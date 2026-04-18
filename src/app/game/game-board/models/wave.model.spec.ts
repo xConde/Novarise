@@ -62,6 +62,39 @@ describe('Wave Model', () => {
       const hasBoss = finalWave.entries!.some(e => e.type === EnemyType.BOSS);
       expect(hasBoss).toBeTrue();
     });
+
+    // ── Sprint 35 — Phase 2 carryover: UNSHAKEABLE + VEINSEEKER placement ──
+
+    it('UNSHAKEABLE appears in at least one wave definition (regression guard)', () => {
+      // Sprint 35: UNSHAKEABLE placed in wave 9 as elite reinforcement.
+      // If this test fails, an UNSHAKEABLE entry was accidentally removed during
+      // a balance pass — restore it before merging.
+      const appearsInAnyWave = WAVE_DEFINITIONS.some(wave =>
+        wave.entries!.some(e => e.type === EnemyType.UNSHAKEABLE)
+      );
+      expect(appearsInAnyWave).toBeTrue();
+    });
+
+    it('VEINSEEKER appears in at least one wave definition (regression guard)', () => {
+      // Sprint 35: VEINSEEKER placed in wave 10 (boss wave).
+      // If this test fails, a VEINSEEKER entry was accidentally removed — restore it.
+      const appearsInAnyWave = WAVE_DEFINITIONS.some(wave =>
+        wave.entries!.some(e => e.type === EnemyType.VEINSEEKER)
+      );
+      expect(appearsInAnyWave).toBeTrue();
+    });
+
+    it('VEINSEEKER appears in a wave that also contains a BOSS (boss-wave placement guard)', () => {
+      // VEINSEEKER is a boss-tier enemy — must live in a wave with at least one BOSS entry.
+      const veinseekerWaves = WAVE_DEFINITIONS.filter(wave =>
+        wave.entries!.some(e => e.type === EnemyType.VEINSEEKER)
+      );
+      expect(veinseekerWaves.length).toBeGreaterThan(0);
+      const allInBossWaves = veinseekerWaves.every(wave =>
+        wave.entries!.some(e => e.type === EnemyType.BOSS)
+      );
+      expect(allInBossWaves).toBeTrue();
+    });
   });
 
   describe('WaveEntry interface', () => {

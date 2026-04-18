@@ -74,24 +74,34 @@ export const WAVE_DEFINITIONS: WaveDefinition[] = [
     ],
     reward: 120
   },
-  // Wave 9: Mixed shielded, swarm, and flying gauntlet
+  // Wave 9: Mixed shielded, swarm, and flying gauntlet — with elite reinforcement.
+  // Phase 3 sprint 35 — UNSHAKEABLE elite placed here as first live appearance.
+  // 1 copy at conservative spawn interval; its path-mutation immunity and high HP
+  // (UNSHAKEABLE_STATS.health) create a tanky threat that DETOUR cannot reroute.
+  // Balance: placeholder count — refine via playtest + sprint 79 balance pass.
   {
     entries: [
       { type: EnemyType.SHIELDED, count: 3, spawnInterval: 1.5 },
       { type: EnemyType.SWARM, count: 5, spawnInterval: 0.8 },
       { type: EnemyType.HEAVY, count: 2, spawnInterval: 1.2 },
       { type: EnemyType.FAST, count: 4, spawnInterval: 0.5 },
-      { type: EnemyType.FLYING, count: 3, spawnInterval: 1.0 }
+      { type: EnemyType.FLYING, count: 3, spawnInterval: 1.0 },
+      { type: EnemyType.UNSHAKEABLE, count: 1, spawnInterval: 3.0 }
     ],
     reward: 150
   },
-  // Wave 10: Boss wave with escort
+  // Wave 10: Boss wave with escort — VEINSEEKER added as additional boss-tier threat.
+  // Phase 3 sprint 35 — VEINSEEKER placed here: the Cartographer mutation threshold
+  // (3 path mutations) is realistically achievable by wave 10, triggering its speed
+  // boost. Appended after existing escort; does not replace any existing entry.
+  // Balance: placeholder — refine via playtest + sprint 79 balance pass.
   {
     entries: [
       { type: EnemyType.BOSS, count: 1, spawnInterval: 0 },
       { type: EnemyType.SHIELDED, count: 2, spawnInterval: 1.5 },
       { type: EnemyType.SWARM, count: 3, spawnInterval: 1.0 },
-      { type: EnemyType.HEAVY, count: 1, spawnInterval: 2.0 }
+      { type: EnemyType.HEAVY, count: 1, spawnInterval: 2.0 },
+      { type: EnemyType.VEINSEEKER, count: 1, spawnInterval: 4.0 }
     ],
     reward: 250
   }

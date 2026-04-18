@@ -319,6 +319,18 @@ export class EnemyService {
         return;
       }
 
+      // Sprint 34 GRAVITY_WELL — encounter-scoped modifier: enemies on tiles
+      // with elevation < 0 (depressed) skip their movement entirely this turn.
+      // Per-enemy check: each enemy's current grid position is tested independently.
+      // ElevationService is @Optional — returns 0 (no penalty) when absent.
+      const gravityWellActive = this.cardEffectService.getModifierValue(MODIFIER_STAT.GRAVITY_WELL) > 0;
+      if (gravityWellActive) {
+        const tileElev = this.elevationService?.getElevation(
+          enemy.gridPosition.row, enemy.gridPosition.col,
+        ) ?? 0;
+        if (tileElev < 0) return; // skip movement for this enemy this turn
+      }
+
       // VEINSEEKER speed-up mechanic: when the path was mutated in the past
       // VEINSEEKER_SPEED_BOOST_WINDOW turns, VEINSEEKER advances 2 tiles/turn
       // instead of its base 1. This is the archetype-depth plan's "path modified

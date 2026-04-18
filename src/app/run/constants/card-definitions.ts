@@ -256,6 +256,21 @@ const CARD_VALUES = {
   avalancheOrderCost: 2,
   avalancheDamagePerElevation: 10,      // base: 10 damage per elevation unit
   avalancheUpgradedDamagePerElevation: 15, // upgraded: 15 damage per elevation unit
+
+  // ── Highground archetype — KING_OF_THE_HILL (Sprint 33) ────────────────
+  // KING_OF_THE_HILL (3E rare): the tower(s) at the highest elevation on the
+  // board deal +100% damage (base) or +150% (upgraded). Only activates when
+  // maxElevation ≥ 1. Encounter-scoped (duration: null).
+  kingOfTheHillCost: 3,
+  kingOfTheHillBonus: 1.0,             // +100% damage (×2) at max elevation
+  kingOfTheHillUpgradedBonus: 1.5,     // +150% damage (×2.5) when upgraded
+
+  // ── Highground archetype — GRAVITY_WELL (Sprint 34) ────────────────────
+  // GRAVITY_WELL (3E rare): enemies on tiles with elevation < 0 (depressed)
+  // skip their movement for the turn. Encounter-scoped (duration: null).
+  // Upgrade: slot reserved for future balance tuning — same effect, no stat
+  // change. Plays out of deck identically; difference is a future Memory flag.
+  gravityWellCost: 3,
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -1598,6 +1613,83 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     } satisfies ElevationTargetCardEffect,
     archetype: 'highground',
     terraform: true,
+  },
+
+  // ── Highground archetype — rare cards (Sprints 33/34) ────────────────────
+
+  /**
+   * KING_OF_THE_HILL (Sprint 33) — encounter-scoped passive: the tower(s) at
+   * the HIGHEST elevation on the board deal +100% damage (base) / +150%
+   * (upgraded). Only activates when maxElevation ≥ 1; a flat board (all
+   * towers at elevation 0) confers no bonus — otherwise every tower would
+   * receive it on a flat map, which is obviously wrong.
+   *
+   * Ties: all towers sharing max elevation receive the bonus (anti-flapping —
+   * a single RAISE_PLATFORM must not flip the bonus between towers each turn).
+   *
+   * Duration: null (encounter-scoped, mirrors CARTOGRAPHER_SEAL pattern).
+   * NOT terraform: reads elevation, does not mutate tile state.
+   */
+  [CardId.KING_OF_THE_HILL]: {
+    id: CardId.KING_OF_THE_HILL,
+    name: 'King of the Hill',
+    description: 'The tower(s) at the highest elevation deal +100% damage for this encounter.',
+    upgradedDescription: 'The tower(s) at the highest elevation deal +150% damage for this encounter.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.RARE,
+    energyCost: CARD_VALUES.kingOfTheHillCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.KING_OF_THE_HILL_DAMAGE_BONUS,
+      value: CARD_VALUES.kingOfTheHillBonus,
+      duration: null,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.KING_OF_THE_HILL_DAMAGE_BONUS,
+      value: CARD_VALUES.kingOfTheHillUpgradedBonus,
+      duration: null,
+    },
+    archetype: 'highground' as const,
+    terraform: false,
+  },
+
+  /**
+   * GRAVITY_WELL (Sprint 34) — encounter-scoped passive: enemies on tiles
+   * with elevation < 0 (depressed) skip their movement for the turn.
+   * Effect is checked per-enemy independently in EnemyService.stepEnemiesOneTurn.
+   *
+   * Upgrade: same effect, no stat change. Upgrade slot is reserved for future
+   * balance tuning (e.g. cost reduction, or a Memory flag when that keyword
+   * ships). Plays out of deck identically to the base.
+   *
+   * Duration: null (encounter-scoped, mirrors CARTOGRAPHER_SEAL pattern).
+   * NOT terraform: reads elevation, does not mutate tile state.
+   */
+  [CardId.GRAVITY_WELL]: {
+    id: CardId.GRAVITY_WELL,
+    name: 'Gravity Well',
+    description: 'Enemies on depressed tiles (elevation < 0) cannot move this encounter.',
+    upgradedDescription: 'Enemies on depressed tiles (elevation < 0) cannot move this encounter.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.RARE,
+    energyCost: CARD_VALUES.gravityWellCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.GRAVITY_WELL,
+      value: 1,
+      duration: null,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.GRAVITY_WELL,
+      value: 1,
+      duration: null,
+    },
+    archetype: 'highground' as const,
+    terraform: false,
   },
 };
 

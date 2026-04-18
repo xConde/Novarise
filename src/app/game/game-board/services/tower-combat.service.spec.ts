@@ -3494,3 +3494,224 @@ describe('TowerCombatService VANTAGE_POINT damage bonus (sprint 31)', () => {
     expect(10000 - enemy.health).toBe(Math.round(BASE_BASIC_DAMAGE * 1.75));
   });
 });
+
+// ── Sprint 33 — KING_OF_THE_HILL damage bonus integration ─────────────────────
+
+describe('TowerCombatService KING_OF_THE_HILL damage bonus (sprint 33)', () => {
+  const KOTH_ROW = 10;
+  const KOTH_COL = 12;
+  const KOTH_WORLD_X = -0.5;
+  const KOTH_WORLD_Z = 0;
+  const KOTH_TURN = 1;
+  const KOTH_STAT = MODIFIER_STAT.KING_OF_THE_HILL_DAMAGE_BONUS;
+
+  const BASE_BASIC_DAMAGE = TOWER_CONFIGS[TowerType.BASIC].damage;
+
+  let kothSvc: TowerCombatService;
+  let kothEnemyMap: Map<string, Enemy>;
+  let kothElevationSpy: jasmine.SpyObj<ElevationService>;
+  let kothCardEffectSpy: jasmine.SpyObj<CardEffectService>;
+
+  function buildKothTestBed(tileElevations: Map<string, number>, maxElevation: number): void {
+    kothEnemyMap = new Map();
+    kothElevationSpy = createElevationServiceSpy(tileElevations, maxElevation);
+    kothCardEffectSpy = createCardEffectServiceSpy();
+
+    const kothPathSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset']
+    );
+    kothPathSpy.getPathToExitLength.and.returnValue(0);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(kothEnemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: kothCardEffectSpy },
+        { provide: PathfindingService, useValue: kothPathSpy },
+        { provide: ElevationService, useValue: kothElevationSpy },
+      ],
+    });
+    kothSvc = TestBed.inject(TowerCombatService);
+  }
+
+  it('KOTH active + tower at max elevation (2) → damage ×2.0', () => {
+    // Tower at elevation 2 = max → bonus 1.0 → multiplier = 1 + 1.0 = 2.0
+    const tileMap = new Map([[ `${KOTH_ROW}-${KOTH_COL}`, 2 ]]);
+    buildKothTestBed(tileMap, 2);
+
+    kothCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === KOTH_STAT ? 1.0 : 0
+    );
+
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', KOTH_WORLD_X, KOTH_WORLD_Z, 10000);
+    kothEnemyMap.set('e1', enemy);
+
+    kothSvc.fireTurn(new THREE.Scene(), KOTH_TURN);
+
+    expect(10000 - enemy.health).toBe(Math.round(BASE_BASIC_DAMAGE * 2.0));
+  });
+
+  it('KOTH active + tower at lower elevation → no bonus', () => {
+    // Tower at elevation 1, max is 2 — does NOT qualify for KOTH bonus.
+    const tileMap = new Map([
+      [ `${KOTH_ROW}-${KOTH_COL}`, 1 ],
+      [ '5-5', 2 ],  // another tile at max; tower is not on it
+    ]);
+    buildKothTestBed(tileMap, 2);
+
+    kothCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === KOTH_STAT ? 1.0 : 0
+    );
+
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', KOTH_WORLD_X, KOTH_WORLD_Z, 10000);
+    kothEnemyMap.set('e1', enemy);
+
+    kothSvc.fireTurn(new THREE.Scene(), KOTH_TURN);
+
+    // Elevation 1 ≥ VANTAGE_POINT_ELEVATION_THRESHOLD (1) → passive range bonus
+    // applies, but damage is base-only since tower is not at maxElevation (2).
+    expect(10000 - enemy.health).toBe(BASE_BASIC_DAMAGE);
+  });
+
+  it('KOTH inactive → no bonus regardless of elevation', () => {
+    const tileMap = new Map([[ `${KOTH_ROW}-${KOTH_COL}`, 3 ]]);
+    buildKothTestBed(tileMap, 3);
+    // getModifierValue returns 0 for all stats (no KOTH active)
+
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', KOTH_WORLD_X, KOTH_WORLD_Z, 10000);
+    kothEnemyMap.set('e1', enemy);
+
+    kothSvc.fireTurn(new THREE.Scene(), KOTH_TURN);
+
+    // No KOTH bonus — base damage only (elevation range boost doesn't affect damage).
+    expect(10000 - enemy.health).toBe(BASE_BASIC_DAMAGE);
+  });
+
+  it('KOTH active + flat board (maxElevation=0) → no bonus (guard prevents flat-board all-towers bonus)', () => {
+    // maxElevation=0 → kothActive=false → no tower gets the bonus even though
+    // every tower's elevation equals max (0). This is the critical anti-bug guard.
+    buildKothTestBed(new Map(), 0);
+
+    kothCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === KOTH_STAT ? 1.0 : 0
+    );
+
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', KOTH_WORLD_X, KOTH_WORLD_Z, 10000);
+    kothEnemyMap.set('e1', enemy);
+
+    kothSvc.fireTurn(new THREE.Scene(), KOTH_TURN);
+
+    // Flat board: base damage only, no KOTH bonus.
+    expect(10000 - enemy.health).toBe(BASE_BASIC_DAMAGE);
+  });
+
+  it('KOTH active + multiple towers tied at max elevation → ALL get the bonus', () => {
+    // Two towers at elevation 2 (max), placed far apart so each can only reach its own enemy.
+    // boardWidth=25, tileSize=1: world.x = (col - 25/2) = col - 12.5
+    // Tower A: row=10,col=12 → world (-0.5, 0).  Enemy A at (-0.5, 0) — distance 0 from A, 7 from B.
+    // Tower B: row=10,col=5  → world (-7.5, 0).  Enemy B at (-7.5, 0) — distance 0 from B, 7 from A.
+    // BASIC range = 3 (or 4.5 with elev-2 passive). 7 >> 4.5 → no cross-fire.
+    const KOTH_COL_B = 5;
+    // world x for col 5 with boardWidth 25, tileSize 1: 5 - 12.5 = -7.5
+    const KOTH_WORLD_X_B = -7.5;
+    const tileMap = new Map([
+      [ `${KOTH_ROW}-${KOTH_COL}`, 2 ],
+      [ `${KOTH_ROW}-${KOTH_COL_B}`, 2 ],
+    ]);
+    buildKothTestBed(tileMap, 2);
+
+    kothCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === KOTH_STAT ? 1.0 : 0
+    );
+
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL, TowerType.BASIC, new THREE.Group());
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL_B, TowerType.BASIC, new THREE.Group());
+
+    const enemy1 = createTestEnemy('e1', KOTH_WORLD_X, KOTH_WORLD_Z, 10000);
+    const enemy2 = createTestEnemy('e2', KOTH_WORLD_X_B, KOTH_WORLD_Z, 10000);
+    kothEnemyMap.set('e1', enemy1);
+    kothEnemyMap.set('e2', enemy2);
+
+    kothSvc.fireTurn(new THREE.Scene(), KOTH_TURN);
+
+    // Both towers fire at their respective enemies with ×2 damage bonus.
+    expect(10000 - enemy1.health).toBe(Math.round(BASE_BASIC_DAMAGE * 2.0));
+    expect(10000 - enemy2.health).toBe(Math.round(BASE_BASIC_DAMAGE * 2.0));
+  });
+
+  it('upgraded KOTH (1.5 bonus) + tower at max elevation → damage ×2.5', () => {
+    // Upgraded KOTH: 1 + 1.5 = 2.5 multiplier.
+    const tileMap = new Map([[ `${KOTH_ROW}-${KOTH_COL}`, 2 ]]);
+    buildKothTestBed(tileMap, 2);
+
+    kothCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === KOTH_STAT ? 1.5 : 0
+    );
+
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', KOTH_WORLD_X, KOTH_WORLD_Z, 10000);
+    kothEnemyMap.set('e1', enemy);
+
+    kothSvc.fireTurn(new THREE.Scene(), KOTH_TURN);
+
+    expect(10000 - enemy.health).toBe(Math.round(BASE_BASIC_DAMAGE * 2.5));
+  });
+
+  it('KOTH + VANTAGE_POINT composition: both bonuses stack multiplicatively', () => {
+    // Tower at elevation 2 (max). KOTH bonus 1.0 → ×2. VP bonus 0.5 → ×1.5.
+    // Composed: base × 1.5 (VP) × 2.0 (KOTH) = base × 3.0.
+    const VP_STAT = MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS;
+    const tileMap = new Map([[ `${KOTH_ROW}-${KOTH_COL}`, 2 ]]);
+    buildKothTestBed(tileMap, 2);
+
+    kothCardEffectSpy.getModifierValue.and.callFake((stat: string) => {
+      if (stat === KOTH_STAT) return 1.0;
+      if (stat === VP_STAT) return 0.5;
+      return 0;
+    });
+
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', KOTH_WORLD_X, KOTH_WORLD_Z, 10000);
+    kothEnemyMap.set('e1', enemy);
+
+    kothSvc.fireTurn(new THREE.Scene(), KOTH_TURN);
+
+    expect(10000 - enemy.health).toBe(Math.round(BASE_BASIC_DAMAGE * 1.5 * 2.0));
+  });
+
+  it('KOTH + HIGH_PERCH + VANTAGE_POINT full stack: correct damage and range composition', () => {
+    // Tower at elevation 2 (max). All three bonuses active.
+    // Damage: base × 1.5 (VP) × 2.0 (KOTH) = base × 3.0.
+    // Range: base × elevationPassive(1.5) × highPerch(1.25) = base × 1.875.
+    const VP_STAT = MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS;
+    const HP_STAT = MODIFIER_STAT.HIGH_PERCH_RANGE_BONUS;
+    const tileMap = new Map([[ `${KOTH_ROW}-${KOTH_COL}`, 2 ]]);
+    buildKothTestBed(tileMap, 2);
+
+    kothCardEffectSpy.getModifierValue.and.callFake((stat: string) => {
+      if (stat === KOTH_STAT) return 1.0;
+      if (stat === VP_STAT) return 0.5;
+      if (stat === HP_STAT) return 0.25;
+      return 0;
+    });
+
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', KOTH_WORLD_X, KOTH_WORLD_Z, 10000);
+    kothEnemyMap.set('e1', enemy);
+
+    kothSvc.fireTurn(new THREE.Scene(), KOTH_TURN);
+
+    expect(10000 - enemy.health).toBe(Math.round(BASE_BASIC_DAMAGE * 1.5 * 2.0));
+  });
+});

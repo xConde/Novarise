@@ -209,7 +209,8 @@ export class TowerCombatService {
     // hasElevation guards the per-tower elevation lookup so flat boards (no
     // Highground cards played yet) pay zero cost: getMaxElevation() is a single
     // board scan, O(rows×cols), done once per fireTurn call.
-    const hasElevation = this.elevationService != null && this.elevationService.getMaxElevation() !== 0;
+    const maxElevation = this.elevationService != null ? this.elevationService.getMaxElevation() : 0;
+    const hasElevation = maxElevation !== 0;
 
     // Sprint 29 HIGH_PERCH — wave-scoped range bonus for elevated towers.
     // highPerchBonus is summed across all stacked copies via getModifierValue.
@@ -220,10 +221,17 @@ export class TowerCombatService {
     // stacked copies via getModifierValue; applied multiplicatively per-tower.
     const vantagePointBonus = this.cardEffectService.getModifierValue(MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS);
 
+    // Sprint 33 KING_OF_THE_HILL — encounter-scoped damage bonus for the
+    // tower(s) at the HIGHEST elevation on the board. Only activates when
+    // maxElevation ≥ 1 — flat boards (all towers at elevation 0) get no bonus.
+    // Ties: ALL towers tied at max elevation receive the bonus (anti-flapping).
+    const kothBonus = this.cardEffectService.getModifierValue(MODIFIER_STAT.KING_OF_THE_HILL_DAMAGE_BONUS);
+    const kothActive = kothBonus > 0 && maxElevation >= 1;
+
     const hasCardModifiers =
       cardDamageBoost !== 0 || cardRangeBoost !== 0 || sniperDamageBoost !== 0
       || pathLengthMultiplier !== 1 || hasElevation || highPerchBonus !== 0
-      || vantagePointBonus !== 0;
+      || vantagePointBonus !== 0 || kothActive;
 
     // Deterministic firing order: row then col.
     const towerList = Array.from(this.placedTowers.values()).sort((a, b) => {
@@ -264,6 +272,11 @@ export class TowerCombatService {
         const vantagePointActive = vantagePointBonus > 0
           && towerElevation >= ELEVATION_CONFIG.VANTAGE_POINT_ELEVATION_THRESHOLD;
         const vantagePointDmgMult = vantagePointActive ? (1 + vantagePointBonus) : 1;
+        // Sprint 33 KING_OF_THE_HILL — per-tower KOTH multiplier.
+        // Only applies to towers whose elevation equals the board-wide max.
+        // kothActive already gates on maxElevation ≥ 1, so flat boards never
+        // enter this branch. Composition order: ...× vantagePoint × koth.
+        const kothMult = (kothActive && towerElevation === maxElevation) ? (1 + kothBonus) : 1;
         this.scratchStats.damage = Math.round(
           baseStats.damage
             * towerDamageMultiplier
@@ -272,7 +285,8 @@ export class TowerCombatService {
             * sniperBoost
             * cardDamageMult
             * pathLengthMultiplier
-            * vantagePointDmgMult,
+            * vantagePointDmgMult
+            * kothMult,
         );
         this.scratchStats.range = baseStats.range * relicRange * (1 + cardRangeBoost) * cardRangeMult * elevationRangeMult * highPerchMult;
         this.scratchStats.cost = baseStats.cost;

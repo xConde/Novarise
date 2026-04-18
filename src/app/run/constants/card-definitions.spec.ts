@@ -11,8 +11,8 @@ import { TowerType } from '../../game/game-board/models/tower.model';
 import { MODIFIER_STAT } from './modifier-stat.constants';
 
 describe('CARD_DEFINITIONS', () => {
-  it('has exactly 64 cards', () => {
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(64);
+  it('has exactly 66 cards', () => {
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(66);
   });
 
   it('contains all CardId enum values', () => {
@@ -55,8 +55,8 @@ describe('CARD_DEFINITIONS', () => {
       expect(getCardsByType(CardType.SPELL).length).toBe(30);
     });
 
-    it('has 16 modifier cards (12 original + CARTOGRAPHER_SEAL + LABYRINTH_MIND + HIGH_PERCH + VANTAGE_POINT)', () => {
-      expect(getCardsByType(CardType.MODIFIER).length).toBe(16);
+    it('has 18 modifier cards (12 original + CARTOGRAPHER_SEAL + LABYRINTH_MIND + HIGH_PERCH + VANTAGE_POINT + KING_OF_THE_HILL + GRAVITY_WELL)', () => {
+      expect(getCardsByType(CardType.MODIFIER).length).toBe(18);
     });
 
     it('has 6 utility cards', () => {
@@ -985,6 +985,122 @@ describe('CARD_DEFINITIONS', () => {
         expect(def.upgradedDescription).toBeDefined();
         expect(def.upgradedDescription!.trim().length).toBeGreaterThan(0);
       });
+    });
+  });
+
+  // ── Phase 3 Sprints 33/34 — Highground rare cards ───────────────────────
+  describe('Highground rare cards', () => {
+    describe('KING_OF_THE_HILL (Sprint 33)', () => {
+      const def = CARD_DEFINITIONS[CardId.KING_OF_THE_HILL];
+
+      it('exists in CARD_DEFINITIONS', () => {
+        expect(def).toBeDefined();
+      });
+
+      it('is a RARE highground MODIFIER card', () => {
+        expect(def.type).toBe(CardType.MODIFIER);
+        expect(def.rarity).toBe(CardRarity.RARE);
+        expect(def.archetype).toBe('highground');
+      });
+
+      it('costs 3 energy (rare cost curve)', () => {
+        expect(def.energyCost).toBe(3);
+      });
+
+      it('does NOT carry the terraform flag (reads elevation, does not mutate tiles)', () => {
+        expect(def.terraform).toBe(false);
+      });
+
+      it('has a modifier effect with stat = kingOfTheHillDamageBonus', () => {
+        expect(def.effect.type).toBe('modifier');
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.stat).toBe(MODIFIER_STAT.KING_OF_THE_HILL_DAMAGE_BONUS);
+      });
+
+      it('base value is 1.0 (+100% damage bonus)', () => {
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.value).toBeCloseTo(1.0, 5);
+      });
+
+      it('base duration is null (encounter-scoped)', () => {
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.duration).toBeNull();
+      });
+
+      it('upgraded value is 1.5 (+150% damage bonus)', () => {
+        const upgraded = def.upgradedEffect as ModifierCardEffect;
+        expect(upgraded.value).toBeCloseTo(1.5, 5);
+      });
+
+      it('upgraded duration is still null (encounter-scoped)', () => {
+        const upgraded = def.upgradedEffect as ModifierCardEffect;
+        expect(upgraded.duration).toBeNull();
+      });
+
+      it('has upgradedDescription defined and non-empty', () => {
+        expect(def.upgradedDescription?.trim().length).toBeGreaterThan(0);
+      });
+    });
+
+    describe('GRAVITY_WELL (Sprint 34)', () => {
+      const def = CARD_DEFINITIONS[CardId.GRAVITY_WELL];
+
+      it('exists in CARD_DEFINITIONS', () => {
+        expect(def).toBeDefined();
+      });
+
+      it('is a RARE highground MODIFIER card', () => {
+        expect(def.type).toBe(CardType.MODIFIER);
+        expect(def.rarity).toBe(CardRarity.RARE);
+        expect(def.archetype).toBe('highground');
+      });
+
+      it('costs 3 energy (rare cost curve)', () => {
+        expect(def.energyCost).toBe(3);
+      });
+
+      it('does NOT carry the terraform flag (reads elevation, does not mutate tiles)', () => {
+        expect(def.terraform).toBe(false);
+      });
+
+      it('has a modifier effect with stat = gravityWell', () => {
+        expect(def.effect.type).toBe('modifier');
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.stat).toBe(MODIFIER_STAT.GRAVITY_WELL);
+      });
+
+      it('base value is 1 (boolean-style flag)', () => {
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.value).toBe(1);
+      });
+
+      it('base duration is null (encounter-scoped)', () => {
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.duration).toBeNull();
+      });
+
+      it('upgraded value is 1 (same effect, slot reserved for future tuning)', () => {
+        const upgraded = def.upgradedEffect as ModifierCardEffect;
+        expect(upgraded.value).toBe(1);
+      });
+
+      it('upgraded duration is still null (encounter-scoped)', () => {
+        const upgraded = def.upgradedEffect as ModifierCardEffect;
+        expect(upgraded.duration).toBeNull();
+      });
+
+      it('has upgradedDescription defined and non-empty', () => {
+        expect(def.upgradedDescription?.trim().length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  // ── Sprint 35 — Starter deck neutrality check ───────────────────────────
+  describe('Sprint 35 — starter deck neutrality check', () => {
+    it('getStarterDeck() does not contain KING_OF_THE_HILL or GRAVITY_WELL (starter is neutral)', () => {
+      const starterIds = new Set(getStarterDeck());
+      expect(starterIds.has(CardId.KING_OF_THE_HILL)).toBeFalse();
+      expect(starterIds.has(CardId.GRAVITY_WELL)).toBeFalse();
     });
   });
 });

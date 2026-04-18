@@ -20,6 +20,7 @@ import { SerializableEnemy } from '../models/encounter-checkpoint.model';
 import { createTestEnemy } from '../testing/test-enemy.factory';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
+import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 
 /**
  * Helper: configure modifier effects on the real GameStateService.
@@ -3735,6 +3736,187 @@ describe('EnemyService', () => {
 
       // Floor-at-1 applies: Math.max(1, 2 - 2 - 0) = Math.max(1, 0) = 1
       expect(enemy.distanceTraveled).toBe(1);
+    });
+  });
+
+  // ── Sprint 34 — GRAVITY_WELL movement gate ───────────────────────────────
+
+  describe('GRAVITY_WELL movement gate', () => {
+    /**
+     * GRAVITY_WELL: enemies on depressed tiles (elevation < 0) skip movement.
+     * Tested by injecting a CardEffectService spy that returns 1 for GRAVITY_WELL
+     * and an ElevationService spy for per-tile elevation.
+     */
+    let gravityCardSpy: jasmine.SpyObj<CardEffectService>;
+    let gravityElevSpy: jasmine.SpyObj<ElevationService>;
+
+    function buildGravityTestBed(
+      tileElevations: Map<string, number>,
+      gravityWellActive: boolean,
+    ): void {
+      TestBed.resetTestingModule();
+      const gameBoardServiceSpy = createGameBoardServiceSpy(10, 10, 1, () => createTestBoard());
+      const relicSpy = createRelicServiceSpy();
+
+      gravityCardSpy = jasmine.createSpyObj<CardEffectService>('CardEffectService', [
+        'getModifierValue',
+        'hasActiveModifier',
+        'applyModifier',
+        'applySpell',
+        'tickWave',
+        'getActiveModifiers',
+        'tryConsumeLeakBlock',
+        'serializeModifiers',
+        'restoreModifiers',
+        'reset',
+      ]);
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? (gravityWellActive ? 1 : 0) : 0
+      );
+
+      gravityElevSpy = jasmine.createSpyObj<ElevationService>('ElevationService', [
+        'getElevation',
+        'getMaxElevation',
+        'raise',
+        'depress',
+        'setAbsolute',
+        'collapse',
+        'getElevationMap',
+        'getActiveChanges',
+        'tickTurn',
+        'reset',
+        'serialize',
+        'restore',
+      ]);
+      gravityElevSpy.getElevation.and.callFake((row: number, col: number) =>
+        tileElevations.get(`${row}-${col}`) ?? 0
+      );
+      gravityElevSpy.getMaxElevation.and.returnValue(0);
+
+      TestBed.configureTestingModule({
+        providers: [
+          PathfindingService,
+          EnemyService,
+          EnemyVisualService,
+          EnemyHealthService,
+          EnemyMeshFactoryService,
+          GameStateService,
+          { provide: GameBoardService, useValue: gameBoardServiceSpy },
+          { provide: CardEffectService, useValue: gravityCardSpy },
+          { provide: RelicService, useValue: relicSpy },
+          { provide: ElevationService, useValue: gravityElevSpy },
+        ],
+      });
+
+      service = TestBed.inject(EnemyService);
+      mockScene = new THREE.Scene();
+    }
+
+    it('enemy on elevation-0 tile with GRAVITY_WELL active → moves normally', () => {
+      buildGravityTestBed(new Map(), true);  // all tiles elev 0
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      // Elevation 0 is NOT < 0 — no gating; enemy advances 1 tile.
+      expect(enemy.pathIndex).toBe(startIndex + 1);
+    });
+
+    it('enemy on elevation -1 tile with GRAVITY_WELL active → skips movement', () => {
+      // Place the enemy on tile row=1,col=0 (path[1] after spawning) at elevation -1.
+      // After spawn the enemy is at path[0]. Step once to move to path[1], which is elev -1.
+      // Then on the SECOND stepEnemiesOneTurn, the gate should fire and skip movement.
+      buildGravityTestBed(new Map(), false);  // GRAVITY_WELL inactive for first step
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);  // advance to path[1]
+      const indexAtDepressedTile = enemy.pathIndex;
+
+      // Now enable GRAVITY_WELL and set the current tile to elevation -1.
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 1 : 0
+      );
+      const { row, col } = enemy.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      // Enemy is on a depressed tile — GRAVITY_WELL gates movement; pathIndex unchanged.
+      expect(enemy.pathIndex).toBe(indexAtDepressedTile);
+    });
+
+    it('enemy on elevation -1 tile WITHOUT GRAVITY_WELL → moves normally', () => {
+      buildGravityTestBed(new Map(), false);  // GRAVITY_WELL inactive
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);  // advance to path[1]
+      const indexAfterFirstStep = enemy.pathIndex;
+
+      // Depressed tile, but no GRAVITY_WELL active.
+      const { row, col } = enemy.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      // No GRAVITY_WELL — moves normally.
+      expect(enemy.pathIndex).toBe(indexAfterFirstStep + 1);
+    });
+
+    it('enemy on elevation +1 tile with GRAVITY_WELL active → moves normally (only depressed tiles gate)', () => {
+      buildGravityTestBed(new Map(), false);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);  // advance to path[1]
+      const indexAfterFirstStep = enemy.pathIndex;
+
+      // Enable GRAVITY_WELL, but tile is elevated (+1), NOT depressed.
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 1 : 0
+      );
+      const { row, col } = enemy.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? 1 : 0
+      );
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      // Elevation +1 is NOT < 0 — enemy moves normally.
+      expect(enemy.pathIndex).toBe(indexAfterFirstStep + 1);
+    });
+
+    it('multiple enemies: only those on depressed tiles are gated per-enemy', () => {
+      // Spawn one enemy. Step it forward (GRAVITY_WELL inactive) to put it at path[1].
+      // Step a second time with GRAVITY_WELL active and tile depressed — enemy is gated.
+      // Then step a third time after disabling GRAVITY_WELL — enemy moves again.
+      // This validates the per-enemy independence logic without needing two enemies
+      // at different tile positions (which would be the same path node after 1 step).
+      buildGravityTestBed(new Map(), false);
+
+      const enemyA = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      // Step 1: advance to path[1], no GRAVITY_WELL.
+      service.stepEnemiesOneTurn(() => 0);
+      const indexAtPath1 = enemyA.pathIndex;
+
+      // Enable GRAVITY_WELL and depress the tile enemyA is currently on.
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 1 : 0
+      );
+      const { row: rowA, col: colA } = enemyA.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === rowA && c === colA ? -1 : 0
+      );
+
+      // Step 2: GRAVITY_WELL active + depressed tile → gated.
+      service.stepEnemiesOneTurn(() => 0);
+      expect(enemyA.pathIndex).toBe(indexAtPath1); // no movement
+
+      // Disable GRAVITY_WELL — verify per-enemy check is per-step (not permanent freeze).
+      gravityCardSpy.getModifierValue.and.returnValue(0);
+      service.stepEnemiesOneTurn(() => 0);
+      expect(enemyA.pathIndex).toBe(indexAtPath1 + 1); // moves again
     });
   });
 });

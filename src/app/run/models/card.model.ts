@@ -114,6 +114,10 @@ export enum CardId {
   CLIFFSIDE = 'CLIFFSIDE',
   VANTAGE_POINT = 'VANTAGE_POINT',
   AVALANCHE_ORDER = 'AVALANCHE_ORDER',
+
+  // Highground archetype — rare cards (Phase 3, Sprints 33/34)
+  KING_OF_THE_HILL = 'KING_OF_THE_HILL',
+  GRAVITY_WELL = 'GRAVITY_WELL',
 }
 
 export enum CardType {

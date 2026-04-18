@@ -50,6 +50,23 @@ export const MODIFIER_STAT = {
   // in TowerCombatService.fireTurn after elevationRangeMult.
   // Uses duration=1 (one-wave countdown, mirrors HIGH_PERCH pattern).
   VANTAGE_POINT_DAMAGE_BONUS: 'vantagePointDamageBonus',
+
+  // Phase 3 Sprint 33 — KING_OF_THE_HILL modifier (rare).
+  //
+  // Encounter-scoped (duration: null). Passive: the tower(s) at the HIGHEST
+  // elevation on the board deal +100% damage (base) / +150% (upgraded).
+  // Only activates when maxElevation ≥ 1 — flat boards get no bonus.
+  // Ties: ALL towers sharing max elevation receive the bonus (anti-flapping).
+  // Read in TowerCombatService.fireTurn via getMaxElevation() + per-tower check.
+  KING_OF_THE_HILL_DAMAGE_BONUS: 'kingOfTheHillDamageBonus',
+
+  // Phase 3 Sprint 34 — GRAVITY_WELL modifier (rare).
+  //
+  // Encounter-scoped (duration: null). Boolean flag: when active, enemies on
+  // tiles with elevation < 0 (depressed) skip their movement for the turn.
+  // Consumed in EnemyService.stepEnemiesOneTurn via getModifierValue() > 0.
+  // Upgrade slot reserved for future balance tuning — same effect, no change.
+  GRAVITY_WELL: 'gravityWell',
 } as const;
 
 export type ModifierStat = typeof MODIFIER_STAT[keyof typeof MODIFIER_STAT];
