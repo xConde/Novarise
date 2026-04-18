@@ -238,6 +238,108 @@ describe('Card System — Balance', () => {
     expect(Object.keys(CARD_DEFINITIONS).length).toBe(58);
   });
 
+  // ── Phase 2 Sprint 19 — Cartographer economy validation ────────────────────
+  //
+  // Sprint 19 is a utility/tuning pass. The committed decision: keep the
+  // starter deck archetype-neutral. Every archetype earns its cards through
+  // the reward pool, not the starter. This prevents any archetype from
+  // accidentally flipping a fresh deck's `getDominantArchetype()` tag before
+  // the player has made a real choice.
+  //
+  // These specs codify the cost curve so balance regressions show up as test
+  // failures. Tune here by modifying expected costs; do NOT silently drop the
+  // spec when reworking.
+
+  describe('Cartographer economy (Sprint 19 utility pass)', () => {
+    const cartographerCards = Object.values(CARD_DEFINITIONS).filter(c => c.archetype === 'cartographer');
+
+    it('every Cartographer card has archetype = cartographer', () => {
+      // Sanity check the archetype tag round-trips correctly (failure mode:
+      // a copy-paste bug that drops the archetype field and defaults to neutral).
+      for (const card of cartographerCards) {
+        expect(card.archetype).toBe('cartographer');
+      }
+    });
+
+    it('common Cartographer cards cost 0-1 energy (cheap, frequent plays)', () => {
+      const commons = cartographerCards.filter(c => c.rarity === CardRarity.COMMON);
+      expect(commons.length).toBeGreaterThan(0);
+      for (const card of commons) {
+        expect(card.energyCost)
+          .withContext(`${card.id}: common should cost 0-1 energy`)
+          .toBeLessThanOrEqual(1);
+      }
+    });
+
+    it('uncommon Cartographer cards cost 1-2 energy', () => {
+      const uncommons = cartographerCards.filter(c => c.rarity === CardRarity.UNCOMMON);
+      expect(uncommons.length).toBeGreaterThan(0);
+      for (const card of uncommons) {
+        expect(card.energyCost)
+          .withContext(`${card.id}: uncommon should cost 1-2 energy`)
+          .toBeGreaterThanOrEqual(1);
+        expect(card.energyCost)
+          .withContext(`${card.id}: uncommon should cost 1-2 energy`)
+          .toBeLessThanOrEqual(2);
+      }
+    });
+
+    it('rare Cartographer cards cost 2-3 energy (strong effects, worth the cost)', () => {
+      const rares = cartographerCards.filter(c => c.rarity === CardRarity.RARE);
+      expect(rares.length).toBeGreaterThan(0);
+      for (const card of rares) {
+        expect(card.energyCost)
+          .withContext(`${card.id}: rare should cost 2-3 energy`)
+          .toBeGreaterThanOrEqual(2);
+        expect(card.energyCost)
+          .withContext(`${card.id}: rare should cost 2-3 energy`)
+          .toBeLessThanOrEqual(3);
+      }
+    });
+
+    it('no Cartographer card is seeded in the starter deck (archetype-neutral start)', () => {
+      // Deliberate design: a fresh run's dominant archetype must be 'neutral'
+      // so reward weighting doesn't lean before the player picks their path.
+      // See DeckService.getDominantArchetype + anti-flapping tie-break.
+      const starter = getStarterDeck();
+      for (const cardId of starter) {
+        const def = CARD_DEFINITIONS[cardId];
+        expect(def.archetype ?? 'neutral')
+          .withContext(`${cardId} in starter deck but tagged ${def.archetype}`)
+          .toBe('neutral');
+      }
+    });
+
+    it('tile-target Cartographer cards all set terraform=true for tooltip/keyword visibility', () => {
+      // Any Cartographer card with effect.type === 'terraform_target' must
+      // carry the terraform keyword (feeds hover tooltip + card-detail modal).
+      for (const card of cartographerCards) {
+        if (card.effect.type === 'terraform_target') {
+          expect(card.terraform)
+            .withContext(`${card.id}: tile-target Cartographer card must set terraform=true`)
+            .toBe(true);
+        }
+      }
+    });
+
+    it('non-terraform Cartographer cards (DETOUR, SEAL, LABYRINTH_MIND) explicitly set terraform=false', () => {
+      // These three change rules/routing without modifying tile state. They
+      // must be archetype-tagged but NOT carry the terraform keyword, so the
+      // tooltip keyword list doesn't lie about what they do.
+      const nonTerraformIds: readonly CardId[] = [
+        CardId.DETOUR,
+        CardId.CARTOGRAPHER_SEAL,
+        CardId.LABYRINTH_MIND,
+      ];
+      for (const cardId of nonTerraformIds) {
+        const def = CARD_DEFINITIONS[cardId];
+        expect(def.terraform)
+          .withContext(`${cardId}: must NOT be tagged terraform`)
+          .toBe(false);
+      }
+    });
+  });
+
   it('starter cards should all have STARTER rarity', () => {
     const starterCardDefs = STARTER_IDS.map(id => CARD_DEFINITIONS[id]);
     const nonStarterRarity = starterCardDefs.filter(d => d.rarity !== CardRarity.STARTER);
