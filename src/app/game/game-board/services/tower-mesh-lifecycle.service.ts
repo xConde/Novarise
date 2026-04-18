@@ -6,6 +6,7 @@ import { TowerMeshFactoryService } from './tower-mesh-factory.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { SceneService } from './scene.service';
 import { GameBoardService } from '../game-board.service';
+import { BOARD_CONFIG } from '../constants/board.constants';
 import { disposeMaterial } from '../utils/three-utils';
 
 /**
@@ -35,6 +36,14 @@ export class TowerMeshLifecycleService {
       this.gameBoardService.getBoardWidth(),
       this.gameBoardService.getBoardHeight(),
     );
+    // Tower factory places the group at fixed tileHeight. If the underlying
+    // tile is elevated (Highground archetype), lift the group to sit on top
+    // of the raised tile. Disposal-neutral — identity-stable mesh.
+    const board = this.gameBoardService.getGameBoard();
+    const tileElevation = board?.[row]?.[col]?.elevation ?? 0;
+    if (tileElevation !== 0) {
+      mesh.position.y = tileElevation + BOARD_CONFIG.tileHeight;
+    }
     this.meshRegistry.towerMeshes.set(`${row}-${col}`, mesh);
     this.sceneService.getScene().add(mesh);
     this.meshRegistry.rebuildTowerChildrenArray();

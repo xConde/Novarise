@@ -1245,6 +1245,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           tower.row, tower.col, tower.type,
           this.gameBoardService.getBoardWidth(), this.gameBoardService.getBoardHeight()
         );
+        // Tower factory always places the group at fixed tileHeight. If Step 3.6
+        // restored the underlying tile to a non-zero elevation, translate the
+        // tower group up so it sits on top of the raised tile instead of
+        // clipping into the ground. Disposal-neutral — identity-stable mesh.
+        const boardSnapshot = this.gameBoardService.getGameBoard();
+        const tileElevation = boardSnapshot?.[tower.row]?.[tower.col]?.elevation ?? 0;
+        if (tileElevation !== 0) {
+          mesh.position.y = tileElevation + BOARD_CONFIG.tileHeight;
+        }
         scene.add(mesh);
         this.meshRegistry.towerMeshes.set(tower.id, mesh);
         towerMeshes.set(tower.id, mesh);
