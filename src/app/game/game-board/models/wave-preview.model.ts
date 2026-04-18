@@ -26,6 +26,7 @@ const ENEMY_TYPE_LABELS: Record<EnemyType, string> = {
   [EnemyType.SWARM]: 'Swarm',
   [EnemyType.FLYING]: 'Flying',
   [EnemyType.MINER]: 'Miner',
+  [EnemyType.UNSHAKEABLE]: 'Unshakeable',
 };
 
 /**

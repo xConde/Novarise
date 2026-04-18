@@ -7,5 +7,6 @@ export enum EnemyType {
   SHIELDED = 'SHIELDED',
   SWARM = 'SWARM',
   FLYING = 'FLYING',
-  MINER = 'MINER'
+  MINER = 'MINER',
+  UNSHAKEABLE = 'UNSHAKEABLE'
 }

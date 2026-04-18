@@ -40,6 +40,8 @@ export interface Enemy {
   statusParticleEffectType?: string; // Tracks which effect type the current particles belong to
   /** Turn number when this enemy was spawned. Set only for MINER — drives the 3-turn dig cadence. */
   spawnedOnTurn?: number;
+  /** True for UNSHAKEABLE elite — skipped by applyDetour, cannot be rerouted. */
+  immuneToDetour?: boolean;
 }
 
 export interface EnemyStats {
@@ -55,6 +57,17 @@ export interface EnemyStats {
   maxShield?: number;   // Starting shield HP (SHIELDED type only)
   spawnOnDeath?: number; // Number of mini-enemies to spawn on death (SWARM type only)
 }
+
+/** Named constants for UNSHAKEABLE elite stats — no magic numbers inline. */
+export const UNSHAKEABLE_STATS = {
+  health: 600,
+  speed: 0.8,
+  tilesPerTurn: 1,
+  value: 30,
+  color: 0x555555, // Stone gray — reads as heavy / immovable
+  size: 0.5,
+  leakDamage: 3,
+} as const;
 
 /** Named constants for MINER stats — no magic numbers inline. */
 export const MINER_STATS = {
@@ -154,7 +167,16 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     color: MINER_STATS.color,
     size: MINER_STATS.size,
     leakDamage: MINER_STATS.leakDamage,
-  }
+  },
+  [EnemyType.UNSHAKEABLE]: {
+    health: UNSHAKEABLE_STATS.health,
+    speed: UNSHAKEABLE_STATS.speed,
+    tilesPerTurn: UNSHAKEABLE_STATS.tilesPerTurn,
+    value: UNSHAKEABLE_STATS.value,
+    color: UNSHAKEABLE_STATS.color,
+    size: UNSHAKEABLE_STATS.size,
+    leakDamage: UNSHAKEABLE_STATS.leakDamage,
+  },
 };
 
 /** Y-position (world height) for flying enemies hovering above ground. */

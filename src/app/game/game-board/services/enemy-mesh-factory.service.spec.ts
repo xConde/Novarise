@@ -70,6 +70,7 @@ describe('EnemyMeshFactoryService', () => {
       EnemyType.SHIELDED,
       EnemyType.SWARM,
       EnemyType.MINER,
+      EnemyType.UNSHAKEABLE,
     ];
 
     types.forEach(type => {
@@ -198,6 +199,7 @@ describe('EnemyMeshFactoryService', () => {
       EnemyType.SHIELDED,
       EnemyType.SWARM,
       EnemyType.FLYING,
+      EnemyType.UNSHAKEABLE,
     ];
 
     geometryTypes.forEach(type => {
@@ -380,6 +382,39 @@ describe('EnemyMeshFactoryService', () => {
 
       expect(mesh).toBeInstanceOf(THREE.Mesh);
       expect(mesh.geometry).toBeInstanceOf(THREE.BoxGeometry);
+    });
+  });
+
+  // --- UNSHAKEABLE geometry ---
+
+  describe('UNSHAKEABLE geometry (createEnemyGeometry)', () => {
+    let geom: THREE.BufferGeometry;
+
+    beforeEach(() => {
+      geom = service.createEnemyGeometry(EnemyType.UNSHAKEABLE, 0.5);
+    });
+
+    afterEach(() => {
+      geom.dispose();
+    });
+
+    it('returns an OctahedronGeometry for UNSHAKEABLE', () => {
+      expect(geom).toBeInstanceOf(THREE.OctahedronGeometry);
+    });
+
+    it('UNSHAKEABLE mesh from createEnemyMesh is a THREE.Mesh with OctahedronGeometry', () => {
+      const enemy = makeEnemy(EnemyType.UNSHAKEABLE);
+      const mesh = service.createEnemyMesh(enemy);
+      createdMeshes.push(mesh);
+
+      expect(mesh).toBeInstanceOf(THREE.Mesh);
+      expect(mesh.geometry).toBeInstanceOf(THREE.OctahedronGeometry);
+    });
+
+    it('UNSHAKEABLE geometry is distinct from HEAVY (box) geometry', () => {
+      const heavyGeom = service.createEnemyGeometry(EnemyType.HEAVY, 0.4);
+      expect(geom.constructor).not.toBe(heavyGeom.constructor);
+      heavyGeom.dispose();
     });
   });
 });

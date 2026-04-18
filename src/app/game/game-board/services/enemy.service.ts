@@ -262,6 +262,11 @@ export class EnemyService {
       enemy.spawnedOnTurn = currentTurn;
     }
 
+    // UNSHAKEABLE: flag immunity to DETOUR rerouting.
+    if (type === EnemyType.UNSHAKEABLE) {
+      enemy.immuneToDetour = true;
+    }
+
     if (stats.maxShield !== undefined) {
       enemy.shield = stats.maxShield;
       enemy.maxShield = stats.maxShield;
@@ -867,8 +872,7 @@ export class EnemyService {
    * iteration. Enemies naturally fall back to shortest-path re-planning at the
    * next waypoint arrival (executeRepath flow).
    *
-   * // Sprint 22 UNSHAKEABLE: skip if enemy.immuneToDetour — add the flag on
-   * // the Enemy interface and check it here when that phase opens.
+   * UNSHAKEABLE enemies (immuneToDetour === true) are skipped — they cannot be rerouted.
    *
    * @returns Number of enemies whose path was overridden.
    */
@@ -881,7 +885,7 @@ export class EnemyService {
     for (const enemy of this.enemies.values()) {
       if (enemy.isFlying) continue;
       if (enemy.dying) continue;
-      // Sprint 22 UNSHAKEABLE: skip if enemy.immuneToDetour
+      if (enemy.immuneToDetour === true) continue;
 
       const { col, row } = enemy.gridPosition;
 
@@ -972,6 +976,7 @@ export class EnemyService {
       ...(e.shieldBreaking !== undefined && { shieldBreaking: e.shieldBreaking }),
       ...(e.shieldBreakTimer !== undefined && { shieldBreakTimer: e.shieldBreakTimer }),
       ...(e.spawnedOnTurn !== undefined && { spawnedOnTurn: e.spawnedOnTurn }),
+      ...(e.immuneToDetour !== undefined && { immuneToDetour: e.immuneToDetour }),
     }));
     return { enemies, enemyCounter: this.enemyCounter };
   }

@@ -4,7 +4,7 @@ import { EnemyService } from './enemy.service';
 import { PathfindingService } from './pathfinding.service';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
-import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS, MINER_STATS, MINER_DIG_INTERVAL_TURNS } from '../models/enemy.model';
+import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS, MINER_STATS, MINER_DIG_INTERVAL_TURNS, UNSHAKEABLE_STATS } from '../models/enemy.model';
 import { GameBoardTile } from '../models/game-board-tile';
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
@@ -114,7 +114,7 @@ describe('EnemyService', () => {
       const types: EnemyType[] = [
         EnemyType.BASIC, EnemyType.FAST, EnemyType.HEAVY,
         EnemyType.SWIFT, EnemyType.BOSS, EnemyType.SHIELDED,
-        EnemyType.SWARM, EnemyType.FLYING, EnemyType.MINER
+        EnemyType.SWARM, EnemyType.FLYING, EnemyType.MINER, EnemyType.UNSHAKEABLE
       ];
       types.forEach(type => {
         const enemy = service.spawnEnemy(type, mockScene)!;
@@ -132,7 +132,8 @@ describe('EnemyService', () => {
         EnemyType.SHIELDED,
         EnemyType.SWARM,
         EnemyType.FLYING,
-        EnemyType.MINER
+        EnemyType.MINER,
+        EnemyType.UNSHAKEABLE
       ];
 
       types.forEach(type => {
@@ -3394,6 +3395,131 @@ describe('EnemyService', () => {
         // If enemy has no path remaining it won't step — not a failure
         expect(enemy.pathIndex).toBe(enemy.path.length - 1);
       }
+    });
+  });
+
+  // ── UNSHAKEABLE elite enemy (Sprint 22) ──────────────────────────────────
+
+  describe('UNSHAKEABLE enemy', () => {
+    it('should spawn with correct stats from UNSHAKEABLE_STATS', () => {
+      const enemy = service.spawnEnemy(EnemyType.UNSHAKEABLE, mockScene)!;
+
+      expect(enemy.type).toBe(EnemyType.UNSHAKEABLE);
+      expect(enemy.health).toBe(UNSHAKEABLE_STATS.health);
+      expect(enemy.speed).toBeCloseTo(UNSHAKEABLE_STATS.speed);
+      expect(enemy.value).toBe(UNSHAKEABLE_STATS.value);
+      expect(enemy.leakDamage).toBe(UNSHAKEABLE_STATS.leakDamage);
+    });
+
+    it('should set immuneToDetour = true on spawn', () => {
+      const enemy = service.spawnEnemy(EnemyType.UNSHAKEABLE, mockScene)!;
+
+      expect(enemy.immuneToDetour).toBe(true);
+    });
+
+    it('should NOT set immuneToDetour on non-UNSHAKEABLE enemies', () => {
+      const basic = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const heavy = service.spawnEnemy(EnemyType.HEAVY, mockScene)!;
+
+      expect(basic.immuneToDetour).toBeUndefined();
+      expect(heavy.immuneToDetour).toBeUndefined();
+    });
+  });
+
+  // ── applyDetour with UNSHAKEABLE ─────────────────────────────────────────
+
+  describe('applyDetour with UNSHAKEABLE', () => {
+    it('does not override path on UNSHAKEABLE enemy', () => {
+      const unshakeable = service.spawnEnemy(EnemyType.UNSHAKEABLE, mockScene)!;
+      const originalPath = [...unshakeable.path];
+      const originalIndex = unshakeable.pathIndex;
+
+      // Give it a short path so applyDetour would normally override it.
+      unshakeable.path = [
+        { x: 0, y: 0, g: 0, h: 0, f: 0 },
+        { x: 9, y: 9, g: 0, h: 0, f: 0 },
+      ];
+      unshakeable.pathIndex = 0;
+
+      const count = service.applyDetour();
+
+      // UNSHAKEABLE is immune — count is 0, path unchanged.
+      expect(count).toBe(0);
+      expect(unshakeable.path.length).toBe(2);
+      expect(unshakeable.pathIndex).toBe(0);
+    });
+
+    it('overrides HEAVY path but skips UNSHAKEABLE path in the same applyDetour call', () => {
+      const heavy = service.spawnEnemy(EnemyType.HEAVY, mockScene)!;
+      const unshakeable = service.spawnEnemy(EnemyType.UNSHAKEABLE, mockScene)!;
+
+      // Give both enemies a short 2-node path so applyDetour would override if eligible.
+      const shortPath = (): Array<{ x: number; y: number; g: number; h: number; f: number }> => [
+        { x: 0, y: 0, g: 0, h: 0, f: 0 },
+        { x: 9, y: 9, g: 0, h: 0, f: 0 },
+      ];
+
+      heavy.path = shortPath();
+      heavy.pathIndex = 0;
+      unshakeable.path = shortPath();
+      unshakeable.pathIndex = 0;
+
+      const count = service.applyDetour();
+
+      // Only HEAVY is eligible — UNSHAKEABLE is immune.
+      expect(count).toBe(1);
+      // HEAVY gets a longer rerouted path.
+      expect(heavy.path.length).toBeGreaterThan(2);
+      // UNSHAKEABLE path is unchanged.
+      expect(unshakeable.path.length).toBe(2);
+    });
+  });
+
+  // ── UNSHAKEABLE serialize round-trip ─────────────────────────────────────
+
+  describe('UNSHAKEABLE serialize round-trip', () => {
+    it('serializeEnemies() preserves immuneToDetour for UNSHAKEABLE', () => {
+      const enemy = service.spawnEnemy(EnemyType.UNSHAKEABLE, mockScene)!;
+
+      const { enemies } = service.serializeEnemies();
+      const serialized = enemies.find(e => e.id === enemy.id)!;
+
+      expect(serialized.immuneToDetour).toBe(true);
+    });
+
+    it('serializeEnemies() omits immuneToDetour for non-UNSHAKEABLE enemies', () => {
+      const basic = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      const { enemies } = service.serializeEnemies();
+      const serialized = enemies.find(e => e.id === basic.id)!;
+
+      expect((serialized as unknown as Record<string, unknown>)['immuneToDetour']).toBeUndefined();
+    });
+
+    it('restoreEnemies() preserves immuneToDetour on UNSHAKEABLE', () => {
+      const serialized: SerializableEnemy[] = [
+        {
+          id: 'unshakeable-1',
+          type: EnemyType.UNSHAKEABLE,
+          position: { x: 0, y: UNSHAKEABLE_STATS.size, z: 0 },
+          gridPosition: { row: 0, col: 0 },
+          health: UNSHAKEABLE_STATS.health,
+          maxHealth: UNSHAKEABLE_STATS.health,
+          speed: UNSHAKEABLE_STATS.speed,
+          value: UNSHAKEABLE_STATS.value,
+          leakDamage: UNSHAKEABLE_STATS.leakDamage,
+          path: [],
+          pathIndex: 0,
+          distanceTraveled: 0,
+          immuneToDetour: true,
+        }
+      ];
+      const meshMap = new Map<string, THREE.Mesh>([['unshakeable-1', new THREE.Mesh()]]);
+
+      service.restoreEnemies(serialized, meshMap, 1);
+
+      const restored = service.getEnemies().get('unshakeable-1')!;
+      expect(restored.immuneToDetour).toBe(true);
     });
   });
 });

@@ -126,4 +126,16 @@ export const ENEMY_INFO: Record<EnemyType, EnemyInfo> = {
     color: ENEMY_STATS[EnemyType.MINER].color,
     immunities: [],
   },
+  [EnemyType.UNSHAKEABLE]: {
+    type: EnemyType.UNSHAKEABLE,
+    name: 'Unshakeable',
+    description: 'Massive elite enemy immune to forced rerouting. Cannot be affected by DETOUR.',
+    health: ENEMY_STATS[EnemyType.UNSHAKEABLE].health,
+    speed: ENEMY_STATS[EnemyType.UNSHAKEABLE].speed,
+    reward: ENEMY_STATS[EnemyType.UNSHAKEABLE].value,
+    leakDamage: ENEMY_STATS[EnemyType.UNSHAKEABLE].leakDamage,
+    special: 'Immune to DETOUR, 3 leak damage',
+    color: ENEMY_STATS[EnemyType.UNSHAKEABLE].color,
+    immunities: ['Detour'],
+  },
 };

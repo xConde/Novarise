@@ -92,6 +92,8 @@ export interface SerializableEnemy {
   readonly shieldBreakTimer?: number;
   /** Spawn turn for MINER enemies — drives 3-turn dig cadence. Undefined on non-MINER enemies. */
   readonly spawnedOnTurn?: number;
+  /** True for UNSHAKEABLE elite — immune to DETOUR rerouting. Undefined on all other enemy types. */
+  readonly immuneToDetour?: boolean;
 }
 
 /**
