@@ -83,6 +83,8 @@ import { WavePreviewService, FutureWaveSummary } from './services/wave-preview.s
 import { HandCard } from './components/card-hand/card-hand.component';
 import { PathMutationService } from './services/path-mutation.service';
 import { ElevationService } from './services/elevation.service';
+import { LineOfSightService } from './services/line-of-sight.service';
+import { TerraformMaterialPoolService } from './services/terraform-material-pool.service';
 import { ELEVATION_CONFIG } from './constants/elevation.constants';
 import { BlockType } from './models/game-board-tile';
 import { BOARD_CONFIG } from './constants/board.constants';
@@ -150,7 +152,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, WavePreviewService]
+  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;

@@ -17,10 +17,6 @@ import { PileInspectorComponent } from './game-board/components/pile-inspector/p
 import { LastTurnSummaryComponent } from './game-board/components/last-turn-summary/last-turn-summary.component';
 import { CardDetailComponent } from './game-board/components/card-detail/card-detail.component';
 import { IconComponent } from '@shared/components/icon/icon.component';
-import { PathMutationService } from './game-board/services/path-mutation.service';
-import { ElevationService } from './game-board/services/elevation.service';
-import { LineOfSightService } from './game-board/services/line-of-sight.service';
-import { TerraformMaterialPoolService } from './game-board/services/terraform-material-pool.service';
 
 @NgModule({
   declarations: [
@@ -40,6 +36,11 @@ import { TerraformMaterialPoolService } from './game-board/services/terraform-ma
     RouterModule.forChild([{ path: '', component: GameComponent, canDeactivate: [gameLeaveGuard] }]),
     IconComponent,
   ],
-  providers: [GameBoardService, CombatVFXService, GamePauseService, ChallengeDisplayService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService]
+  // PathMutationService / ElevationService / LineOfSightService / TerraformMaterialPoolService
+  // live on GameBoardComponent.providers, NOT here. Each one transitively depends on
+  // component-scoped peers (BoardMeshRegistryService, PathfindingService, SceneService);
+  // hoisting them to module scope breaks DI because module injectors can't see
+  // component-level providers. See regression fix 2026-04-18.
+  providers: [GameBoardService, CombatVFXService, GamePauseService, ChallengeDisplayService]
 })
 export class GameModule {}
