@@ -11,9 +11,9 @@ import { TowerType } from '../../game/game-board/models/tower.model';
 import { MODIFIER_STAT } from './modifier-stat.constants';
 
 describe('CARD_DEFINITIONS', () => {
-  it('has exactly 71 cards', () => {
-    // Phase 4 adds HANDSHAKE (sprint 43) + FORMATION (sprint 44) + LINKWORK (sprint 45) + HARMONIC (sprint 46) + GRID_SURGE (sprint 47).
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(71);
+  it('has exactly 72 cards', () => {
+    // Phase 4 adds HANDSHAKE (sprint 43) + FORMATION (sprint 44) + LINKWORK (sprint 45) + HARMONIC (sprint 46) + GRID_SURGE (sprint 47) + CONDUIT_BRIDGE (sprint 48).
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(72);
   });
 
   it('contains all CardId enum values', () => {
@@ -60,8 +60,8 @@ describe('CARD_DEFINITIONS', () => {
       expect(getCardsByType(CardType.MODIFIER).length).toBe(23);
     });
 
-    it('has 6 utility cards', () => {
-      expect(getCardsByType(CardType.UTILITY).length).toBe(6);
+    it('has 7 utility cards (adds CONDUIT_BRIDGE in sprint 48)', () => {
+      expect(getCardsByType(CardType.UTILITY).length).toBe(7);
     });
   });
 

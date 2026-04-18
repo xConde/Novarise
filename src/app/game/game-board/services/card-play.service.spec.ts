@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { CardPlayService, CardPlayCallbacks } from './card-play.service';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
+import { TowerGraphService } from './tower-graph.service';
 import { DeckService } from '../../../run/services/deck.service';
 import { RunService } from '../../../run/services/run.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
@@ -354,6 +355,85 @@ describe('CardPlayService', () => {
       service.onCardPlayed(card);
       // draw-two draws 2 cards
       expect(deckSpy.drawOne).toHaveBeenCalledTimes(2);
+    });
+
+    // Phase 4 sprint 48 — CONDUIT_BRIDGE utility resolution.
+    describe('CONDUIT_BRIDGE ("bridge_towers" utility)', () => {
+      it('is a no-op when TowerGraphService is absent (pre-Conduit test beds)', () => {
+        // Default TestBed does not provide TowerGraphService, so the @Optional
+        // graphService is undefined. Card still consumes energy (playCard fires),
+        // but no virtual edge is registered.
+        towerCombatSpy.getPlacedTowers.and.returnValue(new Map());
+        const card: CardInstance = { instanceId: 'cb-1', cardId: CardId.CONDUIT_BRIDGE, upgraded: false };
+        service.onCardPlayed(card);
+        // Card consumed (utility cards are instant-resolve via playCard).
+        expect(deckSpy.playCard).toHaveBeenCalledWith('cb-1');
+      });
+
+      it('no-op when fewer than 2 towers exist', () => {
+        const graphSpy = jasmine.createSpyObj<TowerGraphService>('TowerGraphService', ['addVirtualEdge']);
+        // Inject via reflection — the service was constructed without it, so
+        // set the private field directly to validate the early-return branch.
+        (service as unknown as { towerGraphService: TowerGraphService }).towerGraphService = graphSpy;
+        towerCombatSpy.getPlacedTowers.and.returnValue(new Map());
+        const card: CardInstance = { instanceId: 'cb-2', cardId: CardId.CONDUIT_BRIDGE, upgraded: false };
+        service.onCardPlayed(card);
+        expect(graphSpy.addVirtualEdge).not.toHaveBeenCalled();
+      });
+
+      it('no-op when all tower pairs are adjacent (manhattan ≤ 1)', () => {
+        const graphSpy = jasmine.createSpyObj<TowerGraphService>('TowerGraphService', ['addVirtualEdge']);
+        (service as unknown as { towerGraphService: TowerGraphService }).towerGraphService = graphSpy;
+        // Two towers at (5, 5) and (5, 6) — spatially adjacent.
+        const towers = new Map<string, { row: number; col: number; type: TowerType; level: number; totalInvested: number }>();
+        towers.set('5-5', { row: 5, col: 5, type: TowerType.BASIC, level: 1, totalInvested: 50 });
+        towers.set('5-6', { row: 5, col: 6, type: TowerType.BASIC, level: 1, totalInvested: 50 });
+        towerCombatSpy.getPlacedTowers.and.returnValue(towers as never);
+        const card: CardInstance = { instanceId: 'cb-3', cardId: CardId.CONDUIT_BRIDGE, upgraded: false };
+        service.onCardPlayed(card);
+        expect(graphSpy.addVirtualEdge).not.toHaveBeenCalled();
+      });
+
+      it('calls addVirtualEdge with expiresOnTurn = currentTurn + duration + 1', () => {
+        const graphSpy = jasmine.createSpyObj<TowerGraphService>('TowerGraphService', ['addVirtualEdge']);
+        (service as unknown as { towerGraphService: TowerGraphService }).towerGraphService = graphSpy;
+        graphSpy.addVirtualEdge.and.returnValue(true);
+        // Two non-adjacent towers (manhattan 5).
+        const towers = new Map<string, { row: number; col: number; type: TowerType; level: number; totalInvested: number }>();
+        towers.set('5-5', { row: 5, col: 5, type: TowerType.BASIC, level: 1, totalInvested: 50 });
+        towers.set('5-10', { row: 5, col: 10, type: TowerType.BASIC, level: 1, totalInvested: 50 });
+        towerCombatSpy.getPlacedTowers.and.returnValue(towers as never);
+        combatLoopSpy.getTurnNumber.and.returnValue(7);
+
+        const card: CardInstance = { instanceId: 'cb-4', cardId: CardId.CONDUIT_BRIDGE, upgraded: false };
+        service.onCardPlayed(card);
+
+        // CARD_VALUES.conduitBridgeDuration = 3. Expires at 7 + 3 + 1 = 11
+        // (see applyConduitBridge docstring: +1 compensates for top-of-turn
+        // graph tickTurn so the edge lasts `duration` turns of play).
+        expect(graphSpy.addVirtualEdge).toHaveBeenCalledWith(
+          5, 5, 5, 10, 11, jasmine.any(String),
+        );
+      });
+
+      it('upgraded card uses upgradedDuration (4 turns)', () => {
+        const graphSpy = jasmine.createSpyObj<TowerGraphService>('TowerGraphService', ['addVirtualEdge']);
+        (service as unknown as { towerGraphService: TowerGraphService }).towerGraphService = graphSpy;
+        graphSpy.addVirtualEdge.and.returnValue(true);
+        const towers = new Map<string, { row: number; col: number; type: TowerType; level: number; totalInvested: number }>();
+        towers.set('5-5', { row: 5, col: 5, type: TowerType.BASIC, level: 1, totalInvested: 50 });
+        towers.set('5-10', { row: 5, col: 10, type: TowerType.BASIC, level: 1, totalInvested: 50 });
+        towerCombatSpy.getPlacedTowers.and.returnValue(towers as never);
+        combatLoopSpy.getTurnNumber.and.returnValue(0);
+
+        const card: CardInstance = { instanceId: 'cb-5', cardId: CardId.CONDUIT_BRIDGE, upgraded: true };
+        service.onCardPlayed(card);
+
+        // upgradedDuration=4 → expiresOnTurn = 0 + 4 + 1 = 5.
+        expect(graphSpy.addVirtualEdge).toHaveBeenCalledWith(
+          5, 5, 5, 10, 5, jasmine.any(String),
+        );
+      });
     });
   });
 

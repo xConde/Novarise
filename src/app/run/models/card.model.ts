@@ -127,6 +127,7 @@ export enum CardId {
   // Conduit archetype — uncommon cards (Phase 4, Sprints 46+)
   HARMONIC = 'HARMONIC',
   GRID_SURGE = 'GRID_SURGE',
+  CONDUIT_BRIDGE = 'CONDUIT_BRIDGE',
 }
 
 export enum CardType {

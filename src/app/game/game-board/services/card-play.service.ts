@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 
 import { TowerType, MAX_TOWER_LEVEL } from '../models/tower.model';
@@ -20,6 +20,7 @@ import { RunService } from '../../../run/services/run.service';
 import { WavePreviewService } from './wave-preview.service';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
+import { TowerGraphService } from './tower-graph.service';
 import {
   CardInstance,
   SpellCardEffect,
@@ -128,6 +129,13 @@ export class CardPlayService {
      * elevation-model.md §4 — peer service, not a MutationOp extension.
      */
     private elevationService: ElevationService,
+    /**
+     * Phase 4 sprint 48 — CONDUIT_BRIDGE writes virtual edges via this service.
+     * @Optional() — test beds that predate sprint 48 or omit Conduit primitives
+     * see bridge_towers as a no-op (card consumes energy but nothing happens).
+     * Production GameBoardComponent always wires it.
+     */
+    @Optional() private towerGraphService?: TowerGraphService,
   ) {}
 
   /**
@@ -790,8 +798,57 @@ export class CardPlayService {
         }
         break;
       }
+      case 'bridge_towers':
+        this.applyConduitBridge(effect.value);
+        break;
       default:
         break;
     }
+  }
+
+  /**
+   * Phase 4 sprint 48 — CONDUIT_BRIDGE utility card resolution. Selects a
+   * random non-adjacent tower pair via seeded RNG and registers a virtual
+   * adjacency edge with `expiresOnTurn = currentTurn + duration + 1`.
+   *
+   * The +1 offset compensates for TowerGraphService.tickTurn running at the
+   * TOP of CombatLoopService.resolveTurn (consistent with path-mutation /
+   * elevation expiry). With `expiresOnTurn = M + N + 1` where M is the
+   * play-turn, the edge is alive during turns M+1..M+N (N turns total).
+   *
+   * MVP behavior: random pair from all non-adjacent pairs (Manhattan > 1).
+   * No-op when fewer than 2 towers exist, no non-adjacent pair exists, or
+   * the graph service is absent (test beds). Energy is still consumed
+   * (card was already played at this point).
+   */
+  private applyConduitBridge(duration: number): void {
+    if (!this.towerGraphService) return;
+    const towers = Array.from(this.towerCombatService.getPlacedTowers().values());
+    if (towers.length < 2) return;
+
+    // Enumerate all non-adjacent tower pairs (Manhattan distance > 1).
+    // Adjacent pairs are already spatial edges; bridging them adds no value.
+    const pairs: Array<{ aRow: number; aCol: number; bRow: number; bCol: number }> = [];
+    for (let i = 0; i < towers.length; i++) {
+      for (let j = i + 1; j < towers.length; j++) {
+        const t1 = towers[i];
+        const t2 = towers[j];
+        const manhattan = Math.abs(t1.row - t2.row) + Math.abs(t1.col - t2.col);
+        if (manhattan > 1) {
+          pairs.push({ aRow: t1.row, aCol: t1.col, bRow: t2.row, bCol: t2.col });
+        }
+      }
+    }
+    if (pairs.length === 0) return;
+
+    const pickIdx = Math.floor(this.runService.nextRandom() * pairs.length);
+    const picked = pairs[pickIdx];
+    const currentTurn = this.combatLoopService.getTurnNumber();
+    // See function docstring for the +1 rationale.
+    const expiresOnTurn = currentTurn + duration + 1;
+    this.towerGraphService.addVirtualEdge(
+      picked.aRow, picked.aCol, picked.bRow, picked.bCol,
+      expiresOnTurn, `conduit_bridge_turn_${currentTurn}`,
+    );
   }
 }

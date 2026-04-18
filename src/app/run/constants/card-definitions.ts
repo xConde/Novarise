@@ -322,6 +322,19 @@ const CARD_VALUES = {
   gridSurgeBonus: 1.0,                // +100% damage (base, ×2 multiplier)
   gridSurgeUpgradedBonus: 1.5,        // +150% damage (upgraded, ×2.5 multiplier)
   gridSurgeDuration: 1,               // turn countdown (1 turn)
+
+  // ── Conduit archetype — CONDUIT_BRIDGE (Sprint 48) ───────────────────────
+  // CONDUIT_BRIDGE (2E uncommon): utility card that applies a virtual
+  // adjacency edge between two random non-adjacent towers via seeded RNG
+  // for N turns. First v10-checkpoint consumer that populates the
+  // serialized towerGraph.virtualEdges field (previously always empty).
+  //
+  // MVP: auto-picks the pair (utility framework, no target picker UI).
+  // Full two-click tower target picker deferred to a utility-pass sprint —
+  // the card's core mechanical effect lands here.
+  conduitBridgeCost: 2,
+  conduitBridgeDuration: 3,           // turn duration (3 turns, base)
+  conduitBridgeUpgradedDuration: 4,   // turn duration (4 turns, upgraded)
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -1931,6 +1944,45 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
       value: CARD_VALUES.gridSurgeUpgradedBonus,
       duration: CARD_VALUES.gridSurgeDuration,
       durationScope: 'turn' as const,
+    },
+    archetype: 'conduit' as const,
+    link: true,
+    terraform: false,
+  },
+
+  /**
+   * CONDUIT_BRIDGE (Sprint 48) — instant-resolve utility card. Picks two
+   * random non-adjacent towers via seeded RNG and installs a virtual
+   * adjacency edge between them for N turns. First consumer of the
+   * v10-checkpoint towerGraph.virtualEdges field.
+   *
+   * MVP implementation (no target-picker UI): auto-selects the pair from
+   * all non-adjacent pairs. A later polish sprint may replace this with a
+   * two-click player-driven target picker.
+   *
+   * effect.value is the duration (turns). executeUtilityCard reads it when
+   * computing expiresOnTurn via TowerGraphService.addVirtualEdge.
+   *
+   * NOT terraform. Link: true for archetype tooling / pool weighting.
+   */
+  [CardId.CONDUIT_BRIDGE]: {
+    id: CardId.CONDUIT_BRIDGE,
+    name: 'Conduit Bridge',
+    description: 'Link two random distant towers as adjacent for 3 turns.',
+    upgradedDescription: 'Link two random distant towers as adjacent for 4 turns.',
+    type: CardType.UTILITY,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.conduitBridgeCost,
+    upgraded: false,
+    effect: {
+      type: 'utility' as const,
+      utilityId: 'bridge_towers',
+      value: CARD_VALUES.conduitBridgeDuration,
+    },
+    upgradedEffect: {
+      type: 'utility' as const,
+      utilityId: 'bridge_towers',
+      value: CARD_VALUES.conduitBridgeUpgradedDuration,
     },
     archetype: 'conduit' as const,
     link: true,
