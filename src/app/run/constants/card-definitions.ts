@@ -302,8 +302,8 @@ const CARD_VALUES = {
 
   // ── Conduit — CONDUIT_BRIDGE ────────────────────────────────────────────
   conduitBridgeCost: 2,
-  conduitBridgeDuration: 3,           // turns
-  conduitBridgeUpgradedDuration: 4,
+  conduitBridgeDuration: 5,           // turns
+  conduitBridgeUpgradedDuration: 7,
 
   // ── Conduit — ARCHITECT ─────────────────────────────────────────────────
   architectCost: 3,
@@ -1874,8 +1874,8 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.CONDUIT_BRIDGE]: {
     id: CardId.CONDUIT_BRIDGE,
     name: 'Conduit Bridge',
-    description: 'Link two non-adjacent towers as neighbors for 3 turns.',
-    upgradedDescription: 'Link two non-adjacent towers as neighbors for 4 turns.',
+    description: 'Link two non-adjacent towers as neighbors for 5 turns.',
+    upgradedDescription: 'Link two non-adjacent towers as neighbors for 7 turns.',
     type: CardType.UTILITY,
     rarity: CardRarity.UNCOMMON,
     energyCost: CARD_VALUES.conduitBridgeCost,
