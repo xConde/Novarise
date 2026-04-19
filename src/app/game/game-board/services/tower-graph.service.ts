@@ -101,8 +101,10 @@ export class TowerGraphService {
    * Shape: `{ a, b, kind }` with a/b lex-ordered (`a < b`) so subscribers
    * can key on the canonical edge id.
    *
-   * Subjects `.complete()` in `reset()` to let subscribers release refs
-   * early even though the component-scoped instance is also destroyed.
+   * NOTE: subjects are NOT completed in `reset()` because the service is
+   * reused across encounters (same component-scoped instance). Subscribers
+   * are released when the component is destroyed via LinkMeshService's
+   * own ngOnDestroy.
    */
   private readonly edgesAddedSubject = new Subject<TowerGraphEdge>();
   private readonly edgesRemovedSubject = new Subject<TowerGraphEdge>();
