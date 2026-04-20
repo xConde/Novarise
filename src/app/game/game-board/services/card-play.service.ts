@@ -31,12 +31,22 @@ import {
   TileTargetResult,
   isTerraformTargetEffect,
   isElevationTargetEffect,
+  CardDefinition,
 } from '../../../run/models/card.model';
 import { MutationOp } from './path-mutation.types';
 import { ElevationOp } from './elevation.types';
 import { getCardDefinition } from '../../../run/constants/card-definitions';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 import { disposeMaterial } from '../utils/three-utils';
+
+/**
+ * Upgraded CARTOGRAPHER_SEAL refunds this many energy on the first terraform
+ * card played each turn. Mirror of CARD_VALUES.cartographerSealRefundAmount —
+ * both must stay in sync. Lives here (service module scope) rather than in a
+ * shared constants file because it's consumed only by maybeRefundTerraform
+ * below and the symmetric test in card-play.service.spec.ts.
+ */
+const CARTOGRAPHER_SEAL_REFUND_AMOUNT = 1;
 
 export interface CardPlayCallbacks {
   onEnterPlacementMode: (type: TowerType, card: CardInstance) => void;
@@ -473,9 +483,23 @@ export class CardPlayService {
     // Mutation succeeded — consume the card (deducts energy, moves to discard).
     // Energy was confirmed sufficient above, so playCard should not fail here.
     this.deckService.playCard(card.instanceId);
+    this.maybeRefundTerraformForUpgradedSeal(def);
     this.clearTileTargetState();
     this.callbacks?.onExitTileTargetMode?.();
     return { ok: true };
+  }
+
+  /**
+   * Upgraded CARTOGRAPHER_SEAL refund hook. Called on every terraform card's
+   * successful play (both terraform_target and elevation_target paths). Gates
+   * on def.terraform (so non-terraform modifiers don't trigger) and delegates
+   * to CardEffectService.tryConsumeTerraformRefund for the once-per-turn
+   * check. Refunds are capped by deckService.addEnergy's max-clamp.
+   */
+  private maybeRefundTerraformForUpgradedSeal(def: CardDefinition): void {
+    if (!def.terraform) return;
+    if (!this.cardEffectService.tryConsumeTerraformRefund()) return;
+    this.deckService.addEnergy(CARTOGRAPHER_SEAL_REFUND_AMOUNT);
   }
 
   /**
@@ -581,6 +605,7 @@ export class CardPlayService {
       }
 
       this.deckService.playCard(card.instanceId);
+      this.maybeRefundTerraformForUpgradedSeal(def);
       this.clearTileTargetState();
       this.callbacks?.onExitTileTargetMode?.();
       return { ok: true };
@@ -627,6 +652,7 @@ export class CardPlayService {
 
     // Success — consume the card.
     this.deckService.playCard(card.instanceId);
+    this.maybeRefundTerraformForUpgradedSeal(def);
     this.clearTileTargetState();
     this.callbacks?.onExitTileTargetMode?.();
     return { ok: true };
@@ -729,6 +755,7 @@ export class CardPlayService {
 
     // Center succeeded — consume the card.
     this.deckService.playCard(card.instanceId);
+    this.maybeRefundTerraformForUpgradedSeal(getCardDefinition(card.cardId));
     this.clearTileTargetState();
     this.callbacks?.onExitTileTargetMode?.();
     return { ok: true };

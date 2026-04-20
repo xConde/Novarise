@@ -209,7 +209,14 @@ const CARD_VALUES = {
 
   // CARTOGRAPHER_SEAL (sprint 17): 2E rare anchor. All terraform mutations this
   // encounter persist permanently (duration is forced to null at resolve time).
+  // VALUE acts as a tier sentinel — 1 = anchor-only (base card), 2 = anchor +
+  // first-terraform-per-turn refund (upgraded card). CardPlayService checks the
+  // anchor presence (base behavior) and separately calls
+  // CardEffectService.tryConsumeTerraformRefund to gate the 1E refund.
   cartographerSealCost: 2,
+  cartographerSealBaseValue: 1,
+  cartographerSealUpgradedValue: 2,
+  cartographerSealRefundAmount: 1,        // energy refunded on first terraform each turn
   // LABYRINTH_MIND (sprint 18): 2E rare build-around. Tower damage scales with
   // current spawner→exit path length. Multiplier = 1 + (pathLength * k).
   // k=0.02 → 30-tile path = 60% bonus, 50-tile path = 100% bonus.
@@ -1385,7 +1392,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     id: CardId.CARTOGRAPHER_SEAL,
     name: 'Cartographer\'s Seal',
     description: 'All terraform you play this encounter is permanent.',
-    upgradedDescription: 'All terraform you play this encounter is permanent.',
+    upgradedDescription: 'All terraform you play this encounter is permanent. The first terraform each turn refunds 1 energy.',
     type: CardType.MODIFIER,
     rarity: CardRarity.RARE,
     energyCost: CARD_VALUES.cartographerSealCost,
@@ -1393,13 +1400,13 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     effect: {
       type: 'modifier',
       stat: MODIFIER_STAT.TERRAFORM_ANCHOR,
-      value: 1,
+      value: CARD_VALUES.cartographerSealBaseValue,
       duration: null,  // encounter-scoped — see tickWave
     },
     upgradedEffect: {
       type: 'modifier',
       stat: MODIFIER_STAT.TERRAFORM_ANCHOR,
-      value: 1,
+      value: CARD_VALUES.cartographerSealUpgradedValue,
       duration: null,
     },
     archetype: 'cartographer',

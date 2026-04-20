@@ -21,10 +21,17 @@ export const MODIFIER_STAT = {
   // via `hasActiveModifier()` rather than `getModifierValue()` — the aggregator
   // returns 0, which is harmless.
   //
-  // - TERRAFORM_ANCHOR (CARTOGRAPHER_SEAL): when active, forces terraform
-  //   mutations to duration=null (permanent).
+  // - TERRAFORM_ANCHOR (CARTOGRAPHER_SEAL): encounter-scoped tier sentinel.
+  //   Value 1 = anchor-only (base card: forces terraform duration → null).
+  //   Value 2 = anchor + first-terraform-per-turn refund (upgraded card).
+  //   The refund gate is a separate per-turn modifier so save/restore rides
+  //   along with existing cardModifiers serialization.
+  // - TERRAFORM_REFUND_USED_THIS_TURN: 1-turn boolean flag. Added the moment
+  //   the upgraded seal refund fires; auto-expires next tickTurn. A second
+  //   terraform played in the same turn sees this present → refund denied.
   // - LABYRINTH_MIND: tower damage scales with current spawner→exit path length.
   TERRAFORM_ANCHOR: 'terraformAnchor',
+  TERRAFORM_REFUND_USED_THIS_TURN: 'terraformRefundUsedThisTurn',
   LABYRINTH_MIND: 'labyrinthMind',
 
   /** HIGH_PERCH: conditional range bonus for towers on elevation ≥ 2. */

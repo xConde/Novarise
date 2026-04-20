@@ -909,4 +909,54 @@ describe('CardEffectService', () => {
       expect(service.getModifierValue(HIGH_PERCH_STAT)).toBe(0);
     });
   });
+
+  // ── CARTOGRAPHER_SEAL upgraded — tryConsumeTerraformRefund ──────────────
+
+  describe('tryConsumeTerraformRefund', () => {
+    it('returns false when no TERRAFORM_ANCHOR modifier is active (no seal played)', () => {
+      expect(service.tryConsumeTerraformRefund()).toBeFalse();
+    });
+
+    it('returns false when BASE seal is active (value 1, below upgraded threshold)', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));
+      expect(service.tryConsumeTerraformRefund()).toBeFalse();
+    });
+
+    it('returns true when UPGRADED seal is active (value 2)', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 2, null));
+      expect(service.tryConsumeTerraformRefund()).toBeTrue();
+    });
+
+    it('returns false on the SECOND call in the same turn (refund consumed)', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 2, null));
+      expect(service.tryConsumeTerraformRefund()).toBeTrue();
+      expect(service.tryConsumeTerraformRefund()).toBeFalse();
+    });
+
+    it('returns true again AFTER tickTurn (the used-this-turn flag expires)', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 2, null));
+      expect(service.tryConsumeTerraformRefund()).toBeTrue();
+      service.tickTurn();  // auto-expires TERRAFORM_REFUND_USED_THIS_TURN
+      expect(service.tryConsumeTerraformRefund()).toBeTrue();
+    });
+
+    it('two stacked BASE seals (aggregate value 2) do NOT spoof upgraded tier', () => {
+      // Anti-spoofing: the refund gates on a SINGLE entry whose value ≥ 2, not
+      // the aggregate of multiple base entries. Documented in
+      // CARTOGRAPHER_SEAL_UPGRADED_VALUE comment in card-effect.service.ts.
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));
+      expect(service.tryConsumeTerraformRefund()).toBeFalse();
+    });
+
+    it('reset clears the used-this-turn flag so a fresh encounter starts refund-available', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 2, null));
+      service.tryConsumeTerraformRefund();  // consume
+      service.reset();
+      // New encounter: upgraded seal must be re-applied; refund unavailable until it is.
+      expect(service.tryConsumeTerraformRefund()).toBeFalse();
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 2, null));
+      expect(service.tryConsumeTerraformRefund()).toBeTrue();
+    });
+  });
 });

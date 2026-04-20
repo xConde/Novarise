@@ -1000,12 +1000,14 @@ export function createCardEffectServiceSpy(): jasmine.SpyObj<CardEffectService> 
     'hasActiveModifier',
     'getActiveModifiers',
     'tryConsumeLeakBlock',
+    'tryConsumeTerraformRefund',
     'reset',
   ]);
   spy.getModifierValue.and.returnValue(0);
   spy.hasActiveModifier.and.returnValue(false);
   spy.getActiveModifiers.and.returnValue([]);
   spy.tryConsumeLeakBlock.and.returnValue(false);
+  spy.tryConsumeTerraformRefund.and.returnValue(false);
   return spy;
 }
 

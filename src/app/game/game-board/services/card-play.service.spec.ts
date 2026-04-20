@@ -127,10 +127,12 @@ describe('CardPlayService', () => {
     );
 
     cardEffectSpy = jasmine.createSpyObj<CardEffectService>('CardEffectService', [
-      'applySpell', 'applyModifier', 'reset', 'hasActiveModifier',
+      'applySpell', 'applyModifier', 'reset', 'hasActiveModifier', 'tryConsumeTerraformRefund',
     ]);
     // Default: no modifiers active. Sprint-17 CARTOGRAPHER_SEAL specs override this.
     cardEffectSpy.hasActiveModifier.and.returnValue(false);
+    // Default: upgraded-seal refund OFF. Sprint-17 upgrade specs opt in.
+    cardEffectSpy.tryConsumeTerraformRefund.and.returnValue(false);
 
     towerCombatSpy = jasmine.createSpyObj<TowerCombatService>('TowerCombatService', [
       'getPlacedTowers', 'upgradeTower', 'unregisterTower',
@@ -941,6 +943,50 @@ describe('CardPlayService', () => {
         expect(pathMutationSpy.block).toHaveBeenCalledWith(
           0, 3, 3, 'tf-no-seal', currentTurn, mockScene,
         );
+      });
+
+      // ── Upgraded CARTOGRAPHER_SEAL — first-terraform-per-turn refund ────
+
+      it('refund fires on successful terraform when tryConsumeTerraformRefund returns true', () => {
+        cardEffectSpy.tryConsumeTerraformRefund.and.returnValue(true);
+        registerTerraformDef(1, 'build', null);
+        service['pendingTileTargetCard'] = makeTerraformInstance('tf-seal-refund');
+        service['pendingTileTargetEffect'] = makeTerraformEffect('build', null);
+        deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+        pathMutationSpy.build.and.returnValue({ ok: true } as MutationResult);
+
+        service.resolveTileTarget(2, 2, mockScene, currentTurn);
+
+        expect(cardEffectSpy.tryConsumeTerraformRefund).toHaveBeenCalled();
+        expect(deckSpy.addEnergy).toHaveBeenCalledWith(1);
+      });
+
+      it('refund does NOT fire when tryConsumeTerraformRefund returns false', () => {
+        cardEffectSpy.tryConsumeTerraformRefund.and.returnValue(false);
+        registerTerraformDef(1, 'build', null);
+        service['pendingTileTargetCard'] = makeTerraformInstance('tf-no-refund');
+        service['pendingTileTargetEffect'] = makeTerraformEffect('build', null);
+        deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+        pathMutationSpy.build.and.returnValue({ ok: true } as MutationResult);
+
+        service.resolveTileTarget(2, 2, mockScene, currentTurn);
+
+        expect(deckSpy.addEnergy).not.toHaveBeenCalled();
+      });
+
+      it('refund does NOT fire when board rejects the terraform (card never consumed)', () => {
+        cardEffectSpy.tryConsumeTerraformRefund.and.returnValue(true);
+        registerTerraformDef(1, 'build', null);
+        service['pendingTileTargetCard'] = makeTerraformInstance('tf-reject');
+        service['pendingTileTargetEffect'] = makeTerraformEffect('build', null);
+        deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+        pathMutationSpy.build.and.returnValue({ ok: false, reason: 'spawner-or-exit' } as MutationResult);
+
+        service.resolveTileTarget(2, 2, mockScene, currentTurn);
+
+        // Short-circuit on board rejection — refund hook never called.
+        expect(cardEffectSpy.tryConsumeTerraformRefund).not.toHaveBeenCalled();
+        expect(deckSpy.addEnergy).not.toHaveBeenCalled();
       });
     });
 

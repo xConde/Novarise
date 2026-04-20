@@ -25,6 +25,15 @@ import { CARTOGRAPHER_CONFIG } from '../../game/game-board/constants/cartographe
 import { DeckService } from './deck.service';
 import { WavePreviewService } from '../../game/game-board/services/wave-preview.service';
 
+/**
+ * Upgraded CARTOGRAPHER_SEAL sets TERRAFORM_ANCHOR.value to 2 via the tier-
+ * sentinel scheme on its card effect. Refund logic scans for a single active
+ * TERRAFORM_ANCHOR entry whose `value >= threshold` — NOT aggregate — so two
+ * base seals (value 1 + 1 = aggregate 2) don't spoof the upgrade. Mirror of
+ * CARD_VALUES.cartographerSealUpgradedValue.
+ */
+const CARTOGRAPHER_SEAL_UPGRADED_VALUE = 2;
+
 /** A single active modifier with a wave- or turn-based countdown. */
 export interface ActiveModifier {
   readonly stat: ModifierStat;
@@ -295,6 +304,34 @@ export class CardEffectService {
   /** All active modifiers (read-only snapshot for UI display). */
   getActiveModifiers(): ReadonlyArray<ActiveModifier> {
     return this.activeModifiers;
+  }
+
+  /**
+   * Upgraded CARTOGRAPHER_SEAL — attempt to claim the per-turn terraform
+   * refund. Returns true iff:
+   *  - TERRAFORM_ANCHOR's aggregate value ≥ upgraded-tier threshold (2), and
+   *  - no TERRAFORM_REFUND_USED_THIS_TURN modifier is currently active.
+   *
+   * When returning true, installs a 1-turn TERRAFORM_REFUND_USED_THIS_TURN
+   * modifier so a second terraform in the same turn sees it and is denied.
+   * The per-turn flag auto-expires via tickTurn at turn end, making the
+   * refund available again next turn. Rides along in cardModifiers
+   * serialization — no checkpoint version bump required.
+   */
+  tryConsumeTerraformRefund(): boolean {
+    const hasUpgradedSeal = this.activeModifiers.some(
+      m => m.stat === MODIFIER_STAT.TERRAFORM_ANCHOR && m.value >= CARTOGRAPHER_SEAL_UPGRADED_VALUE,
+    );
+    if (!hasUpgradedSeal) return false;
+    if (this.hasActiveModifier(MODIFIER_STAT.TERRAFORM_REFUND_USED_THIS_TURN)) return false;
+
+    this.activeModifiers.push({
+      stat: MODIFIER_STAT.TERRAFORM_REFUND_USED_THIS_TURN,
+      value: 1,
+      remainingWaves: null,
+      remainingTurns: 1,
+    });
+    return true;
   }
 
   /**

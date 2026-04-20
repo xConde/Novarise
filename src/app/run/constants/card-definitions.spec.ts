@@ -753,6 +753,28 @@ describe('CARD_DEFINITIONS', () => {
           fail('effect is not a modifier');
         }
       });
+
+      it('base value is 1 (anchor-only tier)', () => {
+        if (def.effect.type === 'modifier') {
+          expect(def.effect.value).toBe(1);
+        } else {
+          fail('effect is not a modifier');
+        }
+      });
+
+      it('upgraded value is 2 (anchor + refund tier sentinel)', () => {
+        if (def.upgradedEffect && def.upgradedEffect.type === 'modifier') {
+          expect(def.upgradedEffect.value).toBe(2);
+          expect(def.upgradedEffect.stat).toBe('terraformAnchor');
+          expect(def.upgradedEffect.duration).toBeNull();
+        } else {
+          fail('upgradedEffect is not a modifier');
+        }
+      });
+
+      it('upgraded description mentions the 1-energy refund each turn', () => {
+        expect(def.upgradedDescription).toMatch(/refunds? 1 energy/i);
+      });
     });
 
     describe('LABYRINTH_MIND (Sprint 18)', () => {
