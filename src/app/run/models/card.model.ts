@@ -421,6 +421,16 @@ export interface ElevationTargetCardEffect {
     /** Damage per unit of prior elevation, applied to all enemies on the tile. */
     readonly damagePerElevation: number;
   };
+  /**
+   * DEPRESS_TILE upgrade — when set, after the center 'depress' op succeeds,
+   * card-play picks one 4-dir adjacent tile via the seeded run RNG and applies
+   * the same depress (same amount, same duration, same exposeEnemies). The
+   * spread is best-effort: if every 4-dir neighbor is out-of-bounds, spawner/
+   * exit, or already-changed-this-turn, the center still succeeds and no
+   * spread occurs (mirrors CLIFFSIDE wing semantics). Only valid on
+   * `op: 'depress'`.
+   */
+  readonly spreadToAdjacent?: boolean;
 }
 
 /**

@@ -1267,6 +1267,117 @@ describe('CardPlayService', () => {
       });
     });
 
+    // ── DEPRESS_TILE upgrade — spreadToAdjacent ─────────────────────────────
+    //
+    // Upgraded DEPRESS_TILE sets `spreadToAdjacent: true` on its effect. After
+    // the center `depress` succeeds, card-play picks one 4-dir adjacent tile
+    // via the seeded run RNG and applies the same depress. Best-effort —
+    // rejected neighbors are silently skipped; shuffling continues until one
+    // succeeds or all four are exhausted.
+    describe('DEPRESS_TILE upgraded — spreadToAdjacent', () => {
+      function arm(
+        row: number,
+        col: number,
+        opts: { duration?: number | null; exposeEnemies?: boolean } = {},
+      ): void {
+        registerElevationDef(1, 'depress', 1, opts.duration ?? null, opts.exposeEnemies ?? true);
+        service['pendingElevationTargetCard'] = makeElevationInstance('elev-spread');
+        service['pendingElevationTargetEffect'] = {
+          type: 'elevation_target',
+          op: 'depress',
+          amount: 1,
+          duration: opts.duration ?? null,
+          exposeEnemies: opts.exposeEnemies ?? true,
+          spreadToAdjacent: true,
+        };
+        // Center resolves, then one adjacent neighbor — both depress calls succeed.
+        elevationSpy.depress.and.returnValue({ ok: true, newElevation: -1 });
+        // Deterministic RNG — always pick index 0 (first candidate).
+        const runSpy = TestBed.inject(RunService) as jasmine.SpyObj<RunService>;
+        runSpy.nextRandom.and.returnValue(0);
+      }
+
+      it('calls depress twice: once for center, once for a 4-dir adjacent tile', () => {
+        arm(3, 2);
+
+        const result = service.resolveTileTarget(3, 2, mockScene, currentTurn);
+
+        expect(result.ok).toBeTrue();
+        expect(elevationSpy.depress).toHaveBeenCalledTimes(2);
+      });
+
+      it('spread candidate is one of the 4 cardinal neighbors (not diagonal)', () => {
+        arm(3, 2);
+
+        service.resolveTileTarget(3, 2, mockScene, currentTurn);
+
+        const spreadCall = elevationSpy.depress.calls.argsFor(1);
+        const [spreadRow, spreadCol] = [spreadCall[0], spreadCall[1]];
+        const isCardinal =
+          (spreadRow === 2 && spreadCol === 2) ||
+          (spreadRow === 4 && spreadCol === 2) ||
+          (spreadRow === 3 && spreadCol === 1) ||
+          (spreadRow === 3 && spreadCol === 3);
+        expect(isCardinal).toBeTrue();
+      });
+
+      it('spread inherits center effect.amount / duration / exposeEnemies', () => {
+        arm(3, 2, { duration: null, exposeEnemies: true });
+
+        service.resolveTileTarget(3, 2, mockScene, currentTurn);
+
+        const [, , spreadAmount, spreadDuration] = elevationSpy.depress.calls.argsFor(1);
+        expect(spreadAmount).toBe(1);
+        expect(spreadDuration).toBeNull();
+      });
+
+      it('center still consumes the card even when every adjacent tile rejects', () => {
+        arm(3, 2);
+        // Center succeeds; every neighbor rejects.
+        elevationSpy.depress.and.callFake((row: number, col: number) => {
+          if (row === 3 && col === 2) return { ok: true, newElevation: -1 };
+          return { ok: false, reason: 'spawner-or-exit' };
+        });
+
+        const result = service.resolveTileTarget(3, 2, mockScene, currentTurn);
+
+        expect(result.ok).toBeTrue();
+        expect(deckSpy.playCard).toHaveBeenCalledWith('elev-spread');
+        // All 4 neighbors were attempted (1 center + 4 tries).
+        expect(elevationSpy.depress).toHaveBeenCalledTimes(5);
+      });
+
+      it('non-upgraded (spreadToAdjacent absent) only depresses center — ZERO spread calls', () => {
+        registerElevationDef(1, 'depress', 1, null, true);
+        service['pendingElevationTargetCard'] = makeElevationInstance('elev-base');
+        service['pendingElevationTargetEffect'] = {
+          type: 'elevation_target',
+          op: 'depress',
+          amount: 1,
+          duration: null,
+          exposeEnemies: true,
+          // spreadToAdjacent intentionally absent
+        };
+        elevationSpy.depress.and.returnValue({ ok: true, newElevation: -1 });
+
+        service.resolveTileTarget(3, 2, mockScene, currentTurn);
+
+        expect(elevationSpy.depress).toHaveBeenCalledTimes(1);
+      });
+
+      it('spread does NOT occur when the CENTER tile rejects (card is no-op)', () => {
+        arm(3, 2);
+        elevationSpy.depress.and.returnValue({ ok: false, reason: 'spawner-or-exit' });
+
+        const result = service.resolveTileTarget(3, 2, mockScene, currentTurn);
+
+        expect(result.ok).toBeFalse();
+        // Only the center attempt — spread short-circuits on center rejection.
+        expect(elevationSpy.depress).toHaveBeenCalledTimes(1);
+        expect(deckSpy.playCard).not.toHaveBeenCalled();
+      });
+    });
+
     describe('cancelTileTarget — covers elevation state', () => {
       it('clears pending elevation card on cancel', () => {
         service['pendingElevationTargetCard'] = makeElevationInstance();

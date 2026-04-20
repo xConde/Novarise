@@ -616,11 +616,54 @@ export class CardPlayService {
       return { ok: false, reason: elevationResult.reason };
     }
 
+    // DEPRESS_TILE upgrade: after the center succeeds, try to depress one
+    // 4-dir adjacent tile via the seeded run RNG. Best-effort — spawner/exit,
+    // out-of-bounds, and already-changed-this-turn neighbors are silently
+    // skipped. If every neighbor is ineligible, the center still succeeds and
+    // no spread occurs (mirrors CLIFFSIDE wing semantics).
+    if (effect.op === 'depress' && effect.spreadToAdjacent) {
+      this.spreadDepressToRandomAdjacent(row, col, effect, sourceId, currentTurn);
+    }
+
     // Success — consume the card.
     this.deckService.playCard(card.instanceId);
     this.clearTileTargetState();
     this.callbacks?.onExitTileTargetMode?.();
     return { ok: true };
+  }
+
+  /**
+   * DEPRESS_TILE upgrade — picks one 4-dir adjacent tile via seeded RNG and
+   * applies the same depress amount / duration / exposeEnemies. Failures are
+   * silently skipped; the center tile has already succeeded by the time this
+   * runs. Candidate shuffling is seeded so save/restore and run-seed sharing
+   * produce identical spread targets across replays.
+   */
+  private spreadDepressToRandomAdjacent(
+    centerRow: number,
+    centerCol: number,
+    effect: ElevationTargetCardEffect,
+    sourceId: string,
+    currentTurn: number,
+  ): void {
+    const candidates: Array<{ row: number; col: number }> = [
+      { row: centerRow - 1, col: centerCol },
+      { row: centerRow + 1, col: centerCol },
+      { row: centerRow, col: centerCol - 1 },
+      { row: centerRow, col: centerCol + 1 },
+    ];
+
+    // Seeded Fisher-Yates — pull one candidate at a time, call depress(), stop
+    // on the first success. Skipped candidates don't consume the spread slot.
+    const remaining = candidates.slice();
+    while (remaining.length > 0) {
+      const idx = Math.floor(this.runService.nextRandom() * remaining.length);
+      const pick = remaining.splice(idx, 1)[0];
+      const result = this.elevationService.depress(
+        pick.row, pick.col, effect.amount, effect.duration, sourceId, currentTurn,
+      );
+      if (result.ok) return;
+    }
   }
 
   /**
