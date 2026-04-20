@@ -4,6 +4,7 @@ import {
   getCardDefinition,
   getCardsByRarity,
   getCardsByType,
+  getEffectiveEnergyCost,
   getStarterDeck,
 } from './card-definitions';
 import { CardId, CardInstance, CardRarity, CardType, TowerCardEffect, ModifierCardEffect, ElevationTargetCardEffect } from '../models/card.model';
@@ -1151,6 +1152,59 @@ describe('CARD_DEFINITIONS', () => {
       const starterIds = new Set(getStarterDeck());
       expect(starterIds.has(CardId.KING_OF_THE_HILL)).toBeFalse();
       expect(starterIds.has(CardId.GRAVITY_WELL)).toBeFalse();
+    });
+  });
+
+  // ── getEffectiveEnergyCost — upgrade cost reduction ─────────────────────
+  describe('getEffectiveEnergyCost', () => {
+    it('returns base cost when the card instance is not upgraded', () => {
+      const instance: CardInstance = { instanceId: 'c1', cardId: CardId.ARCHITECT, upgraded: false };
+      expect(getEffectiveEnergyCost(instance)).toBe(3);
+    });
+
+    it('returns upgradedEnergyCost when the card instance IS upgraded and field is set (ARCHITECT)', () => {
+      const instance: CardInstance = { instanceId: 'c1', cardId: CardId.ARCHITECT, upgraded: true };
+      expect(getEffectiveEnergyCost(instance)).toBe(2);
+    });
+
+    it('falls back to base cost when upgraded but no upgradedEnergyCost field is set (LAY_TILE)', () => {
+      const instance: CardInstance = { instanceId: 'c1', cardId: CardId.LAY_TILE, upgraded: true };
+      // LAY_TILE upgrade uses drawOnSuccess, not cost reduction — upgradedEnergyCost undefined.
+      expect(getEffectiveEnergyCost(instance)).toBe(1);
+    });
+  });
+
+  // ── ARCHITECT (Sprint 49) — cost-reduction upgrade ──────────────────────
+  describe('ARCHITECT (sprint 49)', () => {
+    const def = CARD_DEFINITIONS[CardId.ARCHITECT];
+
+    it('exists as a rare conduit MODIFIER card', () => {
+      expect(def).toBeDefined();
+      expect(def.type).toBe(CardType.MODIFIER);
+      expect(def.rarity).toBe(CardRarity.RARE);
+      expect(def.archetype).toBe('conduit');
+    });
+
+    it('base costs 3 energy', () => {
+      expect(def.energyCost).toBe(3);
+    });
+
+    it('upgrade reduces cost to 2 energy via upgradedEnergyCost', () => {
+      expect(def.upgradedEnergyCost).toBe(2);
+    });
+
+    it('upgraded description mentions the 2-energy cost', () => {
+      expect(def.upgradedDescription).toMatch(/2 energy/i);
+    });
+
+    it('upgraded effect is structurally identical to base (cost-only upgrade)', () => {
+      if (def.effect.type === 'modifier' && def.upgradedEffect?.type === 'modifier') {
+        expect(def.upgradedEffect.stat).toBe(def.effect.stat);
+        expect(def.upgradedEffect.value).toBe(def.effect.value);
+        expect(def.upgradedEffect.duration).toBe(def.effect.duration);
+      } else {
+        fail('ARCHITECT effect or upgradedEffect is not a modifier');
+      }
     });
   });
 });

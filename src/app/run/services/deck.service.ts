@@ -8,7 +8,7 @@ import {
   DeckState,
   EnergyState,
 } from '../models/card.model';
-import { getCardDefinition } from '../constants/card-definitions';
+import { getCardDefinition, getEffectiveEnergyCost } from '../constants/card-definitions';
 import { SeededRng, createSeededRng } from '../constants/run.constants';
 import { SerializableDeckState } from '../../game/game-board/models/encounter-checkpoint.model';
 import { RelicService } from './relic.service';
@@ -174,7 +174,7 @@ export class DeckService {
     const card = this.deckState.hand[index];
     const def = getCardDefinition(card.cardId);
     const costModifier = this.relicService ? this.relicService.getCardEnergyCostModifier(def) : 0;
-    const cost = Math.max(0, def.energyCost + costModifier);
+    const cost = Math.max(0, getEffectiveEnergyCost(card) + costModifier);
 
     if (this.energyState.current < cost) return false;
 

@@ -187,6 +187,15 @@ export interface CardDefinition {
   readonly type: CardType;
   readonly rarity: CardRarity;
   readonly energyCost: number;
+  /**
+   * Optional energy cost applied when the card instance's `upgraded` flag is
+   * true. When undefined (default), the upgraded card costs the same as the
+   * base. Set on cards whose upgrade identity IS the cost reduction (e.g.,
+   * ARCHITECT 3E → 2E to enable same-turn combo plays). Reads route through
+   * `getEffectiveEnergyCost(card)` — do NOT read `def.energyCost` directly
+   * on play paths without checking this field.
+   */
+  readonly upgradedEnergyCost?: number;
   readonly effect: CardEffect;
   readonly upgradedEffect?: CardEffect;
   readonly upgraded: boolean;

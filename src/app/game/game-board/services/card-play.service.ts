@@ -35,7 +35,7 @@ import {
 } from '../../../run/models/card.model';
 import { MutationOp } from './path-mutation.types';
 import { ElevationOp } from './elevation.types';
-import { getCardDefinition } from '../../../run/constants/card-definitions';
+import { getCardDefinition, getEffectiveEnergyCost } from '../../../run/constants/card-definitions';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 import { disposeMaterial } from '../utils/three-utils';
 
@@ -242,7 +242,7 @@ export class CardPlayService {
       this.clearTileTargetState();
 
       // Check energy affordability without consuming — same pattern as tower cards.
-      if (this.deckService.getEnergy().current < def.energyCost) return;
+      if (this.deckService.getEnergy().current < getEffectiveEnergyCost(card)) return;
 
       // Enter tile-target mode — hold the card in limbo.
       this.pendingTileTargetCard = card;
@@ -257,7 +257,7 @@ export class CardPlayService {
       this.cancelPendingTowerCard();
       this.clearTileTargetState();
 
-      if (this.deckService.getEnergy().current < def.energyCost) return;
+      if (this.deckService.getEnergy().current < getEffectiveEnergyCost(card)) return;
 
       this.pendingElevationTargetCard = card;
       this.pendingElevationTargetEffect = effect;
@@ -277,7 +277,7 @@ export class CardPlayService {
       this.cancelPendingTowerCard();
 
       // Check energy affordability without consuming
-      if (this.deckService.getEnergy().current < def.energyCost) return;
+      if (this.deckService.getEnergy().current < getEffectiveEnergyCost(card)) return;
 
       // Hold the card in limbo — don't consume yet
       this.pendingTowerCard = card;
@@ -301,7 +301,7 @@ export class CardPlayService {
     }
 
     const cardInstanceId = card.instanceId;
-    const energyCost = def.energyCost;
+    const energyCost = getEffectiveEnergyCost(card);
     if (!this.deckService.playCard(cardInstanceId)) return;
 
     try {
@@ -393,7 +393,7 @@ export class CardPlayService {
 
     // Re-check energy immediately before mutation — a prior card play this
     // turn may have reduced available energy since the card was clicked.
-    if (this.deckService.getEnergy().current < def.energyCost) {
+    if (this.deckService.getEnergy().current < getEffectiveEnergyCost(card)) {
       this.clearTileTargetState();
       this.callbacks?.onExitTileTargetMode?.();
       return { ok: false, reason: 'insufficient-energy' };
@@ -562,7 +562,7 @@ export class CardPlayService {
     const def = getCardDefinition(card.cardId);
 
     // Re-check energy — another card play may have spent it since the card click.
-    if (this.deckService.getEnergy().current < def.energyCost) {
+    if (this.deckService.getEnergy().current < getEffectiveEnergyCost(card)) {
       this.clearTileTargetState();
       this.callbacks?.onExitTileTargetMode?.();
       return { ok: false, reason: 'insufficient-energy' };

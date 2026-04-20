@@ -18,7 +18,7 @@ import {
   DeckState,
   EnergyState,
 } from '../../../../run/models/card.model';
-import { getCardDefinition } from '../../../../run/constants/card-definitions';
+import { getCardDefinition, getEffectiveEnergyCost } from '../../../../run/constants/card-definitions';
 import { TOWER_CONFIGS, TowerType } from '../../models/tower.model';
 import { RelicService } from '../../../../run/services/relic.service';
 
@@ -223,7 +223,8 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
       const effect = instance.upgraded && definition.upgradedEffect ? definition.upgradedEffect : definition.effect;
       const goldCost = effect.type === 'tower' ? (TOWER_CONFIGS[effect.towerType]?.cost ?? null) : null;
       const costModifier = this.relicService ? this.relicService.getCardEnergyCostModifier(definition) : 0;
-      const effectiveEnergyCost = Math.max(0, definition.energyCost + costModifier);
+      const baseCost = getEffectiveEnergyCost(instance);
+      const effectiveEnergyCost = Math.max(0, baseCost + costModifier);
       return {
         instance,
         definition,

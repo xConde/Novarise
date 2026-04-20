@@ -119,9 +119,13 @@ export class CardDetailModalComponent implements AfterViewInit, OnDestroy {
 
     const rows: BalanceRow[] = [];
     // Energy cost — mirrored as stat row 0 because the def owns it, not the effect.
+    // Surface upgraded cost too when it differs (e.g., ARCHITECT 3E → 2E).
     rows.push({
       label: 'Energy cost',
       base: String(this.definition.energyCost),
+      upgraded: this.definition.upgradedEnergyCost !== undefined
+        ? String(this.definition.upgradedEnergyCost)
+        : undefined,
     });
 
     if (base.type === 'modifier') {

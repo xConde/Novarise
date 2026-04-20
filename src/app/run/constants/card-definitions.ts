@@ -327,7 +327,12 @@ const CARD_VALUES = {
   conduitBridgeUpgradedDuration: 7,
 
   // ── Conduit — ARCHITECT ─────────────────────────────────────────────────
+  // Base: 3E rare flag (cluster super-node adjacency). Upgraded: cost drops
+  // to 2E to enable same-turn combo plays with HANDSHAKE / GRID_SURGE —
+  // intentionally a cost-only upgrade; the identity stays with "cluster
+  // becomes one big adjacency group for neighbor-gated cards."
   architectCost: 3,
+  architectUpgradedCost: 2,
   architectValue: 1,                  // sentinel — flag modifier
 
   // ── Conduit — HIVE_MIND ─────────────────────────────────────────────────
@@ -1932,10 +1937,11 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     id: CardId.ARCHITECT,
     name: 'Architect',
     description: 'Every tower in a cluster counts as adjacent to every other tower in that cluster for the rest of this encounter.',
-    upgradedDescription: 'Every tower in a cluster counts as adjacent to every other tower in that cluster for the rest of this encounter.',
+    upgradedDescription: 'Costs 2 energy. Every tower in a cluster counts as adjacent to every other tower in that cluster for the rest of this encounter.',
     type: CardType.MODIFIER,
     rarity: CardRarity.RARE,
     energyCost: CARD_VALUES.architectCost,
+    upgradedEnergyCost: CARD_VALUES.architectUpgradedCost,
     upgraded: false,
     effect: {
       type: 'modifier' as const,
@@ -2026,6 +2032,21 @@ export function getActiveTowerEffect(card: CardInstance): TowerCardEffect | unde
   const def = getCardDefinition(card.cardId);
   const effect = (card.upgraded && def.upgradedEffect) ? def.upgradedEffect : def.effect;
   return effect.type === 'tower' ? effect : undefined;
+}
+
+/**
+ * Resolve the effective energy cost for a card instance, accounting for the
+ * upgrade-cost reduction (e.g., ARCHITECT 3E → 2E on upgrade). Falls back to
+ * the base `energyCost` when the card is not upgraded or no upgraded cost is
+ * declared. Callers in play paths should route through this helper — reading
+ * `def.energyCost` directly will miss cost-reduction upgrades.
+ */
+export function getEffectiveEnergyCost(card: CardInstance): number {
+  const def = getCardDefinition(card.cardId);
+  if (card.upgraded && def.upgradedEnergyCost !== undefined) {
+    return def.upgradedEnergyCost;
+  }
+  return def.energyCost;
 }
 
 export function getStarterDeck(): CardId[] {
