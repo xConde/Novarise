@@ -111,24 +111,44 @@ See separate commit: SUPERSEDED banner on the conduit-adjacency-graph
 spike, dead comment removal, renamed test-fixture version literals
 (and pushed back on the audit's misread that the literals were stale).
 
-## Known no-op upgrades (cards shipping `upgradedEffect` identical to base)
+## No-op upgrades — SHIPPED in session 5 (Option X)
 
-These five cards upgrade "successfully" in-run but have no mechanical or
-descriptive change. Each needs either a real upgrade value or an explicit
-convention for "un-upgradable" cards.
+Session 5 took the Option X path (ship real upgrades before merge, don't
+merge unfinished content). All 7 no-op upgrades now have real values,
+each landed as a single per-system commit with updated spec arithmetic.
 
-| Card | Rarity | Current upgrade | Suggestion |
+| Card | Rarity | Shipped upgrade | Commit |
 |---|---|---|---|
-| LAY_TILE | Common | None | Upgraded gets `energyCost: 0` (free terraform at upgrade) |
-| DEPRESS_TILE | Common | None | Upgraded expose multiplier 25% → 40% |
-| DETOUR | Uncommon | None | Upgraded forces 2 steps instead of 1 |
-| CARTOGRAPHER_SEAL | Rare | None | Upgraded also refunds 1 energy when a terraform is played |
-| GRAVITY_WELL | Rare | None | Upgraded also damages stuck enemies 10% HP/turn |
-| ARCHITECT | Rare | None | Upgraded reduces energy cost 3 → 2 |
-| HIVE_MIND | Rare | None | Upgraded shares fire rate too (partial LINKWORK) |
+| GRAVITY_WELL | Rare | +10% max-HP bleed per turn on gated enemies | balance(highground): ship GRAVITY_WELL upgrade |
+| DEPRESS_TILE | Common | Also depresses 1 random adjacent tile (same amount + expose) | balance(highground): ship DEPRESS_TILE upgrade |
+| DETOUR | Uncommon | 8% max-HP damage per extra path-step walked | balance(cartographer): ship DETOUR upgrade |
+| CARTOGRAPHER_SEAL | Rare | +1E refund on first terraform played each turn | balance(cartographer): ship CARTOGRAPHER_SEAL upgrade |
+| LAY_TILE | Common | Also draws 1 card (cycle-card) | balance(cartographer): ship LAY_TILE upgrade |
+| ARCHITECT | Rare | Cost 3E → 2E (enables same-turn combo plays) | balance(conduit): ship ARCHITECT upgrade |
+| HIVE_MIND | Rare | Shares strongest member's secondary stats (splash / chain / blast / DoT / status) | balance(conduit): ship HIVE_MIND upgrade |
 
-None of these are shipping in session 4 — they invent new balance values
-and the codex reframe was the priority. Each is a 1-sprint commit.
+Designs diverge from the original findings-doc suggestions in three places
+where the original proposals were rejected:
+
+- **LAY_TILE** — `energyCost: 0` was rejected as an infinite-engine risk
+  with CARTOGRAPHER_SEAL (free permanent path → LABYRINTH_MIND runaway).
+  Cycle-card upgrade keeps 1E cost, sustains deck pressure.
+- **HIVE_MIND** — "shares fire rate" was rejected as collapsing LINKWORK
+  into HIVE_MIND. Secondary-stat sharing (splash/chain/DoT/status) is
+  identity-shifting without stepping on LINKWORK's fire-rate role.
+- **ARCHITECT** — kept as cost reduction despite the initial "laziest
+  upgrade" critique. Alternatives (cluster modifier propagation, neighbor-
+  count override) all collapsed other cards' identity. 3E → 2E is a
+  genuine deck-building affordance: unlocks same-turn combos with
+  HANDSHAKE / GRID_SURGE that the base cost effectively blocks.
+
+Supporting schema changes (all backwards-compatible):
+- `ElevationTargetCardEffect.spreadToAdjacent` (DEPRESS_TILE)
+- `TerraformTargetCardEffect.drawOnSuccess` (LAY_TILE)
+- `CardDefinition.upgradedEnergyCost` + `getEffectiveEnergyCost(card)` helper (ARCHITECT)
+- `MODIFIER_STAT.TERRAFORM_REFUND_USED_THIS_TURN` (CARTOGRAPHER_SEAL per-turn gate)
+- `CardEffectService.getMaxModifierEntryValue()` (anti-spoofing for tier sentinels)
+- Tier-sentinel values on GRAVITY_WELL / CARTOGRAPHER_SEAL / DETOUR / HIVE_MIND effect values (1 = base, 2 = upgraded)
 
 ## Balance tensions — NOT shipped, need playtest
 
