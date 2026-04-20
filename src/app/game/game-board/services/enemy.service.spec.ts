@@ -3444,6 +3444,84 @@ describe('EnemyService', () => {
 
       expect(count).toBeGreaterThanOrEqual(1);
     });
+
+    // ── DETOUR upgraded — per-extra-step max-HP damage ─────────────────────
+    //
+    // Upgraded DETOUR passes a non-zero damageFractionPerExtraStep to
+    // applyDetour. Each rerouted enemy takes burst damage proportional to the
+    // length delta (longestPath.length - remainingCurrent), via damageEnemy
+    // so shields / expose / status / death-spawn logic all run normally.
+    it('upgraded (damageFraction 0.08): rerouted enemy takes proportional max-HP damage', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeTruthy();
+
+      enemy!.path = [
+        { x: 0, y: 0, g: 0, h: 0, f: 0 },
+        { x: 9, y: 9, g: 0, h: 0, f: 0 },
+      ];
+      enemy!.pathIndex = 0;
+      const healthBefore = enemy!.health;
+
+      const count = service.applyDetour(0.08);
+
+      // Rerouted — damage was applied.
+      expect(count).toBe(1);
+      expect(enemy!.health).toBeLessThan(healthBefore);
+    });
+
+    it('base tier (damageFraction default 0): rerouted enemy takes NO damage', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeTruthy();
+
+      enemy!.path = [
+        { x: 0, y: 0, g: 0, h: 0, f: 0 },
+        { x: 9, y: 9, g: 0, h: 0, f: 0 },
+      ];
+      enemy!.pathIndex = 0;
+      const healthBefore = enemy!.health;
+
+      const count = service.applyDetour();  // default = 0
+
+      expect(count).toBe(1);
+      expect(enemy!.health).toBe(healthBefore);
+    });
+
+    it('upgraded: damage is NOT applied to enemies whose path was NOT rerouted', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeTruthy();
+
+      // Already-long path so applyDetour finds nothing longer — no override.
+      const fullLongPath = [];
+      for (let i = 0; i < 100; i++) {
+        fullLongPath.push({ x: i, y: i, g: 0, h: 0, f: 0 });
+      }
+      enemy!.path = fullLongPath;
+      enemy!.pathIndex = 0;
+      const healthBefore = enemy!.health;
+
+      const count = service.applyDetour(0.08);
+
+      expect(count).toBe(0);
+      expect(enemy!.health).toBe(healthBefore);
+    });
+
+    it('upgraded damage floors at 1 HP even when fraction × extraSteps rounds to 0', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeTruthy();
+      // Monkey-patch an unrealistically small maxHealth so fraction rounds low.
+      enemy!.maxHealth = 5;  // 5 × 0.0001 = 0.0005 → Math.round = 0 → floor 1.
+      enemy!.health = 5;
+      enemy!.path = [
+        { x: 0, y: 0, g: 0, h: 0, f: 0 },
+        { x: 9, y: 9, g: 0, h: 0, f: 0 },
+      ];
+      enemy!.pathIndex = 0;
+
+      service.applyDetour(0.0001);
+
+      // Floor-1 damage means the enemy took some damage even with a tiny fraction.
+      expect(enemy!.health).toBeLessThan(5);
+    });
   });
 
   describe('ground enemy straight-line fallback — no A* path', () => {

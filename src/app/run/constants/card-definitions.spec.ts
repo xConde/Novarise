@@ -718,8 +718,12 @@ describe('CARD_DEFINITIONS', () => {
         expect(def.effect).toEqual({ type: 'spell', spellId: 'detour', value: 1 });
       });
 
-      it('upgradedEffect matches base effect (no upgrade change for Sprint 14)', () => {
-        expect(def.upgradedEffect).toEqual({ type: 'spell', spellId: 'detour', value: 1 });
+      it('upgradedEffect uses value 2 (damage tier sentinel)', () => {
+        expect(def.upgradedEffect).toEqual({ type: 'spell', spellId: 'detour', value: 2 });
+      });
+
+      it('upgradedDescription mentions the max-HP damage per extra step', () => {
+        expect(def.upgradedDescription).toMatch(/8%.*max HP/i);
       });
     });
 

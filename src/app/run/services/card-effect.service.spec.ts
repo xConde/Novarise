@@ -845,6 +845,16 @@ describe('CardEffectService', () => {
       service.applySpell(spellEffect('detour', 1), makeCtx());
       expect(enemyServiceSpy.applyDetour).toHaveBeenCalledTimes(1);
     });
+
+    it('base tier (value 1): passes damageFraction = 0 to applyDetour', () => {
+      service.applySpell(spellEffect('detour', 1), makeCtx());
+      expect(enemyServiceSpy.applyDetour).toHaveBeenCalledWith(0);
+    });
+
+    it('upgraded tier (value 2): passes damageFraction = 0.08 to applyDetour', () => {
+      service.applySpell(spellEffect('detour', 2), makeCtx());
+      expect(enemyServiceSpy.applyDetour).toHaveBeenCalledWith(0.08);
+    });
   });
 
   // ── applyModifier — HIGH_PERCH_RANGE_BONUS (Sprint 29) ────────

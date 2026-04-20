@@ -21,6 +21,7 @@ import { EnemyService } from '../../game/game-board/services/enemy.service';
 import { Enemy } from '../../game/game-board/models/enemy.model';
 import { StatusEffectService } from '../../game/game-board/services/status-effect.service';
 import { StatusEffectType } from '../../game/game-board/constants/status-effect.constants';
+import { CARTOGRAPHER_CONFIG } from '../../game/game-board/constants/cartographer.constants';
 import { DeckService } from './deck.service';
 import { WavePreviewService } from '../../game/game-board/services/wave-preview.service';
 
@@ -183,7 +184,9 @@ export class CardEffectService {
       case 'detour':
         // Force all non-flying, non-dying enemies onto their longest valid path
         // for one movement step. See EnemyService.applyDetour for full semantics.
-        this.applyDetour(ctx);
+        // effect.value is a tier sentinel: 1 = reroute-only (base card),
+        // 2 = reroute + per-extra-step max-HP damage (upgraded card).
+        this.applyDetour(ctx, effect.value);
         break;
 
       // 'salvage' and 'fortify': handled in GameBoardComponent (need tower selection UI).
@@ -192,9 +195,16 @@ export class CardEffectService {
     }
   }
 
-  /** Delegate DETOUR routing override to EnemyService. */
-  private applyDetour(ctx: SpellContext): void {
-    ctx.enemyService.applyDetour();
+  /**
+   * Delegate DETOUR routing override to EnemyService. Upgraded tier (value ≥ 2)
+   * also passes the per-extra-step damage fraction so each rerouted enemy
+   * takes proportional burst damage at cast time.
+   */
+  private applyDetour(ctx: SpellContext, tierValue: number): void {
+    const damageFraction = tierValue >= CARTOGRAPHER_CONFIG.DETOUR_UPGRADED_VALUE
+      ? CARTOGRAPHER_CONFIG.DETOUR_DAMAGE_FRACTION_PER_EXTRA_STEP
+      : 0;
+    ctx.enemyService.applyDetour(damageFraction);
   }
 
   // ── Modifier Effects ─────────────────────────────────────

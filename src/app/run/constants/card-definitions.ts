@@ -198,7 +198,14 @@ const CARD_VALUES = {
 
   // DETOUR (sprint 14): 2E uncommon, force all enemies onto the longest valid
   // path for one step. Modifies enemy routing, NOT tile state — terraform: false.
+  // SpellCardEffect VALUE is a tier sentinel: 1 = reroute-only (base card),
+  // 2 = reroute + damage (upgraded card). CardEffectService.applyDetour
+  // branches on value ≥ 2 to pass a non-zero damage fraction through to
+  // EnemyService.applyDetour.
   detourCost: 2,
+  detourBaseValue: 1,
+  detourUpgradedValue: 2,
+  detourDamageFractionPerExtraStep: 0.08,   // 8% max-HP per extra path tile added
 
   // CARTOGRAPHER_SEAL (sprint 17): 2E rare anchor. All terraform mutations this
   // encounter persist permanently (duration is forced to null at resolve time).
@@ -1354,13 +1361,13 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     id: CardId.DETOUR,
     name: 'Detour',
     description: 'Force all enemies onto the longest valid path for one step.',
-    upgradedDescription: 'Force all enemies onto the longest valid path for one step.',
+    upgradedDescription: 'Force all enemies onto the longest valid path for one step. Each detoured enemy also takes 8% max HP damage per extra tile of path walked.',
     type: CardType.SPELL,
     rarity: CardRarity.UNCOMMON,
     energyCost: CARD_VALUES.detourCost,
     upgraded: false,
-    effect: { type: 'spell', spellId: 'detour', value: 1 },
-    upgradedEffect: { type: 'spell', spellId: 'detour', value: 1 },
+    effect: { type: 'spell', spellId: 'detour', value: CARD_VALUES.detourBaseValue },
+    upgradedEffect: { type: 'spell', spellId: 'detour', value: CARD_VALUES.detourUpgradedValue },
     archetype: 'cartographer',
     terraform: false,
   },

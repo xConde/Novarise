@@ -950,9 +950,17 @@ export class EnemyService {
    *
    * UNSHAKEABLE enemies (immuneToDetour === true) are skipped — they cannot be rerouted.
    *
+   * Upgraded DETOUR (damageFractionPerExtraStep > 0) applies burst damage to
+   * every enemy whose path was actually overridden, proportional to the number
+   * of extra path tiles added versus their prior remaining route. Damage is
+   * dealt through damageEnemy so shields / exposed multiplier / status / death
+   * spawns all run normally. Floors at 1 HP per damaged enemy.
+   *
+   * @param damageFractionPerExtraStep Fraction of max HP per extra path tile
+   *        the reroute added. 0 (default) = base card, no damage.
    * @returns Number of enemies whose path was overridden.
    */
-  applyDetour(): number {
+  applyDetour(damageFractionPerExtraStep: number = 0): number {
     const exitTiles = this.pathfindingService.getExitTiles();
     if (exitTiles.length === 0) return 0;
 
@@ -986,9 +994,18 @@ export class EnemyService {
       if (longestPath.length === 0) continue;
       const remainingCurrent = enemy.path.length - enemy.pathIndex;
       if (longestPath.length > remainingCurrent) {
+        const extraSteps = longestPath.length - remainingCurrent;
         enemy.path = longestPath;
         enemy.pathIndex = 0;
         overrideCount++;
+
+        if (damageFractionPerExtraStep > 0) {
+          const damage = Math.max(
+            1,
+            Math.round(enemy.maxHealth * damageFractionPerExtraStep * extraSteps),
+          );
+          this.damageEnemy(enemy.id, damage);
+        }
       }
     }
 
