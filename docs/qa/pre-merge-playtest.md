@@ -272,6 +272,27 @@ Nice-to-haves that don't block merge but should land post-merge:
   of main, likely superseded by the archetype-depth scope. Decide:
   merge-forward, close, or rebase.
 
+### Delete these branch-scoped docs after merge
+
+These are temporary artifacts written to support the merge gate.
+They have no value once the branch is merged and the playtest pass is
+done. Delete them in the first post-merge commit:
+
+- `docs/qa/pre-merge-playtest.md` — this file
+- `docs/balance/session-4-findings.md` — session-4 audit + balance
+  deltas. Anything still load-bearing (e.g., balance knobs that
+  actually ship) should be folded into `STRATEGIC_AUDIT.md` or a
+  permanent `docs/balance/README.md` first
+- Empty `docs/qa/` and `docs/balance/` directories after the two
+  files above go (unless a `README.md` is written to keep them)
+
+**What to KEEP (permanent design artifacts):**
+- `docs/design/conduit-adjacency-graph.md` — spike doc with the
+  SUPERSEDED banner. Stays alongside `path-mutation-service.md` and
+  `elevation-model.md` as historical design context.
+
+**Memory files** (`/Users/edconde/.claude/projects/-Users-edconde-dev-Novarise/memory/*.md`) are outside the repo and have their own lifecycle. The session kickoffs (`project_phase4_session5_kickoff.md`, etc.) get archived or deleted per the user's preference — not a merge-time concern.
+
 ---
 
 ## 7. Pre-merge sign-off
