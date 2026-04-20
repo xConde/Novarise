@@ -181,8 +181,11 @@ const CARD_VALUES = {
   epidemicUpgradedCriticalMass: 1, // upgraded: only need 1
 
   // ── Cartographer archetype — terraform-target cards (Phase 2) ────────────
-  // LAY_TILE (sprint 11): 1E common, permanent path addition
+  // LAY_TILE (sprint 11): 1E common, permanent path addition. Upgraded card
+  // additionally draws 1 card on success (cycle-card behavior); encoded as
+  // TerraformTargetCardEffect.drawOnSuccess on the upgraded effect object.
   layTileCost: 1,
+  layTileUpgradedDrawCount: 1,
   // BLOCK_PASSAGE (sprint 12): 1E common, temporary wall
   blockPassageCost: 1,
   blockPassageDuration: 2,
@@ -1249,13 +1252,18 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     id: CardId.LAY_TILE,
     name: 'Lay Tile',
     description: 'Convert a wall into a path tile.',
-    upgradedDescription: 'Convert a wall into a path tile.',
+    upgradedDescription: 'Convert a wall into a path tile. Draw 1 card.',
     type: CardType.SPELL,
     rarity: CardRarity.COMMON,
     energyCost: CARD_VALUES.layTileCost,
     upgraded: false,
     effect: { type: 'terraform_target', op: 'build', duration: null },
-    upgradedEffect: { type: 'terraform_target', op: 'build', duration: null },
+    upgradedEffect: {
+      type: 'terraform_target',
+      op: 'build',
+      duration: null,
+      drawOnSuccess: CARD_VALUES.layTileUpgradedDrawCount,
+    },
     archetype: 'cartographer',
     terraform: true,
   },

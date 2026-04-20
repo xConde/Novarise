@@ -597,6 +597,25 @@ describe('CARD_DEFINITIONS', () => {
           expect(def.effect.duration).toBeNull();
         }
       });
+
+      it('upgraded effect carries drawOnSuccess = 1 (cycle-card behavior)', () => {
+        expect(def.upgradedEffect?.type).toBe('terraform_target');
+        if (def.upgradedEffect?.type === 'terraform_target') {
+          expect(def.upgradedEffect.drawOnSuccess).toBe(1);
+          expect(def.upgradedEffect.op).toBe('build');
+          expect(def.upgradedEffect.duration).toBeNull();
+        }
+      });
+
+      it('base effect does NOT carry drawOnSuccess (only upgraded cycles)', () => {
+        if (def.effect.type === 'terraform_target') {
+          expect(def.effect.drawOnSuccess).toBeUndefined();
+        }
+      });
+
+      it('upgraded description mentions the draw', () => {
+        expect(def.upgradedDescription).toMatch(/draw 1 card/i);
+      });
     });
 
     describe('BLOCK_PASSAGE (sprint 12)', () => {

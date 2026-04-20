@@ -484,6 +484,11 @@ export class CardPlayService {
     // Energy was confirmed sufficient above, so playCard should not fail here.
     this.deckService.playCard(card.instanceId);
     this.maybeRefundTerraformForUpgradedSeal(def);
+    // LAY_TILE upgraded — draw-on-success rider (turns it into a cycle-card).
+    // Applies to any terraform_target card that opts in via effect.drawOnSuccess.
+    if (effect.drawOnSuccess && effect.drawOnSuccess > 0) {
+      this.deckService.drawCards(effect.drawOnSuccess);
+    }
     this.clearTileTargetState();
     this.callbacks?.onExitTileTargetMode?.();
     return { ok: true };

@@ -118,7 +118,7 @@ describe('CardPlayService', () => {
 
   beforeEach(() => {
     deckSpy = jasmine.createSpyObj<DeckService>('DeckService', [
-      'playCard', 'getEnergy', 'drawOne', 'addEnergy', 'discardHand', 'getDeckState', 'undoPlay',
+      'playCard', 'getEnergy', 'drawOne', 'drawCards', 'addEnergy', 'discardHand', 'getDeckState', 'undoPlay',
     ]);
     deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
     deckSpy.playCard.and.returnValue(true);
@@ -987,6 +987,56 @@ describe('CardPlayService', () => {
         // Short-circuit on board rejection — refund hook never called.
         expect(cardEffectSpy.tryConsumeTerraformRefund).not.toHaveBeenCalled();
         expect(deckSpy.addEnergy).not.toHaveBeenCalled();
+      });
+    });
+
+    // ── LAY_TILE upgraded — drawOnSuccess rider (cycle-card) ─────────────
+
+    describe('drawOnSuccess rider (LAY_TILE upgraded)', () => {
+      it('calls deckService.drawCards(N) when effect.drawOnSuccess is set and mutation succeeds', () => {
+        registerTerraformDef(1, 'build', null);
+        service['pendingTileTargetCard'] = makeTerraformInstance('lay-tile-upg');
+        service['pendingTileTargetEffect'] = {
+          type: 'terraform_target',
+          op: 'build',
+          duration: null,
+          drawOnSuccess: 1,
+        };
+        deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+        pathMutationSpy.build.and.returnValue({ ok: true } as MutationResult);
+
+        service.resolveTileTarget(2, 2, mockScene, currentTurn);
+
+        expect(deckSpy.drawCards).toHaveBeenCalledWith(1);
+      });
+
+      it('does NOT call drawCards when effect.drawOnSuccess is absent (base LAY_TILE)', () => {
+        registerTerraformDef(1, 'build', null);
+        service['pendingTileTargetCard'] = makeTerraformInstance('lay-tile-base');
+        service['pendingTileTargetEffect'] = makeTerraformEffect('build', null);  // no drawOnSuccess
+        deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+        pathMutationSpy.build.and.returnValue({ ok: true } as MutationResult);
+
+        service.resolveTileTarget(2, 2, mockScene, currentTurn);
+
+        expect(deckSpy.drawCards).not.toHaveBeenCalled();
+      });
+
+      it('does NOT call drawCards when the mutation is rejected (card never consumed)', () => {
+        registerTerraformDef(1, 'build', null);
+        service['pendingTileTargetCard'] = makeTerraformInstance('lay-tile-rej');
+        service['pendingTileTargetEffect'] = {
+          type: 'terraform_target',
+          op: 'build',
+          duration: null,
+          drawOnSuccess: 1,
+        };
+        deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+        pathMutationSpy.build.and.returnValue({ ok: false, reason: 'spawner-or-exit' } as MutationResult);
+
+        service.resolveTileTarget(0, 0, mockScene, currentTurn);
+
+        expect(deckSpy.drawCards).not.toHaveBeenCalled();
       });
     });
 

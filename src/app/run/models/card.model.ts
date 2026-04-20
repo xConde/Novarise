@@ -346,6 +346,13 @@ export interface TerraformTargetCardEffect {
     /** Fraction of maxHealth — 0.5 means 50% of max HP. */
     readonly pctMaxHp: number;
   };
+  /**
+   * Optional card-draw rider. When set, after the mutation succeeds and the
+   * card is consumed, CardPlayService calls deckService.drawCards(N). Used
+   * by LAY_TILE upgraded to turn it into a cycle-card (place 1 tile + draw 1).
+   * Hand-size cap applies; surplus draws are silently dropped (StS convention).
+   */
+  readonly drawOnSuccess?: number;
 }
 
 /**
