@@ -336,8 +336,15 @@ const CARD_VALUES = {
   architectValue: 1,                  // sentinel — flag modifier
 
   // ── Conduit — HIVE_MIND ─────────────────────────────────────────────────
+  // Tier sentinel on the modifier value: 1 = base (cluster fires with the
+  // strongest member's damage + range). 2 = upgraded (additionally propagates
+  // the strongest member's secondary stats — splash radius, chain bounces,
+  // blast radius, dot damage/duration, and on-hit status effect — to every
+  // cluster member's shots). TowerCombatService.fireTurn reads the numeric
+  // value in its HIVE_MIND prepass and branches on ≥ 2.
   hiveMindCost: 3,
-  hiveMindValue: 1,                   // sentinel — flag modifier
+  hiveMindValue: 1,                   // base tier — damage + range sharing only
+  hiveMindUpgradedValue: 2,           // upgraded tier — also secondary-stat sharing
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -1969,7 +1976,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     id: CardId.HIVE_MIND,
     name: 'Hive Mind',
     description: 'For the rest of this encounter, every tower in a cluster fires with the strongest tower\u2019s damage and range.',
-    upgradedDescription: 'For the rest of this encounter, every tower in a cluster fires with the strongest tower\u2019s damage and range.',
+    upgradedDescription: 'For the rest of this encounter, every tower in a cluster fires with the strongest tower\u2019s damage, range, and secondary effect (splash, chain bounces, status, and DoT).',
     type: CardType.MODIFIER,
     rarity: CardRarity.RARE,
     energyCost: CARD_VALUES.hiveMindCost,
@@ -1983,7 +1990,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     upgradedEffect: {
       type: 'modifier' as const,
       stat: MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
-      value: CARD_VALUES.hiveMindValue,
+      value: CARD_VALUES.hiveMindUpgradedValue,
       duration: null,
     },
     archetype: 'conduit' as const,

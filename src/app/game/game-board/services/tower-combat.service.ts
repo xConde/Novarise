@@ -301,7 +301,14 @@ export class TowerCombatService {
     const linkworkActive = this.cardEffectService.hasActiveModifier(MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE);
     const harmonicActive = this.cardEffectService.hasActiveModifier(MODIFIER_STAT.HARMONIC_SIMULTANEOUS_FIRE);
     // HIVE_MIND requires a two-pass walk — see preComposedStats prepass below.
-    const hiveMindActive = this.cardEffectService.hasActiveModifier(MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX);
+    // Tier sentinel via getMaxModifierEntryValue (NOT aggregate): single entry
+    // with value ≥ 1 = damage + range sharing (base); value ≥ 2 = also share
+    // secondary stats (splash/chain/blast/DoT/status) from the strongest
+    // cluster member (upgraded). Max-entry prevents two base copies (aggregate
+    // 2) from spoofing the upgraded tier.
+    const hiveMindTier = this.cardEffectService.getMaxModifierEntryValue(MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX);
+    const hiveMindActive = hiveMindTier > 0;
+    const hiveMindSecondaryActive = hiveMindTier >= CONDUIT_CONFIG.HIVE_MIND_UPGRADED_VALUE;
 
     const hasCardModifiers =
       cardDamageBoost !== 0 || cardRangeBoost !== 0 || sniperDamageBoost !== 0
@@ -366,6 +373,11 @@ export class TowerCombatService {
         // itself only, so max-of-cluster collapses to self.
         let effectiveDamage = stack.damage;
         let effectiveRange = stack.range;
+        // Track the top-damage cluster member for upgraded secondary-stat
+        // propagation below. Defaults to self — no override unless a stronger
+        // member is found.
+        let topDamageMember: PlacedTower = tower;
+        let topDamageAmount = stack.damage;
         if (hiveMindActive && this.towerGraphService && preComposedStats !== null) {
           const clusterIds = this.towerGraphService.getClusterTowers(tower.row, tower.col, turnNumber);
           for (const id of clusterIds) {
@@ -373,6 +385,13 @@ export class TowerCombatService {
             if (!cached) continue;
             if (cached.damage > effectiveDamage) effectiveDamage = cached.damage;
             if (cached.range > effectiveRange) effectiveRange = cached.range;
+            if (cached.damage > topDamageAmount) {
+              const member = this.placedTowers.get(id);
+              if (member) {
+                topDamageMember = member;
+                topDamageAmount = cached.damage;
+              }
+            }
           }
         }
 
@@ -382,22 +401,32 @@ export class TowerCombatService {
         towerVantagePointDmgMult = stack.towerVantagePointDmgMult;
         towerKothMult = stack.towerKothMult;
         this.scratchStats.cost = baseStats.cost;
+        // HIVE_MIND upgraded — secondary-stat source. When the top-damage
+        // cluster member is a different tower than the firing one, borrow
+        // THEIR baseStats for the secondary fields (splash / chain / blast /
+        // DoT / status). Card overrides and relic multipliers still apply to
+        // the firing tower (since they were drafted for this slot). Self-
+        // leader falls through to the normal path — zero cost when inactive.
+        const secondarySource =
+          hiveMindSecondaryActive && topDamageMember !== tower
+            ? getEffectiveStats(topDamageMember.type, topDamageMember.level, topDamageMember.specialization)
+            : baseStats;
         const cardSplashMult = tower.cardStatOverrides?.splashRadiusMultiplier ?? 1;
-        this.scratchStats.splashRadius = (baseStats.splashRadius ?? 0) * this.relicService.getSplashRadiusMultiplier() * cardSplashMult;
+        this.scratchStats.splashRadius = (secondarySource.splashRadius ?? 0) * this.relicService.getSplashRadiusMultiplier() * cardSplashMult;
         this.scratchStats.color = baseStats.color;
-        this.scratchStats.slowFactor = baseStats.slowFactor;
+        this.scratchStats.slowFactor = secondarySource.slowFactor;
         const cardChainBonus = tower.cardStatOverrides?.chainBounceBonus ?? 0;
-        this.scratchStats.chainCount = baseStats.chainCount != null
-          ? baseStats.chainCount + this.relicService.getChainBounceBonus() + cardChainBonus
-          : baseStats.chainCount;
-        this.scratchStats.chainRange = baseStats.chainRange;
-        this.scratchStats.blastRadius = baseStats.blastRadius;
-        this.scratchStats.dotDuration = baseStats.dotDuration;
+        this.scratchStats.chainCount = secondarySource.chainCount != null
+          ? secondarySource.chainCount + this.relicService.getChainBounceBonus() + cardChainBonus
+          : secondarySource.chainCount;
+        this.scratchStats.chainRange = secondarySource.chainRange;
+        this.scratchStats.blastRadius = secondarySource.blastRadius;
+        this.scratchStats.dotDuration = secondarySource.dotDuration;
         const cardDotMult = tower.cardStatOverrides?.dotDamageMultiplier ?? 1;
-        this.scratchStats.dotDamage = baseStats.dotDamage != null
-          ? baseStats.dotDamage * this.relicService.getDotDamageMultiplier() * cardDotMult
-          : baseStats.dotDamage;
-        this.scratchStats.statusEffect = baseStats.statusEffect;
+        this.scratchStats.dotDamage = secondarySource.dotDamage != null
+          ? secondarySource.dotDamage * this.relicService.getDotDamageMultiplier() * cardDotMult
+          : secondarySource.dotDamage;
+        this.scratchStats.statusEffect = secondarySource.statusEffect;
         stats = this.scratchStats;
       } else {
         stats = baseStats;

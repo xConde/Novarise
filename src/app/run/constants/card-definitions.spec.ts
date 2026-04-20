@@ -1174,6 +1174,45 @@ describe('CARD_DEFINITIONS', () => {
     });
   });
 
+  // ── HIVE_MIND (Sprint 50) — secondary-stat sharing upgrade ──────────────
+  describe('HIVE_MIND (sprint 50)', () => {
+    const def = CARD_DEFINITIONS[CardId.HIVE_MIND];
+
+    it('exists as a rare conduit MODIFIER card', () => {
+      expect(def).toBeDefined();
+      expect(def.type).toBe(CardType.MODIFIER);
+      expect(def.rarity).toBe(CardRarity.RARE);
+      expect(def.archetype).toBe('conduit');
+    });
+
+    it('base effect value is 1 (tier sentinel: damage + range sharing)', () => {
+      if (def.effect.type === 'modifier') {
+        expect(def.effect.value).toBe(1);
+        expect(def.effect.stat).toBe('hiveMindClusterMax');
+      } else {
+        fail('effect is not a modifier');
+      }
+    });
+
+    it('upgraded effect value is 2 (tier sentinel: +secondary sharing)', () => {
+      if (def.upgradedEffect?.type === 'modifier') {
+        expect(def.upgradedEffect.value).toBe(2);
+        expect(def.upgradedEffect.stat).toBe('hiveMindClusterMax');
+      } else {
+        fail('upgradedEffect is not a modifier');
+      }
+    });
+
+    it('upgraded description mentions the secondary effect', () => {
+      expect(def.upgradedDescription).toMatch(/secondary|splash|chain|status/i);
+    });
+
+    it('does NOT change cost on upgrade (stays at 3E — secondary sharing IS the upgrade identity)', () => {
+      expect(def.energyCost).toBe(3);
+      expect(def.upgradedEnergyCost).toBeUndefined();
+    });
+  });
+
   // ── ARCHITECT (Sprint 49) — cost-reduction upgrade ──────────────────────
   describe('ARCHITECT (sprint 49)', () => {
     const def = CARD_DEFINITIONS[CardId.ARCHITECT];

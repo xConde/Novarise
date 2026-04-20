@@ -54,4 +54,15 @@ export const CONDUIT_CONFIG = {
    * grid, so GRID_SURGE rewards maximal clustering density.
    */
   GRID_SURGE_MIN_NEIGHBORS: 4,
+
+  /**
+   * Modifier-value threshold for the HIVE_MIND upgraded "secondary-stat
+   * sharing" tier. TowerCombatService.fireTurn reads
+   * MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX as a numeric tier: ≥ 1 = cluster
+   * shares damage + range only (base), ≥ 2 = also shares splash radius,
+   * chain bounces, blast radius, DoT damage/duration, and on-hit status
+   * effect from the strongest cluster member. Mirror of
+   * CARD_VALUES.hiveMindUpgradedValue.
+   */
+  HIVE_MIND_UPGRADED_VALUE: 2,
 } as const;

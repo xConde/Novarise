@@ -997,6 +997,7 @@ export function createCardEffectServiceSpy(): jasmine.SpyObj<CardEffectService> 
     'tickWave',
     'tickTurn',
     'getModifierValue',
+    'getMaxModifierEntryValue',
     'hasActiveModifier',
     'getActiveModifiers',
     'tryConsumeLeakBlock',
@@ -1004,6 +1005,7 @@ export function createCardEffectServiceSpy(): jasmine.SpyObj<CardEffectService> 
     'reset',
   ]);
   spy.getModifierValue.and.returnValue(0);
+  spy.getMaxModifierEntryValue.and.returnValue(0);
   spy.hasActiveModifier.and.returnValue(false);
   spy.getActiveModifiers.and.returnValue([]);
   spy.tryConsumeLeakBlock.and.returnValue(false);

@@ -910,6 +910,31 @@ describe('CardEffectService', () => {
     });
   });
 
+  // ── getMaxModifierEntryValue — single-entry tier check ──────────────────
+
+  describe('getMaxModifierEntryValue', () => {
+    it('returns 0 when no modifier for the stat is active', () => {
+      expect(service.getMaxModifierEntryValue(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBe(0);
+    });
+
+    it('returns a single entry\'s value when exactly one is active', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 2, null));
+      expect(service.getMaxModifierEntryValue(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBe(2);
+    });
+
+    it('returns the MAX across multiple entries, not the aggregate', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 2, null));
+      // Aggregate would be 3; max-entry is 2.
+      expect(service.getMaxModifierEntryValue(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBe(2);
+    });
+
+    it('ignores entries for other stats', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.DAMAGE, 5, null));
+      expect(service.getMaxModifierEntryValue(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBe(0);
+    });
+  });
+
   // ── CARTOGRAPHER_SEAL upgraded — tryConsumeTerraformRefund ──────────────
 
   describe('tryConsumeTerraformRefund', () => {

@@ -102,9 +102,14 @@ export const MODIFIER_STAT = {
   ARCHITECT_CLUSTER_PROPAGATION: 'architectClusterPropagation',
 
   /**
-   * HIVE_MIND (Conduit rare build-around): encounter-scoped boolean flag.
-   * Every tower in a cluster reads the MAX composed damage and range across
-   * cluster members. A BASIC + SNIPER cluster fires both at SNIPER damage.
+   * HIVE_MIND (Conduit rare build-around): encounter-scoped tier sentinel.
+   * Value 1 (base card): every tower in a cluster reads the MAX composed
+   * damage + range across cluster members. A BASIC + SNIPER cluster fires
+   * both at SNIPER damage.
+   * Value 2 (upgraded card): additionally propagates the strongest member's
+   * secondary stats — splash radius, chain bounces, blast radius, DoT damage
+   * and duration, and on-hit status effect. A BASIC + SPLASH cluster with
+   * upgraded HIVE_MIND fires the BASIC with SPLASH radius.
    * Disrupted towers read their cluster as cluster-of-1.
    */
   HIVE_MIND_CLUSTER_MAX: 'hiveMindClusterMax',

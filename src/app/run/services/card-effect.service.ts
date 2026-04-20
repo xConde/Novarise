@@ -307,6 +307,22 @@ export class CardEffectService {
   }
 
   /**
+   * MAX value across active modifier entries for `stat`, or 0 when none are
+   * active. Use this instead of `getModifierValue` when a single-entry tier
+   * check is required — aggregating lets two base-tier entries (e.g., two
+   * CARTOGRAPHER_SEALs at value 1) spoof an upgraded-tier threshold. Scan is
+   * O(n) over activeModifiers; callers are fire-loop hot paths so the list
+   * is typically tiny (< 10 entries).
+   */
+  getMaxModifierEntryValue(stat: ModifierStat): number {
+    let max = 0;
+    for (const m of this.activeModifiers) {
+      if (m.stat === stat && m.value > max) max = m.value;
+    }
+    return max;
+  }
+
+  /**
    * Upgraded CARTOGRAPHER_SEAL — attempt to claim the per-turn terraform
    * refund. Returns true iff:
    *  - TERRAFORM_ANCHOR's aggregate value ≥ upgraded-tier threshold (2), and
@@ -319,10 +335,7 @@ export class CardEffectService {
    * serialization — no checkpoint version bump required.
    */
   tryConsumeTerraformRefund(): boolean {
-    const hasUpgradedSeal = this.activeModifiers.some(
-      m => m.stat === MODIFIER_STAT.TERRAFORM_ANCHOR && m.value >= CARTOGRAPHER_SEAL_UPGRADED_VALUE,
-    );
-    if (!hasUpgradedSeal) return false;
+    if (this.getMaxModifierEntryValue(MODIFIER_STAT.TERRAFORM_ANCHOR) < CARTOGRAPHER_SEAL_UPGRADED_VALUE) return false;
     if (this.hasActiveModifier(MODIFIER_STAT.TERRAFORM_REFUND_USED_THIS_TURN)) return false;
 
     this.activeModifiers.push({

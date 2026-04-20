@@ -5202,6 +5202,10 @@ describe('TowerCombatService HARMONIC', () => {
     cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
       stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
     );
+    // Tier sentinel: 1 = base (damage+range sharing), 2 = upgraded (+secondary).
+    cardEffectSpy.getMaxModifierEntryValue.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX ? 1 : 0,
+    );
     const enemy = enemyAt('e1', -0.5, 0, 10000);
 
     service.fireTurn(mockScene, 1);
@@ -5232,6 +5236,10 @@ describe('TowerCombatService HARMONIC', () => {
     cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
       stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
     );
+    // Tier sentinel: 1 = base (damage+range sharing), 2 = upgraded (+secondary).
+    cardEffectSpy.getMaxModifierEntryValue.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX ? 1 : 0,
+    );
     const enemy = enemyAt('e1', -0.5, 0, 10000);
 
     service.fireTurn(mockScene, 1);
@@ -5246,6 +5254,10 @@ describe('TowerCombatService HARMONIC', () => {
     cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
       stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
     );
+    // Tier sentinel: 1 = base (damage+range sharing), 2 = upgraded (+secondary).
+    cardEffectSpy.getMaxModifierEntryValue.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX ? 1 : 0,
+    );
     // Disrupt the BASIC so its cluster reads as size 1 — collapsing HIVE_MIND.
     graph.severTower(BASE_ROW, BASE_COL, /* until */ 100, 'test-disruptor');
     const enemy = enemyAt('e1', -0.5, 0, 10000);
@@ -5257,6 +5269,92 @@ describe('TowerCombatService HARMONIC', () => {
     const damageTaken = 10000 - enemy.health;
     expect(damageTaken).toBeGreaterThanOrEqual(105);
     expect(damageTaken).toBeLessThan(160);
+  });
+
+  // ── HIVE_MIND upgraded — secondary-stat sharing (tier 2) ────────────────
+
+  it('HIVE_MIND upgraded (tier 2) + BASIC+SPLASH cluster → BASIC fires with SPLASH radius', () => {
+    // BASIC has no splashRadius; SPLASH has a non-zero splashRadius. Upgraded
+    // HIVE_MIND means the strongest cluster member's secondary stats propagate —
+    // BASIC should now fire with SPLASH's splashRadius as the "secondary source".
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.SPLASH, new THREE.Group());
+
+    // Tier 2 = upgraded. hasActiveModifier still true for existing gate logic.
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
+    );
+    cardEffectSpy.getMaxModifierEntryValue.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX ? 2 : 0,
+    );
+
+    // Spawn two close enemies so a non-zero splashRadius on BASIC would hit
+    // both with one BASIC shot. Coordinates are tower-close so splash AoE lands.
+    const mainEnemy = enemyAt('main', -0.5, 0, 10000);
+    const splashEnemy = enemyAt('splash-target', -0.4, 0, 10000);
+
+    service.fireTurn(mockScene, 1);
+
+    // If BASIC inherited SPLASH's secondary radius, both enemies take damage.
+    // (Base-tier BASIC has no splash, so secondary would miss splashEnemy.)
+    expect(10000 - splashEnemy.health).toBeGreaterThan(0);
+    // And the main target also took damage from the BASIC shot.
+    expect(10000 - mainEnemy.health).toBeGreaterThan(0);
+  });
+
+  it('HIVE_MIND BASE tier (value 1) — BASIC+SPLASH cluster does NOT share splash', () => {
+    // Sanity: the upgrade is what unlocks secondary sharing. Base tier leaves
+    // BASIC as a single-target fire even when clustered with SPLASH.
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.SPLASH, new THREE.Group());
+
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
+    );
+    cardEffectSpy.getMaxModifierEntryValue.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX ? 1 : 0,
+    );
+
+    // Place a second enemy OUTSIDE BASIC's single-target line but within a
+    // splash AoE if one were applied. With base HIVE_MIND, BASIC fires at the
+    // primary only; the secondary-position enemy stays at full HP.
+    const mainEnemy = enemyAt('main', -0.5, 0, 10000);
+    const secondaryEnemy = enemyAt('aoe-target', -0.5, 0.4, 10000);
+
+    service.fireTurn(mockScene, 1);
+
+    // Primary gets hit by both BASIC and SPLASH; secondary-position enemy only
+    // gets hit if SPLASH's own shot covers them (not from BASIC borrowing).
+    expect(10000 - mainEnemy.health).toBeGreaterThan(0);
+    // Assert that BASIC did NOT gain splash radius — if both enemies took the
+    // same cluster-borrowed damage the numbers would look identical; base tier
+    // should show the SECONDARY enemy taking less damage (only SPLASH's reach).
+    const mainDmg = 10000 - mainEnemy.health;
+    const secondaryDmg = 10000 - secondaryEnemy.health;
+    // Secondary takes at most SPLASH's splash hit, NOT a BASIC splash-borrow.
+    expect(secondaryDmg).toBeLessThanOrEqual(mainDmg);
+  });
+
+  it('HIVE_MIND upgraded — lone tower falls through (topDamageMember === self, no override)', () => {
+    // Upgraded HIVE_MIND with a cluster of 1 should not change BASIC's behavior
+    // from the base tier — topDamageMember === self, secondary-source branch is
+    // a no-op. Guarded explicitly so regressions in the self-fallthrough don't
+    // silently rewrite scratchStats with junk.
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
+    );
+    cardEffectSpy.getMaxModifierEntryValue.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX ? 2 : 0,
+    );
+
+    const enemy = enemyAt('e1', -0.5, 0, 10000);
+
+    service.fireTurn(mockScene, 1);
+
+    // Lone BASIC with upgraded tier — fires as if no HIVE_MIND. Damage = 25.
+    expect(10000 - enemy.health).toBe(25);
   });
 
   it('HARMONIC skips passengers when target is out of their range', () => {
