@@ -78,4 +78,22 @@ export const ELEVATION_CONFIG = {
    * through service code.
    */
   WYRM_BASE_DAMAGE_IMMUNITY: true,
+
+  // ── GRAVITY_WELL upgraded — bleed tier ─────────────────────────────────────
+
+  /**
+   * Modifier-value threshold for the GRAVITY_WELL upgraded "bleed" tier.
+   * EnemyService.stepEnemiesOneTurn reads MODIFIER_STAT.GRAVITY_WELL as a
+   * numeric tier: ≥ 1 = gate-only (base card), ≥ 2 = gate + bleed (upgraded).
+   * Mirror of CARD_VALUES.gravityWellUpgradedValue — both must stay in sync.
+   */
+  GRAVITY_WELL_UPGRADED_VALUE: 2,
+
+  /**
+   * Fraction of max-HP dealt to every enemy the upgraded GRAVITY_WELL gates
+   * each turn. 0.10 = 10% per turn. Resolved through EnemyService.damageEnemy
+   * so shields / exposed-damage multiplier / death spawns all run normally.
+   * Mirror of CARD_VALUES.gravityWellBleedFraction — both must stay in sync.
+   */
+  GRAVITY_WELL_BLEED_FRACTION: 0.10,
 } as const;

@@ -266,9 +266,13 @@ const CARD_VALUES = {
   // ── Highground archetype — GRAVITY_WELL (Sprint 34) ────────────────────
   // GRAVITY_WELL (3E rare): enemies on tiles with elevation < 0 (depressed)
   // skip their movement for the turn. Encounter-scoped (duration: null).
-  // Upgrade: slot reserved for future balance tuning — same effect, no stat
-  // change. Plays out of deck identically; difference is a future Memory flag.
+  // Modifier-stat VALUE is a tier sentinel: 1 = gate-only (base), 2 = gate + bleed
+  // (upgraded). EnemyService.stepEnemiesOneTurn branches on value ≥ 2 to apply
+  // the per-turn max-HP bleed to every enemy it gates that step.
   gravityWellCost: 3,
+  gravityWellBaseValue: 1,
+  gravityWellUpgradedValue: 2,
+  gravityWellBleedFraction: 0.10,   // 10% max-HP per turn on gated enemies (upgraded only)
 
   // ── Conduit — HANDSHAKE ─────────────────────────────────────────────────
   handshakeCost: 1,
@@ -1682,7 +1686,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     id: CardId.GRAVITY_WELL,
     name: 'Gravity Well',
     description: 'Enemies on depressed tiles (elevation < 0) cannot move this encounter.',
-    upgradedDescription: 'Enemies on depressed tiles (elevation < 0) cannot move this encounter.',
+    upgradedDescription: 'Enemies on depressed tiles (elevation < 0) cannot move this encounter. Each turn, gated enemies also take 10% of their max HP as damage.',
     type: CardType.MODIFIER,
     rarity: CardRarity.RARE,
     energyCost: CARD_VALUES.gravityWellCost,
@@ -1690,13 +1694,13 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     effect: {
       type: 'modifier' as const,
       stat: MODIFIER_STAT.GRAVITY_WELL,
-      value: 1,
+      value: CARD_VALUES.gravityWellBaseValue,
       duration: null,
     },
     upgradedEffect: {
       type: 'modifier' as const,
       stat: MODIFIER_STAT.GRAVITY_WELL,
-      value: 1,
+      value: CARD_VALUES.gravityWellUpgradedValue,
       duration: null,
     },
     archetype: 'highground' as const,

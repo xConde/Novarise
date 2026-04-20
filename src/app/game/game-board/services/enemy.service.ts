@@ -325,12 +325,22 @@ export class EnemyService {
       // ElevationService is @Optional — returns 0 (no penalty) when absent.
       // Sprint 37 GLIDER exception: ignoresElevation bypasses the GRAVITY_WELL check —
       // a glider on a depressed tile moves normally.
-      const gravityWellActive = this.cardEffectService.getModifierValue(MODIFIER_STAT.GRAVITY_WELL) > 0;
-      if (gravityWellActive && !(ENEMY_STATS[enemy.type]?.ignoresElevation)) {
+      // Modifier VALUE is a tier sentinel: 1 = gate-only (base card), 2 = gate +
+      // bleed (upgraded card). Upgraded path deals 10% max-HP to every enemy it
+      // gates this step, resolved through damageEnemy so shields, elevation
+      // expose multiplier, and death-spawn logic all run normally.
+      const gravityWellValue = this.cardEffectService.getModifierValue(MODIFIER_STAT.GRAVITY_WELL);
+      if (gravityWellValue > 0 && !(ENEMY_STATS[enemy.type]?.ignoresElevation)) {
         const tileElev = this.elevationService?.getElevation(
           enemy.gridPosition.row, enemy.gridPosition.col,
         ) ?? 0;
-        if (tileElev < 0) return; // skip movement for this enemy this turn
+        if (tileElev < 0) {
+          if (gravityWellValue >= ELEVATION_CONFIG.GRAVITY_WELL_UPGRADED_VALUE) {
+            const bleedDamage = Math.max(1, Math.round(enemy.maxHealth * ELEVATION_CONFIG.GRAVITY_WELL_BLEED_FRACTION));
+            this.damageEnemy(enemy.id, bleedDamage);
+          }
+          return; // skip movement for this enemy this turn
+        }
       }
 
       // VEINSEEKER speed-up mechanic: when the path was mutated in the past

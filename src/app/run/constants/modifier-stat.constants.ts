@@ -41,8 +41,11 @@ export const MODIFIER_STAT = {
   KING_OF_THE_HILL_DAMAGE_BONUS: 'kingOfTheHillDamageBonus',
 
   /**
-   * GRAVITY_WELL: encounter-scoped boolean flag. When active, enemies on
-   * tiles with elevation < 0 skip their movement for the turn.
+   * GRAVITY_WELL: encounter-scoped tier sentinel. Value 1 = gate-only (base
+   * card); value 2 = gate + 10% max-HP bleed per turn on gated enemies
+   * (upgraded card). EnemyService.stepEnemiesOneTurn reads the numeric value
+   * and branches: value ≥ 1 → movement gate on depressed tiles; value ≥ 2 →
+   * per-turn bleed on each gated enemy.
    */
   GRAVITY_WELL: 'gravityWell',
 

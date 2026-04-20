@@ -1070,7 +1070,7 @@ describe('CARD_DEFINITIONS', () => {
         expect(effect.stat).toBe(MODIFIER_STAT.GRAVITY_WELL);
       });
 
-      it('base value is 1 (boolean-style flag)', () => {
+      it('base value is 1 (gate-only tier)', () => {
         const effect = def.effect as ModifierCardEffect;
         expect(effect.value).toBe(1);
       });
@@ -1080,14 +1080,18 @@ describe('CARD_DEFINITIONS', () => {
         expect(effect.duration).toBeNull();
       });
 
-      it('upgraded value is 1 (same effect, slot reserved for future tuning)', () => {
+      it('upgraded value is 2 (gate + bleed tier)', () => {
         const upgraded = def.upgradedEffect as ModifierCardEffect;
-        expect(upgraded.value).toBe(1);
+        expect(upgraded.value).toBe(2);
       });
 
       it('upgraded duration is still null (encounter-scoped)', () => {
         const upgraded = def.upgradedEffect as ModifierCardEffect;
         expect(upgraded.duration).toBeNull();
+      });
+
+      it('upgraded description mentions the max-HP bleed', () => {
+        expect(def.upgradedDescription).toMatch(/10%.*max HP/i);
       });
 
       it('has upgradedDescription defined and non-empty', () => {

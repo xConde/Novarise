@@ -3968,6 +3968,139 @@ describe('EnemyService', () => {
       // GLIDER moves normally (ignoresElevation = true).
       expect(glider.pathIndex).toBeGreaterThan(gliderIdx);
     });
+
+    // ── GRAVITY_WELL upgraded — bleed tier (value ≥ 2) ───────────────────────
+
+    /**
+     * Upgraded GRAVITY_WELL reports modifier value 2 instead of 1. When a
+     * gated enemy is skipped this turn, it additionally takes 10% of its max
+     * HP as damage (Math.max(1, ...) floor). Base tier (value 1) continues to
+     * gate without damage — the two tiers must remain distinguishable.
+     */
+    it('upgraded tier (value 2): gated enemy takes 10% max-HP damage (amplified by +25% exposed bonus)', () => {
+      // Bleed is resolved through damageEnemy, which applies the +25% exposed-
+      // damage multiplier on negative-elevation tiles. This is by design — an
+      // enemy already standing on a depressed tile takes amplified damage from
+      // every source, and the GRAVITY_WELL bleed should follow the same rule
+      // (documented in elevation.constants.ts + enemy.service.ts).
+      buildGravityTestBed(new Map(), false);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);  // advance to path[1]
+      const healthBeforeGate = enemy.health;
+      const maxHealth = enemy.maxHealth;
+
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 2 : 0
+      );
+      const { row, col } = enemy.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      const baseBleed = Math.max(1, Math.round(maxHealth * 0.10));
+      const expectedBleedAfterExpose = Math.round(baseBleed * 1.25);
+      expect(enemy.health).toBe(healthBeforeGate - expectedBleedAfterExpose);
+    });
+
+    it('upgraded tier (value 2): enemy still has movement gated (tier does not imply skip-damage-only)', () => {
+      buildGravityTestBed(new Map(), false);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);
+      const indexAtDepressedTile = enemy.pathIndex;
+
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 2 : 0
+      );
+      const { row, col } = enemy.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(enemy.pathIndex).toBe(indexAtDepressedTile);
+    });
+
+    it('base tier (value 1): gated enemy takes NO damage', () => {
+      buildGravityTestBed(new Map(), false);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);
+      const healthBeforeGate = enemy.health;
+
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 1 : 0
+      );
+      const { row, col } = enemy.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(enemy.health).toBe(healthBeforeGate);
+    });
+
+    it('upgraded tier (value 2) on elevation 0 (not depressed): no bleed, no gate', () => {
+      buildGravityTestBed(new Map(), false);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const healthBefore = enemy.health;
+      const startIndex = enemy.pathIndex;
+
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 2 : 0
+      );
+      // Elevation 0 — NOT depressed — so gate + bleed both skip.
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(enemy.pathIndex).toBe(startIndex + 1);  // moved
+      expect(enemy.health).toBe(healthBefore);       // untouched
+    });
+
+    it('upgraded tier (value 2) + GLIDER on depressed tile: ignoresElevation → no gate, no bleed', () => {
+      buildGravityTestBed(new Map(), false);
+      const glider = service.spawnEnemy(EnemyType.GLIDER, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);
+      const healthBefore = glider.health;
+      const indexAtPath1 = glider.pathIndex;
+
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 2 : 0
+      );
+      const { row, col } = glider.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(glider.pathIndex).toBeGreaterThan(indexAtPath1);  // moved (ignoresElevation)
+      expect(glider.health).toBe(healthBefore);                 // no bleed (same exemption)
+    });
+
+    it('upgraded tier (value 2): bleed damage can kill a low-HP enemy', () => {
+      buildGravityTestBed(new Map(), false);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);
+      // Reduce enemy health so the 10% bleed will kill it.
+      const expectedBleed = Math.max(1, Math.round(enemy.maxHealth * 0.10));
+      service.damageEnemy(enemy.id, enemy.health - expectedBleed);
+      expect(enemy.health).toBe(expectedBleed);
+
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 2 : 0
+      );
+      const { row, col } = enemy.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(enemy.health).toBeLessThanOrEqual(0);
+    });
   });
 
   // ── Sprint 37 GLIDER — exposed damage bypass ─────────────────────────────
