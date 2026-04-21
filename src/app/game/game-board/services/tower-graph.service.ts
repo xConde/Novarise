@@ -354,23 +354,30 @@ export class TowerGraphService {
   // ─── Per-turn lifecycle ────────────────────────────────────────────────
 
   /**
-   * Expires virtual edges whose `expiresOnTurn === currentTurn` and
-   * disruption entries whose `untilTurn === currentTurn`.
+   * Expires virtual edges whose `expiresOnTurn <= currentTurn` and disruption
+   * entries whose `untilTurn <= currentTurn`.
    *
    * Called from `CombatLoopService.resolveTurn` at the same slot as
    * `pathMutationService.tickTurn` and `elevationService.tickTurn` — at the
    * TOP of the turn, immediately after `turnNumber++`.
+   *
+   * Uses `<=` rather than strict equality so a turn-skip card (none exist
+   * today, but the feature has been on the roadmap) cannot silently leak an
+   * already-expired edge by jumping the counter past the exact expiry turn.
+   * With `===`, a skip from turn 3 → turn 5 on an edge expiring at turn 4
+   * would fire tickTurn(5) only — the `edge.expiresOnTurn === 4` check would
+   * miss the edge and it would survive forever.
    */
   tickTurn(currentTurn: number): void {
     for (const [edgeKey, edge] of Array.from(this.virtualEdges)) {
-      if (edge.expiresOnTurn === currentTurn) {
+      if (edge.expiresOnTurn <= currentTurn) {
         this.virtualEdges.delete(edgeKey);
         const [aId, bId] = edgeKey.split('__');
         this.edgesRemovedSubject.next({ a: aId, b: bId, kind: 'virtual' });
       }
     }
     for (const [id, entry] of Array.from(this.disruptedUntil)) {
-      if (entry.untilTurn === currentTurn) this.disruptedUntil.delete(id);
+      if (entry.untilTurn <= currentTurn) this.disruptedUntil.delete(id);
     }
   }
 

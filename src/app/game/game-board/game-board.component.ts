@@ -1300,8 +1300,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // would normally keep the graph in sync. This single rebuild() consumes the
       // current `placedTowersGetter()` result and re-derives all 4-dir edges +
       // cluster membership. O(N × 4) lookups — well under 0.1ms for realistic
-      // tower counts. See conduit-adjacency-graph.md §9 for the rationale and §17
-      // for the 19→20-step restore coordinator.
+      // tower counts. See conduit-adjacency-graph.md §9 for the "graph state is
+      // derived, not checkpointed" rationale.
       this.towerGraphService.rebuild();
 
       // Step 4.6: Restore graph overlay state (virtual edges + disruption entries).
