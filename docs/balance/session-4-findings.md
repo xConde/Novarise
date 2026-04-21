@@ -171,27 +171,18 @@ delivers ~15–25% effective run-wide in a basic-heavy deck.
 Recommendation: leave at 1.10. Revisit only if playtest shows TUNING_FORK
 is the auto-pick uncommon relic regardless of deck composition.
 
-### 3. FORMATION additive range — likely under-tuned
+### 3. FORMATION additive range — SHIPPED SESSION 5 (+1/+2 → +2/+3)
 
-+1 / +2 tiles on the straight-line trigger is restrictive. Most boards
-have ≥ 2 bends; a 3-in-a-row is rare in typical play, and the range
-boost only applies for the wave.
+Option B (same trigger, better payoff) shipped. Playtest gate: if 3-in-
+a-row triggers in > 50% of waves in Run C, dial back to +1/+2.
 
-Option A — keep effect, relax trigger: accept diagonals (adds
-complexity to TowerGraphService).
-Option B — same trigger, better payoff: +2 / +3 range. Simpler.
+### 4. HANDSHAKE bonuses — SHIPPED SESSION 5 (+15%/+25% → +20%/+30%)
 
-Proposal: Option B. Measure hit rate of the 3+ row trigger in
-playtest; if <1 wave in 3 triggers it, B is a no-brainer buff.
-
-### 4. HANDSHAKE bonuses (+15% / +25%) vs graph-query complexity
-
-For an uncommon-archetype-locked card, +15% wave-scoped is modest.
-DAMAGE_BOOST delivers +25% wave-scoped without any neighbor gate.
-HANDSHAKE costs the same 1E but has the adjacency requirement.
-
-Proposal: bump base to +20%, upgraded to +30%. Keeps the adjacency
-tax meaningful but rewards the Conduit identity.
+Shipped as proposed. Playtest gate: if end-wave boss TTK falls below 3
+turns on Run C with HANDSHAKE upgraded + a full cluster + HIVE_MIND,
+dial upgraded back to +25%. Cluster stacking is the known runaway risk
+(TUNING_FORK × HANDSHAKE × GRID_SURGE × HIVE_MIND compounds
+multiplicatively).
 
 ### 5. GRID_SURGE ×2 / ×2.5 — plausibly correct
 
