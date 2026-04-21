@@ -1174,6 +1174,35 @@ describe('CARD_DEFINITIONS', () => {
     });
   });
 
+  // ── FORMATION (Sprint 44) — session-5 balance bump ──────────────────────
+  describe('FORMATION (sprint 44)', () => {
+    const def = CARD_DEFINITIONS[CardId.FORMATION];
+
+    it('base range additive is 2 (session-5 bump from 1)', () => {
+      if (def.effect.type === 'modifier') {
+        expect(def.effect.value).toBe(2);
+      } else {
+        fail('effect is not a modifier');
+      }
+    });
+
+    it('upgraded range additive is 3 (session-5 bump from 2)', () => {
+      if (def.upgradedEffect?.type === 'modifier') {
+        expect(def.upgradedEffect.value).toBe(3);
+      } else {
+        fail('upgradedEffect is not a modifier');
+      }
+    });
+
+    it('description mentions +2 range (base)', () => {
+      expect(def.description).toMatch(/\+2 range/);
+    });
+
+    it('upgraded description mentions +3 range', () => {
+      expect(def.upgradedDescription).toMatch(/\+3 range/);
+    });
+  });
+
   // ── HIVE_MIND (Sprint 50) — secondary-stat sharing upgrade ──────────────
   describe('HIVE_MIND (sprint 50)', () => {
     const def = CARD_DEFINITIONS[CardId.HIVE_MIND];

@@ -298,9 +298,15 @@ const CARD_VALUES = {
   handshakeDuration: 1,
 
   // ── Conduit — FORMATION ─────────────────────────────────────────────────
+  // Session-5 balance delta: +1/+2 → +2/+3. Session-4 findings flagged the
+  // 3-in-a-row trigger as restrictive (rare on typical boards with bends)
+  // and the +1 payoff as underwhelming relative to the positional commitment.
+  // Doubling the additive makes FORMATION a "sniper-row" build-around rather
+  // than a mild buff — consistent with Conduit's "positional commitment =
+  // real payoff" identity.
   formationCost: 1,
-  formationRangeAdditive: 1,
-  formationUpgradedRangeAdditive: 2,
+  formationRangeAdditive: 2,
+  formationUpgradedRangeAdditive: 3,
   formationDuration: 1,
 
   // ── Conduit — LINKWORK ──────────────────────────────────────────────────
@@ -1782,8 +1788,8 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.FORMATION]: {
     id: CardId.FORMATION,
     name: 'Formation',
-    description: 'Towers in a row of 3 or more gain +1 range this wave.',
-    upgradedDescription: 'Towers in a row of 3 or more gain +2 range this wave.',
+    description: 'Towers in a row of 3 or more gain +2 range this wave.',
+    upgradedDescription: 'Towers in a row of 3 or more gain +3 range this wave.',
     type: CardType.MODIFIER,
     rarity: CardRarity.COMMON,
     energyCost: CARD_VALUES.formationCost,
