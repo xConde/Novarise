@@ -1174,6 +1174,35 @@ describe('CARD_DEFINITIONS', () => {
     });
   });
 
+  // ── CONDUIT_BRIDGE (Sprint 48) — session-5 walkback ─────────────────────
+  describe('CONDUIT_BRIDGE (sprint 48)', () => {
+    const def = CARD_DEFINITIONS[CardId.CONDUIT_BRIDGE];
+
+    it('base duration is 4 turns (session-5 walkback from 5)', () => {
+      if (def.effect.type === 'utility') {
+        expect(def.effect.value).toBe(4);
+      } else {
+        fail('effect is not a utility');
+      }
+    });
+
+    it('upgraded duration is 5 turns (session-5 walkback from 7)', () => {
+      if (def.upgradedEffect?.type === 'utility') {
+        expect(def.upgradedEffect.value).toBe(5);
+      } else {
+        fail('upgradedEffect is not a utility');
+      }
+    });
+
+    it('description mentions 4 turns', () => {
+      expect(def.description).toMatch(/4 turns/);
+    });
+
+    it('upgraded description mentions 5 turns', () => {
+      expect(def.upgradedDescription).toMatch(/5 turns/);
+    });
+  });
+
   // ── HANDSHAKE (Sprint 43) — session-5 balance bump ──────────────────────
   describe('HANDSHAKE (sprint 43)', () => {
     const def = CARD_DEFINITIONS[CardId.HANDSHAKE];

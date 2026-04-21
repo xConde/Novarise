@@ -334,9 +334,15 @@ const CARD_VALUES = {
   gridSurgeDuration: 1,               // turn
 
   // ── Conduit — CONDUIT_BRIDGE ────────────────────────────────────────────
+  // Session-5 balance walkback: 5/7 → 4/5. Session-4 bumped 3/4 → 5/7 with
+  // reasoning "3 turns is a blip inside a 7-10 turn wave" — but the blip
+  // was the card's identity. At 7 turns upgraded, playing CONDUIT_BRIDGE
+  // turn 1 of a 7-turn wave covers the entire wave, erasing the "when do
+  // I play this?" decision. 4/5 restores that decision while still giving
+  // enough uptime to matter (50-70% on an average wave).
   conduitBridgeCost: 2,
-  conduitBridgeDuration: 5,           // turns
-  conduitBridgeUpgradedDuration: 7,
+  conduitBridgeDuration: 4,           // turns
+  conduitBridgeUpgradedDuration: 5,
 
   // ── Conduit — ARCHITECT ─────────────────────────────────────────────────
   // Base: 3E rare flag (cluster super-node adjacency). Upgraded: cost drops
@@ -1925,8 +1931,8 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.CONDUIT_BRIDGE]: {
     id: CardId.CONDUIT_BRIDGE,
     name: 'Conduit Bridge',
-    description: 'Link two non-adjacent towers as neighbors for 5 turns.',
-    upgradedDescription: 'Link two non-adjacent towers as neighbors for 7 turns.',
+    description: 'Link two non-adjacent towers as neighbors for 4 turns.',
+    upgradedDescription: 'Link two non-adjacent towers as neighbors for 5 turns.',
     type: CardType.UTILITY,
     rarity: CardRarity.UNCOMMON,
     energyCost: CARD_VALUES.conduitBridgeCost,
