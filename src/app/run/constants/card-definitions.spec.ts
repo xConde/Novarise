@@ -1174,6 +1174,35 @@ describe('CARD_DEFINITIONS', () => {
     });
   });
 
+  // ── HANDSHAKE (Sprint 43) — session-5 balance bump ──────────────────────
+  describe('HANDSHAKE (sprint 43)', () => {
+    const def = CARD_DEFINITIONS[CardId.HANDSHAKE];
+
+    it('base damage bonus is 20% (session-5 bump from 15%)', () => {
+      if (def.effect.type === 'modifier') {
+        expect(def.effect.value).toBeCloseTo(0.20, 5);
+      } else {
+        fail('effect is not a modifier');
+      }
+    });
+
+    it('upgraded damage bonus is 30% (session-5 bump from 25%)', () => {
+      if (def.upgradedEffect?.type === 'modifier') {
+        expect(def.upgradedEffect.value).toBeCloseTo(0.30, 5);
+      } else {
+        fail('upgradedEffect is not a modifier');
+      }
+    });
+
+    it('description mentions +20% damage', () => {
+      expect(def.description).toMatch(/\+20%/);
+    });
+
+    it('upgraded description mentions +30% damage', () => {
+      expect(def.upgradedDescription).toMatch(/\+30%/);
+    });
+  });
+
   // ── FORMATION (Sprint 44) — session-5 balance bump ──────────────────────
   describe('FORMATION (sprint 44)', () => {
     const def = CARD_DEFINITIONS[CardId.FORMATION];

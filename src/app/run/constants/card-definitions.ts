@@ -292,9 +292,15 @@ const CARD_VALUES = {
   gravityWellBleedFraction: 0.10,   // 10% max-HP per turn on gated enemies (upgraded only)
 
   // ── Conduit — HANDSHAKE ─────────────────────────────────────────────────
+  // Session-5 balance delta: +15%/+25% → +20%/+30%. Session-4 findings: as
+  // a Conduit-gated uncommon with a ≥1-neighbor requirement, HANDSHAKE's
+  // +15% base was strictly weaker than DAMAGE_BOOST's +25% unconditional
+  // at the same 1E cost. Bumping to +20% base keeps DAMAGE_BOOST as the
+  // ceiling for ungated bonus, while +30% upgraded rewards committing to
+  // the Conduit positional read.
   handshakeCost: 1,
-  handshakeBonus: 0.15,
-  handshakeUpgradedBonus: 0.25,
+  handshakeBonus: 0.20,
+  handshakeUpgradedBonus: 0.30,
   handshakeDuration: 1,
 
   // ── Conduit — FORMATION ─────────────────────────────────────────────────
@@ -1757,8 +1763,8 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.HANDSHAKE]: {
     id: CardId.HANDSHAKE,
     name: 'Handshake',
-    description: 'Towers with at least one adjacent tower gain +15% damage this wave.',
-    upgradedDescription: 'Towers with at least one adjacent tower gain +25% damage this wave.',
+    description: 'Towers with at least one adjacent tower gain +20% damage this wave.',
+    upgradedDescription: 'Towers with at least one adjacent tower gain +30% damage this wave.',
     type: CardType.MODIFIER,
     rarity: CardRarity.COMMON,
     energyCost: CARD_VALUES.handshakeCost,
