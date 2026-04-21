@@ -24,7 +24,14 @@ const ENEMY_TYPE_LABELS: Record<EnemyType, string> = {
   [EnemyType.BOSS]: 'Boss',
   [EnemyType.SHIELDED]: 'Shielded',
   [EnemyType.SWARM]: 'Swarm',
-  [EnemyType.FLYING]: 'Flying'
+  [EnemyType.FLYING]: 'Flying',
+  [EnemyType.MINER]: 'Miner',
+  [EnemyType.UNSHAKEABLE]: 'Unshakeable',
+  [EnemyType.VEINSEEKER]: 'Veinseeker',
+  // Sprint 37–39 — Highground archetype
+  [EnemyType.GLIDER]: 'Glider',
+  [EnemyType.TITAN]: 'Titan',
+  [EnemyType.WYRM_ASCENDANT]: 'Wyrm Ascendant',
 };
 
 /**

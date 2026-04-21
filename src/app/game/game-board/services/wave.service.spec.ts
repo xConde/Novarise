@@ -160,7 +160,7 @@ describe('WaveService', () => {
       service.startWave(1, mockScene);
       service.spawnForTurn(mockScene); // turn 1
 
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1, jasmine.any(Set));
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1, jasmine.any(Set), undefined);
     });
 
     it('should spawn one enemy per turn (Wave 1: 5 BASIC across 5 turns)', () => {
@@ -623,7 +623,7 @@ describe('WaveService', () => {
       service.setCustomWaves(CUSTOM_WAVES);
       service.startWave(2, mockScene);
       service.spawnForTurn(mockScene);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1, jasmine.any(Set));
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1, jasmine.any(Set), undefined);
     });
 
     it('startWave() rejects waves beyond custom count when endless mode is off', () => {
@@ -766,7 +766,7 @@ describe('WaveService', () => {
       const count = service.spawnForTurn(mockScene);
       expect(count).toBe(2);
       expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(2);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1, jasmine.any(Set));
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1, jasmine.any(Set), undefined);
     });
 
     it('turn 1 is an empty prep turn — 0 enemies spawned and schedule still active', () => {
@@ -785,7 +785,7 @@ describe('WaveService', () => {
       service.spawnForTurn(mockScene); // turn 1
       const count = service.spawnForTurn(mockScene); // turn 2
       expect(count).toBe(1);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1, jasmine.any(Set));
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1, jasmine.any(Set), undefined);
     });
 
     it('becomes inactive after turn 2 (schedule exhausted)', () => {
@@ -811,7 +811,7 @@ describe('WaveService', () => {
       service.startWave(1, mockScene);
       expect(service.getRemainingToSpawn()).toBe(5);
       service.spawnForTurn(mockScene);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1, jasmine.any(Set));
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1, jasmine.any(Set), undefined);
     });
   });
 
@@ -826,8 +826,8 @@ describe('WaveService', () => {
       service.startWave(1, mockScene);
       service.spawnForTurn(mockScene);
       // Should spawn FAST (from spawnTurns), not HEAVY (from entries)
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1, jasmine.any(Set));
-      expect(enemyServiceSpy.spawnEnemy).not.toHaveBeenCalledWith(EnemyType.HEAVY, mockScene, 1, 1, jasmine.any(Set));
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1, jasmine.any(Set), undefined);
+      expect(enemyServiceSpy.spawnEnemy).not.toHaveBeenCalledWith(EnemyType.HEAVY, mockScene, 1, 1, jasmine.any(Set), undefined);
     });
   });
 
@@ -884,7 +884,7 @@ describe('WaveService', () => {
 
       service.spawnForTurn(mockScene); // delay turn
       service.spawnForTurn(mockScene); // authored turn 0: BASIC
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1, jasmine.any(Set));
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1, jasmine.any(Set), undefined);
     });
   });
 
@@ -911,7 +911,7 @@ describe('WaveService', () => {
 
       service.spawnForTurn(mockScene); // turn 2: FAST
       expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(2);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1, jasmine.any(Set));
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1, jasmine.any(Set), undefined);
 
       expect(service.isSpawning()).toBeFalse();
     });
@@ -993,13 +993,13 @@ describe('WaveService', () => {
       // First turn: 1 BASIC
       const count0 = service.spawnForTurn(mockScene);
       expect(count0).toBe(1);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1, jasmine.any(Set));
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1, jasmine.any(Set), undefined);
 
       // Second turn: 2 FAST
       enemyServiceSpy.spawnEnemy.calls.reset();
       const count1 = service.spawnForTurn(mockScene);
       expect(count1).toBe(2);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1, jasmine.any(Set));
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1, jasmine.any(Set), undefined);
     });
 
     it('serialize → restore roundtrip preserves all state', () => {
@@ -1186,6 +1186,7 @@ describe('WaveService', () => {
         1,       // health mult unchanged
         0.5,     // caltrops speed applied
         jasmine.any(Set),
+        undefined,
       );
     });
 
@@ -1209,6 +1210,7 @@ describe('WaveService', () => {
         1,   // health mult
         1,   // speed back to normal — multiplier was one-shot
         jasmine.any(Set),
+        undefined,
       );
     });
 
@@ -1234,6 +1236,7 @@ describe('WaveService', () => {
         1,
         1,   // reset cleared the pending multiplier
         jasmine.any(Set),
+        undefined,
       );
     });
   });
@@ -1266,6 +1269,7 @@ describe('WaveService', () => {
         1,
         0.5,  // restored CALTROPS multiplier was applied
         jasmine.any(Set),
+        undefined,
       );
     });
 
@@ -1296,6 +1300,7 @@ describe('WaveService', () => {
         1,
         0.5,
         jasmine.any(Set),
+        undefined,
       );
     });
 
@@ -1319,6 +1324,7 @@ describe('WaveService', () => {
         1,
         1,   // both multipliers defaulted to 1
         jasmine.any(Set),
+        undefined,
       );
     });
   });

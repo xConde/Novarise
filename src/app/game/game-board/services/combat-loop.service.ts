@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 
 import { GameStateService } from './game-state.service';
@@ -25,6 +25,11 @@ import { ScreenShakeService } from './screen-shake.service';
 import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 import { WAVE_CONFIG } from '../constants/combat.constants';
 import { isTwinBossWave } from '@core/models/wave-definition.model';
+import { PathMutationService } from './path-mutation.service';
+import { ElevationService } from './elevation.service';
+import { TowerGraphService } from './tower-graph.service';
+import { ELEVATION_CONFIG } from '../constants/elevation.constants';
+import { RELIC_EFFECT_CONFIG } from '../../../run/constants/run.constants';
 
 /**
  * Owns the turn-based combat resolution for the COMBAT phase.
@@ -74,6 +79,10 @@ export class CombatLoopService {
     private notificationService: GameNotificationService,
     private audioService: AudioService,
     private screenShakeService: ScreenShakeService,
+    private pathMutationService: PathMutationService,
+    private elevationService: ElevationService,
+    // @Optional() — absent in pre-Conduit test beds; tickTurn becomes a no-op.
+    @Optional() private towerGraphService?: TowerGraphService,
   ) {}
 
   /** Phase 4: current turn number, exposed for UI bindings. */
@@ -138,6 +147,28 @@ export class CombatLoopService {
    */
   resolveTurn(scene: THREE.Scene): CombatFrameResult {
     this.turnNumber++;
+
+    // Expire path mutations FIRST — before spawn, move, or fire — so all turn-N
+    // actions observe the post-expire board state. (Design doc §4 ordering correction:
+    // the original note said "same slot as status tick" which was wrong because enemy
+    // movement is step 2, before status tick at step 5b.)
+    this.pathMutationService.tickTurn(this.turnNumber, scene);
+    // Expire duration-limited tile elevations AFTER path mutations (structural → numeric ordering).
+    // Elevation tickTurn has no scene parameter — translates existing meshes, no geometry rebuild.
+    // CRITICAL: elevation expiry does NOT invalidate the pathfinding cache (spike §11).
+    this.elevationService.tickTurn(this.turnNumber);
+    // Expire virtual edges (CONDUIT_BRIDGE) and disruption entries
+    // (DISRUPTOR / ISOLATOR / DIVIDER). Ordered with the other tickTurn calls.
+    this.towerGraphService?.tickTurn(this.turnNumber);
+
+    // Sprint 36 OROGENY — every OROGENY_INTERVAL_TURNS (5) turns, permanently raise
+    // a random tower's tile by +1. No-op when no towers exist or all tower tiles are
+    // already at MAX_ELEVATION. RunService.nextRandom() used — no Math.random().
+    const orogenyCounter = this.relicService.incrementOrogenyCounter();
+    if (this.relicService.isOrogenyTrigger(orogenyCounter, ELEVATION_CONFIG.OROGENY_INTERVAL_TURNS)) {
+      this.applyOrogenyEffect();
+    }
+
     const cardGoldMult = 1 + this.cardEffectService.getModifierValue(MODIFIER_STAT.GOLD_MULTIPLIER);
 
     // Reset per-turn accumulators
@@ -157,12 +188,20 @@ export class CombatLoopService {
     const waveAtTurnStart = this.gameStateService.getState().wave;
 
     // 1. Spawn this turn's scheduled enemies
-    this.waveService.spawnForTurn(scene);
+    this.waveService.spawnForTurn(scene, this.turnNumber);
 
-    // 2. Enemy movement — each enemy advances its tiles-per-turn count
+    // 2. Enemy movement — each enemy advances its tiles-per-turn count.
+    // Pass this.turnNumber so VEINSEEKER's path-mutation speed boost
+    // can check PathMutationService.wasMutatedInLastTurns(currentTurn, 3).
     const reachedExit = this.enemyService.stepEnemiesOneTurn(
       (enemyId) => this.statusEffectService.getSlowTileReduction(enemyId),
+      this.turnNumber,
     );
+
+    // 2.5 — MINER dig phase. MINERs that have been alive N*3 turns destroy
+    // the next eligible WALL on their path, reshaping the board mid-wave.
+    // Runs AFTER movement so the MINER walks first, then digs from its new position.
+    this.enemyService.tickMinerDigs(this.turnNumber, scene);
 
     // 3. Tower fire — picks targets and applies damage instantly
     const fireResult = this.towerCombatService.fireTurn(scene, this.turnNumber);
@@ -263,6 +302,13 @@ export class CombatLoopService {
       }
 
       this.gameStateService.completeWave(reward);
+
+      // SURVEYOR_COMPASS: award gold for unique tiles enemies crossed this wave.
+      const surveyorGold = this.relicService.consumeSurveyorGold();
+      if (surveyorGold > 0) {
+        this.gameStateService.addGoldAndScore(surveyorGold);
+      }
+
       const postWavePhase = this.gameStateService.getState().phase;
 
       let interestEarned = 0;
@@ -308,6 +354,12 @@ export class CombatLoopService {
         : `Lucky Coin ×${procs} (+${bonus} bonus gold)`;
       this.notificationService.show(NotificationType.INFO, 'Lucky Coin', message);
     }
+
+    // Tick turn-scoped card modifiers at END of turn — mirrors tickWave's
+    // end-of-wave semantic: duration=N means "active for the next N turns
+    // after play." Ticking at top of resolveTurn would expire duration=1
+    // modifiers before fireTurn and never fire them.
+    this.cardEffectService.tickTurn();
 
     return {
       kills: [...this.frameKills],
@@ -363,7 +415,24 @@ export class CombatLoopService {
       || (encounter?.isElite ?? false)
       || (encounter?.isBoss ?? false);
     const luckyCoinMult = this.relicService.rollLuckyCoin();
-    const goldMult = this.relicService.getGoldMultiplier(isElite) * luckyCoinMult;
+
+    // CONSTELLATION — +25% gold when the killing tower is in a cluster of ≥ 5.
+    // DOT / mortar-zone kills omit towerRow/towerCol so they skip the gate.
+    // Short-circuits when the relic is absent.
+    let constellationMult = 1;
+    if (
+      this.relicService.hasConstellation()
+      && this.towerGraphService !== undefined
+      && killInfo.towerRow !== undefined
+      && killInfo.towerCol !== undefined
+    ) {
+      const clusterSize = this.towerGraphService.getClusterSize(killInfo.towerRow, killInfo.towerCol, this.turnNumber);
+      if (clusterSize >= RELIC_EFFECT_CONFIG.constellationMinClusterSize) {
+        constellationMult = RELIC_EFFECT_CONFIG.constellationClusterGoldMultiplier;
+      }
+    }
+
+    const goldMult = this.relicService.getGoldMultiplier(isElite) * luckyCoinMult * constellationMult;
     const adjustedGold = Math.round(enemy.value * goldMult * cardGoldMult);
     this.gameStateService.addGoldAndScore(adjustedGold);
     this.gameStatsService.recordGoldEarned(adjustedGold);
@@ -391,5 +460,36 @@ export class CombatLoopService {
 
     this.enemyService.startDyingAnimation(killInfo.id);
     this.runEventBus.emit(RunEventType.ENEMY_KILLED, { enemyType: enemy.type, value: enemy.value });
+  }
+
+  /**
+   * Sprint 36 OROGENY — pick a random tower and permanently raise its tile by +1.
+   * No-op when: no towers exist, all tower tiles are at MAX_ELEVATION, or
+   * the elevation service rejects the raise (spawner/exit guard). Uses
+   * runService.nextRandom() — no Math.random().
+   */
+  private applyOrogenyEffect(): void {
+    const towers = Array.from(this.towerCombatService.getPlacedTowers().values());
+    if (towers.length === 0) return;
+
+    // Filter to towers whose tile is below MAX_ELEVATION
+    const eligible = towers.filter(t =>
+      this.elevationService.getElevation(t.row, t.col) < ELEVATION_CONFIG.MAX_ELEVATION,
+    );
+    if (eligible.length === 0) return;
+
+    const idx = Math.floor(this.runService.nextRandom() * eligible.length);
+    const tower = eligible[idx];
+    if (!tower) return;
+
+    this.elevationService.raise(
+      tower.row,
+      tower.col,
+      ELEVATION_CONFIG.OROGENY_ELEVATION_AMOUNT,
+      null, // permanent
+      'orogeny',
+      this.turnNumber,
+      'relic',
+    );
   }
 }

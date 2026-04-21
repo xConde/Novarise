@@ -470,6 +470,69 @@ describe('RunService', () => {
     expect(Array.isArray(rewards.cardChoices)).toBeTrue();
   }));
 
+  // Phase 2 Sprint 10.5 — dominant archetype snapshot on reward screen config.
+  it('generateRewards() includes dominantArchetype snapshot for the chip', fakeAsync(() => {
+    service.startNewRun();
+    service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+    const rewards = service.generateRewards();
+
+    // Starter deck has no archetype-tagged cards, so dominant must be neutral.
+    expect(rewards.dominantArchetype).toBe('neutral');
+  }));
+
+  // Phase 3 prep — chip flip animation plumbing. RunService threads the prior
+  // reward screen's archetype through RewardScreenConfig.previousDominantArchetype
+  // so the chip can fire a flip keyframe on transition.
+  describe('generateRewards — previousDominantArchetype plumbing', () => {
+    it('returns previousDominantArchetype=null on the first reward screen of a run', fakeAsync(() => {
+      service.startNewRun();
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+      const rewards = service.generateRewards();
+
+      expect(rewards.previousDominantArchetype).toBeNull();
+    }));
+
+    it('returns the prior archetype on the second reward screen', fakeAsync(() => {
+      service.startNewRun();
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+      const first = service.generateRewards();
+      // Second reward generation in the same run should echo the first's archetype
+      // through the previous field, even if no deck change occurred (dominance
+      // is re-snapshotted each call).
+      const second = service.generateRewards();
+
+      expect(second.previousDominantArchetype).toBe(first.dominantArchetype);
+    }));
+
+    it('resets the prior-archetype cache when a new run starts', fakeAsync(() => {
+      service.startNewRun();
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+      service.generateRewards(); // primes lastShownDominantArchetype
+
+      service.startNewRun(); // clears the cache
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+      const afterReset = service.generateRewards();
+
+      expect(afterReset.previousDominantArchetype).toBeNull();
+    }));
+
+    it('resets the prior-archetype cache when a run is abandoned', fakeAsync(() => {
+      service.startNewRun();
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+      service.generateRewards(); // primes lastShownDominantArchetype
+
+      service.abandonRun();
+
+      service.startNewRun();
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+      const afterAbandon = service.generateRewards();
+
+      expect(afterAbandon.previousDominantArchetype).toBeNull();
+    }));
+  });
+
   it('generateRewards() returns exactly 3 card choices', fakeAsync(() => {
     service.startNewRun();
     service.prepareEncounter(service.nodeMap!.nodes[0]);
@@ -1023,12 +1086,15 @@ describe('RunService', () => {
         waveState: {} as any,
         deckState: {} as any,
         cardModifiers: [],
-        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false, orogenyTurnCounter: 0 },
         gameStats: {} as any,
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
         runStateFlags: { entries: [], consumedEventIds: [] },
+        pathMutations: { mutations: [], nextId: 0 },
+        tileElevations: { elevations: [], changes: [], nextId: 0 },
+        towerGraph: { virtualEdges: [], disruptedUntil: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1058,12 +1124,15 @@ describe('RunService', () => {
         waveState: {} as any,
         deckState: {} as any,
         cardModifiers: [],
-        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false, orogenyTurnCounter: 0 },
         gameStats: {} as any,
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
         runStateFlags: { entries: [], consumedEventIds: [] },
+        pathMutations: { mutations: [], nextId: 0 },
+        tileElevations: { elevations: [], changes: [], nextId: 0 },
+        towerGraph: { virtualEdges: [], disruptedUntil: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1100,12 +1169,15 @@ describe('RunService', () => {
         waveState: {} as any,
         deckState: {} as any,
         cardModifiers: [],
-        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false, orogenyTurnCounter: 0 },
         gameStats: {} as any,
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
         runStateFlags: { entries: [], consumedEventIds: [] },
+        pathMutations: { mutations: [], nextId: 0 },
+        tileElevations: { elevations: [], changes: [], nextId: 0 },
+        towerGraph: { virtualEdges: [], disruptedUntil: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1138,12 +1210,15 @@ describe('RunService', () => {
         waveState: {} as any,
         deckState: {} as any,
         cardModifiers: [],
-        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false, orogenyTurnCounter: 0 },
         gameStats: {} as any,
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
         runStateFlags: { entries: [], consumedEventIds: [] },
+        pathMutations: { mutations: [], nextId: 0 },
+        tileElevations: { elevations: [], changes: [], nextId: 0 },
+        towerGraph: { virtualEdges: [], disruptedUntil: [] },
       });
 
       // node_0_0 is NOT in completedNodeIds — valid checkpoint.
@@ -1683,7 +1758,7 @@ describe('RunService', () => {
           instanceCounter: 0,
         },
         cardModifiers: [],
-        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false, orogenyTurnCounter: 0 },
         gameStats: { totalGoldEarned: 0, totalDamageDealt: 0, shotsFired: 0, killsByTowerType: {}, enemiesLeaked: 0, towersPlaced: 0, towersSold: 0 },
         challengeState: { totalGoldSpent: 0, maxTowersPlaced: 0, towerTypesUsed: [], currentTowerCount: 0, livesLostThisGame: 0 },
         wavePreview: { oneShotBonus: 0 },
@@ -1697,9 +1772,9 @@ describe('RunService', () => {
       localStorage.removeItem(CHECKPOINT_KEY);
 
       expect(loaded).not.toBeNull();
-      // Migration chain 5→6→7 back-fills both runStateFlags.entries and consumedEventIds.
+      // Migration chain 5→6→7→8→9→10 back-fills runStateFlags.entries, consumedEventIds, pathMutations, tileElevations, and towerGraph.
       expect(loaded!.runStateFlags).toEqual({ entries: [], consumedEventIds: [] });
-      expect(loaded!.version).toBe(7);
+      expect(loaded!.version).toBe(CHECKPOINT_VERSION);
     });
 
     it('v6 round-trips populated runStateFlags', () => {
@@ -1721,13 +1796,16 @@ describe('RunService', () => {
         waveState: { currentWaveIndex: 0, turnSchedule: [], turnScheduleIndex: 0, active: false, endlessMode: false, currentEndlessResult: null },
         deckState: { deckState: { drawPile: [], hand: [], discardPile: [], exhaustPile: [] }, energyState: { current: 3, max: 3 }, instanceCounter: 0 },
         cardModifiers: [],
-        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false, orogenyTurnCounter: 0 },
         gameStats: { totalGoldEarned: 0, totalDamageDealt: 0, shotsFired: 0, killsByTowerType: {}, enemiesLeaked: 0, towersPlaced: 0, towersSold: 0 },
         challengeState: { totalGoldSpent: 0, maxTowersPlaced: 0, towerTypesUsed: [], currentTowerCount: 0, livesLostThisGame: 0 },
         wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
         runStateFlags: { entries: [[FLAG_KEYS.MERCHANT_AIDED, 1], [FLAG_KEYS.SCOUT_SAVED, 3]], consumedEventIds: [] },
+        pathMutations: { mutations: [], nextId: 0 },
+        tileElevations: { elevations: [], changes: [], nextId: 0 },
+        towerGraph: { virtualEdges: [], disruptedUntil: [] },
       };
 
       const CHECKPOINT_KEY = 'novarise_encounter_checkpoint';
@@ -2029,6 +2107,164 @@ describe('RunService', () => {
       const grantedRelicId = service.runState!.relicIds[0] as RelicId;
       const grantedDef = RELIC_DEFINITIONS[grantedRelicId];
       expect(grantedDef.rarity).toBe(RelicRarity.COMMON);
+    }));
+  });
+
+  // ── Phase 1 Sprint 8 — pickArchetypeAwareCard ──────────────────────────
+  describe('pickArchetypeAwareCard()', () => {
+    function makePool(): Array<{ id: string; archetype?: string }> {
+      return [
+        { id: 'cart_a', archetype: 'cartographer' },
+        { id: 'cart_b', archetype: 'cartographer' },
+        { id: 'neut_a', archetype: 'neutral' },
+        { id: 'neut_b' }, // archetype undefined — treated as neutral
+      ];
+    }
+
+    it('uniform pick when dominant is "neutral"', () => {
+      const pool = makePool();
+      const rng = () => 0.0; // forces first index every call
+      const picked = (service as any).pickArchetypeAwareCard(pool, 'neutral', rng);
+      expect(picked.id).toBe('cart_a');
+    });
+
+    it('with rng < 0.6, picks from archetype-aligned subset', () => {
+      const pool = makePool();
+      // First rng call (0.5) → wantArchetype branch (true).
+      // Second call selects from [cart_a, cart_b]; index = floor(0 * 2) = 0.
+      const calls = [0.5, 0.0];
+      let i = 0;
+      const rng = () => calls[i++];
+      const picked = (service as any).pickArchetypeAwareCard(pool, 'cartographer', rng);
+      expect(['cart_a', 'cart_b']).toContain(picked.id);
+    });
+
+    it('with rng >= 0.6, picks from neutral subset', () => {
+      const pool = makePool();
+      // First rng call (0.7) → wantArchetype branch (false).
+      // Second call selects from [neut_a, neut_b]; index = floor(0 * 2) = 0.
+      const calls = [0.7, 0.0];
+      let i = 0;
+      const rng = () => calls[i++];
+      const picked = (service as any).pickArchetypeAwareCard(pool, 'cartographer', rng);
+      expect(['neut_a', 'neut_b']).toContain(picked.id);
+    });
+
+    it('falls back to neutral subset when archetype subset empty', () => {
+      const pool = [
+        { id: 'neut_a', archetype: 'neutral' },
+        { id: 'neut_b' },
+      ];
+      // wantArchetype branch (rng < 0.6) but no archetype matches → falls back.
+      const calls = [0.5, 0.0];
+      let i = 0;
+      const rng = () => calls[i++];
+      const picked = (service as any).pickArchetypeAwareCard(pool, 'cartographer', rng);
+      expect(['neut_a', 'neut_b']).toContain(picked.id);
+    });
+
+    it('falls back to archetype subset when neutral subset empty', () => {
+      const pool = [
+        { id: 'cart_a', archetype: 'cartographer' },
+        { id: 'cart_b', archetype: 'cartographer' },
+      ];
+      // !wantArchetype branch (rng >= 0.6) but no neutral matches → falls back.
+      const calls = [0.7, 0.0];
+      let i = 0;
+      const rng = () => calls[i++];
+      const picked = (service as any).pickArchetypeAwareCard(pool, 'cartographer', rng);
+      expect(['cart_a', 'cart_b']).toContain(picked.id);
+    });
+  });
+
+  // ── Phase 1 Sprint 4 — removeCardFromShop ──────────────────────────────
+  describe('removeCardFromShop()', () => {
+    it('returns false when no run state exists', () => {
+      expect(service.removeCardFromShop('any')).toBeFalse();
+    });
+
+    it('returns false when player gold is below cardRemoveCost', fakeAsync(() => {
+      service.startNewRun();
+      const cards = service.getDeckCards();
+      const target = cards.find(c => CARD_DEFINITIONS[c.cardId as CardId].rarity !== CardRarity.STARTER);
+
+      // Force gold below cost
+      service['updateState']({ ...service.runState!, gold: 0 });
+
+      const result = service.removeCardFromShop(target?.instanceId ?? 'whatever');
+      expect(result).toBeFalse();
+    }));
+
+    it('returns false for unknown instanceId', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, gold: 1000 });
+      expect(service.removeCardFromShop('does_not_exist')).toBeFalse();
+    }));
+
+    it('returns false when target is a STARTER card', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, gold: 1000 });
+      const cards = service.getDeckCards();
+      const starter = cards.find(c => CARD_DEFINITIONS[c.cardId as CardId].rarity === CardRarity.STARTER);
+      expect(starter).toBeTruthy();
+
+      expect(service.removeCardFromShop(starter!.instanceId)).toBeFalse();
+    }));
+
+    it('successfully removes a non-starter card and deducts gold', fakeAsync(() => {
+      service.startNewRun();
+      // Add a non-starter card to the deck via collectReward
+      service['updateState']({ ...service.runState!, gold: 1000 });
+      service.collectReward({ type: 'card', cardId: CardId.GOLD_RUSH });
+
+      const cards = service.getDeckCards();
+      const target = cards.find(c => c.cardId === CardId.GOLD_RUSH);
+      expect(target).toBeTruthy();
+
+      const goldBefore = service.runState!.gold;
+      const totalBefore = service.getDeckCards().length;
+      const ids = service.runState!.deckCardIds.length;
+
+      const result = service.removeCardFromShop(target!.instanceId);
+
+      expect(result).toBeTrue();
+      expect(service.runState!.gold).toBe(goldBefore - 75);
+      expect(service.getDeckCards().length).toBe(totalBefore - 1);
+      expect(service.runState!.deckCardIds.length).toBe(ids - 1);
+    }));
+
+    // Phase 1 red-team Finding 1 — duplicate card removal must keep
+    // deckCardIds in sync with live deck (no silent desync on save).
+    it('keeps deckCardIds in sync when removing one of multiple duplicate cards', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, gold: 1000 });
+
+      // Snapshot baseline counts (starter deck may already contain GOLD_RUSH).
+      const baselineGoldRushCount = service.getDeckCards()
+        .filter(c => c.cardId === CardId.GOLD_RUSH).length;
+
+      // Add two extra copies — guarantees at least 2 instances of the same cardId.
+      service.collectReward({ type: 'card', cardId: CardId.GOLD_RUSH });
+      service.collectReward({ type: 'card', cardId: CardId.GOLD_RUSH });
+
+      const goldRushInstances = service.getDeckCards()
+        .filter(c => c.cardId === CardId.GOLD_RUSH);
+      expect(goldRushInstances.length).toBe(baselineGoldRushCount + 2);
+
+      // Remove one copy.
+      const result = service.removeCardFromShop(goldRushInstances[0].instanceId);
+      expect(result).toBeTrue();
+
+      // Live deck and persisted deckCardIds must agree on the post-removal count.
+      const liveAfter = service.getDeckCards().filter(c => c.cardId === CardId.GOLD_RUSH).length;
+      const idsAfter = service.runState!.deckCardIds.filter(id => id === CardId.GOLD_RUSH).length;
+      expect(liveAfter).toBe(baselineGoldRushCount + 1);
+      expect(idsAfter).toBe(liveAfter);
+
+      // The full persisted list must equal the live deck composition (multiset).
+      const liveCardIds = service.getDeckCards().map(c => c.cardId).slice().sort();
+      const persistedSorted = service.runState!.deckCardIds.slice().sort();
+      expect(persistedSorted).toEqual(liveCardIds);
     }));
   });
 });

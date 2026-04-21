@@ -17,6 +17,14 @@ export interface KillInfo {
   damage: number;
   towerType: TowerType | null;
   towerLevel: number;
+  /**
+   * Killing tower's row + col. Optional — absent for DOT ticks and
+   * mortar-zone kills (the zone is free-floating; its placer may have
+   * moved or been sold). CombatLoopService.processKill reads these for
+   * CONSTELLATION's cluster-size gate; missing row/col skips the gate.
+   */
+  towerRow?: number;
+  towerCol?: number;
 }
 
 /** Deferred audio event accumulated during physics steps, drained once per frame by the component. */

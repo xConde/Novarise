@@ -131,6 +131,7 @@ export class RunComponent implements OnInit, OnDestroy {
         break;
       case NodeType.SHOP:
         this.runService.generateShopItems();
+        this.refreshShopDeckSnapshot();
         this.viewMode = 'shop';
         break;
       case NodeType.EVENT:
@@ -219,6 +220,20 @@ export class RunComponent implements OnInit, OnDestroy {
     return this.runService.getDeckCards();
   }
 
+  /**
+   * Phase 1 Sprint 4 hardening (red-team Finding 2):
+   * Memoized snapshot of the current deck for the shop card-removal picker.
+   * Refreshed only when entering the shop or after a successful removal — NOT
+   * via a per-CD-tick method-call binding. The previous `[deckCards]="getDeckCards()"`
+   * binding allocated a new array every change-detection tick, which fired
+   * ngOnChanges on ShopScreenComponent and reset its one-use card-remove slot.
+   */
+  shopDeckSnapshot: CardInstance[] = [];
+
+  private refreshShopDeckSnapshot(): void {
+    this.shopDeckSnapshot = this.runService.getDeckCards();
+  }
+
   /** Handle card upgrade selection from rest screen. */
   onCardUpgraded(instanceId: string): void {
     this.runService.upgradeCard(instanceId);
@@ -262,6 +277,19 @@ export class RunComponent implements OnInit, OnDestroy {
   leaveShop(): void {
     this.runService.leaveShop();
     this.viewMode = 'map';
+  }
+
+  /**
+   * Phase 1 Sprint 4 — handle the shop card-remove action. The ShopScreen
+   * component is the source of truth for "one use per visit"; this just
+   * delegates to the service and stays on the shop screen.
+   */
+  onShopCardRemoved(instanceId: string): void {
+    this.runService.removeCardFromShop(instanceId);
+    // Refresh snapshot so subsequent UI surfaces (resume from shop later, etc.)
+    // see the post-removal state. Does NOT trigger ShopScreen.ngOnChanges
+    // shopItems reset path — only the deckCards reference changes.
+    this.refreshShopDeckSnapshot();
   }
 
   /** Calculate heal amount for rest site — includes ascension REST_HEAL_REDUCTION. */
@@ -366,6 +394,7 @@ export class RunComponent implements OnInit, OnDestroy {
         break;
       case NodeType.SHOP:
         this.runService.generateShopItems();
+        this.refreshShopDeckSnapshot();
         this.viewMode = 'shop';
         break;
       case NodeType.EVENT:

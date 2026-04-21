@@ -1,9 +1,10 @@
-import { Component, HostListener, Input, Output, EventEmitter } from '@angular/core';
+import { Component, HostListener, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { RelicDefinition, RELIC_DEFINITIONS, RelicId, RelicRarity } from '../../models/relic.model';
 import { RewardScreenConfig, RewardItem, CardReward } from '../../models/encounter.model';
 import { ChallengeDefinition, CHALLENGE_SCORE_TO_GOLD_RATIO, computeChallengeGoldBonus } from '../../data/challenges';
 import { getCardDefinition } from '../../constants/card-definitions';
 import { SKIP_GOLD_BY_NODE_TYPE } from '../../constants/run.constants';
+import { ARCHETYPE_DISPLAY, ArchetypeDisplay } from '../../constants/archetype.constants';
 
 /** CSS class suffix returned per rarity. */
 const RARITY_CLASS: Record<RelicRarity, string> = {
@@ -12,12 +13,18 @@ const RARITY_CLASS: Record<RelicRarity, string> = {
   [RelicRarity.RARE]: 'rare',
 };
 
+/**
+ * Duration the archetype chip spends in its flipping state before the
+ * `--flipping` modifier is cleared. Must match the SCSS keyframe duration.
+ */
+const ARCHETYPE_CHIP_FLIP_DURATION_MS = 600;
+
 @Component({
   selector: 'app-reward-screen',
   templateUrl: './reward-screen.component.html',
   styleUrls: ['./reward-screen.component.scss'],
 })
-export class RewardScreenComponent {
+export class RewardScreenComponent implements OnInit, OnDestroy {
   @Input() config!: RewardScreenConfig;
   @Output() rewardCollected = new EventEmitter<RewardItem>();
   @Output() screenClosed = new EventEmitter<void>();
@@ -27,6 +34,16 @@ export class RewardScreenComponent {
   cardPicked = false;
   /** Name of the card the player added to their deck — shown in the confirmation line. */
   pickedCardName: string | null = null;
+
+  /**
+   * Transient flag bound to `.reward-archetype__chip--flipping`. Set when the
+   * player transitions archetypes between reward screens (previous !==
+   * current); cleared after the keyframe completes. Respects
+   * prefers-reduced-motion — the flag stays false when motion is reduced so
+   * the keyframe never runs.
+   */
+  isArchetypeFlipping = false;
+  private flipTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Gold awarded when the player skips the card reward — 0 if none for this node type. */
   get skipGoldAmount(): number {
@@ -77,12 +94,57 @@ export class RewardScreenComponent {
     return RELIC_DEFINITIONS[this.selectedRelic]?.name ?? null;
   }
 
+  /**
+   * Phase 2 Sprint 10.5 — display table for the "Deck leaning:" chip.
+   * Reads from the snapshotted `config.dominantArchetype`; never queries
+   * DeckService at render time so the chip stays consistent with the
+   * rewards shown (see generateRewards() in run.service.ts).
+   */
+  get archetypeDisplay(): ArchetypeDisplay {
+    return ARCHETYPE_DISPLAY[this.config.dominantArchetype];
+  }
+
   onCardSkipped(): void {
     this.cardPicked = true;
     const bonus = this.skipGoldAmount;
     if (bonus > 0) {
       this.rewardCollected.emit({ type: 'gold', amount: bonus });
     }
+  }
+
+  ngOnInit(): void {
+    const prev = this.config.previousDominantArchetype;
+    const curr = this.config.dominantArchetype;
+    if (prev === null || prev === curr) {
+      return;
+    }
+    if (this.prefersReducedMotion()) {
+      return;
+    }
+    this.isArchetypeFlipping = true;
+    this.flipTimer = setTimeout(() => {
+      this.isArchetypeFlipping = false;
+      this.flipTimer = null;
+    }, ARCHETYPE_CHIP_FLIP_DURATION_MS);
+  }
+
+  ngOnDestroy(): void {
+    if (this.flipTimer !== null) {
+      clearTimeout(this.flipTimer);
+      this.flipTimer = null;
+    }
+  }
+
+  /**
+   * Read the user's motion-reduction preference at animation start. Pulled
+   * into a method so tests can stub it without touching the global
+   * matchMedia surface.
+   */
+  private prefersReducedMotion(): boolean {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return false;
+    }
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
   get canContinue(): boolean {

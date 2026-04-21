@@ -17,6 +17,7 @@ import { PileInspectorComponent } from './game-board/components/pile-inspector/p
 import { LastTurnSummaryComponent } from './game-board/components/last-turn-summary/last-turn-summary.component';
 import { CardDetailComponent } from './game-board/components/card-detail/card-detail.component';
 import { IconComponent } from '@shared/components/icon/icon.component';
+
 @NgModule({
   declarations: [
     GameComponent,
@@ -35,6 +36,11 @@ import { IconComponent } from '@shared/components/icon/icon.component';
     RouterModule.forChild([{ path: '', component: GameComponent, canDeactivate: [gameLeaveGuard] }]),
     IconComponent,
   ],
+  // PathMutationService / ElevationService / LineOfSightService / TerraformMaterialPoolService
+  // live on GameBoardComponent.providers, NOT here. Each one transitively depends on
+  // component-scoped peers (BoardMeshRegistryService, PathfindingService, SceneService);
+  // hoisting them to module scope breaks DI because module injectors can't see
+  // component-level providers. See regression fix 2026-04-18.
   providers: [GameBoardService, CombatVFXService, GamePauseService, ChallengeDisplayService]
 })
 export class GameModule {}

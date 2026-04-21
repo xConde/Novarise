@@ -1,6 +1,6 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
-import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, DamageResult, GridNode } from '../models/enemy.model';
+import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, DamageResult, GridNode, MINER_DIG_INTERVAL_TURNS, VEINSEEKER_SPEED_BOOST_WINDOW, VEINSEEKER_BOOSTED_TILES_PER_TURN } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
@@ -13,6 +13,10 @@ import { EnemyHealthService } from './enemy-health.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 import { SerializableEnemy } from '../models/encounter-checkpoint.model';
+import { PathMutationService } from './path-mutation.service';
+import { ElevationService } from './elevation.service';
+import { ELEVATION_CONFIG } from '../constants/elevation.constants';
+import { BlockType } from '../models/game-board-tile';
 
 export { DamageResult } from '../models/enemy.model';
 
@@ -35,6 +39,23 @@ export class EnemyService {
     private enemyHealth: EnemyHealthService,
     private cardEffectService: CardEffectService,
     private relicService: RelicService,
+    /**
+     * @Optional() breaks the EnemyService → PathMutationService DI.
+     * PathMutationService already avoids injecting EnemyService directly
+     * (uses a setRepathHook callback instead), so no cycle exists at
+     * runtime — @Optional() is a belt-and-suspenders guard for test beds
+     * that don't register PathMutationService in their providers array.
+     * tickMinerDigs early-outs when the service is null so MINERs simply
+     * don't dig in those test contexts.
+     */
+    @Optional() private pathMutationService: PathMutationService | null,
+    /**
+     * @Optional() guard matches the PathMutationService pattern: EnemyService is
+     * instantiated in test beds that omit ElevationService from providers. The
+     * damageEnemy exposed-multiplier reads `elevationService?.getElevation() ?? 0`
+     * which safely returns 0 (no bonus) in those contexts.
+     */
+    @Optional() private elevationService: ElevationService | null,
   ) {}
 
   /**
@@ -62,6 +83,13 @@ export class EnemyService {
      * fresh from the live enemies map (previous-turn enemies only).
      */
     externalOccupied?: Set<string>,
+    /**
+     * The current turn number, threaded from CombatLoopService.resolveTurn
+     * → WaveService.spawnForTurn → here. Only used to stamp spawnedOnTurn on
+     * MINER enemies. Callers that don't have a turn context (test helpers, one-off
+     * spawns) should omit this — MINERs spawned without a turn context won't dig.
+     */
+    currentTurn?: number,
   ): Enemy | null {
     const spawnerTiles = this.pathfindingService.getSpawnerTiles();
     if (spawnerTiles.length === 0) {
@@ -233,6 +261,21 @@ export class EnemyService {
       enemy.isFlying = true;
     }
 
+    // MINER: record spawn turn for 3-turn dig cadence.
+    // spawnEnemy receives currentTurn via an optional parameter threaded
+    // from CombatLoopService.resolveTurn → WaveService.spawnForTurn(scene, currentTurn)
+    // → EnemyService.spawnEnemy(..., currentTurn). Existing callers that
+    // omit currentTurn get undefined — those MINERs won't dig, which is
+    // correct for test helpers and one-off spawns that have no turn context.
+    if (type === EnemyType.MINER && currentTurn !== undefined) {
+      enemy.spawnedOnTurn = currentTurn;
+    }
+
+    // UNSHAKEABLE: flag immunity to DETOUR rerouting.
+    if (type === EnemyType.UNSHAKEABLE) {
+      enemy.immuneToDetour = true;
+    }
+
     if (stats.maxShield !== undefined) {
       enemy.shield = stats.maxShield;
       enemy.maxShield = stats.maxShield;
@@ -261,7 +304,7 @@ export class EnemyService {
    * @returns IDs of enemies that reached the exit this turn (callers apply
    *          leak damage and call {@link removeEnemy}).
    */
-  stepEnemiesOneTurn(slowReductionFor: (enemyId: string) => number): string[] {
+  stepEnemiesOneTurn(slowReductionFor: (enemyId: string) => number, currentTurn = 0): string[] {
     const reachedExit: string[] = [];
     // enemySpeed modifier: floored integer reduction. Weak (<50%) modifiers won't affect FAST/SWIFT,
     // won't affect 1-tile movers at all. Balance in M4 S5.
@@ -276,7 +319,42 @@ export class EnemyService {
         return;
       }
 
-      const baseTiles = ENEMY_STATS[enemy.type].tilesPerTurn;
+      // Sprint 34 GRAVITY_WELL — encounter-scoped modifier: enemies on tiles
+      // with elevation < 0 (depressed) skip their movement entirely this turn.
+      // Per-enemy check: each enemy's current grid position is tested independently.
+      // ElevationService is @Optional — returns 0 (no penalty) when absent.
+      // Sprint 37 GLIDER exception: ignoresElevation bypasses the GRAVITY_WELL check —
+      // a glider on a depressed tile moves normally.
+      // Modifier VALUE is a tier sentinel: 1 = gate-only (base card), 2 = gate +
+      // bleed (upgraded card). Upgraded path deals 10% max-HP to every enemy it
+      // gates this step, resolved through damageEnemy so shields, elevation
+      // expose multiplier, and death-spawn logic all run normally.
+      const gravityWellValue = this.cardEffectService.getModifierValue(MODIFIER_STAT.GRAVITY_WELL);
+      if (gravityWellValue > 0 && !(ENEMY_STATS[enemy.type]?.ignoresElevation)) {
+        const tileElev = this.elevationService?.getElevation(
+          enemy.gridPosition.row, enemy.gridPosition.col,
+        ) ?? 0;
+        if (tileElev < 0) {
+          if (gravityWellValue >= ELEVATION_CONFIG.GRAVITY_WELL_UPGRADED_VALUE) {
+            const bleedDamage = Math.max(1, Math.round(enemy.maxHealth * ELEVATION_CONFIG.GRAVITY_WELL_BLEED_FRACTION));
+            this.damageEnemy(enemy.id, bleedDamage);
+          }
+          return; // skip movement for this enemy this turn
+        }
+      }
+
+      // VEINSEEKER speed-up mechanic: when the path was mutated in the past
+      // VEINSEEKER_SPEED_BOOST_WINDOW turns, VEINSEEKER advances 2 tiles/turn
+      // instead of its base 1. This is the archetype-depth plan's "path modified
+      // in past 3 turns → +30% speed" mechanic, simplified to an integer tile bump.
+      // Slow and modifier reductions apply to the boosted value as normal.
+      let baseTiles = ENEMY_STATS[enemy.type].tilesPerTurn;
+      if (
+        enemy.type === EnemyType.VEINSEEKER &&
+        this.pathMutationService?.wasMutatedInLastTurns(currentTurn, VEINSEEKER_SPEED_BOOST_WINDOW)
+      ) {
+        baseTiles = VEINSEEKER_BOOSTED_TILES_PER_TURN;
+      }
       const slowReduction = slowReductionFor(enemy.id);
       const enemySpeedReduction = enemySpeedSlow > 0 ? Math.floor(baseTiles * enemySpeedSlow) : 0;
       // Floor at 1 tile/turn — SLOW aura re-applies each turn while enemy is in
@@ -302,6 +380,9 @@ export class EnemyService {
         const node = enemy.path[enemy.pathIndex];
         enemy.gridPosition.row = node.y;
         enemy.gridPosition.col = node.x;
+
+        // Track tile for SURVEYOR_COMPASS relic (no-op if relic inactive).
+        this.relicService.recordTileVisited(node.y, node.x);
 
         // Snap world position to the new tile center.
         this.pathfindingService.gridToWorldPosInto(node.y, node.x, this.scratchCurrentWorld);
@@ -420,6 +501,20 @@ export class EnemyService {
     const enemy = this.enemies.get(enemyId);
     if (!enemy || enemy.health <= 0) return noOp;
 
+    // Phase 3 Highground — "exposed" multiplier: enemies on tiles with negative
+    // elevation (from DEPRESS_TILE) take +25% incoming damage from all sources.
+    // Read live from ElevationService so the bonus is universal — applies to
+    // tower fire, chain lightning, status tick, COLLAPSE damage, etc.
+    // @Optional() guard: returns 0 (no bonus) in test beds without ElevationService.
+    // Sprint 37 GLIDER exception: ignoresElevation skips this penalty entirely.
+    const ignoresElevation = ENEMY_STATS[enemy.type]?.ignoresElevation ?? false;
+    const tileElevation = this.elevationService?.getElevation(
+      enemy.gridPosition.row, enemy.gridPosition.col,
+    ) ?? 0;
+    if (!ignoresElevation && tileElevation < 0) {
+      damage = Math.round(damage * (1 + ELEVATION_CONFIG.EXPOSED_DAMAGE_BONUS));
+    }
+
     // --- Shield absorption (SHIELDED type) ---
     if (enemy.shield !== undefined && enemy.shield > 0) {
       if (damage <= enemy.shield) {
@@ -511,6 +606,97 @@ export class EnemyService {
    */
   updateShieldBreakAnimations(deltaTime: number): void {
     this.enemyHealth.updateShieldBreakAnimations(this.enemies, deltaTime);
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // MINER dig phase (Sprint 21)
+  // ────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Scan the MINER's remaining path and return the first WALL tile that is
+   * legal to dig: not SPAWNER / EXIT (PathMutationService.destroy rejects
+   * those automatically) AND not player-built (would invalidate Cartographer
+   * counter-play per design doc §9). Returns null if no legal WALL adjacent.
+   *
+   * **Why adjacent walls, not path-walls:** the MINER's A* path
+   * (`enemy.path`) only contains TRAVERSABLE tiles — A* skips WALL tiles
+   * by construction (pathfinding.service.ts:90). Scanning the path for
+   * walls never finds any. Instead we look at the 4-direction neighbors
+   * of the MINER's current grid position — walls it could punch through
+   * to open new traversal options.
+   *
+   * Scan order: up, down, left, right — deterministic so tests can
+   * assert on the first-chosen direction.
+   *
+   * GridNode convention: node.x = col, node.y = row; enemy.gridPosition
+   * is {row, col} directly.
+   */
+  findMinerDigTarget(enemy: Enemy): { row: number; col: number } | null {
+    const board = this.gameBoardService.getGameBoard();
+    const { row: er, col: ec } = enemy.gridPosition;
+    const NEIGHBORS: ReadonlyArray<{ dr: number; dc: number }> = [
+      { dr: -1, dc: 0 }, // up
+      { dr:  1, dc: 0 }, // down
+      { dr:  0, dc: -1 }, // left
+      { dr:  0, dc: 1 }, // right
+    ];
+
+    for (const { dr, dc } of NEIGHBORS) {
+      const row = er + dr;
+      const col = ec + dc;
+      const boardRow = board[row];
+      if (!boardRow) continue;
+      const tile = boardRow[col];
+      if (!tile) continue;
+      if (tile.type !== BlockType.WALL) continue;
+      // Skip walls the player intentionally placed (preserve Cartographer
+      // counter-play — BLOCK_PASSAGE / COLLAPSE walls are immune to MINER).
+      if (this.pathMutationService?.isPlayerBlocked(row, col)) continue;
+      return { row, col };
+    }
+    return null;
+  }
+
+  /**
+   * Trigger the MINER dig behaviour for all living, non-flying MINERs whose
+   * 3-turn cadence fires this turn. Called from CombatLoopService.resolveTurn
+   * after enemy movement (step 2.5) so each MINER walks first, then digs
+   * from its new position.
+   *
+   * Early-outs:
+   * - If PathMutationService is absent (test contexts) — no dig.
+   * - If enemy is dying or flying.
+   * - If spawnedOnTurn is undefined (non-MINER or legacy spawn).
+   * - If (currentTurn - spawnedOnTurn) is 0 or not a multiple of MINER_DIG_INTERVAL_TURNS.
+   *
+   * Each dig is journaled as source='boss', sourceId=`miner:<enemyId>` so
+   * save/restore preserves the tile mutation even after the MINER dies.
+   */
+  tickMinerDigs(currentTurn: number, scene: THREE.Scene): void {
+    if (!this.pathMutationService) return;
+
+    for (const enemy of this.enemies.values()) {
+      if (enemy.dying || enemy.health <= 0) continue;
+      if (enemy.isFlying) continue;
+      if (enemy.type !== EnemyType.MINER) continue;
+      if (enemy.spawnedOnTurn === undefined) continue;
+
+      const turnsSinceSpawn = currentTurn - enemy.spawnedOnTurn;
+      if (turnsSinceSpawn <= 0) continue;
+      if (turnsSinceSpawn % MINER_DIG_INTERVAL_TURNS !== 0) continue;
+
+      const target = this.findMinerDigTarget(enemy);
+      if (!target) continue;
+
+      this.pathMutationService.destroy(
+        target.row,
+        target.col,
+        `miner:${enemy.id}`,
+        currentTurn,
+        scene,
+        'boss',
+      );
+    }
   }
 
   /**
@@ -754,6 +940,79 @@ export class EnemyService {
   }
 
   /**
+   * Override every non-flying, non-dying enemy's path with the longest simple
+   * path from their current grid position to any exit, for one movement step.
+   *
+   * Called by the DETOUR card (Sprint 14). The enemy's `pathIndex` resets to 0
+   * so they begin walking the new route immediately on the next movement
+   * iteration. Enemies naturally fall back to shortest-path re-planning at the
+   * next waypoint arrival (executeRepath flow).
+   *
+   * UNSHAKEABLE enemies (immuneToDetour === true) are skipped — they cannot be rerouted.
+   *
+   * Upgraded DETOUR (damageFractionPerExtraStep > 0) applies burst damage to
+   * every enemy whose path was actually overridden, proportional to the number
+   * of extra path tiles added versus their prior remaining route. Damage is
+   * dealt through damageEnemy so shields / exposed multiplier / status / death
+   * spawns all run normally. Floors at 1 HP per damaged enemy.
+   *
+   * @param damageFractionPerExtraStep Fraction of max HP per extra path tile
+   *        the reroute added. 0 (default) = base card, no damage.
+   * @returns Number of enemies whose path was overridden.
+   */
+  applyDetour(damageFractionPerExtraStep = 0): number {
+    const exitTiles = this.pathfindingService.getExitTiles();
+    if (exitTiles.length === 0) return 0;
+
+    let overrideCount = 0;
+
+    for (const enemy of this.enemies.values()) {
+      if (enemy.isFlying) continue;
+      if (enemy.dying) continue;
+      if (enemy.immuneToDetour === true) continue;
+
+      const { col, row } = enemy.gridPosition;
+
+      // Skip enemies already standing on an exit — no path to compute.
+      const atExit = exitTiles.some(e => e.row === row && e.col === col);
+      if (atExit) continue;
+
+      // Find the longest path to each exit; pick the overall longest.
+      let longestPath: import('../models/enemy.model').GridNode[] = [];
+      for (const exit of exitTiles) {
+        const candidate = this.pathfindingService.findLongestPath(
+          { x: col, y: row },
+          { x: exit.col, y: exit.row },
+        );
+        if (candidate.length > longestPath.length) {
+          longestPath = candidate;
+        }
+      }
+
+      // Only override if the longest path is strictly longer than the current
+      // remaining path — otherwise DETOUR has no routing benefit.
+      if (longestPath.length === 0) continue;
+      const remainingCurrent = enemy.path.length - enemy.pathIndex;
+      if (longestPath.length > remainingCurrent) {
+        const extraSteps = longestPath.length - remainingCurrent;
+        enemy.path = longestPath;
+        enemy.pathIndex = 0;
+        overrideCount++;
+
+        if (damageFractionPerExtraStep > 0) {
+          const damage = Math.max(
+            1,
+            Math.round(enemy.maxHealth * damageFractionPerExtraStep * extraSteps),
+          );
+          this.damageEnemy(enemy.id, damage);
+        }
+      }
+    }
+
+    return overrideCount;
+  }
+
+  /**
    * Build a straight-line path to the geometrically nearest exit (Manhattan
    * distance). FLYING enemies bypass terrain so "reachability" always holds;
    * we just pick the closest target.
@@ -809,6 +1068,8 @@ export class EnemyService {
       ...(e.hitFlashTimer !== undefined && { hitFlashTimer: e.hitFlashTimer }),
       ...(e.shieldBreaking !== undefined && { shieldBreaking: e.shieldBreaking }),
       ...(e.shieldBreakTimer !== undefined && { shieldBreakTimer: e.shieldBreakTimer }),
+      ...(e.spawnedOnTurn !== undefined && { spawnedOnTurn: e.spawnedOnTurn }),
+      ...(e.immuneToDetour !== undefined && { immuneToDetour: e.immuneToDetour }),
     }));
     return { enemies, enemyCounter: this.enemyCounter };
   }

@@ -8,6 +8,24 @@
     </p>
   </div>
 
+  <!-- Deck-leaning archetype chip (Phase 2 Sprint 10.5). Always rendered so
+       players perceive the silent 60/40 reward-pool weighting; shows
+       "Neutral" when no archetype dominates. Phase 3 prep: when the player
+       transitions archetypes between reward screens the chip runs a flip
+       animation so the shift registers visually. -->
+  <div class="reward-archetype"
+       [attr.data-archetype]="config.dominantArchetype"
+       [attr.aria-label]="'Deck leaning toward ' + archetypeDisplay.label + '. Card rewards are weighted toward this archetype.'">
+    <span class="reward-archetype__label" aria-hidden="true">Deck leaning:</span>
+    <span class="reward-archetype__chip"
+          [class.reward-archetype__chip--flipping]="isArchetypeFlipping"
+          [style.--archetype-color]="archetypeDisplay.color"
+          [style.--archetype-accent]="archetypeDisplay.accent"
+          aria-hidden="true">
+      {{ archetypeDisplay.label }}
+    </span>
+  </div>
+
   <!-- Challenges completed — shown only when the encounter is a campaign
        map with challenge objectives and at least one was satisfied. The
        per-challenge gold bonus is already included in config.goldPickup;

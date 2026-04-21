@@ -24,6 +24,7 @@
   display: grid;
   grid-template-rows:
     [header-start]     var(--reward-header-size)  [header-end]
+    [archetype-start]  auto                        [archetype-end]
     [challenges-start] auto                        [challenges-end]
     [choices-start]    auto                        [choices-end]
     [picked-start]     auto                        [picked-end]
@@ -32,6 +33,7 @@
   grid-template-columns: 1fr;
   grid-template-areas:
     "header"
+    "archetype"
     "challenges"
     "choices"
     "picked"
@@ -47,6 +49,7 @@
 // ── Grid-area assignments for direct children ─────────────────────────────────
 
 .reward-header     { grid-area: header; }
+.reward-archetype  { grid-area: archetype; }
 .reward-challenges { grid-area: challenges; }
 .reward-choices    { grid-area: choices; }
 .reward-picked     { grid-area: picked; }
@@ -82,6 +85,88 @@ app-card-draft     { grid-area: draft; }
   font-weight: 700;
   color: var(--game-gold);
   margin: 0;
+}
+
+// ── Deck-leaning archetype chip ───────────────────────────────────────────────
+// Phase 2 Sprint 10.5. Surfaces the silent 60/40 archetype-aware reward-pool
+// weighting (DeckService.getDominantArchetype()). Styled after the HUD's
+// .challenge-indicator pill — Orbitron, pill radius, thin accent border.
+// Color + background are driven by CSS custom properties set per-archetype
+// from ARCHETYPE_DISPLAY in archetype.constants.ts.
+
+.reward-archetype {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 0;
+  margin: 0;
+}
+
+.reward-archetype__label {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-3xs);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.reward-archetype__chip {
+  --archetype-color: rgba(255, 255, 255, 0.75);
+  --archetype-accent: rgba(255, 255, 255, 0.2);
+
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-3xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.7rem;
+  border-radius: 1rem;
+  color: var(--archetype-color);
+  background: color-mix(in srgb, var(--archetype-accent) 40%, transparent);
+  border: var(--border-width-thin) solid var(--archetype-accent);
+  white-space: nowrap;
+  transform-origin: center center;
+  // Respect stacking in case the pulse glow overlaps adjacent reward sections.
+  position: relative;
+  z-index: 1;
+
+  // Phase 3 prep — fires when dominantArchetype differs from the previous
+  // reward screen. The keyframe duration matches
+  // ARCHETYPE_CHIP_FLIP_DURATION_MS in the component so the class clears
+  // in sync with the visual. Reduced-motion users never receive the class
+  // (guarded in component.ngOnInit), so no SCSS fallback needed here.
+  &--flipping {
+    animation: archetype-chip-flip 600ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+}
+
+@keyframes archetype-chip-flip {
+  0% {
+    transform: rotateY(0deg) scale(1);
+    box-shadow: 0 0 0 0 var(--archetype-accent);
+  }
+  35% {
+    transform: rotateY(90deg) scale(1.08);
+    box-shadow: 0 0 12px 4px var(--archetype-accent);
+  }
+  65% {
+    transform: rotateY(180deg) scale(1.04);
+    box-shadow: 0 0 20px 6px var(--archetype-accent);
+  }
+  100% {
+    transform: rotateY(360deg) scale(1);
+    box-shadow: 0 0 0 0 var(--archetype-accent);
+  }
+}
+
+// Fallback for browsers without color-mix — the accent is already translucent
+// rgba, so using it directly reads as a slightly stronger tint.
+@supports not (background: color-mix(in srgb, red 40%, transparent)) {
+  .reward-archetype__chip {
+    background: var(--archetype-accent);
+  }
 }
 
 // ── Challenges completed section ──────────────────────────────────────────────
@@ -466,5 +551,12 @@ app-card-draft     { grid-area: draft; }
     transition: none;
 
     &:hover:not(:disabled) { transform: none; }
+  }
+
+  // Defence-in-depth: the component already gates on prefers-reduced-motion
+  // before applying --flipping, but if the class leaks through (e.g. a
+  // preference change mid-animation) the keyframe is suppressed here.
+  .reward-archetype__chip--flipping {
+    animation: none;
   }
 }

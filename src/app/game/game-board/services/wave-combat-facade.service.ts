@@ -27,6 +27,9 @@ import { EncounterCheckpoint, CHECKPOINT_VERSION } from '../models/encounter-che
 import { WavePreviewService } from './wave-preview.service';
 import { TurnHistoryService } from './turn-history.service';
 import { TowerType } from '../models/tower.model';
+import { PathMutationService } from './path-mutation.service';
+import { ElevationService } from './elevation.service';
+import { TowerGraphService } from './tower-graph.service';
 
 /** Callbacks that WaveCombatFacadeService calls back into the component for concerns
  *  it cannot own (template-bound state, pending card state). */
@@ -99,6 +102,9 @@ export class WaveCombatFacadeService {
     private encounterCheckpointService: EncounterCheckpointService,
     private wavePreviewService: WavePreviewService,
     private turnHistoryService: TurnHistoryService,
+    private pathMutationService: PathMutationService,
+    private elevationService: ElevationService,
+    private towerGraphService: TowerGraphService,
   ) {}
 
   /** Register component callbacks. Call in ngOnInit before any wave interaction. */
@@ -288,6 +294,9 @@ export class WaveCombatFacadeService {
         turnHistory: this.turnHistoryService.serialize(),
         itemInventory: this.itemService.serialize(),
         runStateFlags: this.runStateFlagService.serialize(),
+        pathMutations: this.pathMutationService.serialize(),
+        tileElevations: this.elevationService.serialize(),
+        towerGraph: this.towerGraphService.serialize(),
       };
 
       this.encounterCheckpointService.saveCheckpoint(checkpoint);

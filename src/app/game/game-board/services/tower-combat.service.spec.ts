@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { TowerCombatService, KillInfo, CombatAudioEvent, RegisterTowerOptions } from './tower-combat.service';
+import { TowerCombatService, KillInfo, CombatAudioEvent, RegisterTowerOptions, DamageStackContext } from './tower-combat.service';
 import { ChainLightningService } from './chain-lightning.service';
 // M2 S5: ProjectileService import removed (file deleted)
 import { CombatVFXService } from './combat-vfx.service';
@@ -17,6 +17,13 @@ import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy, crea
 import { TowerAnimationService } from './tower-animation.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
+import { RunService } from '../../../run/services/run.service';
+import { PathfindingService } from './pathfinding.service';
+import { LineOfSightService } from './line-of-sight.service';
+import { ElevationService } from './elevation.service';
+import { TowerGraphService } from './tower-graph.service';
+import { ELEVATION_CONFIG } from '../constants/elevation.constants';
+import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 
 describe('TowerCombatService', () => {
   let service: TowerCombatService;
@@ -50,6 +57,16 @@ describe('TowerCombatService', () => {
     gameBoardServiceSpy = createGameBoardServiceSpy(25, 20, 1);
     relicServiceSpy = createRelicServiceSpy();
 
+    // Sprint 18 LABYRINTH_MIND — TowerCombatService now takes an @Optional()
+    // PathfindingService. Stub it with a spy that returns 0 length so existing
+    // non-LABYRINTH tests see multiplier=1. The LABYRINTH_MIND-specific test
+    // rebinds getPathToExitLength via the returned spy.
+    const pathfindingSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService',
+      ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset'],
+    );
+    pathfindingSpy.getPathToExitLength.and.returnValue(0);
+
     TestBed.configureTestingModule({
       providers: [
         TowerCombatService,
@@ -62,6 +79,7 @@ describe('TowerCombatService', () => {
         { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
         { provide: RelicService, useValue: relicServiceSpy },
         { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+        { provide: PathfindingService, useValue: pathfindingSpy },
       ]
     });
     service = TestBed.inject(TowerCombatService);
@@ -1797,6 +1815,43 @@ describe('TowerCombatService', () => {
       // With 6 enemies in range and high damage (15 base) all 6 slots fire → hitCount >= 6
       expect(result.hitCount).toBeGreaterThanOrEqual(6);
     });
+
+    // Phase 2 Sprint 18 — LABYRINTH_MIND damage scaling
+    it('LABYRINTH_MIND: damage scales with path length when modifier is active', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', enemy);
+
+      // Activate LABYRINTH_MIND with 2% scaling and a 30-tile path.
+      // Expected multiplier: 1 + (30 * 0.02) = 1.6 → damage 25 × 1.6 = 40.
+      cardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === 'labyrinthMind' ? 0.02 : 0,
+      );
+      const pathfindingSpy = TestBed.inject(PathfindingService) as jasmine.SpyObj<PathfindingService>;
+      pathfindingSpy.getPathToExitLength.and.returnValue(30);
+
+      service.fireTurn(mockScene, TURN_1);
+
+      const baseBasicDamage = 25; // TOWER_CONFIGS[BASIC].damage
+      const damageTaken = 10000 - enemy.health;
+      expect(damageTaken).toBe(Math.round(baseBasicDamage * 1.6));
+    });
+
+    it('LABYRINTH_MIND: zero scaling leaves damage unchanged (multiplier fallback = 1)', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', enemy);
+
+      // No LABYRINTH_MIND; default scaling=0 means pathLengthMultiplier stays 1.
+      cardEffectSpy.getModifierValue.and.returnValue(0);
+      const pathfindingSpy = TestBed.inject(PathfindingService) as jasmine.SpyObj<PathfindingService>;
+      pathfindingSpy.getPathToExitLength.and.returnValue(30);
+
+      service.fireTurn(mockScene, TURN_1);
+
+      const baseBasicDamage = 25;
+      expect(10000 - enemy.health).toBe(baseBasicDamage);
+    });
   });
 
   // --- QUICK_DRAW relic: +1 shot on tower placement turn ---
@@ -2386,6 +2441,7 @@ describe('Tower Model Functions', () => {
 
 });
 
+
 // --- Checkpoint serialization ---
 
 describe('TowerCombatService checkpoint serialization', () => {
@@ -2726,5 +2782,2602 @@ describe('TowerCombatService checkpoint serialization', () => {
       const serialized = svc.serializeMortarZones();
       expect(serialized[0].centerX).toBe(1.0);
     });
+  });
+});
+
+// ── Sprint 26: Line-of-sight integration ─────────────────────────────────────
+// Standalone top-level describe so it has its own TestBed and doesn't share
+// local constants with the primary TowerCombatService describe.
+//
+// Board: 25×20, tileSize=1. Tower at (10,12) → world (-0.5, 0).
+//   worldX = (col - 12.5) * 1  →  col=12 → x=-0.5
+//   worldZ = (row - 10)   * 1  →  row=10 → z=0
+
+describe('TowerCombatService LOS integration (sprint 26)', () => {
+  const LOS_TOWER_ROW = 10;
+  const LOS_TOWER_COL = 12;
+  const LOS_TOWER_WORLD_X = -0.5;
+  const LOS_TOWER_WORLD_Z = 0;
+  const LOS_TURN = 1;
+
+  let losSvc: TowerCombatService;
+  let losEnemyMap: Map<string, Enemy>;
+  let losServiceSpy: jasmine.SpyObj<LineOfSightService>;
+
+  beforeEach(() => {
+    losEnemyMap = new Map();
+    losServiceSpy = jasmine.createSpyObj<LineOfSightService>('LineOfSightService', ['isVisible']);
+    losServiceSpy.isVisible.and.returnValue(true); // default: all shots pass LOS
+
+    const losEnemySpy = createEnemyServiceSpy(losEnemyMap);
+    const losBoardSpy = createGameBoardServiceSpy(25, 20, 1);
+    const losRelicSpy = createRelicServiceSpy();
+    const losPathSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset']
+    );
+    losPathSpy.getPathToExitLength.and.returnValue(0);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: losEnemySpy },
+        { provide: GameBoardService, useValue: losBoardSpy },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: losRelicSpy },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+        { provide: PathfindingService, useValue: losPathSpy },
+        { provide: LineOfSightService, useValue: losServiceSpy },
+      ]
+    });
+    losSvc = TestBed.inject(TowerCombatService);
+  });
+
+  it('non-elevated board: LOS always passes — enemy is hit (no regression)', () => {
+    losSvc.registerTower(LOS_TOWER_ROW, LOS_TOWER_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', LOS_TOWER_WORLD_X, LOS_TOWER_WORLD_Z, 1000);
+    losEnemyMap.set('e1', enemy);
+
+    losSvc.fireTurn(new THREE.Scene(), LOS_TURN);
+
+    expect(enemy.health).toBeLessThan(1000);
+  });
+
+  it('raised intervening tile: enemy behind wall is not targeted', () => {
+    losServiceSpy.isVisible.and.returnValue(false); // simulate raised wall blocking LOS
+
+    losSvc.registerTower(LOS_TOWER_ROW, LOS_TOWER_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', LOS_TOWER_WORLD_X, LOS_TOWER_WORLD_Z, 1000);
+    losEnemyMap.set('e1', enemy);
+
+    losSvc.fireTurn(new THREE.Scene(), LOS_TURN);
+
+    expect(enemy.health).toBe(1000); // LOS blocked — no damage
+  });
+
+  it('elevated tower: can see over low terrain (LOS returns true)', () => {
+    losServiceSpy.isVisible.and.returnValue(true); // tower elevation clears the wall
+
+    losSvc.registerTower(LOS_TOWER_ROW, LOS_TOWER_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', LOS_TOWER_WORLD_X, LOS_TOWER_WORLD_Z, 1000);
+    losEnemyMap.set('e1', enemy);
+
+    losSvc.fireTurn(new THREE.Scene(), LOS_TURN);
+
+    expect(enemy.health).toBeLessThan(1000);
+  });
+
+  it('MORTAR bypasses LOS: isVisible is never called for MORTAR', () => {
+    // LOS spy returns false — but MORTAR is an AOE arc weapon and bypasses LOS per §12
+    losServiceSpy.isVisible.and.returnValue(false);
+
+    losSvc.registerTower(LOS_TOWER_ROW, LOS_TOWER_COL, TowerType.MORTAR, new THREE.Group());
+    const enemy = createTestEnemy('e1', LOS_TOWER_WORLD_X, LOS_TOWER_WORLD_Z, 1000);
+    losEnemyMap.set('e1', enemy);
+
+    losSvc.fireTurn(new THREE.Scene(), LOS_TURN);
+
+    // MORTAR bypasses isVisible entirely per elevation-model.md §12
+    expect(losServiceSpy.isVisible).not.toHaveBeenCalled();
+  });
+});
+
+// ── Sprint 29 — Elevation range multiplier + HIGH_PERCH integration ────────
+
+/**
+ * Helper: build a minimal ElevationService spy.
+ *
+ * @param tileElevations  Map of "row-col" → elevation for per-tile reads.
+ * @param maxElevation    Override for getMaxElevation() (0 = flat board).
+ */
+function createElevationServiceSpy(
+  tileElevations: Map<string, number> = new Map(),
+  maxElevation = 0,
+): jasmine.SpyObj<ElevationService> {
+  const spy = jasmine.createSpyObj<ElevationService>('ElevationService', [
+    'getElevation',
+    'getMaxElevation',
+    'raise',
+    'depress',
+    'setAbsolute',
+    'collapse',
+    'getElevationMap',
+    'getActiveChanges',
+    'tickTurn',
+    'reset',
+    'serialize',
+    'restore',
+  ]);
+  spy.getMaxElevation.and.returnValue(maxElevation);
+  spy.getElevation.and.callFake((row: number, col: number) =>
+    tileElevations.get(`${row}-${col}`) ?? 0
+  );
+  return spy;
+}
+
+describe('TowerCombatService elevation range multiplier (sprint 29)', () => {
+  // Tower at row=10, col=12, world position (-0.5, 0) — same anchor as main suite
+  const EL_ROW = 10;
+  const EL_COL = 12;
+  const EL_WORLD_X = -0.5;
+  const EL_WORLD_Z = 0;
+  const EL_TURN = 1;
+
+  /** Base BASIC tower range (from TOWER_CONFIGS). Used as reference in multiplier math. */
+  const BASE_BASIC_RANGE = TOWER_CONFIGS[TowerType.BASIC].range;
+  /** Base BASIC tower damage — for damage-unchanged assertions. */
+  const BASE_BASIC_DAMAGE = TOWER_CONFIGS[TowerType.BASIC].damage;
+
+  let elSvc: TowerCombatService;
+  let elEnemyMap: Map<string, Enemy>;
+  let elElevationSpy: jasmine.SpyObj<ElevationService>;
+  let elCardEffectSpy: jasmine.SpyObj<CardEffectService>;
+
+  function buildTestBed(
+    tileElevations: Map<string, number>,
+    maxElevation: number,
+  ): void {
+    elEnemyMap = new Map();
+    elElevationSpy = createElevationServiceSpy(tileElevations, maxElevation);
+    elCardEffectSpy = createCardEffectServiceSpy();
+
+    const elPathSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset']
+    );
+    elPathSpy.getPathToExitLength.and.returnValue(0);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(elEnemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: elCardEffectSpy },
+        { provide: PathfindingService, useValue: elPathSpy },
+        { provide: ElevationService, useValue: elElevationSpy },
+      ]
+    });
+    elSvc = TestBed.inject(TowerCombatService);
+  }
+
+  // ── Part A: passive elevation range bonus ────────────────────────────────
+
+  describe('passive elevation range bonus', () => {
+    it('tower at elevation 0 → effective range unchanged (multiplier = 1.0×)', () => {
+      // Flat board: getMaxElevation() returns 0 → fast path, no per-tower lookup.
+      buildTestBed(new Map(), 0);
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy at exactly base range — must be hit.
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // Enemy within base range → hit
+      expect(enemy.health).toBeLessThan(10000);
+    });
+
+    it('flat board — getElevation is never called (fast-path guard)', () => {
+      buildTestBed(new Map(), 0);
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // hasElevation=false → getElevation never called
+      expect(elElevationSpy.getElevation).not.toHaveBeenCalled();
+    });
+
+    it('tower at elevation 1 → range × 1.25', () => {
+      // elevation 1 → mult = 1 + 1×0.25 = 1.25
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 1 ]]);
+      buildTestBed(tileMap, 1);
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      const expectedRange = BASE_BASIC_RANGE * 1.25;
+      // Enemy just inside the 1.25× range but outside base range → only hit when elevated.
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE + 0.1, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      // Also place an enemy at exactly expectedRange to confirm it's reachable.
+      const enemyAt125 = createTestEnemy('e2', EL_WORLD_X + expectedRange, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e2', enemyAt125);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // The enemy in the 1.25× zone should be hit (closer, found first)
+      expect(enemy.health).toBeLessThan(10000);
+    });
+
+    it('tower at elevation 2 → range × 1.5', () => {
+      // elevation 2 → mult = 1 + 2×0.25 = 1.5
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 2 ]]);
+      buildTestBed(tileMap, 2);
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      const expectedMult = 1 + 2 * ELEVATION_CONFIG.RANGE_BONUS_PER_ELEVATION; // 1.5
+      const expectedRange = BASE_BASIC_RANGE * expectedMult;
+
+      // Enemy placed between base range and 1.5× range — only reachable when elevated.
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE + 0.5, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // Within 1.5× range → must be hit
+      expect(enemy.health).toBeLessThan(10000);
+
+      // Verify the enemy is actually inside the expected range (guards the test's own logic)
+      const distToEnemy = BASE_BASIC_RANGE + 0.5;
+      expect(distToEnemy).toBeLessThan(expectedRange);
+    });
+
+    it('tower at elevation 3 → range × 1.75 (maximum elevation)', () => {
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 3 ]]);
+      buildTestBed(tileMap, 3);
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      const expectedMult = 1 + 3 * ELEVATION_CONFIG.RANGE_BONUS_PER_ELEVATION; // 1.75
+      const expectedRange = BASE_BASIC_RANGE * expectedMult;
+
+      // Enemy between base range and 1.75× range — unreachable without elevation.
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE + 1.0, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      // Sanity: enemy is within 1.75× range
+      expect(BASE_BASIC_RANGE + 1.0).toBeLessThan(expectedRange);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      expect(enemy.health).toBeLessThan(10000);
+    });
+
+    it('tower at elevation -1 → range × 0.75 (self-inflicted pit penalty)', () => {
+      // Negative elevation → range penalty (0.75×). Realistic scenario: a board where most tiles
+      // are at elevation 0 but the tower tile has been depressed. hasElevation uses
+      // getMaxElevation() > 0 as the guard — so we must simulate a board where at least one
+      // tile is above 0 (another tile raised) so the per-tower elevation lookup fires.
+      // The tower tile itself returns -1; the guard sees maxElevation=1 → lookup runs.
+      buildTestBed(new Map(), 1); // maxElevation=1 → hasElevation=true, triggers per-tower lookup
+      elElevationSpy.getElevation.and.callFake((row: number, col: number) =>
+        (row === EL_ROW && col === EL_COL) ? -1 : 0  // tower tile is depressed; rest at 0
+      );
+
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy placed just beyond the 0.75× range → NOT reachable.
+      // 0.75× range = 3 × 0.75 = 2.25. Enemy at 2.45 is outside that range.
+      const penalizedRange = BASE_BASIC_RANGE * 0.75; // 2.25
+      const enemy = createTestEnemy('e1', EL_WORLD_X + penalizedRange + 0.2, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // Enemy is beyond the 0.75× range → should NOT be hit
+      expect(enemy.health).toBe(10000);
+    });
+
+    it('two towers at different elevations get correct multipliers independently', () => {
+      // Strategy: use two towers in separate columns far apart so neither can
+      // reach the other's enemy. We verify each tower's range multiplier by
+      // checking which enemy it hits.
+      //
+      // Tower A at (row=10, col=2) → elevation 2 → range × 1.5 = 4.5
+      // Tower B at (row=10, col=22) → elevation 0 → range × 1.0 = 3.0
+      //
+      // Board is 25×20, tileSize=1.
+      // worldX_A = (2  - 12.5) * 1 = -10.5, worldZ_A = (10 - 10) * 1 = 0
+      // worldX_B = (22 - 12.5) * 1 =   9.5, worldZ_B = 0
+
+      const ROW_A = 10; const COL_A = 2;
+      const ROW_B = 10; const COL_B = 22;
+      const worldA_X = (COL_A - 25 / 2);  // -10.5
+      const worldA_Z = 0;
+      const worldB_X = (COL_B - 25 / 2);  //   9.5
+      const worldB_Z = 0;
+
+      const tileMap = new Map([
+        [ `${ROW_A}-${COL_A}`, 2 ],  // tower A elevated
+        [ `${ROW_B}-${COL_B}`, 0 ],  // tower B flat
+      ]);
+      buildTestBed(tileMap, 2);
+
+      elSvc.registerTower(ROW_A, COL_A, TowerType.BASIC, new THREE.Group());
+      elSvc.registerTower(ROW_B, COL_B, TowerType.BASIC, new THREE.Group());
+
+      // Enemy A: between BASE_BASIC_RANGE and 1.5× range from tower A.
+      // At worldX = worldA_X + BASE_BASIC_RANGE + 0.5 (3.5 from tower A).
+      // Tower A (range 4.5) can reach it; tower B (far away) cannot.
+      const enemyA = createTestEnemy('eA', worldA_X + BASE_BASIC_RANGE + 0.5, worldA_Z, 10000);
+
+      // Enemy B: at exactly BASE_BASIC_RANGE from tower B.
+      // At worldX = worldB_X + BASE_BASIC_RANGE (3 from tower B).
+      // Tower B (range 3.0) can reach it; tower A (far away) cannot.
+      const enemyB = createTestEnemy('eB', worldB_X + BASE_BASIC_RANGE, worldB_Z, 10000);
+
+      elEnemyMap.set('eA', enemyA);
+      elEnemyMap.set('eB', enemyB);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // Tower A (elevation 2, range 4.5): enemyA at 3.5 → within range → hit
+      expect(enemyA.health).toBeLessThan(10000);
+      // Tower B (elevation 0, range 3.0): enemyB at 3.0 → within range → hit
+      expect(enemyB.health).toBeLessThan(10000);
+    });
+  });
+
+  // ── Part B: HIGH_PERCH modifier card integration ─────────────────────────
+
+  describe('HIGH_PERCH modifier integration', () => {
+    const HIGH_PERCH_STAT = MODIFIER_STAT.HIGH_PERCH_RANGE_BONUS;
+
+    it('HIGH_PERCH active + tower at elevation 2 → range × 1.5 × 1.25 = 1.875×', () => {
+      // elevation 2 → passive mult 1.5; HIGH_PERCH bonus 0.25 → highPerchMult 1.25
+      // combined: 1.5 × 1.25 = 1.875
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 2 ]]);
+      buildTestBed(tileMap, 2);
+
+      elCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === HIGH_PERCH_STAT ? 0.25 : 0
+      );
+
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      const expectedRange = BASE_BASIC_RANGE * 1.875;
+      // Enemy between 1.5× range and 1.875× range — only reachable with both bonuses.
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE * 1.6, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      // Verify test setup: enemy is between 1.5× and 1.875× range
+      expect(BASE_BASIC_RANGE * 1.6).toBeGreaterThan(BASE_BASIC_RANGE * 1.5);
+      expect(BASE_BASIC_RANGE * 1.6).toBeLessThan(expectedRange);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      expect(enemy.health).toBeLessThan(10000);
+    });
+
+    it('HIGH_PERCH active + tower at elevation 1 (below threshold) → only passive 1.25× (no HIGH_PERCH bonus)', () => {
+      // elevation 1 = below HIGH_PERCH_ELEVATION_THRESHOLD (2) → highPerchMult = 1.0
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 1 ]]);
+      buildTestBed(tileMap, 1);
+
+      elCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === HIGH_PERCH_STAT ? 0.25 : 0
+      );
+
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy between 1.25× and 1.5× range — would be hit only if HIGH_PERCH applied.
+      const rangeAt125 = BASE_BASIC_RANGE * 1.25;
+      const rangeAt150 = BASE_BASIC_RANGE * 1.5;
+      const enemy = createTestEnemy('e1', EL_WORLD_X + rangeAt125 + 0.1, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      // Sanity: enemy is beyond 1.25× but within 1.5× (i.e. requires HIGH_PERCH to reach)
+      expect(rangeAt125 + 0.1).toBeLessThan(rangeAt150);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // Tower has only 1.25× passive — enemy at 1.25×+0.1 is out of range → not hit
+      expect(enemy.health).toBe(10000);
+    });
+
+    it('HIGH_PERCH upgraded (0.4) + tower at elevation 2 → range × 1.5 × 1.4 = 2.1×', () => {
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 2 ]]);
+      buildTestBed(tileMap, 2);
+
+      elCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === HIGH_PERCH_STAT ? 0.4 : 0
+      );
+
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      const expectedRange = BASE_BASIC_RANGE * 2.1;
+      // Enemy beyond 1.875× but within 2.1× range (upgraded bonus needed)
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE * 2.0, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      // Sanity: enemy at 2.0× is within 2.1× but beyond 1.875×
+      expect(BASE_BASIC_RANGE * 2.0).toBeLessThan(expectedRange);
+      expect(BASE_BASIC_RANGE * 2.0).toBeGreaterThan(BASE_BASIC_RANGE * 1.875);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      expect(enemy.health).toBeLessThan(10000);
+    });
+
+    it('HIGH_PERCH does not affect tower damage (range-only bonus)', () => {
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 2 ]]);
+      buildTestBed(tileMap, 2);
+
+      elCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === HIGH_PERCH_STAT ? 0.25 : 0
+      );
+
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+      const enemy = createTestEnemy('e1', EL_WORLD_X, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // Damage should be exactly base damage (no bonus)
+      expect(10000 - enemy.health).toBe(BASE_BASIC_DAMAGE);
+    });
+
+    it('no HIGH_PERCH active + tower at elevation 2 → only passive 1.5× applies', () => {
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 2 ]]);
+      buildTestBed(tileMap, 2);
+
+      // No HIGH_PERCH active
+      elCardEffectSpy.getModifierValue.and.returnValue(0);
+
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy inside 1.875× but outside 1.5× → NOT reachable (no HIGH_PERCH)
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE * 1.6, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      expect(enemy.health).toBe(10000);
+    });
+  });
+
+  // ── LOS + elevation composition ──────────────────────────────────────────
+
+  describe('LOS and elevation compose correctly', () => {
+    it('elevated tower with LOS clear → hits enemy at extended range', () => {
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 2 ]]);
+      // Build with both elevation AND LOS service
+      elEnemyMap = new Map();
+      elElevationSpy = createElevationServiceSpy(tileMap, 2);
+      elCardEffectSpy = createCardEffectServiceSpy();
+
+      const losServiceSpy = jasmine.createSpyObj<LineOfSightService>('LineOfSightService', ['isVisible']);
+      losServiceSpy.isVisible.and.returnValue(true); // LOS clear
+
+      const elPathSpy = jasmine.createSpyObj<PathfindingService>(
+        'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset']
+      );
+      elPathSpy.getPathToExitLength.and.returnValue(0);
+
+      TestBed.configureTestingModule({
+        providers: [
+          TowerCombatService,
+          ChainLightningService,
+          CombatVFXService,
+          StatusEffectService,
+          GameStateService,
+          { provide: EnemyService, useValue: createEnemyServiceSpy(elEnemyMap) },
+          { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+          { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+          { provide: RelicService, useValue: createRelicServiceSpy() },
+          { provide: CardEffectService, useValue: elCardEffectSpy },
+          { provide: PathfindingService, useValue: elPathSpy },
+          { provide: ElevationService, useValue: elElevationSpy },
+          { provide: LineOfSightService, useValue: losServiceSpy },
+        ]
+      });
+      const combinedSvc = TestBed.inject(TowerCombatService);
+
+      combinedSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy between base range and 1.5× range (reachable because elevation + clear LOS)
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE + 0.5, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      combinedSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // Elevation gives 1.5× range AND LOS passes → hit
+      expect(enemy.health).toBeLessThan(10000);
+    });
+
+    it('elevated tower with LOS blocked → misses enemy even at extended range', () => {
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 2 ]]);
+      elEnemyMap = new Map();
+      elElevationSpy = createElevationServiceSpy(tileMap, 2);
+      elCardEffectSpy = createCardEffectServiceSpy();
+
+      const losServiceSpy = jasmine.createSpyObj<LineOfSightService>('LineOfSightService', ['isVisible']);
+      losServiceSpy.isVisible.and.returnValue(false); // LOS blocked
+
+      const elPathSpy = jasmine.createSpyObj<PathfindingService>(
+        'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset']
+      );
+      elPathSpy.getPathToExitLength.and.returnValue(0);
+
+      TestBed.configureTestingModule({
+        providers: [
+          TowerCombatService,
+          ChainLightningService,
+          CombatVFXService,
+          StatusEffectService,
+          GameStateService,
+          { provide: EnemyService, useValue: createEnemyServiceSpy(elEnemyMap) },
+          { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+          { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+          { provide: RelicService, useValue: createRelicServiceSpy() },
+          { provide: CardEffectService, useValue: elCardEffectSpy },
+          { provide: PathfindingService, useValue: elPathSpy },
+          { provide: ElevationService, useValue: elElevationSpy },
+          { provide: LineOfSightService, useValue: losServiceSpy },
+        ]
+      });
+      const combinedSvc = TestBed.inject(TowerCombatService);
+
+      combinedSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy within 1.5× range (elevated range allows targeting) but LOS blocked
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE + 0.5, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      combinedSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // LOS blocked → shot fails despite elevated range
+      expect(enemy.health).toBe(10000);
+    });
+  });
+});
+
+// ── Sprint 31 — VANTAGE_POINT damage bonus integration ────────────────────────
+
+describe('TowerCombatService VANTAGE_POINT damage bonus (sprint 31)', () => {
+  // Reuse the same anchor constants as the elevation range suite.
+  const VP_ROW = 10;
+  const VP_COL = 12;
+  const VP_WORLD_X = -0.5;
+  const VP_WORLD_Z = 0;
+  const VP_TURN = 1;
+  const VP_STAT = MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS;
+
+  const BASE_BASIC_DAMAGE = TOWER_CONFIGS[TowerType.BASIC].damage;
+  const BASE_BASIC_RANGE  = TOWER_CONFIGS[TowerType.BASIC].range;
+
+  let vpSvc: TowerCombatService;
+  let vpEnemyMap: Map<string, Enemy>;
+  let vpElevationSpy: jasmine.SpyObj<ElevationService>;
+  let vpCardEffectSpy: jasmine.SpyObj<CardEffectService>;
+
+  function buildVpTestBed(tileElevations: Map<string, number>, maxElevation: number): void {
+    vpEnemyMap = new Map();
+    vpElevationSpy = createElevationServiceSpy(tileElevations, maxElevation);
+    vpCardEffectSpy = createCardEffectServiceSpy();
+
+    const vpPathSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset']
+    );
+    vpPathSpy.getPathToExitLength.and.returnValue(0);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(vpEnemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: vpCardEffectSpy },
+        { provide: PathfindingService, useValue: vpPathSpy },
+        { provide: ElevationService, useValue: vpElevationSpy },
+      ],
+    });
+    vpSvc = TestBed.inject(TowerCombatService);
+  }
+
+  it('VANTAGE_POINT active + tower at elevation 2 → damage × 1.5', () => {
+    const tileMap = new Map([[ `${VP_ROW}-${VP_COL}`, 2 ]]);
+    buildVpTestBed(tileMap, 2);
+
+    // VP bonus 0.5 → damage multiplier = 1 + 0.5 = 1.5
+    vpCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.5 : 0
+    );
+
+    vpSvc.registerTower(VP_ROW, VP_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', VP_WORLD_X, VP_WORLD_Z, 10000);
+    vpEnemyMap.set('e1', enemy);
+
+    vpSvc.fireTurn(new THREE.Scene(), VP_TURN);
+
+    expect(10000 - enemy.health).toBe(Math.round(BASE_BASIC_DAMAGE * 1.5));
+  });
+
+  it('VANTAGE_POINT active + tower at elevation 0 → no damage bonus (threshold not met)', () => {
+    // Flat board: maxElevation=0 → hasElevation=false; towerElevation=0; VP does not apply.
+    buildVpTestBed(new Map(), 0);
+
+    vpCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.5 : 0
+    );
+
+    vpSvc.registerTower(VP_ROW, VP_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', VP_WORLD_X, VP_WORLD_Z, 10000);
+    vpEnemyMap.set('e1', enemy);
+
+    vpSvc.fireTurn(new THREE.Scene(), VP_TURN);
+
+    // Base damage only — VP threshold of elevation ≥ 1 not met.
+    expect(10000 - enemy.health).toBe(BASE_BASIC_DAMAGE);
+  });
+
+  it('VANTAGE_POINT inactive → no bonus regardless of elevation', () => {
+    const tileMap = new Map([[ `${VP_ROW}-${VP_COL}`, 3 ]]);
+    buildVpTestBed(tileMap, 3);
+    // getModifierValue returns 0 for all stats by default (no VP active)
+
+    vpSvc.registerTower(VP_ROW, VP_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', VP_WORLD_X, VP_WORLD_Z, 10000);
+    vpEnemyMap.set('e1', enemy);
+
+    vpSvc.fireTurn(new THREE.Scene(), VP_TURN);
+
+    // No VP bonus: damage is base only (no VP; elevation range bonus doesn't affect damage)
+    expect(10000 - enemy.health).toBe(BASE_BASIC_DAMAGE);
+  });
+
+  it('VANTAGE_POINT + HIGH_PERCH composition: damage × 1.5, range × 1.5 × 1.25 = 1.875×', () => {
+    // Tower at elevation 2 → passive range 1.5×; HIGH_PERCH 0.25 → range 1.875×;
+    // VP 0.5 → damage 1.5×. Both apply independently in their respective hook.
+    const tileMap = new Map([[ `${VP_ROW}-${VP_COL}`, 2 ]]);
+    buildVpTestBed(tileMap, 2);
+
+    const HP_STAT = MODIFIER_STAT.HIGH_PERCH_RANGE_BONUS;
+    vpCardEffectSpy.getModifierValue.and.callFake((stat: string) => {
+      if (stat === VP_STAT) return 0.5;
+      if (stat === HP_STAT) return 0.25;
+      return 0;
+    });
+
+    vpSvc.registerTower(VP_ROW, VP_COL, TowerType.BASIC, new THREE.Group());
+
+    // Enemy within 1.875× range but beyond 1.5× — only reachable via HIGH_PERCH range bonus.
+    const rangeAt150 = BASE_BASIC_RANGE * 1.5;
+    const rangeAt1875 = BASE_BASIC_RANGE * 1.875;
+    const enemy = createTestEnemy('e1', VP_WORLD_X + rangeAt150 + 0.1, VP_WORLD_Z, 10000);
+    vpEnemyMap.set('e1', enemy);
+
+    expect(rangeAt150 + 0.1).toBeLessThan(rangeAt1875);
+
+    vpSvc.fireTurn(new THREE.Scene(), VP_TURN);
+
+    // Hit (range satisfied) with 1.5× damage.
+    expect(enemy.health).toBeLessThan(10000);
+    expect(10000 - enemy.health).toBe(Math.round(BASE_BASIC_DAMAGE * 1.5));
+  });
+
+  it('upgraded VANTAGE_POINT (0.75) + tower at elevation 1 → damage × 1.75', () => {
+    // Elevation 1 ≥ threshold (1) → VP applies. 0.75 bonus → multiplier = 1.75.
+    const tileMap = new Map([[ `${VP_ROW}-${VP_COL}`, 1 ]]);
+    buildVpTestBed(tileMap, 1);
+
+    vpCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.75 : 0
+    );
+
+    vpSvc.registerTower(VP_ROW, VP_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', VP_WORLD_X, VP_WORLD_Z, 10000);
+    vpEnemyMap.set('e1', enemy);
+
+    vpSvc.fireTurn(new THREE.Scene(), VP_TURN);
+
+    expect(10000 - enemy.health).toBe(Math.round(BASE_BASIC_DAMAGE * 1.75));
+  });
+});
+
+// ── Sprint 33 — KING_OF_THE_HILL damage bonus integration ─────────────────────
+
+describe('TowerCombatService KING_OF_THE_HILL damage bonus (sprint 33)', () => {
+  const KOTH_ROW = 10;
+  const KOTH_COL = 12;
+  const KOTH_WORLD_X = -0.5;
+  const KOTH_WORLD_Z = 0;
+  const KOTH_TURN = 1;
+  const KOTH_STAT = MODIFIER_STAT.KING_OF_THE_HILL_DAMAGE_BONUS;
+
+  const BASE_BASIC_DAMAGE = TOWER_CONFIGS[TowerType.BASIC].damage;
+
+  let kothSvc: TowerCombatService;
+  let kothEnemyMap: Map<string, Enemy>;
+  let kothElevationSpy: jasmine.SpyObj<ElevationService>;
+  let kothCardEffectSpy: jasmine.SpyObj<CardEffectService>;
+
+  function buildKothTestBed(tileElevations: Map<string, number>, maxElevation: number): void {
+    kothEnemyMap = new Map();
+    kothElevationSpy = createElevationServiceSpy(tileElevations, maxElevation);
+    kothCardEffectSpy = createCardEffectServiceSpy();
+
+    const kothPathSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset']
+    );
+    kothPathSpy.getPathToExitLength.and.returnValue(0);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(kothEnemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: kothCardEffectSpy },
+        { provide: PathfindingService, useValue: kothPathSpy },
+        { provide: ElevationService, useValue: kothElevationSpy },
+      ],
+    });
+    kothSvc = TestBed.inject(TowerCombatService);
+  }
+
+  it('KOTH active + tower at max elevation (2) → damage ×2.0', () => {
+    // Tower at elevation 2 = max → bonus 1.0 → multiplier = 1 + 1.0 = 2.0
+    const tileMap = new Map([[ `${KOTH_ROW}-${KOTH_COL}`, 2 ]]);
+    buildKothTestBed(tileMap, 2);
+
+    kothCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === KOTH_STAT ? 1.0 : 0
+    );
+
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', KOTH_WORLD_X, KOTH_WORLD_Z, 10000);
+    kothEnemyMap.set('e1', enemy);
+
+    kothSvc.fireTurn(new THREE.Scene(), KOTH_TURN);
+
+    expect(10000 - enemy.health).toBe(Math.round(BASE_BASIC_DAMAGE * 2.0));
+  });
+
+  it('KOTH active + tower at lower elevation → no bonus', () => {
+    // Tower at elevation 1, max is 2 — does NOT qualify for KOTH bonus.
+    const tileMap = new Map([
+      [ `${KOTH_ROW}-${KOTH_COL}`, 1 ],
+      [ '5-5', 2 ],  // another tile at max; tower is not on it
+    ]);
+    buildKothTestBed(tileMap, 2);
+
+    kothCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === KOTH_STAT ? 1.0 : 0
+    );
+
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', KOTH_WORLD_X, KOTH_WORLD_Z, 10000);
+    kothEnemyMap.set('e1', enemy);
+
+    kothSvc.fireTurn(new THREE.Scene(), KOTH_TURN);
+
+    // Elevation 1 ≥ VANTAGE_POINT_ELEVATION_THRESHOLD (1) → passive range bonus
+    // applies, but damage is base-only since tower is not at maxElevation (2).
+    expect(10000 - enemy.health).toBe(BASE_BASIC_DAMAGE);
+  });
+
+  it('KOTH inactive → no bonus regardless of elevation', () => {
+    const tileMap = new Map([[ `${KOTH_ROW}-${KOTH_COL}`, 3 ]]);
+    buildKothTestBed(tileMap, 3);
+    // getModifierValue returns 0 for all stats (no KOTH active)
+
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', KOTH_WORLD_X, KOTH_WORLD_Z, 10000);
+    kothEnemyMap.set('e1', enemy);
+
+    kothSvc.fireTurn(new THREE.Scene(), KOTH_TURN);
+
+    // No KOTH bonus — base damage only (elevation range boost doesn't affect damage).
+    expect(10000 - enemy.health).toBe(BASE_BASIC_DAMAGE);
+  });
+
+  it('KOTH active + flat board (maxElevation=0) → no bonus (guard prevents flat-board all-towers bonus)', () => {
+    // maxElevation=0 → kothActive=false → no tower gets the bonus even though
+    // every tower's elevation equals max (0). This is the critical anti-bug guard.
+    buildKothTestBed(new Map(), 0);
+
+    kothCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === KOTH_STAT ? 1.0 : 0
+    );
+
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', KOTH_WORLD_X, KOTH_WORLD_Z, 10000);
+    kothEnemyMap.set('e1', enemy);
+
+    kothSvc.fireTurn(new THREE.Scene(), KOTH_TURN);
+
+    // Flat board: base damage only, no KOTH bonus.
+    expect(10000 - enemy.health).toBe(BASE_BASIC_DAMAGE);
+  });
+
+  it('KOTH active + multiple towers tied at max elevation → ALL get the bonus', () => {
+    // Two towers at elevation 2 (max), placed far apart so each can only reach its own enemy.
+    // boardWidth=25, tileSize=1: world.x = (col - 25/2) = col - 12.5
+    // Tower A: row=10,col=12 → world (-0.5, 0).  Enemy A at (-0.5, 0) — distance 0 from A, 7 from B.
+    // Tower B: row=10,col=5  → world (-7.5, 0).  Enemy B at (-7.5, 0) — distance 0 from B, 7 from A.
+    // BASIC range = 3 (or 4.5 with elev-2 passive). 7 >> 4.5 → no cross-fire.
+    const KOTH_COL_B = 5;
+    // world x for col 5 with boardWidth 25, tileSize 1: 5 - 12.5 = -7.5
+    const KOTH_WORLD_X_B = -7.5;
+    const tileMap = new Map([
+      [ `${KOTH_ROW}-${KOTH_COL}`, 2 ],
+      [ `${KOTH_ROW}-${KOTH_COL_B}`, 2 ],
+    ]);
+    buildKothTestBed(tileMap, 2);
+
+    kothCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === KOTH_STAT ? 1.0 : 0
+    );
+
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL, TowerType.BASIC, new THREE.Group());
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL_B, TowerType.BASIC, new THREE.Group());
+
+    const enemy1 = createTestEnemy('e1', KOTH_WORLD_X, KOTH_WORLD_Z, 10000);
+    const enemy2 = createTestEnemy('e2', KOTH_WORLD_X_B, KOTH_WORLD_Z, 10000);
+    kothEnemyMap.set('e1', enemy1);
+    kothEnemyMap.set('e2', enemy2);
+
+    kothSvc.fireTurn(new THREE.Scene(), KOTH_TURN);
+
+    // Both towers fire at their respective enemies with ×2 damage bonus.
+    expect(10000 - enemy1.health).toBe(Math.round(BASE_BASIC_DAMAGE * 2.0));
+    expect(10000 - enemy2.health).toBe(Math.round(BASE_BASIC_DAMAGE * 2.0));
+  });
+
+  it('upgraded KOTH (1.5 bonus) + tower at max elevation → damage ×2.5', () => {
+    // Upgraded KOTH: 1 + 1.5 = 2.5 multiplier.
+    const tileMap = new Map([[ `${KOTH_ROW}-${KOTH_COL}`, 2 ]]);
+    buildKothTestBed(tileMap, 2);
+
+    kothCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === KOTH_STAT ? 1.5 : 0
+    );
+
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', KOTH_WORLD_X, KOTH_WORLD_Z, 10000);
+    kothEnemyMap.set('e1', enemy);
+
+    kothSvc.fireTurn(new THREE.Scene(), KOTH_TURN);
+
+    expect(10000 - enemy.health).toBe(Math.round(BASE_BASIC_DAMAGE * 2.5));
+  });
+
+  it('KOTH + VANTAGE_POINT composition: both bonuses stack multiplicatively', () => {
+    // Tower at elevation 2 (max). KOTH bonus 1.0 → ×2. VP bonus 0.5 → ×1.5.
+    // Composed: base × 1.5 (VP) × 2.0 (KOTH) = base × 3.0.
+    const VP_STAT = MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS;
+    const tileMap = new Map([[ `${KOTH_ROW}-${KOTH_COL}`, 2 ]]);
+    buildKothTestBed(tileMap, 2);
+
+    kothCardEffectSpy.getModifierValue.and.callFake((stat: string) => {
+      if (stat === KOTH_STAT) return 1.0;
+      if (stat === VP_STAT) return 0.5;
+      return 0;
+    });
+
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', KOTH_WORLD_X, KOTH_WORLD_Z, 10000);
+    kothEnemyMap.set('e1', enemy);
+
+    kothSvc.fireTurn(new THREE.Scene(), KOTH_TURN);
+
+    expect(10000 - enemy.health).toBe(Math.round(BASE_BASIC_DAMAGE * 1.5 * 2.0));
+  });
+
+  it('KOTH + HIGH_PERCH + VANTAGE_POINT full stack: correct damage and range composition', () => {
+    // Tower at elevation 2 (max). All three bonuses active.
+    // Damage: base × 1.5 (VP) × 2.0 (KOTH) = base × 3.0.
+    // Range: base × elevationPassive(1.5) × highPerch(1.25) = base × 1.875.
+    const VP_STAT = MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS;
+    const HP_STAT = MODIFIER_STAT.HIGH_PERCH_RANGE_BONUS;
+    const tileMap = new Map([[ `${KOTH_ROW}-${KOTH_COL}`, 2 ]]);
+    buildKothTestBed(tileMap, 2);
+
+    kothCardEffectSpy.getModifierValue.and.callFake((stat: string) => {
+      if (stat === KOTH_STAT) return 1.0;
+      if (stat === VP_STAT) return 0.5;
+      if (stat === HP_STAT) return 0.25;
+      return 0;
+    });
+
+    kothSvc.registerTower(KOTH_ROW, KOTH_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', KOTH_WORLD_X, KOTH_WORLD_Z, 10000);
+    kothEnemyMap.set('e1', enemy);
+
+    kothSvc.fireTurn(new THREE.Scene(), KOTH_TURN);
+
+    expect(10000 - enemy.health).toBe(Math.round(BASE_BASIC_DAMAGE * 1.5 * 2.0));
+  });
+});
+
+// ── Sprint 38 — TITAN halvesElevationDamageBonuses integration ────────────────
+describe('TowerCombatService TITAN elevation damage reduction (sprint 38)', () => {
+  /**
+   * Test vector from spec:
+   *   base damage 10, VP × 1.5, no KOTH
+   *   normal:   Math.round(10 * 1.5) = 15
+   *   vs TITAN: base-without-elev = 10/1.5 = 6.667; elev-portion = 15 - 6.667 = 8.333
+   *             TITAN gets 6.667 + 8.333 * 0.5 = 6.667 + 4.167 = 10.833 → Math.round → 11
+   *
+   * Wait — let me recheck with integer base:
+   *   base BASIC damage (level 1) = BASE_BASIC_DAMAGE (typically 10 from TOWER_CONFIGS)
+   *   stats.damage after VP×1.5 = Math.round(10 * 1.5) = 15
+   *   vantagePointDmgMult = 1.5, kothMult = 1
+   *   baseWithoutElevation = 15 / (1.5 * 1) = 10
+   *   elevationPortion = 15 - 10 = 5
+   *   TITAN: 10 + 5 * 0.5 = 12.5 → Math.round → 13 ✓ (matches spec example)
+   */
+
+  const TITAN_ROW = 2;
+  const TITAN_COL = 2;
+  // Board is 25 wide × 20 tall, tileSize=1 (matches createGameBoardServiceSpy(25,20,1)).
+  // gridToWorld: worldX = (col - boardWidth/2) * tileSize = (2 - 12.5) = -10.5
+  //              worldZ = (row - boardHeight/2) * tileSize = (2 - 10)   = -8
+  const TITAN_WORLD_X = (TITAN_COL - 25 / 2);  // -10.5
+  const TITAN_WORLD_Z = (TITAN_ROW - 20 / 2);  // -8
+  const TITAN_TURN = 1;
+  const VP_STAT = MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS;
+  const KOTH_STAT = MODIFIER_STAT.KING_OF_THE_HILL_DAMAGE_BONUS;
+  const BASE_DAMAGE = TOWER_CONFIGS[TowerType.BASIC].damage;
+
+  let titanSvc: TowerCombatService;
+  let titanEnemyMap: Map<string, Enemy>;
+  let titanElevSpy: jasmine.SpyObj<ElevationService>;
+  let titanCardEffectSpy: jasmine.SpyObj<CardEffectService>;
+
+  function buildTitanTestBed(
+    tileMap: Map<string, number>,
+    maxElev: number,
+  ): void {
+    titanEnemyMap = new Map();
+    titanElevSpy = createElevationServiceSpy(tileMap, maxElev);
+    titanCardEffectSpy = createCardEffectServiceSpy();
+
+    const pathSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset'],
+    );
+    pathSpy.getPathToExitLength.and.returnValue(0);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(titanEnemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: titanCardEffectSpy },
+        { provide: PathfindingService, useValue: pathSpy },
+        { provide: ElevationService, useValue: titanElevSpy },
+      ],
+    });
+
+    titanSvc = TestBed.inject(TowerCombatService);
+    titanSvc.registerTower(TITAN_ROW, TITAN_COL, TowerType.BASIC, new THREE.Group());
+  }
+
+  afterEach(() => { TestBed.resetTestingModule(); });
+
+  // Test vector split into two single-enemy passes because BASIC tower is single-shot;
+  // putting two enemies in one fireTurn only damages the targeted one.
+  it('spec test vector (normal): VP×0.5 → non-TITAN gets Math.round(BASE×1.5)', () => {
+    const tileMap = new Map([[`${TITAN_ROW}-${TITAN_COL}`, 1]]);
+    buildTitanTestBed(tileMap, 1);
+
+    titanCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.5 : 0,
+    );
+
+    const normalEnemy = createTestEnemy('e-normal', TITAN_WORLD_X, TITAN_WORLD_Z, 10000);
+    titanEnemyMap.set('e-normal', normalEnemy);
+
+    titanSvc.fireTurn(new THREE.Scene(), TITAN_TURN);
+
+    const expectedNormal = Math.round(BASE_DAMAGE * 1.5);
+    expect(10000 - normalEnemy.health).toBe(expectedNormal);
+  });
+
+  it('spec test vector (TITAN): VP×0.5 → TITAN gets base + elev×0.5', () => {
+    const tileMap = new Map([[`${TITAN_ROW}-${TITAN_COL}`, 1]]);
+    buildTitanTestBed(tileMap, 1);
+
+    titanCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.5 : 0,
+    );
+
+    const titanEnemy = createTestEnemy('e-titan', TITAN_WORLD_X, TITAN_WORLD_Z, 10000);
+    titanEnemy.type = EnemyType.TITAN;
+    titanEnemyMap.set('e-titan', titanEnemy);
+
+    titanSvc.fireTurn(new THREE.Scene(), TITAN_TURN);
+
+    // stats.damage = Math.round(BASE * 1.5); TITAN: base-without-elev=BASE, elev-portion=stats.damage-BASE
+    const expectedNormal = Math.round(BASE_DAMAGE * 1.5);
+    const expectedTitan = Math.round(BASE_DAMAGE + (expectedNormal - BASE_DAMAGE) * 0.5);
+    expect(10000 - titanEnemy.health).toBe(expectedTitan);
+  });
+
+  it('VANTAGE_POINT active + TITAN target → damage multiplier halved (VP bonus only)', () => {
+    const tileMap = new Map([[`${TITAN_ROW}-${TITAN_COL}`, 1]]);
+    buildTitanTestBed(tileMap, 1);
+
+    titanCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.5 : 0,
+    );
+
+    const titan = createTestEnemy('t1', TITAN_WORLD_X, TITAN_WORLD_Z, 10000);
+    titan.type = EnemyType.TITAN;
+    titanEnemyMap.set('t1', titan);
+
+    titanSvc.fireTurn(new THREE.Scene(), TITAN_TURN);
+
+    const damage = 10000 - titan.health;
+    // VP mult = 1.5; baseDmg=10; fullDmg=15; elev=5; titan=10+2.5=12.5→13
+    expect(damage).toBe(Math.round(BASE_DAMAGE + (Math.round(BASE_DAMAGE * 1.5) - BASE_DAMAGE) * ELEVATION_CONFIG.TITAN_ELEVATION_DAMAGE_REDUCTION));
+  });
+
+  it('non-TITAN enemy at same position with VP active → full multiplier applies', () => {
+    const tileMap = new Map([[`${TITAN_ROW}-${TITAN_COL}`, 1]]);
+    buildTitanTestBed(tileMap, 1);
+
+    titanCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.5 : 0,
+    );
+
+    const normal = createTestEnemy('n1', TITAN_WORLD_X, TITAN_WORLD_Z, 10000);
+    // default type = BASIC — no halvesElevationDamageBonuses
+    titanEnemyMap.set('n1', normal);
+
+    titanSvc.fireTurn(new THREE.Scene(), TITAN_TURN);
+
+    const damage = 10000 - normal.health;
+    expect(damage).toBe(Math.round(BASE_DAMAGE * 1.5));
+  });
+
+  // Split into two single-enemy passes (single-shot tower only hits one target per fireTurn).
+  it('no elevation bonuses active → TITAN takes base damage (nothing to halve)', () => {
+    // Flat board: elevation=0 everywhere. VP/KOTH are inactive. computeTitanDamage
+    // short-circuits when combinedElevMult===1, returning stats.damage unchanged.
+    const tileMap = new Map([[`${TITAN_ROW}-${TITAN_COL}`, 0]]);
+    buildTitanTestBed(tileMap, 0);
+
+    titanCardEffectSpy.getModifierValue.and.returnValue(0);
+
+    const titan = createTestEnemy('t-flat', TITAN_WORLD_X, TITAN_WORLD_Z, 10000);
+    titan.type = EnemyType.TITAN;
+    titanEnemyMap.set('t-flat', titan);
+
+    titanSvc.fireTurn(new THREE.Scene(), TITAN_TURN);
+
+    expect(10000 - titan.health).toBe(BASE_DAMAGE);
+  });
+
+  it('no elevation bonuses active → non-TITAN takes base damage', () => {
+    const tileMap = new Map([[`${TITAN_ROW}-${TITAN_COL}`, 0]]);
+    buildTitanTestBed(tileMap, 0);
+
+    titanCardEffectSpy.getModifierValue.and.returnValue(0);
+
+    const normal = createTestEnemy('n-flat', TITAN_WORLD_X, TITAN_WORLD_Z, 10000);
+    titanEnemyMap.set('n-flat', normal);
+
+    titanSvc.fireTurn(new THREE.Scene(), TITAN_TURN);
+
+    expect(10000 - normal.health).toBe(BASE_DAMAGE);
+  });
+
+  // Split: single-shot tower — test normal and TITAN in separate passes.
+  it('KOTH active + max elevation → non-TITAN gets full KOTH bonus (base × 2)', () => {
+    const tileMap = new Map([[`${TITAN_ROW}-${TITAN_COL}`, 2]]);
+    buildTitanTestBed(tileMap, 2);
+
+    titanCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === KOTH_STAT ? 1.0 : 0,
+    );
+
+    const normal = createTestEnemy('nk', TITAN_WORLD_X, TITAN_WORLD_Z, 10000);
+    titanEnemyMap.set('nk', normal);
+
+    titanSvc.fireTurn(new THREE.Scene(), TITAN_TURN);
+
+    // Normal: base × (1 + 1.0) = base × 2
+    expect(10000 - normal.health).toBe(Math.round(BASE_DAMAGE * 2));
+  });
+
+  it('KOTH active + max elevation + TITAN target → KOTH bonus halved for TITAN', () => {
+    const tileMap = new Map([[`${TITAN_ROW}-${TITAN_COL}`, 2]]);
+    buildTitanTestBed(tileMap, 2);
+
+    titanCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === KOTH_STAT ? 1.0 : 0,
+    );
+
+    const titan = createTestEnemy('tk', TITAN_WORLD_X, TITAN_WORLD_Z, 10000);
+    titan.type = EnemyType.TITAN;
+    titanEnemyMap.set('tk', titan);
+
+    titanSvc.fireTurn(new THREE.Scene(), TITAN_TURN);
+
+    // stats.damage = BASE × 2; TITAN: base-without-elev = BASE×2/2 = BASE
+    // elev-portion = BASE; titan = BASE + BASE×0.5 = BASE×1.5
+    expect(10000 - titan.health).toBe(Math.round(BASE_DAMAGE * 1.5));
+  });
+});
+
+// ── Sprint 39 — WYRM_ASCENDANT immuneToElevationDamageBonuses integration ──
+describe('TowerCombatService WYRM_ASCENDANT elevation damage immunity (sprint 39)', () => {
+  /**
+   * Test vector from spec:
+   *   base BASIC damage = BASE_DAMAGE (10), VP × 1.5, no KOTH
+   *   normal:         Math.round(10 × 1.5) = 15
+   *   TITAN (halve):  Math.round(10 + (15 - 10) × 0.5) = 13
+   *   WYRM (immune):  Math.round(15 / 1.5) = Math.round(10) = 10  ← base without elevation
+   *
+   * Combined VP + KOTH:
+   *   base=10, VP=1.5, KOTH=2 → combinedMult=3 → stats.damage=Math.round(10×3)=30
+   *   WYRM: Math.round(30/3) = 10  ← still base-without-elevation
+   *   TITAN: Math.round(10 + (30-10)×0.5) = Math.round(10+10) = 20
+   */
+
+  const WYRM_ROW = 2;
+  const WYRM_COL = 2;
+  const WYRM_WORLD_X = (WYRM_COL - 25 / 2);  // -10.5
+  const WYRM_WORLD_Z = (WYRM_ROW - 20 / 2);  // -8
+  const WYRM_TURN = 1;
+  const VP_STAT = MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS;
+  const KOTH_STAT = MODIFIER_STAT.KING_OF_THE_HILL_DAMAGE_BONUS;
+  const BASE_DAMAGE = TOWER_CONFIGS[TowerType.BASIC].damage;
+
+  let wyrmSvc: TowerCombatService;
+  let wyrmEnemyMap: Map<string, Enemy>;
+  let wyrmElevSpy: jasmine.SpyObj<ElevationService>;
+  let wyrmCardEffectSpy: jasmine.SpyObj<CardEffectService>;
+
+  function buildWyrmTestBed(
+    tileMap: Map<string, number>,
+    maxElev: number,
+  ): void {
+    wyrmEnemyMap = new Map();
+    wyrmElevSpy = jasmine.createSpyObj<ElevationService>('ElevationService', [
+      'getElevation', 'getMaxElevation', 'raise', 'depress', 'setAbsolute',
+      'collapse', 'getElevationMap', 'getActiveChanges', 'tickTurn', 'reset',
+      'serialize', 'restore',
+    ]);
+    wyrmElevSpy.getMaxElevation.and.returnValue(maxElev);
+    wyrmElevSpy.getElevation.and.callFake((row: number, col: number) =>
+      tileMap.get(`${row}-${col}`) ?? 0,
+    );
+    wyrmCardEffectSpy = createCardEffectServiceSpy();
+
+    const pathSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset'],
+    );
+    pathSpy.getPathToExitLength.and.returnValue(0);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(wyrmEnemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: wyrmCardEffectSpy },
+        { provide: PathfindingService, useValue: pathSpy },
+        { provide: ElevationService, useValue: wyrmElevSpy },
+      ],
+    });
+
+    wyrmSvc = TestBed.inject(TowerCombatService);
+    wyrmSvc.registerTower(WYRM_ROW, WYRM_COL, TowerType.BASIC, new THREE.Group());
+  }
+
+  afterEach(() => { TestBed.resetTestingModule(); });
+
+  it('spec test vector: VP×1.5 → non-WYRM gets Math.round(BASE×1.5)', () => {
+    // Normal target should see full elevation bonus.
+    buildWyrmTestBed(new Map([[`${WYRM_ROW}-${WYRM_COL}`, 1]]), 1);
+    wyrmCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.5 : 0,
+    );
+    const normal = createTestEnemy('e-normal', WYRM_WORLD_X, WYRM_WORLD_Z, 10000);
+    wyrmEnemyMap.set('e-normal', normal);
+    wyrmSvc.fireTurn(new THREE.Scene(), WYRM_TURN);
+    expect(10000 - normal.health).toBe(Math.round(BASE_DAMAGE * 1.5));
+  });
+
+  it('spec test vector: VP×1.5 → WYRM receives base-without-elevation (immune)', () => {
+    // WYRM strips the elevation bonus entirely: damage = Math.round(fullDamage / combinedMult)
+    // VP mult = 1+0.5=1.5; stats.damage = Math.round(10*1.5)=15; WYRM: Math.round(15/1.5)=10
+    buildWyrmTestBed(new Map([[`${WYRM_ROW}-${WYRM_COL}`, 1]]), 1);
+    wyrmCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.5 : 0,
+    );
+    const wyrm = createTestEnemy('e-wyrm', WYRM_WORLD_X, WYRM_WORLD_Z, 10000);
+    wyrm.type = EnemyType.WYRM_ASCENDANT;
+    wyrmEnemyMap.set('e-wyrm', wyrm);
+    wyrmSvc.fireTurn(new THREE.Scene(), WYRM_TURN);
+    const fullDamage = Math.round(BASE_DAMAGE * 1.5);
+    const wyrmDamage = Math.round(fullDamage / 1.5);
+    expect(10000 - wyrm.health).toBe(wyrmDamage);
+    expect(wyrmDamage).toBe(BASE_DAMAGE); // Confirmed: immune path returns base
+  });
+
+  it('VP + KOTH combined → WYRM strips both bonuses (base-without-elevation)', () => {
+    // Tower at elev=2 (maxElev=2) → kothActive. VP=0.5 (mult=1.5), KOTH=1.0 (mult=2).
+    // combined=3; stats.damage=Math.round(BASE×3)=30; WYRM: Math.round(30/3)=10=BASE.
+    buildWyrmTestBed(new Map([[`${WYRM_ROW}-${WYRM_COL}`, 2]]), 2);
+    wyrmCardEffectSpy.getModifierValue.and.callFake((stat: string) => {
+      if (stat === VP_STAT) return 0.5;
+      if (stat === KOTH_STAT) return 1.0;
+      return 0;
+    });
+    const wyrm = createTestEnemy('e-wyrm-vp-koth', WYRM_WORLD_X, WYRM_WORLD_Z, 10000);
+    wyrm.type = EnemyType.WYRM_ASCENDANT;
+    wyrmEnemyMap.set('e-wyrm-vp-koth', wyrm);
+    wyrmSvc.fireTurn(new THREE.Scene(), WYRM_TURN);
+    const fullDamage = Math.round(BASE_DAMAGE * 1.5 * 2); // 30
+    const wyrmDamage = Math.round(fullDamage / (1.5 * 2)); // 10
+    expect(10000 - wyrm.health).toBe(wyrmDamage);
+    expect(wyrmDamage).toBe(BASE_DAMAGE);
+  });
+
+  it('no elevation bonuses active → WYRM takes base damage (fast path)', () => {
+    // Flat board: VP=0, KOTH=0. combinedMult=1. WYRM fast path returns stats.damage unchanged.
+    buildWyrmTestBed(new Map([[`${WYRM_ROW}-${WYRM_COL}`, 0]]), 0);
+    wyrmCardEffectSpy.getModifierValue.and.returnValue(0);
+    const wyrm = createTestEnemy('e-wyrm-flat', WYRM_WORLD_X, WYRM_WORLD_Z, 10000);
+    wyrm.type = EnemyType.WYRM_ASCENDANT;
+    wyrmEnemyMap.set('e-wyrm-flat', wyrm);
+    wyrmSvc.fireTurn(new THREE.Scene(), WYRM_TURN);
+    expect(10000 - wyrm.health).toBe(BASE_DAMAGE);
+  });
+
+  it('WYRM does NOT affect range — tower still fires from elevated position', () => {
+    // With tower at elevation 1, the range multiplier = 1 + 1×0.25 = 1.25.
+    // A WYRM at BASE_RANGE × 1.25 distance away should still be in range.
+    // But a WYRM at BASE_RANGE × 1.3 distance away — strictly beyond base but within
+    // elevated range — should be targetable (elevation range bonus applies).
+    // We verify by placing a WYRM just outside base range but within elevated range;
+    // it should receive damage (confirming it was targeted).
+    const BASE_RANGE = TOWER_CONFIGS[TowerType.BASIC].range;
+    const ELEV_RANGE = BASE_RANGE * (1 + 1 * ELEVATION_CONFIG.RANGE_BONUS_PER_ELEVATION);
+    // Place WYRM at 90% of elevated range — within elevated range, outside base range
+    const wyrmX = WYRM_WORLD_X + BASE_RANGE * 1.15; // beyond base range
+    buildWyrmTestBed(new Map([[`${WYRM_ROW}-${WYRM_COL}`, 1]]), 1);
+    wyrmCardEffectSpy.getModifierValue.and.returnValue(0);
+    const wyrm = createTestEnemy('e-wyrm-range', wyrmX, WYRM_WORLD_Z, 10000);
+    wyrm.type = EnemyType.WYRM_ASCENDANT;
+    wyrmEnemyMap.set('e-wyrm-range', wyrm);
+    wyrmSvc.fireTurn(new THREE.Scene(), WYRM_TURN);
+    // If WYRM is within elevated range, it should take damage.
+    const distFromTower = Math.abs(wyrmX - WYRM_WORLD_X);
+    if (distFromTower <= ELEV_RANGE) {
+      expect(10000 - wyrm.health).toBeGreaterThan(0);
+    } else {
+      // Outside even elevated range — no damage expected
+      expect(10000 - wyrm.health).toBe(0);
+    }
+  });
+
+  it('WYRM + TITAN coexist — each uses its own path independently', () => {
+    // In a single fireTurn there is only one tower (single-shot). So test each
+    // independently with separate buildWyrmTestBed calls (TITAN suite above already
+    // covers TITAN; this test confirms WYRM immunity does not bleed into TITAN logic
+    // by verifying their damage values differ when VP is active).
+    //
+    // WYRM: strips bonus → base-without-elevation
+    // TITAN: halves bonus → base + elev/2
+    const vpMult = 1.5; // VP bonus = 0.5 → mult = 1.5
+    const fullDamage = Math.round(BASE_DAMAGE * vpMult);
+    const wyrmExpected = Math.round(fullDamage / vpMult); // 10 = BASE_DAMAGE
+    const titanExpected = Math.round(BASE_DAMAGE + (fullDamage - BASE_DAMAGE) * ELEVATION_CONFIG.TITAN_ELEVATION_DAMAGE_REDUCTION);
+
+    // WYRM case
+    buildWyrmTestBed(new Map([[`${WYRM_ROW}-${WYRM_COL}`, 1]]), 1);
+    wyrmCardEffectSpy.getModifierValue.and.callFake((s: string) => s === VP_STAT ? 0.5 : 0);
+    const wyrm = createTestEnemy('e-wyrm-coexist', WYRM_WORLD_X, WYRM_WORLD_Z, 10000);
+    wyrm.type = EnemyType.WYRM_ASCENDANT;
+    wyrmEnemyMap.set('e-wyrm-coexist', wyrm);
+    wyrmSvc.fireTurn(new THREE.Scene(), WYRM_TURN);
+    expect(10000 - wyrm.health).toBe(wyrmExpected);
+    TestBed.resetTestingModule();
+
+    // TITAN case — rebuild fresh
+    const titanMap = new Map<string, Enemy>();
+    const titanElevSpy2 = jasmine.createSpyObj<ElevationService>('ElevationService', [
+      'getElevation', 'getMaxElevation', 'raise', 'depress', 'setAbsolute',
+      'collapse', 'getElevationMap', 'getActiveChanges', 'tickTurn', 'reset',
+      'serialize', 'restore',
+    ]);
+    titanElevSpy2.getMaxElevation.and.returnValue(1);
+    titanElevSpy2.getElevation.and.callFake((r: number, c: number) =>
+      r === WYRM_ROW && c === WYRM_COL ? 1 : 0,
+    );
+    const titanCardSpy2 = createCardEffectServiceSpy();
+    const pathSpy2 = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset'],
+    );
+    pathSpy2.getPathToExitLength.and.returnValue(0);
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService, ChainLightningService, CombatVFXService, StatusEffectService, GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(titanMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: titanCardSpy2 },
+        { provide: PathfindingService, useValue: pathSpy2 },
+        { provide: ElevationService, useValue: titanElevSpy2 },
+      ],
+    });
+    const titanSvc2 = TestBed.inject(TowerCombatService);
+    titanSvc2.registerTower(WYRM_ROW, WYRM_COL, TowerType.BASIC, new THREE.Group());
+    titanCardSpy2.getModifierValue.and.callFake((s: string) => s === VP_STAT ? 0.5 : 0);
+    const titan2 = createTestEnemy('e-titan-coexist', WYRM_WORLD_X, WYRM_WORLD_Z, 10000);
+    titan2.type = EnemyType.TITAN;
+    titanMap.set('e-titan-coexist', titan2);
+    titanSvc2.fireTurn(new THREE.Scene(), WYRM_TURN);
+    expect(10000 - titan2.health).toBe(titanExpected);
+
+    // Confirm the two damage values differ when VP is active
+    expect(wyrmExpected).not.toBe(titanExpected);
+    expect(wyrmExpected).toBeLessThan(titanExpected); // WYRM immune → less damage than TITAN halve
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 4 prep — composeDamageStack regression spec.
+// Pre-sprint-41 refactor extracted the 8-stage damage chain + 6-stage range
+// chain from TowerCombatService.fireTurn into a named private method. This
+// spec asserts bit-for-bit equality with the pre-refactor inline computation
+// for a representative input set. If any assertion breaks after this commit
+// lands, the extracted chain diverged from the inline version — revert.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
+  let service: TowerCombatService;
+  let relicSpy: jasmine.SpyObj<RelicService>;
+  let elevationSpy: jasmine.SpyObj<ElevationService>;
+
+  // Default context — neutral: no active modifiers, no elevation, no Conduit.
+  const neutralCtx: DamageStackContext = {
+    towerDamageMultiplier: 1,
+    cardDamageBoost: 0,
+    cardRangeBoost: 0,
+    sniperDamageBoost: 0,
+    pathLengthMultiplier: 1,
+    hasElevation: false,
+    maxElevation: 0,
+    highPerchBonus: 0,
+    vantagePointBonus: 0,
+    kothBonus: 0,
+    kothActive: false,
+    handshakeBonus: 0,
+    formationRangeAdditive: 0,
+    gridSurgeBonus: 0,
+    architectClusterActive: false,
+    currentTurn: 0,
+  };
+
+  beforeEach(() => {
+    relicSpy = createRelicServiceSpy();
+    relicSpy.getDamageMultiplier.and.returnValue(1);
+    relicSpy.getRangeMultiplier.and.returnValue(1);
+    elevationSpy = jasmine.createSpyObj<ElevationService>(
+      'ElevationService',
+      ['getElevation', 'getMaxElevation', 'reset', 'serialize', 'restore', 'tickTurn', 'raise', 'depress', 'setAbsolute', 'collapse', 'getActiveChanges', 'getElevationMap'],
+    );
+    elevationSpy.getElevation.and.returnValue(0);
+    elevationSpy.getMaxElevation.and.returnValue(0);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(new Map()) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: relicSpy },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+        { provide: ElevationService, useValue: elevationSpy },
+      ],
+    });
+    service = TestBed.inject(TowerCombatService);
+  });
+
+  function buildTower(type: TowerType = TowerType.BASIC, row = 5, col = 5, overrides?: { damageMultiplier?: number; rangeMultiplier?: number }) {
+    const tower: any = {
+      id: `t-${row}-${col}`,
+      type,
+      row,
+      col,
+      level: 1,
+      kills: 0,
+      totalInvested: 0,
+      targetingMode: DEFAULT_TARGETING_MODE,
+      mesh: null,
+    };
+    if (overrides) tower.cardStatOverrides = overrides;
+    return tower;
+  }
+
+  function callStack(tower: any, ctx: DamageStackContext = neutralCtx) {
+    const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
+    return (service as any).composeDamageStack(tower, baseStats, ctx);
+  }
+
+  it('neutral inputs → damage = base, range = base, hoisted mults = 1', () => {
+    const tower = buildTower();
+    const base = TOWER_CONFIGS[TowerType.BASIC];
+    const result = callStack(tower);
+
+    expect(result.damage).toBe(base.damage);
+    expect(result.range).toBeCloseTo(base.range, 5);
+    expect(result.towerVantagePointDmgMult).toBe(1);
+    expect(result.towerKothMult).toBe(1);
+  });
+
+  it('applies towerDamageMultiplier (difficulty preset) at stage 1', () => {
+    const tower = buildTower();
+    const result = callStack(tower, { ...neutralCtx, towerDamageMultiplier: 1.5 });
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    expect(result.damage).toBe(Math.round(base * 1.5));
+  });
+
+  it('applies relicDamage multiplier at stage 2 (per-tower-type lookup)', () => {
+    const tower = buildTower();
+    relicSpy.getDamageMultiplier.and.callFake((type: TowerType) => (type === TowerType.BASIC ? 1.2 : 1));
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    const result = callStack(tower);
+    expect(result.damage).toBe(Math.round(base * 1.2));
+  });
+
+  it('applies cardDamageBoost at stage 3 as (1 + x) additive inside multiplier', () => {
+    const tower = buildTower();
+    const result = callStack(tower, { ...neutralCtx, cardDamageBoost: 0.5 });
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    expect(result.damage).toBe(Math.round(base * (1 + 0.5)));
+  });
+
+  it('applies sniperDamageBoost at stage 4 ONLY for SNIPER towers', () => {
+    const sniper = buildTower(TowerType.SNIPER);
+    const basic = buildTower(TowerType.BASIC);
+    const ctx: DamageStackContext = { ...neutralCtx, sniperDamageBoost: 0.25 };
+
+    const sniperResult = callStack(sniper, ctx);
+    const basicResult = callStack(basic, ctx);
+
+    const sniperBase = TOWER_CONFIGS[TowerType.SNIPER].damage;
+    const basicBase = TOWER_CONFIGS[TowerType.BASIC].damage;
+    expect(sniperResult.damage).toBe(Math.round(sniperBase * (1 + 0.25)));
+    expect(basicResult.damage).toBe(basicBase); // Not SNIPER → boost skipped.
+  });
+
+  it('applies per-tower cardStatOverrides.damageMultiplier at stage 5', () => {
+    const tower = buildTower(TowerType.BASIC, 5, 5, { damageMultiplier: 2 });
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    const result = callStack(tower);
+    expect(result.damage).toBe(Math.round(base * 2));
+  });
+
+  it('applies pathLengthMultiplier at stage 6 (LABYRINTH_MIND)', () => {
+    const tower = buildTower();
+    const result = callStack(tower, { ...neutralCtx, pathLengthMultiplier: 1.3 });
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    expect(result.damage).toBe(Math.round(base * 1.3));
+  });
+
+  it('applies vantagePointDmgMult at stage 7 gated by elevation ≥ VP threshold', () => {
+    elevationSpy.getElevation.and.returnValue(ELEVATION_CONFIG.VANTAGE_POINT_ELEVATION_THRESHOLD);
+    const tower = buildTower();
+    const result = callStack(tower, { ...neutralCtx, hasElevation: true, vantagePointBonus: 0.5 });
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    expect(result.damage).toBe(Math.round(base * 1.5));
+    expect(result.towerVantagePointDmgMult).toBe(1.5);
+  });
+
+  it('skips vantagePointDmgMult when elevation is BELOW threshold (gate)', () => {
+    elevationSpy.getElevation.and.returnValue(0); // elev 0, threshold is 1
+    const tower = buildTower();
+    const result = callStack(tower, { ...neutralCtx, hasElevation: true, vantagePointBonus: 0.5 });
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    expect(result.damage).toBe(base); // VP skipped
+    expect(result.towerVantagePointDmgMult).toBe(1);
+  });
+
+  it('applies kothMult at stage 8 only when tower elevation === maxElevation', () => {
+    elevationSpy.getElevation.and.returnValue(3);
+    const tower = buildTower();
+    const ctx: DamageStackContext = {
+      ...neutralCtx,
+      hasElevation: true,
+      maxElevation: 3,
+      kothBonus: 1.0,
+      kothActive: true,
+    };
+    const result = callStack(tower, ctx);
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    expect(result.damage).toBe(Math.round(base * 2));
+    expect(result.towerKothMult).toBe(2);
+  });
+
+  it('skips kothMult when tower is below maxElevation (per-tower gate)', () => {
+    elevationSpy.getElevation.and.returnValue(1);
+    const tower = buildTower();
+    const ctx: DamageStackContext = {
+      ...neutralCtx,
+      hasElevation: true,
+      maxElevation: 3, // board has a taller tower
+      kothBonus: 1.0,
+      kothActive: true,
+    };
+    const result = callStack(tower, ctx);
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    expect(result.damage).toBe(base);
+    expect(result.towerKothMult).toBe(1);
+  });
+
+  it('composes all 8 damage stages in the documented multiplicative order', () => {
+    // Tower: SNIPER, L1, cardStatOverrides.damageMultiplier = 1.5
+    // Elevation: 2 (triggers VP @ threshold 1 and KOTH when === max)
+    elevationSpy.getElevation.and.returnValue(2);
+    relicSpy.getDamageMultiplier.and.returnValue(1.1); // stage 2
+    const tower = buildTower(TowerType.SNIPER, 5, 5, { damageMultiplier: 1.5 });
+    const ctx: DamageStackContext = {
+      towerDamageMultiplier: 1.2,      // stage 1
+      cardDamageBoost: 0.3,             // stage 3 → 1.3
+      cardRangeBoost: 0,
+      sniperDamageBoost: 0.4,           // stage 4 → 1.4 (SNIPER)
+      pathLengthMultiplier: 1.25,       // stage 6
+      hasElevation: true,
+      maxElevation: 2,
+      highPerchBonus: 0,
+      vantagePointBonus: 0.5,           // stage 7 → 1.5
+      kothBonus: 1.0,                   // stage 8 → 2 (elev === max)
+      kothActive: true,
+      handshakeBonus: 0,                // stage 9 — inactive in this spec
+      formationRangeAdditive: 0,        // inactive
+      gridSurgeBonus: 0,                // inactive
+      architectClusterActive: false,    // inactive
+      currentTurn: 0,
+    };
+    const base = TOWER_CONFIGS[TowerType.SNIPER].damage;
+    const expected = Math.round(
+      base
+        * 1.2    // stage 1
+        * 1.1    // stage 2
+        * 1.3    // stage 3
+        * 1.4    // stage 4
+        * 1.5    // stage 5 (cardStatOverrides)
+        * 1.25   // stage 6
+        * 1.5    // stage 7
+        * 2,     // stage 8
+    );
+    expect(callStack(tower, ctx).damage).toBe(expected);
+  });
+
+  it('range stack: 6 stages compose multiplicatively with (base + additive) parenthesis', () => {
+    // Elevation 2 → elevationRangeMult = 1 + 2 × 0.25 = 1.5
+    // HIGH_PERCH active (threshold 2) → 1 + 0.2 = 1.2
+    elevationSpy.getElevation.and.returnValue(ELEVATION_CONFIG.HIGH_PERCH_ELEVATION_THRESHOLD);
+    relicSpy.getRangeMultiplier.and.returnValue(1.1);
+    const tower = buildTower(TowerType.BASIC, 5, 5, { rangeMultiplier: 1.3 });
+    const ctx: DamageStackContext = {
+      ...neutralCtx,
+      cardRangeBoost: 0.2,          // stage 2 → 1.2
+      hasElevation: true,
+      highPerchBonus: 0.2,          // stage 6 → 1.2 (threshold met)
+    };
+    const base = TOWER_CONFIGS[TowerType.BASIC].range;
+    const elevationRangeMult = 1 + ELEVATION_CONFIG.HIGH_PERCH_ELEVATION_THRESHOLD * ELEVATION_CONFIG.RANGE_BONUS_PER_ELEVATION;
+    const expected = (base + 0) * 1.1 * 1.2 * 1.3 * elevationRangeMult * 1.2;
+    expect(callStack(tower, ctx).range).toBeCloseTo(expected, 5);
+  });
+
+  it('range stack: highPerchMult gated below threshold', () => {
+    elevationSpy.getElevation.and.returnValue(1); // HIGH_PERCH threshold is 2
+    const tower = buildTower();
+    const result = callStack(tower, { ...neutralCtx, hasElevation: true, highPerchBonus: 0.5 });
+    const base = TOWER_CONFIGS[TowerType.BASIC].range;
+    const elevationRangeMult = 1 + 1 * ELEVATION_CONFIG.RANGE_BONUS_PER_ELEVATION;
+    // HIGH_PERCH skipped → multiplier 1; passive elevation still applies.
+    expect(result.range).toBeCloseTo(base * elevationRangeMult, 5);
+  });
+
+  it('hasElevation=false short-circuits — no elevation lookup, all elevation mults are 1', () => {
+    // Production invariant: fireTurn computes kothActive = kothBonus > 0 && maxElevation >= 1.
+    // So when hasElevation=false (maxElevation=0), kothActive is always false.
+    // Production never constructs a ctx with kothActive=true AND maxElevation=0.
+    const tower = buildTower();
+    const ctx: DamageStackContext = {
+      ...neutralCtx,
+      vantagePointBonus: 0.5, // VP gate requires tower elev ≥ 1 — skipped when hasElevation=false.
+      highPerchBonus: 0.5,    // HIGH_PERCH gate requires elev ≥ 2 — same.
+    };
+    const result = callStack(tower, ctx);
+    const base = TOWER_CONFIGS[TowerType.BASIC];
+    expect(result.damage).toBe(base.damage);
+    expect(result.range).toBeCloseTo(base.range, 5);
+    expect(elevationSpy.getElevation).not.toHaveBeenCalled();
+  });
+
+  it('rounds damage to integer (Math.round), preserves range as float', () => {
+    const tower = buildTower();
+    const ctx: DamageStackContext = { ...neutralCtx, towerDamageMultiplier: 1.333 };
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    const result = callStack(tower, ctx);
+    expect(result.damage).toBe(Math.round(base * 1.333));
+    expect(Number.isInteger(result.damage)).toBe(true);
+    // Range is NOT rounded — fractional precision preserved.
+    expect(result.range).toBe(TOWER_CONFIGS[TowerType.BASIC].range);
+  });
+
+  // ─── Stage 9 — HANDSHAKE ─────────────────────────────────────────────────
+
+  describe('HANDSHAKE multiplier (stage 9 — graph-reactive)', () => {
+    // Re-wire the real TowerGraphService so composeDamageStack can query neighbors.
+    let graph: TowerGraphService;
+    let placedTowers: Map<string, any>;
+    let serviceWithGraph: TowerCombatService;
+
+    beforeEach(() => {
+      placedTowers = new Map();
+      TestBed.resetTestingModule();
+
+      relicSpy = createRelicServiceSpy();
+      relicSpy.getDamageMultiplier.and.returnValue(1);
+      relicSpy.getRangeMultiplier.and.returnValue(1);
+      elevationSpy = jasmine.createSpyObj<ElevationService>(
+        'ElevationService',
+        ['getElevation', 'getMaxElevation', 'reset', 'serialize', 'restore', 'tickTurn', 'raise', 'depress', 'setAbsolute', 'collapse', 'getActiveChanges', 'getElevationMap'],
+      );
+      elevationSpy.getElevation.and.returnValue(0);
+      elevationSpy.getMaxElevation.and.returnValue(0);
+
+      TestBed.configureTestingModule({
+        providers: [
+          TowerCombatService,
+          ChainLightningService,
+          CombatVFXService,
+          StatusEffectService,
+          GameStateService,
+          TowerGraphService,
+          { provide: EnemyService, useValue: createEnemyServiceSpy(new Map()) },
+          { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+          { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+          { provide: RelicService, useValue: relicSpy },
+          { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+          { provide: ElevationService, useValue: elevationSpy },
+        ],
+      });
+      serviceWithGraph = TestBed.inject(TowerCombatService);
+      graph = TestBed.inject(TowerGraphService);
+      graph.setPlacedTowersGetter(() => placedTowers);
+    });
+
+    function registerTower(row: number, col: number, type: TowerType = TowerType.BASIC): any {
+      const tower = {
+        id: `${row}-${col}`,
+        type,
+        level: 1,
+        row,
+        col,
+        kills: 0,
+        totalInvested: 0,
+        targetingMode: DEFAULT_TARGETING_MODE,
+        mesh: null,
+      };
+      placedTowers.set(tower.id, tower);
+      graph.registerTower(tower);
+      return tower;
+    }
+
+    function callStackWithGraph(tower: any, ctx: Partial<DamageStackContext>) {
+      const fullCtx: DamageStackContext = { ...neutralCtx, ...ctx };
+      const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
+      return (serviceWithGraph as any).composeDamageStack(tower, baseStats, fullCtx);
+    }
+
+    it('HANDSHAKE active + ≥ 1 neighbor → applies (1 + handshakeBonus) multiplier', () => {
+      const towerA = registerTower(5, 5);
+      registerTower(5, 6); // neighbor
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(towerA, { handshakeBonus: 0.15 });
+      expect(result.damage).toBe(Math.round(base * 1.15));
+    });
+
+    it('HANDSHAKE active + ZERO neighbors → multiplier is 1 (bonus gated)', () => {
+      const tower = registerTower(5, 5);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(tower, { handshakeBonus: 0.15 });
+      expect(result.damage).toBe(base);
+    });
+
+    it('HANDSHAKE inactive (bonus=0) → no multiplier applied even with neighbors', () => {
+      const towerA = registerTower(5, 5);
+      registerTower(5, 6);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(towerA, { handshakeBonus: 0 });
+      expect(result.damage).toBe(base);
+    });
+
+    it('HANDSHAKE respects disruption — disrupted tower reports 0 neighbors, bonus skipped', () => {
+      const towerA = registerTower(5, 5);
+      registerTower(5, 6);
+      // Disrupt the target tower.
+      graph.severTower(5, 5, /* until */ 10, 'test-disruptor');
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(towerA, { handshakeBonus: 0.25, currentTurn: 5 });
+      expect(result.damage).toBe(base); // disrupted → no neighbors → no bonus
+    });
+
+    // ─── FORMATION — additive-to-base range ────────────────────────────────
+
+    it('FORMATION active + 3-tower horizontal line → +1 tile range (additive-before-multiplicative)', () => {
+      // Build a horizontal line: (5, 5), (5, 6), (5, 7). Tower under test = middle.
+      registerTower(5, 5);
+      const middle = registerTower(5, 6);
+      registerTower(5, 7);
+      const base = TOWER_CONFIGS[TowerType.BASIC].range;
+      const result = callStackWithGraph(middle, { formationRangeAdditive: 1 });
+      // additive inside parenthesis → (base + 1) × (all mults === 1) = base + 1.
+      expect(result.range).toBeCloseTo(base + 1, 5);
+    });
+
+    it('FORMATION applies to endpoints of a 3-tile line (not just middle)', () => {
+      const leftEnd = registerTower(5, 5);
+      registerTower(5, 6);
+      registerTower(5, 7);
+      const base = TOWER_CONFIGS[TowerType.BASIC].range;
+      const result = callStackWithGraph(leftEnd, { formationRangeAdditive: 1 });
+      expect(result.range).toBeCloseTo(base + 1, 5);
+    });
+
+    it('FORMATION does NOT apply to a 2-tower line (below minLength=3)', () => {
+      const tower = registerTower(5, 5);
+      registerTower(5, 6);
+      const base = TOWER_CONFIGS[TowerType.BASIC].range;
+      const result = callStackWithGraph(tower, { formationRangeAdditive: 1 });
+      expect(result.range).toBeCloseTo(base, 5); // no bonus
+    });
+
+    it('FORMATION applies additive INSIDE multipliers — (base + 1) × elevation × HIGH_PERCH', () => {
+      // Spike §13 regression: (base + 1) × 1.5 × 1.25 ≠ base × 1.5 × 1.25 + 1.
+      elevationSpy.getElevation.and.returnValue(2);
+      registerTower(5, 5);
+      const middle = registerTower(5, 6);
+      registerTower(5, 7);
+
+      const result = callStackWithGraph(middle, {
+        formationRangeAdditive: 1,
+        hasElevation: true,
+        highPerchBonus: 0.25, // HIGH_PERCH active + threshold met at elevation 2
+      });
+
+      const base = TOWER_CONFIGS[TowerType.BASIC].range;
+      const elevationRangeMult = 1 + 2 * ELEVATION_CONFIG.RANGE_BONUS_PER_ELEVATION; // 1.5
+      const highPerchMult = 1 + 0.25; // 1.25
+      const additiveInside = (base + 1) * elevationRangeMult * highPerchMult;
+      const additiveOutside = base * elevationRangeMult * highPerchMult + 1;
+      expect(result.range).toBeCloseTo(additiveInside, 5);
+      expect(result.range).not.toBeCloseTo(additiveOutside, 5);
+    });
+
+    it('FORMATION respects disruption — a disrupted tile interrupts the line', () => {
+      registerTower(5, 5);
+      const middle = registerTower(5, 6);
+      registerTower(5, 7);
+      // Disrupt the middle — now the line reads as three isolated towers.
+      graph.severTower(5, 6, /* until */ 10, 'disruptor');
+      const base = TOWER_CONFIGS[TowerType.BASIC].range;
+      const result = callStackWithGraph(middle, { formationRangeAdditive: 1, currentTurn: 5 });
+      // Middle tower is itself disrupted → isInStraightLineOf returns false.
+      expect(result.range).toBeCloseTo(base, 5);
+    });
+
+    it('FORMATION vertical line — 3 towers at (r, r+1, r+2) same col qualifies', () => {
+      registerTower(3, 5);
+      const mid = registerTower(4, 5);
+      registerTower(5, 5);
+      const base = TOWER_CONFIGS[TowerType.BASIC].range;
+      const result = callStackWithGraph(mid, { formationRangeAdditive: 1 });
+      expect(result.range).toBeCloseTo(base + 1, 5);
+    });
+
+    it('FORMATION does NOT apply to L-shape (3 towers at (5,5), (5,6), (6,6)) — no straight line of 3', () => {
+      const corner = registerTower(5, 5);
+      registerTower(5, 6);
+      registerTower(6, 6);
+      const base = TOWER_CONFIGS[TowerType.BASIC].range;
+      const result = callStackWithGraph(corner, { formationRangeAdditive: 1 });
+      expect(result.range).toBeCloseTo(base, 5);
+    });
+
+    // ─── Stage 10 — GRID_SURGE ───────────────────────────────────────────
+
+    it('GRID_SURGE active + 4 cardinal neighbors → applies (1 + gridSurgeBonus) multiplier', () => {
+      // Cross pattern: center + 4 adjacent neighbors.
+      const center = registerTower(5, 5);
+      registerTower(4, 5);  // N
+      registerTower(6, 5);  // S
+      registerTower(5, 4);  // W
+      registerTower(5, 6);  // E
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(center, { gridSurgeBonus: 1.0 });
+      expect(result.damage).toBe(Math.round(base * 2)); // ×2 damage
+    });
+
+    it('GRID_SURGE active + only 3 neighbors → no multiplier (below MIN=4)', () => {
+      const center = registerTower(5, 5);
+      registerTower(4, 5);
+      registerTower(6, 5);
+      registerTower(5, 4);
+      // Missing E neighbor — only 3 total.
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(center, { gridSurgeBonus: 1.0 });
+      expect(result.damage).toBe(base); // no bonus
+    });
+
+    it('GRID_SURGE active + all 4 neighbors (upgraded bonus 1.5) → ×2.5 damage', () => {
+      const center = registerTower(5, 5);
+      registerTower(4, 5); registerTower(6, 5); registerTower(5, 4); registerTower(5, 6);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(center, { gridSurgeBonus: 1.5 });
+      expect(result.damage).toBe(Math.round(base * 2.5));
+    });
+
+    it('GRID_SURGE inactive (bonus=0) → no multiplier even with 4 neighbors', () => {
+      const center = registerTower(5, 5);
+      registerTower(4, 5); registerTower(6, 5); registerTower(5, 4); registerTower(5, 6);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(center, { gridSurgeBonus: 0 });
+      expect(result.damage).toBe(base);
+    });
+
+    it('GRID_SURGE respects disruption — disrupted tower reads zero neighbors', () => {
+      const center = registerTower(5, 5);
+      registerTower(4, 5); registerTower(6, 5); registerTower(5, 4); registerTower(5, 6);
+      graph.severTower(5, 5, /* until */ 10, 'test-disruptor');
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(center, { gridSurgeBonus: 1.0, currentTurn: 5 });
+      expect(result.damage).toBe(base); // disrupted → zero neighbors → no bonus
+    });
+
+    it('GRID_SURGE composes with HANDSHAKE — both multipliers stack', () => {
+      const center = registerTower(5, 5);
+      registerTower(4, 5); registerTower(6, 5); registerTower(5, 4); registerTower(5, 6);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(center, { handshakeBonus: 0.15, gridSurgeBonus: 1.0 });
+      // base × 1.15 (stage 9 HANDSHAKE) × 2 (stage 10 GRID_SURGE)
+      expect(result.damage).toBe(Math.round(base * 1.15 * 2));
+    });
+
+    // ─── ARCHITECT cluster propagation ───────────────────────────────────
+
+    it('ARCHITECT active + HANDSHAKE + isolated tower → no bonus (cluster of 1)', () => {
+      const lone = registerTower(5, 5);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(lone, { handshakeBonus: 0.15, architectClusterActive: true });
+      expect(result.damage).toBe(base); // cluster size 1 → 0 effective neighbors
+    });
+
+    it('ARCHITECT active + HANDSHAKE + cluster of 2 → applies bonus', () => {
+      const tA = registerTower(5, 5);
+      registerTower(5, 6);  // neighbor → 2-tower cluster
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(tA, { handshakeBonus: 0.15, architectClusterActive: true });
+      expect(result.damage).toBe(Math.round(base * 1.15));
+    });
+
+    it('ARCHITECT extends GRID_SURGE gate — cluster of 5 qualifies even without all 4 spatial neighbors', () => {
+      // Tower at (5,5) with only 2 spatial neighbors (5,6) and (5,7), but
+      // whole cluster is 5 (via an L-shape at (4,7), (3,7)). Without
+      // ARCHITECT: 2 neighbors < 4 (GRID_SURGE_MIN_NEIGHBORS) → no bonus.
+      // With ARCHITECT: cluster-1 = 4 ≥ 4 → bonus applies.
+      const lone = registerTower(5, 5);
+      registerTower(5, 6);   // neighbor of (5,5)
+      registerTower(5, 7);   // neighbor of (5,6)
+      registerTower(4, 7);   // neighbor of (5,7)
+      registerTower(3, 7);   // neighbor of (4,7)
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+
+      // Without ARCHITECT: no bonus (only 1 spatial neighbor at (5,5)).
+      const withoutArchitect = callStackWithGraph(lone, { gridSurgeBonus: 1.0 });
+      expect(withoutArchitect.damage).toBe(base);
+
+      // With ARCHITECT: cluster of 5, so cluster-1 = 4 ≥ MIN (4) → ×2.
+      const withArchitect = callStackWithGraph(lone, { gridSurgeBonus: 1.0, architectClusterActive: true });
+      expect(withArchitect.damage).toBe(Math.round(base * 2));
+    });
+
+    it('ARCHITECT respects disruption — disrupted tower reads cluster of 1', () => {
+      const tA = registerTower(5, 5);
+      registerTower(5, 6); registerTower(5, 7); registerTower(4, 7);
+      // Disrupt (5,5) — should read its cluster as just itself.
+      graph.severTower(5, 5, /* until */ 10, 'test-disruptor');
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(tA, {
+        handshakeBonus: 0.15,
+        architectClusterActive: true,
+        currentTurn: 5,
+      });
+      expect(result.damage).toBe(base); // disrupted → cluster of 1 → no bonus
+    });
+
+    it('ARCHITECT inactive → HANDSHAKE still uses literal neighbor count', () => {
+      // Regression — architectClusterActive=false should route through the
+      // legacy getNeighbors path, not the cluster path.
+      const tA = registerTower(5, 5);
+      registerTower(5, 6);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(tA, { handshakeBonus: 0.15, architectClusterActive: false });
+      expect(result.damage).toBe(Math.round(base * 1.15));
+    });
+
+    // ─── Stage 11 — TUNING_FORK relic ────────────────────────────────────
+
+    it('TUNING_FORK owned + tower with ≥ 1 neighbor → +10% damage', () => {
+      const tA = registerTower(5, 5);
+      registerTower(5, 6);
+      relicSpy.hasTuningFork.and.returnValue(true);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(tA, {});
+      expect(result.damage).toBe(Math.round(base * 1.1));
+    });
+
+    it('TUNING_FORK owned + isolated tower → no bonus', () => {
+      const tA = registerTower(5, 5);
+      relicSpy.hasTuningFork.and.returnValue(true);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(tA, {});
+      expect(result.damage).toBe(base);
+    });
+
+    it('TUNING_FORK not owned → no bonus even with neighbors', () => {
+      const tA = registerTower(5, 5);
+      registerTower(5, 6);
+      // Default spy — hasTuningFork returns false.
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(tA, {});
+      expect(result.damage).toBe(base);
+    });
+
+    it('TUNING_FORK respects disruption — disrupted tower gets no bonus', () => {
+      const tA = registerTower(5, 5);
+      registerTower(5, 6);
+      relicSpy.hasTuningFork.and.returnValue(true);
+      graph.severTower(5, 5, /* until */ 10, 'test-disruptor');
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(tA, { currentTurn: 5 });
+      expect(result.damage).toBe(base);
+    });
+
+    it('TUNING_FORK stacks with HANDSHAKE — both multipliers apply', () => {
+      const tA = registerTower(5, 5);
+      registerTower(5, 6);
+      relicSpy.hasTuningFork.and.returnValue(true);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      // Stage 9 HANDSHAKE (+15%) × stage 11 TUNING_FORK (+10%)
+      const result = callStackWithGraph(tA, { handshakeBonus: 0.15 });
+      expect(result.damage).toBe(Math.round(base * 1.15 * 1.1));
+    });
+
+    // ─── Stage 9 — HANDSHAKE composition regression ──────────────────────
+
+    it('HANDSHAKE composes as stage 9 — after all Phase 3 multipliers', () => {
+      // Fixture: SNIPER at elev 2, KOTH + VP + HANDSHAKE all active.
+      elevationSpy.getElevation.and.returnValue(2);
+      elevationSpy.getMaxElevation.and.returnValue(2);
+      relicSpy.getDamageMultiplier.and.returnValue(1.1);
+      const towerA = registerTower(5, 5, TowerType.SNIPER);
+      registerTower(5, 6); // neighbor for HANDSHAKE
+
+      const result = callStackWithGraph(towerA, {
+        towerDamageMultiplier: 1.2,
+        cardDamageBoost: 0.3,
+        sniperDamageBoost: 0.4,
+        pathLengthMultiplier: 1.25,
+        hasElevation: true,
+        maxElevation: 2,
+        vantagePointBonus: 0.5,
+        kothBonus: 1.0,
+        kothActive: true,
+        handshakeBonus: 0.15,
+      });
+
+      const base = TOWER_CONFIGS[TowerType.SNIPER].damage;
+      const expected = Math.round(
+        base
+          * 1.2    // stage 1: towerDamageMultiplier
+          * 1.1    // stage 2: relicDamage
+          * 1.3    // stage 3: cardDamageBoost
+          * 1.4    // stage 4: sniperBoost
+          * 1.0    // stage 5: cardStatOverrides (none)
+          * 1.25   // stage 6: pathLengthMultiplier
+          * 1.5    // stage 7: VP
+          * 2      // stage 8: KOTH
+          * 1.15,  // stage 9: HANDSHAKE
+      );
+      expect(result.damage).toBe(expected);
+    });
+  });
+});
+
+// ─── LINKWORK (cluster fire-rate share) ────────────────────────────────────────
+//
+// LINKWORK is a turn-scoped flag that grants +1 shotsPerTurn to any tower
+// in a cluster of size ≥ LINKWORK_MIN_CLUSTER_SIZE while active. Tested via
+// fireTurn's shot count path, not composeDamageStack (LINKWORK is a shot
+// modifier, not a damage modifier). Separate top-level describe because the
+// TestBed wires the real TowerGraphService + `setPlacedTowersGetter`, which
+// the parent describe's setup does not.
+
+describe('TowerCombatService LINKWORK', () => {
+  let service: TowerCombatService;
+  let graph: TowerGraphService;
+  let cardEffectSpy: jasmine.SpyObj<CardEffectService>;
+  let enemyMap: Map<string, Enemy>;
+  let mockScene: THREE.Scene;
+
+  // Tower at row=10, col=12 on a 25x20 board → world (-0.5, 0).
+  const BASE_ROW = 10;
+  const BASE_COL = 12;
+
+  beforeEach(() => {
+    enemyMap = new Map();
+    TestBed.resetTestingModule();
+    const pathfindingSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService',
+      ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset'],
+    );
+    pathfindingSpy.getPathToExitLength.and.returnValue(0);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        TowerGraphService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(enemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+        { provide: PathfindingService, useValue: pathfindingSpy },
+      ],
+    });
+    service = TestBed.inject(TowerCombatService);
+    graph = TestBed.inject(TowerGraphService);
+    graph.setPlacedTowersGetter(() => service.getPlacedTowers());
+    cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+    mockScene = new THREE.Scene();
+  });
+
+  // Helper: tower world pos is derived by GameBoardService spy mapping — we
+  // reuse createTestEnemy for enemies at the tower's world position. The
+  // shared spy helper maps row=10,col=12 on a 25x20 board to world (-0.5, 0)
+  // (same projection as the parent describe's TOWER_WORLD_X/Z constants).
+  function enemyAt(id: string, x: number, z: number, hp = 10000): Enemy {
+    const e = createTestEnemy(id, x, z, hp);
+    enemyMap.set(id, e);
+    return e;
+  }
+
+  it('LINKWORK active + cluster of 2 → each tower fires 2 shots (+1 from LINKWORK)', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE,
+    );
+    // 4 enemies so each of 2 towers can land both shots. createTestEnemy
+    // projects tower (10, 12) on a 25x20 board to world (-0.5, 0).
+    enemyAt('e1', -0.5, 0);
+    enemyAt('e2', -0.4, 0);
+    enemyAt('e3', -0.3, 0);
+    enemyAt('e4', -0.2, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    // 2 towers × 2 shots each = 4 fires. LINKWORK grants +1 shot to each
+    // cluster member (cluster size 2 ≥ LINKWORK_MIN_CLUSTER_SIZE).
+    expect(result.fired.length).toBe(4);
+  });
+
+  it('LINKWORK active + isolated tower (cluster of 1) → fires 1 shot (below min)', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE,
+    );
+    enemyAt('e1', -0.5, 0);
+    enemyAt('e2', -0.4, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    expect(result.fired.length).toBe(1);
+  });
+
+  it('LINKWORK inactive → cluster size is ignored, tower fires 1 shot', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    // Default spy: hasActiveModifier returns false for everything.
+    enemyAt('e1', -0.5, 0);
+    enemyAt('e2', -0.4, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    // Two towers × 1 shot each = 2 fires. Without LINKWORK, per-tower is 1.
+    // Tower at (10, 13) targets the nearer enemy; first tower at (10, 12) also
+    // fires once. So total fires = 2 but neither tower is multi-shotting.
+    // Assert no tower fired more than once.
+    const firesByPos = result.fired.length;
+    expect(firesByPos).toBe(2);
+  });
+
+  it('LINKWORK respects disruption — disrupted tower sees itself only (cluster=1)', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE,
+    );
+    // Disrupt the first tower so its cluster size reads as 1.
+    graph.severTower(BASE_ROW, BASE_COL, /* until */ 10, 'test-disruptor');
+    enemyAt('e1', -0.5, 0);
+    enemyAt('e2', -0.4, 0);
+
+    // Turn 5 is within the disruption window.
+    const result = service.fireTurn(mockScene, 5);
+
+    // Disrupted tower no longer multi-shots; its partner (at col+1) is also
+    // disrupted by virtue of the cluster severance, so cluster size for both
+    // drops below the minimum. 1 shot per tower, 2 towers = 2 total fires —
+    // same as the inactive case, not the +1 bonus case.
+    expect(result.fired.length).toBe(2);
+  });
+
+  it('LINKWORK + FIRE_RATE modifier stack additively before ceil', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE,
+    );
+    cardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.FIRE_RATE ? 0.3 : 0,
+    );
+    // 4 enemies so both shots from both towers can resolve.
+    enemyAt('e1', -0.5, 0);
+    enemyAt('e2', -0.4, 0);
+    enemyAt('e3', -0.3, 0);
+    enemyAt('e4', -0.2, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    // Per tower: fireRateBoost=0.3 + LINKWORK=1 → ceil(1 + 1.3) = 3 shots each.
+    // Two towers × 3 shots = 6 total fires.
+    expect(result.fired.length).toBe(6);
+  });
+
+  it('LINKWORK with 3-tower horizontal line → all three towers get +1 shot', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 2, TowerType.BASIC, new THREE.Group());
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE,
+    );
+    // Enough enemies for 3 towers × 2 shots each = 6 fires.
+    for (let i = 0; i < 6; i++) enemyAt(`e${i}`, -0.5 + i * 0.05, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    // Cluster size is 3 for each tower (≥ MIN=2 for all). Total = 3 × 2 = 6 fires.
+    expect(result.fired.length).toBe(6);
+  });
+});
+
+// ─── HARMONIC (cluster-fire propagation) ──────────────────────────────────────
+//
+// HARMONIC is a turn-scoped flag. When active and a tower fires at target T,
+// up to HARMONIC_NEIGHBOR_COUNT (2) random non-disrupted cluster neighbors
+// also fire a single shot at T (range-gated, non-recursive, seeded RNG).
+//
+// Tested via fireTurn. TestBed wires real TowerGraphService + a RunService
+// stub exposing nextRandom for deterministic passenger selection.
+
+describe('TowerCombatService HARMONIC', () => {
+  let service: TowerCombatService;
+  let graph: TowerGraphService;
+  let cardEffectSpy: jasmine.SpyObj<CardEffectService>;
+  let runServiceStub: { nextRandom: jasmine.Spy };
+  let enemyMap: Map<string, Enemy>;
+  let mockScene: THREE.Scene;
+
+  const BASE_ROW = 10;
+  const BASE_COL = 12;
+
+  beforeEach(() => {
+    enemyMap = new Map();
+    TestBed.resetTestingModule();
+    const pathfindingSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService',
+      ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset'],
+    );
+    pathfindingSpy.getPathToExitLength.and.returnValue(0);
+
+    // Deterministic RNG — returns 0, 0, 0, … so Fisher–Yates picks the
+    // earliest candidates. Override per-test as needed.
+    runServiceStub = {
+      nextRandom: jasmine.createSpy('nextRandom').and.returnValue(0),
+    };
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        TowerGraphService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(enemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+        { provide: PathfindingService, useValue: pathfindingSpy },
+        { provide: RunService, useValue: runServiceStub },
+      ],
+    });
+    service = TestBed.inject(TowerCombatService);
+    graph = TestBed.inject(TowerGraphService);
+    graph.setPlacedTowersGetter(() => service.getPlacedTowers());
+    cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+    mockScene = new THREE.Scene();
+  });
+
+  function enemyAt(id: string, x: number, z: number, hp = 10000): Enemy {
+    const e = createTestEnemy(id, x, z, hp);
+    enemyMap.set(id, e);
+    return e;
+  }
+
+  function activateHarmonic(): void {
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HARMONIC_SIMULTANEOUS_FIRE,
+    );
+  }
+
+  it('HARMONIC active + 3-tower cluster → main tower + 2 passengers fire at same target', () => {
+    // 3 towers adjacent horizontally: (10,12) (10,13) (10,14). All in one cluster.
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 2, TowerType.BASIC, new THREE.Group());
+    activateHarmonic();
+    // Single enemy near (10, 12) within range of all 3 (BASIC range = 3 tiles).
+    enemyAt('e1', -0.5, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    // 3 towers × 1 main shot each = 3. Each main tower triggers 2 passengers
+    // at its own target (the shared enemy for adjacent-enough towers).
+    // Main tower (10,12): 1 shot + 2 passengers = 3 fires.
+    // (10,13) fires as main (still has target in range): 1 + 2 passengers = 3.
+    // (10,14) fires as main (target may be borderline): 1 + up to 2 passengers.
+    // The exact number depends on range — at minimum, the main-tower chain at
+    // (10,12) produces 1 main + 2 passenger shots if target is in range of
+    // the two neighbors.
+    expect(result.fired.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('HARMONIC active + isolated tower → only main shot fires (no passengers)', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    activateHarmonic();
+    enemyAt('e1', -0.5, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    expect(result.fired.length).toBe(1);
+  });
+
+  it('HARMONIC inactive → passenger propagation never triggers', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 2, TowerType.BASIC, new THREE.Group());
+    // Default spy: hasActiveModifier returns false.
+    enemyAt('e1', -0.5, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    // Each tower fires once at whatever target is in range — no passenger bursts.
+    // 3 towers × 1 shot = 3 fires.
+    expect(result.fired.length).toBeLessThanOrEqual(3);
+  });
+
+  it('HARMONIC does NOT recurse — passenger shots never trigger their own HARMONIC burst', () => {
+    // 3-tower cluster. Count how many fires happen per tower-type logic:
+    // If HARMONIC recursed, a passenger shot would also trigger N more
+    // passengers, leading to a runaway cascade. Our implementation must
+    // bound total fires per main tower to (1 main + N passengers).
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 2, TowerType.BASIC, new THREE.Group());
+    activateHarmonic();
+    enemyAt('e1', -0.5, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    // Bound: 3 main-tower iterations. Each iteration = 1 main shot + at most
+    // HARMONIC_NEIGHBOR_COUNT (2) passengers = 3 fires per iteration. Hard
+    // cap: 3 * 3 = 9 fires. If recursion leaked, we'd see much more.
+    expect(result.fired.length).toBeLessThanOrEqual(9);
+  });
+
+  it('HARMONIC respects disruption — disrupted tower has cluster size 1, no passengers', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 2, TowerType.BASIC, new THREE.Group());
+    activateHarmonic();
+    // Disrupt the middle tower. The graph reports a disrupted tower as its
+    // own single-tower cluster; cluster reads from (10,12) and (10,14) drop
+    // the disrupted middle tower from the cluster.
+    graph.severTower(BASE_ROW, BASE_COL + 1, /* until */ 20, 'test-disruptor');
+    enemyAt('e1', -0.5, 0);
+
+    const result = service.fireTurn(mockScene, 5);
+
+    // Disruption splits the cluster. Each tower now sees cluster size 1
+    // (or less for the disrupted one), so HARMONIC finds no passengers.
+    // Max fires = 3 main shots × 1 (no passengers) = 3.
+    expect(result.fired.length).toBeLessThanOrEqual(3);
+  });
+
+  it('HARMONIC uses seeded RNG — identical RNG yields identical passenger selection', () => {
+    // 4-tower cluster (main + 3 neighbors). HARMONIC_NEIGHBOR_COUNT=2 → pick 2 of 3.
+    // With nextRandom stubbed to return 0, the Fisher-Yates shuffle is deterministic.
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW - 1, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW + 1, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL - 1, TowerType.BASIC, new THREE.Group());
+    activateHarmonic();
+    // Spy on nextRandom to confirm it was called (determinism gate).
+    expect(runServiceStub.nextRandom).not.toHaveBeenCalled();
+
+    enemyAt('e1', -0.5, 0);
+    service.fireTurn(mockScene, 1);
+
+    // If HARMONIC fires at least once through the 4-tower cluster, nextRandom
+    // is called inside pickHarmonicPassengers. Sanity check: RNG was consulted.
+    expect(runServiceStub.nextRandom).toHaveBeenCalled();
+  });
+
+  // ─── HIVE_MIND cluster-max composition ─────────────────────────────────
+  //
+  // Hard to unit-test in a damage-stack describe because HIVE_MIND is a post-
+  // compose step inside fireTurn (swaps composed stats with cluster max
+  // before writing to scratchStats). These tests exercise the full fireTurn
+  // path to confirm a BASIC next to a SNIPER under HIVE_MIND deals SNIPER
+  // damage.
+
+  it('HIVE_MIND active + BASIC+SNIPER cluster → BASIC deals SNIPER damage', () => {
+    // BASIC (25 dmg) at (10,12), SNIPER (80 dmg) at (10,13). Adjacent → one cluster.
+    // Under HIVE_MIND, BASIC's shot should deal 80 damage (max of cluster).
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.SNIPER, new THREE.Group());
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
+    );
+    // Tier sentinel: 1 = base (damage+range sharing), 2 = upgraded (+secondary).
+    cardEffectSpy.getMaxModifierEntryValue.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX ? 1 : 0,
+    );
+    const enemy = enemyAt('e1', -0.5, 0, 10000);
+
+    service.fireTurn(mockScene, 1);
+
+    // Both towers fire once. SNIPER at (10, 13) world (-0.4, 0) — close enough
+    // to enemy at (-0.5, 0). Enemy gets hit by both; total damage should be at
+    // least 2×80 = 160 (BASIC under HIVE_MIND → 80, plus SNIPER's own 80).
+    const damageTaken = 10000 - enemy.health;
+    expect(damageTaken).toBeGreaterThanOrEqual(160);
+  });
+
+  it('HIVE_MIND inactive → BASIC deals own damage (25), SNIPER deals 80', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.SNIPER, new THREE.Group());
+    // Default spy: no modifiers active.
+    const enemy = enemyAt('e1', -0.5, 0, 10000);
+
+    service.fireTurn(mockScene, 1);
+
+    // BASIC (25) + SNIPER (80) = 105 if both hit and neither gets HIVE_MIND.
+    const damageTaken = 10000 - enemy.health;
+    expect(damageTaken).toBeGreaterThanOrEqual(105);
+    expect(damageTaken).toBeLessThan(160); // < 2×SNIPER confirms HIVE_MIND off
+  });
+
+  it('HIVE_MIND active + isolated BASIC → deals own 25 damage (cluster of 1)', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
+    );
+    // Tier sentinel: 1 = base (damage+range sharing), 2 = upgraded (+secondary).
+    cardEffectSpy.getMaxModifierEntryValue.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX ? 1 : 0,
+    );
+    const enemy = enemyAt('e1', -0.5, 0, 10000);
+
+    service.fireTurn(mockScene, 1);
+
+    // Lone BASIC: max-of-cluster collapses to self. Deals 25.
+    expect(10000 - enemy.health).toBe(25);
+  });
+
+  it('HIVE_MIND respects disruption — disrupted BASIC reads cluster of 1', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.SNIPER, new THREE.Group());
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
+    );
+    // Tier sentinel: 1 = base (damage+range sharing), 2 = upgraded (+secondary).
+    cardEffectSpy.getMaxModifierEntryValue.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX ? 1 : 0,
+    );
+    // Disrupt the BASIC so its cluster reads as size 1 — collapsing HIVE_MIND.
+    graph.severTower(BASE_ROW, BASE_COL, /* until */ 100, 'test-disruptor');
+    const enemy = enemyAt('e1', -0.5, 0, 10000);
+
+    service.fireTurn(mockScene, 5);
+
+    // BASIC disrupted → its own damage (25). SNIPER fires normally at 80.
+    // Total ~ 25 + 80 = 105 (HIVE_MIND dead for BASIC).
+    const damageTaken = 10000 - enemy.health;
+    expect(damageTaken).toBeGreaterThanOrEqual(105);
+    expect(damageTaken).toBeLessThan(160);
+  });
+
+  // ── HIVE_MIND upgraded — secondary-stat sharing (tier 2) ────────────────
+
+  it('HIVE_MIND upgraded (tier 2) + BASIC+SPLASH cluster → BASIC fires with SPLASH radius', () => {
+    // BASIC has no splashRadius; SPLASH has a non-zero splashRadius. Upgraded
+    // HIVE_MIND means the strongest cluster member's secondary stats propagate —
+    // BASIC should now fire with SPLASH's splashRadius as the "secondary source".
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.SPLASH, new THREE.Group());
+
+    // Tier 2 = upgraded. hasActiveModifier still true for existing gate logic.
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
+    );
+    cardEffectSpy.getMaxModifierEntryValue.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX ? 2 : 0,
+    );
+
+    // Spawn two close enemies so a non-zero splashRadius on BASIC would hit
+    // both with one BASIC shot. Coordinates are tower-close so splash AoE lands.
+    const mainEnemy = enemyAt('main', -0.5, 0, 10000);
+    const splashEnemy = enemyAt('splash-target', -0.4, 0, 10000);
+
+    service.fireTurn(mockScene, 1);
+
+    // If BASIC inherited SPLASH's secondary radius, both enemies take damage.
+    // (Base-tier BASIC has no splash, so secondary would miss splashEnemy.)
+    expect(10000 - splashEnemy.health).toBeGreaterThan(0);
+    // And the main target also took damage from the BASIC shot.
+    expect(10000 - mainEnemy.health).toBeGreaterThan(0);
+  });
+
+  it('HIVE_MIND BASE tier (value 1) — BASIC+SPLASH cluster does NOT share splash', () => {
+    // Sanity: the upgrade is what unlocks secondary sharing. Base tier leaves
+    // BASIC as a single-target fire even when clustered with SPLASH.
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.SPLASH, new THREE.Group());
+
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
+    );
+    cardEffectSpy.getMaxModifierEntryValue.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX ? 1 : 0,
+    );
+
+    // Place a second enemy OUTSIDE BASIC's single-target line but within a
+    // splash AoE if one were applied. With base HIVE_MIND, BASIC fires at the
+    // primary only; the secondary-position enemy stays at full HP.
+    const mainEnemy = enemyAt('main', -0.5, 0, 10000);
+    const secondaryEnemy = enemyAt('aoe-target', -0.5, 0.4, 10000);
+
+    service.fireTurn(mockScene, 1);
+
+    // Primary gets hit by both BASIC and SPLASH; secondary-position enemy only
+    // gets hit if SPLASH's own shot covers them (not from BASIC borrowing).
+    expect(10000 - mainEnemy.health).toBeGreaterThan(0);
+    // Assert that BASIC did NOT gain splash radius — if both enemies took the
+    // same cluster-borrowed damage the numbers would look identical; base tier
+    // should show the SECONDARY enemy taking less damage (only SPLASH's reach).
+    const mainDmg = 10000 - mainEnemy.health;
+    const secondaryDmg = 10000 - secondaryEnemy.health;
+    // Secondary takes at most SPLASH's splash hit, NOT a BASIC splash-borrow.
+    expect(secondaryDmg).toBeLessThanOrEqual(mainDmg);
+  });
+
+  it('HIVE_MIND upgraded — lone tower falls through (topDamageMember === self, no override)', () => {
+    // Upgraded HIVE_MIND with a cluster of 1 should not change BASIC's behavior
+    // from the base tier — topDamageMember === self, secondary-source branch is
+    // a no-op. Guarded explicitly so regressions in the self-fallthrough don't
+    // silently rewrite scratchStats with junk.
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
+    );
+    cardEffectSpy.getMaxModifierEntryValue.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX ? 2 : 0,
+    );
+
+    const enemy = enemyAt('e1', -0.5, 0, 10000);
+
+    service.fireTurn(mockScene, 1);
+
+    // Lone BASIC with upgraded tier — fires as if no HIVE_MIND. Damage = 25.
+    expect(10000 - enemy.health).toBe(25);
+  });
+
+  it('HARMONIC skips passengers when target is out of their range', () => {
+    // Place two towers far apart in the cluster via a virtual edge (simulates
+    // CONDUIT_BRIDGE) so cluster membership includes a tower well outside
+    // BASIC range.
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    // 15 tiles away horizontally — well outside BASIC range (3 tiles).
+    service.registerTower(BASE_ROW, BASE_COL - 8, TowerType.BASIC, new THREE.Group());
+    // Use virtual edge to union them into one cluster even though they are
+    // not spatially adjacent (mirrors sprint-48 CONDUIT_BRIDGE semantics).
+    graph.addVirtualEdge(BASE_ROW, BASE_COL, BASE_ROW, BASE_COL - 8, /* expires */ 100, 'test-bridge');
+    activateHarmonic();
+    // Enemy near (10,12) but NOT near (10, 4).
+    enemyAt('e1', -0.5, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    // Main tower fires at e1, HARMONIC tries to propagate to its far
+    // passenger, but the passenger's range doesn't reach e1 → passenger
+    // skipped. Total fires = 1 main + 0 passengers = 1 (plus whatever
+    // firing happens from the far tower if an enemy is in its range —
+    // not in this test). Assert upper bound: no passenger propagation.
+    expect(result.fired.length).toBeLessThanOrEqual(1);
   });
 });

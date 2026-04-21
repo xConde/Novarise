@@ -12,6 +12,15 @@ import * as THREE from 'three';
 export class BoardMeshRegistryService {
   readonly tileMeshes = new Map<string, THREE.Mesh>();
   readonly towerMeshes = new Map<string, THREE.Group>();
+  /**
+   * Cliff column meshes placed under raised tiles (sprint 39 Highground polish).
+   * Key: `"${row}-${col}"`. Created by ElevationService.applyElevation when
+   * newElevation > 0 and priorElevation === 0; resized when elevation increases
+   * while > 0; removed and geometry-disposed when elevation returns to 0.
+   * Material is owned by TerraformMaterialPoolService — cliff meshes must NOT
+   * dispose it individually.
+   */
+  readonly cliffMeshes = new Map<string, THREE.Mesh>();
   gridLines: THREE.Group | null = null;
 
   private tileMeshArray: THREE.Mesh[] = [];
@@ -33,9 +42,63 @@ export class BoardMeshRegistryService {
     this.towerChildrenArray = children;
   }
 
+  /**
+   * Swap the tile mesh stored at (row, col) with `newMesh`.
+   *
+   * The caller is responsible for:
+   *  - removing the old mesh from the scene
+   *  - disposing the old mesh's geometry and material
+   *  - adding `newMesh` to the scene
+   *
+   * This method only updates the internal map entry and rebuilds the flat
+   * array consumed by the raycaster. Matches the tower-mesh-lifecycle pattern
+   * where the component owns scene add/remove and the registry owns the map.
+   */
+  replaceTileMesh(row: number, col: number, newMesh: THREE.Mesh): void {
+    const key = `${row}-${col}`;
+    this.tileMeshes.set(key, newMesh);
+    this.rebuildTileMeshArray();
+  }
+
+  /**
+   * Translate a tile mesh's Y position without disposing or rebuilding geometry.
+   * Used by ElevationService (Highground archetype, sprint 25).
+   *
+   * Disposal-neutral: no geometry or material is touched. The Three.js scene-graph
+   * matrix update is automatic on the next render frame.
+   *
+   * Caller computes newY (typically `elevation + BOARD_CONFIG.tileHeight / 2`).
+   */
+  translateTileMesh(row: number, col: number, newY: number): void {
+    const mesh = this.tileMeshes.get(`${row}-${col}`);
+    if (!mesh) return;
+    mesh.position.y = newY;
+  }
+
+  /**
+   * Translate a tower group's Y position without disposing or rebuilding.
+   * Used by ElevationService when elevation changes on a tile that holds a tower.
+   *
+   * Tower meshes are keyed by `${row}-${col}` (same convention as tile meshes —
+   * confirmed by BoardMeshRegistryService.spec.ts lines 74, 93-94 and
+   * card-play.service.ts line 476). Tower group children are positioned relative
+   * to the group origin (tower-mesh-factory.service.ts §51-277), so moving the
+   * group Y moves every child with it. No child repositioning needed.
+   *
+   * Disposal-neutral: no geometry or material is touched.
+   *
+   * Caller computes newY (typically `elevation + BOARD_CONFIG.tileHeight`).
+   */
+  translateTowerMesh(row: number, col: number, newY: number): void {
+    const group = this.towerMeshes.get(`${row}-${col}`);
+    if (!group) return;
+    group.position.y = newY;
+  }
+
   clear(): void {
     this.tileMeshes.clear();
     this.towerMeshes.clear();
+    this.cliffMeshes.clear();
     this.gridLines = null;
     this.tileMeshArray = [];
     this.towerChildrenArray = [];

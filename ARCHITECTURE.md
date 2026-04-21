@@ -1,294 +1,365 @@
 # Architecture — Novarise
 
+Card-driven turn-based tower-defense roguelite. Every combat encounter runs
+inside a Run — no standalone TD mode.
+
+## Routes
+
+All lazy-loaded. `gameLeaveGuard` is a functional `CanDeactivateFn` on `/play`.
+`devLibraryGuard` redirects `/library` → `/` when `environment.enableDevTools`
+is false.
+
+| Route | Module | Responsibility |
+|-------|--------|----------------|
+| `/` | `LandingModule` | Start / resume / editor entry point |
+| `/edit` | `EditorModule` (`games/novarise/`) | Map editor |
+| `/run` | `RunModule` | Run hub — node map, shop, reward, rest, event, summary |
+| `/play` | `GameModule` | Combat encounter view |
+| `/profile` | `ProfileModule` | Stats + achievements |
+| `/settings` | `SettingsModule` | Settings modal |
+| `/library` | `LibraryModule` | Codex (dev-gated) |
+
+Fallback `**` → `/`.
+
 ## Directory Map
 
 ```
 src/
 ├── app/
-│   ├── campaign/                      # Campaign mode (/campaign)
-│   │   ├── maps/                      # 16 hand-crafted maps: intro-maps, early-maps, mid-maps, late-maps
-│   │   ├── models/                    # campaign.model.ts (CampaignLevel, progress), challenge.model.ts
-│   │   ├── services/                  # CampaignService, CampaignMapService, ChallengeEvaluatorService
-│   │   ├── waves/                     # campaign-waves.ts (per-level wave defs), balance.spec.ts
-│   │   └── campaign.component.ts      # Level select UI
-│   ├── core/                          # App-wide singletons (survive all route transitions)
-│   │   ├── services/                  # Root-scoped services (index.ts barrel)
-│   │   │   └── error-handler, map-bridge, map-share, map-storage, map-template,
-│   │   │       player-profile, settings, storage, tutorial
-│   │   └── models/                    # map-schema.ts, map-template.model.ts (index.ts barrel)
-│   ├── game/                          # Tower defense game (/play, /maps)
+│   ├── core/                          # App-wide singletons (root-scoped via providedIn: 'root')
+│   │   ├── services/                  # map-bridge, map-share, map-storage, map-template,
+│   │   │                              #   player-profile, settings, storage, tutorial
+│   │   ├── guards/                    # dev-library.guard
+│   │   └── models/                    # map-schema, map-template
+│   ├── game/                          # /play combat encounter
 │   │   ├── game-board/
-│   │   │   ├── components/
-│   │   │   │   ├── game-hud/              # HUD display (lives, gold, wave, score, time)
-│   │   │   │   ├── game-results-overlay/  # Victory/defeat overlay (stars, score, challenges)
-│   │   │   │   ├── game-setup-panel/      # Pre-game setup (difficulty, modifiers, start)
-│   │   │   │   ├── tower-info-panel/      # Selected tower stats, upgrade, sell, spec
-│   │   │   │   └── tutorial-spotlight/    # Non-blocking tutorial cards
-│   │   │   ├── constants/             # 16 config files + index.ts barrel (see Constants Architecture)
-│   │   │   ├── models/                # tower, enemy, wave, game-state, score, modifier, wave-preview,
-│   │   │   │                          #   enemy-info (encyclopedia), tower-info (encyclopedia), endless-wave
-│   │   │   │                          #   index.ts barrel
-│   │   │   ├── services/              # 32 services (see Service Scopes)
-│   │   │   │   ├── enemy-mesh-factory.service.ts  # Enemy mesh creation (extracted from EnemyService)
-│   │   │   │   ├── enemy-visual.service.ts         # Status particles, animations, tints
-│   │   │   │   ├── game-input.service.ts            # Keyboard handling and hotkey management
-│   │   │   │   ├── tile-highlight.service.ts        # Tile heatmap highlighting for tower placement
-│   │   │   │   ├── tower-animation.service.ts       # Tower idle animations and tile pulse
-│   │   │   │   ├── range-visualization.service.ts   # Range ring and selection ring lifecycle
-│   │   │   │   └── tower-mesh-factory.service.ts    # Tower mesh creation (extracted from GameBoardService)
+│   │   │   ├── components/            # pile-inspector, last-turn-summary, game-hud,
+│   │   │   │                          #   tower-info-panel, card-hand, card-detail, ...
+│   │   │   ├── constants/             # 20+ config files (see Constants Architecture)
+│   │   │   ├── models/                # tower, enemy, wave, game-state, score, modifier,
+│   │   │   │                          #   encounter-checkpoint (v10), game-board-tile, …
+│   │   │   ├── services/              # 55+ component-scoped services
 │   │   │   ├── testing/               # Shared factories: test-board, test-enemy, test-spies
-│   │   │   └── utils/                 # coordinate-utils, min-heap, object-pool, spatial-grid, three-utils, assert-never
-│   │   ├── guards/                    # GameGuard — requires MapBridge loaded or ?quickplay=true
-│   │   ├── game-board.component.ts    # Main game renderer/loop (~2337 LOC)
-│   │   ├── game-board.component.html  # Template (~387 LOC, decomposed into 5 child components)
-│   │   ├── game-board.service.ts      # Board generation, path-block validation (~432 LOC)
-│   │   └── map-select/                # Map selection screen (/maps)
-│   ├── games/novarise/                # Map editor (/edit)
+│   │   │   └── utils/                 # coordinate-utils, min-heap, object-pool, spatial-grid, ...
+│   │   ├── guards/                    # game-leave.guard
+│   │   ├── game-board.component.ts    # Encounter coordinator (~1900 LOC)
+│   │   └── game-board.service.ts      # Board generation, tile mutation API
+│   ├── games/novarise/                # /edit map editor
 │   │   ├── constants/                 # editor-camera, editor-scene, editor-ui
-│   │   ├── core/                      # Editor-scoped services + index.ts barrel
-│   │   │   └── camera-control, edit-history, editor-notification, editor-scene,
-│   │   │       editor-state, path-validation, terrain-edit
-│   │   ├── features/
-│   │   │   ├── mobile-controls/       # VirtualJoystick, TouchDetection, MobileControlsModule
-│   │   │   ├── terrain-editor/        # TerrainGrid class + state interface
-│   │   │   └── ui-controls/           # EditControlsComponent
-│   │   ├── models/                    # terrain-types.enum.ts
-│   │   └── novarise.component.ts      # Editor renderer/interactions (~1513 LOC)
-│   ├── landing/                       # Landing page (/) — Campaign button + progress display
-│   ├── profile/                       # Player profile (/profile) — 26 achievements, 4 categories, settings
-│   └── shared/utils/                  # Reusable utilities: focus-trap.util.ts
-└── styles/                            # SCSS partials (split from global styles.css)
-    ├── _variables.scss                # All :root custom properties
-    ├── _base.scss                     # Reset, body, scrollbar, focus-visible, skip-link
-    ├── _animations.scss               # All @keyframes definitions
-    ├── _game-board.scss, _game-hud.scss, _game-overlays.scss  # Game styles
-    ├── _editor.scss, _editor-modals.scss                       # Editor styles
-    └── _landing.scss, _campaign.scss, _profile.scss, _pages.scss  # Page styles
+│   │   ├── core/                      # Editor-scoped services (index.ts barrel)
+│   │   ├── features/                  # mobile-controls, terrain-editor, ui-controls
+│   │   └── novarise.component.ts      # Editor renderer (~780 LOC)
+│   ├── library/                       # /library Codex (dev-gated)
+│   │   ├── components/                # library-filters, library-card-tile, card-detail-modal
+│   │   └── card-library.component.ts  # Codex page
+│   ├── run/                           # /run hub + run lifecycle
+│   │   ├── components/                # event-screen, reward-screen, shop-screen, rest-screen,
+│   │   │                              #   node-map, card-draft, run-summary, act-transition, …
+│   │   ├── constants/                 # card-definitions, run-events, modifier-stat, flag-keys, ...
+│   │   ├── models/                    # card, card-instance, run-state, node-map, relic, event
+│   │   ├── services/                  # 14 root-scoped services (see Run Subsystem)
+│   │   └── integration/               # cross-service round-trip specs (cartographer, highground,
+│   │                                  #   conduit, run-flow, card-flow, card-balance)
+│   ├── landing/                       # / landing page
+│   ├── profile/                       # /profile
+│   ├── settings/                      # /settings modal
+│   └── shared/                        # focus-trap util, icon component
+└── styles/                            # SCSS partials
+    ├── _variables.scss                # :root custom properties
+    ├── _base.scss                     # Reset, body, scrollbars, focus-visible
+    ├── _animations.scss               # @keyframes
+    └── ... game / editor / page partials
 ```
 
 ## Module Boundaries
 
-All routes lazy-loaded. `gameGuard` and `gameLeaveGuard` are functional guards (CanActivateFn/CanDeactivateFn).
+**`RunModule` (`/run`)** — no services; all run services are `providedIn: 'root'`
+so they survive `/run` ↔ `/play` transitions. See Run Subsystem.
 
-**`CampaignModule` (`/campaign`)** provides: `CampaignService`, `CampaignMapService`, `ChallengeEvaluatorService`
+**`GameModule` (`/play`)** provides:
+`GameBoardService`, `PathMutationService`, `ElevationService`, `LineOfSightService`,
+`TerraformMaterialPoolService`.
 
-**`GameModule` (`/play`)** provides: `GameBoardService`
+**`GameBoardComponent`** component-scoped providers (~40): `SceneService`,
+`EnemyService`, `TowerCombatService`, `CombatLoopService`, `WaveService`,
+`CardPlayService`, `TowerGraphService`, `LinkMeshService`, `StatusEffectService`,
+`BoardMeshRegistryService`, `TowerMeshLifecycleService`, `TowerPlacementService`,
+`TowerSelectionService`, `TurnHistoryService`, `WaveCombatFacadeService`,
+`TutorialFacadeService`, and the mesh / visual / audio / particle services.
 
-**`GameBoardComponent`** provides (component-scoped): `SceneService`, `EnemyService`, `EnemyVisualService`, `PathfindingService`, `GameStateService`, `WaveService`, `TowerCombatService`, `AudioService`, `ParticleService`, `ScreenShakeService`, `GoldPopupService`, `FpsCounterService`, `GameStatsService`, `DamagePopupService`, `MinimapService`, `TowerPreviewService`, `PathVisualizationService`, `StatusEffectService`, `TilePricingService`, `PriceLabelService`, `GameNotificationService`, `ChallengeTrackingService`, `GameEndService`, `GameSessionService`, `TowerInteractionService`, `CombatLoopService`, `TileHighlightService`, `TowerAnimationService`, `RangeVisualizationService`, `TowerMeshFactoryService`, `EnemyMeshFactoryService`, `GameInputService`
+**`EditorModule` (`/edit`)** provides the editor-scoped service graph under
+`games/novarise/core/`.
 
-**`EditorModule` (`/edit`)** provides: `PathValidationService`, `EditorSceneService`, `EditorNotificationService`, `TerrainEditService`, `EditorStateService`, `EditHistoryService`, `CameraControlService`
+**`LibraryModule` (`/library`)** provides: `LibraryFiltersComponent`,
+`LibraryCardTileComponent`, `CardDetailModalComponent` + the Codex page itself.
 
-**Root-scoped** (survive route transitions, all in `core/services/`): `MapBridgeService`, `SettingsService`, `PlayerProfileService`, `MapStorageService`, `MapShareService`, `MapTemplateService`, `StorageService`, `TutorialService`, `ErrorHandlerService`
+**Root-scoped services (survive all route transitions):**
+- `core/services/*` — `MapBridgeService`, `SettingsService`, `PlayerProfileService`,
+  `MapStorageService`, `MapShareService`, `MapTemplateService`, `StorageService`,
+  `TutorialService`, `SeenCardsService`
+- `run/services/*` — all 14 run services (see below)
+- `EncounterCheckpointService` (root, used by run + game)
 
-## Data Flow
+## Run Subsystem (`src/app/run/services/`)
+
+All 14 services are `providedIn: 'root'`. They survive route transitions so
+run state is preserved across `/run` ↔ `/play`. Explicit `reset()` on run end
+or new-run start (see red-team lessons below).
+
+| Service | Responsibility |
+|---------|----------------|
+| `RunService` | Central run orchestrator; `runState$` + `nodeMap$` BehaviorSubjects; start / encounter / reward / advance / end lifecycle; seeded run RNG via `createSeededRng(seed)` |
+| `DeckService` | 4-pile deck model (draw / hand / discard / exhaust); energy state; card play / draw / discard / exhaust / upgrade; archetype dominance query (`getDominantArchetype`) |
+| `CardEffectService` | Spell / modifier card effect resolution; active modifier list with wave- OR turn-countdown; `tickWave()` / `tickTurn()`; `tryConsumeLeakBlock()`, `tryConsumeTerraformRefund()`, `getMaxModifierEntryValue()` |
+| `RelicService` | Pull-model relic effects; cached `RelicModifiers` rebuilt on relic set change; trigger-based relics (`ARCHITECTS_BLUEPRINT`, `LUCKY_COIN`, `TUNING_FORK`, etc.) |
+| `EncounterService` | Node → `EncounterConfig`; loads map into `MapBridgeService` before `/play` navigation |
+| `EncounterCheckpointService` | Mid-encounter save/resume; localStorage persistence; version migration chain v1 → v10; corrupt-checkpoint detection |
+| `NodeMapGeneratorService` | Seeded node graph (mulberry32 RNG); 11 content rows + boss row; SHOP row 5, REST row 8 |
+| `WaveGeneratorService` | Procedural wave composition; depth-tiered pools; elite / boss presets |
+| `ItemService` | Consumable item inventory (HEAL, ENERGY_ELIXIR, …); phase-gated use |
+| `RunStateFlagService` | Per-run state flags (e.g., `MERCHANT_AIDED`); consumed one-shot event triggers |
+| `RunMapService` | `/run` → `/play` navigation bridge; preserves currentNodeId |
+| `RunEventBusService` | Pub-sub `Subject<RunEvent>` for cross-service events |
+| `RunPersistenceService` | localStorage run save/resume; keys: `novarise_run_state`, `novarise_run_map` |
+| `AscensionModifierService` | Ascension-level modifiers applied to encounter config (enemy HP, shop prices, starting relic downgrade, anti-heal, …) |
+
+## Save / Resume Architecture
+
+**Checkpoint current version:** 10 (declared in `game-board/models/encounter-checkpoint.model.ts`).
+
+**Auto-save:** Hook in `WaveCombatFacadeService.endTurn()` — saves after every
+`resolveTurn()`, clears on VICTORY / DEFEAT.
+
+**Manual save:** Pause menu "Save & Exit" → `CanDeactivate` observable → user
+confirmation → `EncounterCheckpointService.saveCheckpoint()`.
+
+**Restore flow** (in `GameBoardComponent.restoreFromCheckpoint`, ~20 steps):
+towers BEFORE enemies (pathfinding grid) → turn number BEFORE mortar zones
+(expiry) → graph overlay AFTER `towerGraphService.rebuild()` → GameState LAST
+(triggers UI subscribers).
+
+**Serializing services** (13): GameState, DeckService, CardEffectService,
+WaveService, TowerCombatService, EnemyService, StatusEffectService,
+CombatLoopService, RelicService, GameStatsService, ChallengeTrackingService,
+AscensionModifierService, WavePreviewService, ItemService, RunStateFlagService,
+ElevationService, PathMutationService, TowerGraphService.
+
+**Migration chain:** v1 → v2 → … → v10. Each migration adds the missing fields
+for the next version; stale fields are migrated forward, never deleted
+mid-chain. Structural validation guards against corrupt payloads.
+
+## Archetype Systems (Phases 2-4)
+
+Three spatial archetypes ship on this branch. All are turn-based. Siegeworks
+(Phase 5) is deferred — the archetype enum value + Codex filter chip exist;
+0 cards live in the pool.
+
+### Cartographer (Phase 2)
+**Mechanic:** reshape the board at runtime.
+
+- `PathMutationService` (component-scoped in GameModule) — tile CRUD:
+  `build`, `block`, `destroy`, `bridgehead`. Mutations tracked in a journal
+  with expiry; CARTOGRAPHER_SEAL anchors every mutation as permanent.
+- `PathfindingService.findLongestPath` for DETOUR routing.
+- Shared terraform tile material pool (`TerraformMaterialPoolService`) to
+  avoid per-tile material churn.
+- 8 cards, 2 relics.
+
+### Highground (Phase 3)
+**Mechanic:** per-tile elevation raises range / damage / exposes enemies.
+
+- `ElevationService` (component-scoped) — per-tile integer elevation; raise /
+  depress / collapse ops; journal-based expiry; max-elevation query for
+  KING_OF_THE_HILL.
+- Elevation composes into `composeDamageStack()` via passive range bonus,
+  HIGH_PERCH range, VANTAGE_POINT damage, KING_OF_THE_HILL damage.
+- `LineOfSightService` — elevation-aware LOS check for tower fire.
+- Exposed enemies take +25% damage on negative-elevation tiles
+  (`ELEVATION_CONFIG.EXPOSED_DAMAGE_BONUS`).
+- Cliff column meshes rendered via `TerraformMaterialPoolService` cliff
+  material entry.
+- 8 cards, 2 relics, 2 new enemies (TITAN elite, GLIDER), 1 boss
+  (WYRM_ASCENDANT).
+
+### Conduit (Phase 4)
+**Mechanic:** adjacency between towers — cluster / neighbor-gated bonuses.
+
+- `TowerGraphService` (component-scoped) — 4-dir adjacency graph; cluster
+  membership via union-find; virtual edges (CONDUIT_BRIDGE) with turn-based
+  expiry; disruption entries shrink clusters without topology changes.
+- `LinkMeshService` (component-scoped) — live Three.js mesh layer subscribing
+  to `edgesAdded$` / `edgesRemoved$` observables; shared materials disposed
+  once.
+- Neighbor-gated cards read `getNeighbors` / `getClusterSize` / cluster-member
+  aggregates in `composeDamageStack`.
+- ARCHITECT flag swaps neighbor-count source to `clusterSize - 1` for
+  HANDSHAKE / GRID_SURGE.
+- HIVE_MIND prepass: compose every tower's damage stack up-front, then the
+  per-tower fire loop picks MAX across cluster members. Upgraded tier also
+  propagates secondary stats (splash / chain / blast / DoT / status) from
+  the strongest member.
+- 8 cards, 2 relics.
+
+See `docs/design/conduit-adjacency-graph.md` for the Phase 4 design spike.
+
+## Card System
+
+**`CardDefinition`** (`run/models/card.model.ts`) — static lookup keyed by `CardId`.
+Effect dispatched via discriminated union: `TowerCardEffect`, `SpellCardEffect`,
+`ModifierCardEffect`, `UtilityCardEffect`, `TerraformTargetCardEffect`,
+`ElevationTargetCardEffect`.
+
+**`CardInstance`** — deck entry. Stores `{ instanceId, cardId, upgraded }` only;
+archetype / effect / cost all re-derived from `CARD_DEFINITIONS` at read time.
+`getActiveTowerEffect(card)` and `getEffectiveEnergyCost(card)` route through
+the upgrade flag.
+
+**Checkpoint:** only `cardId` + `instanceId` + `upgraded` are serialized.
+Archetype tagging and `upgradedEnergyCost` live on the static definition and
+need no migration when those fields change.
+
+**Archetype tagging:** `CardDefinition.archetype?: CardArchetype`. Defaults to
+`'neutral'` via `def.archetype ?? 'neutral'` in both `DeckService` and the
+Codex. Neutral cards (starter / draw / scout) omit the field.
+
+**Reward weighting:** `RunService.pickArchetypeAwareCard` — 60% dominant-
+archetype / 40% neutral, 0% other archetypes. Dominant archetype is the
+archetype with the most cards across all 4 piles; ties return `'neutral'`
+(anti-flapping). Used by both card-reward pools and the card section of
+`generateShopItems`.
+
+## Data Flow (run → combat → run)
 
 ```
-Editor (novarise.component.ts)
-  └─ MapStorageService (localStorage read/write)
-  └─ EditHistoryService (undo/redo commands)
-  └─ EditorStateService (BehaviorSubject tile grid)
-  └─ PathValidationService (BFS path check before save)
-        │
-        ▼  on "Play" → MapBridgeService.setMap()  [root-scoped, survives route transition]
-        │
-Game (game-board.component.ts)
-  └─ MapBridgeService.getMap() → board[row][col] layout
-  └─ GameStateService (phase: SETUP → COMBAT → INTERMISSION → …)
-  └─ GameBoardService (tile mesh creation, tower placement)
-  └─ EnemyService (A* pathfinding, spawn, movement, modifier effects)
-  └─ TowerCombatService (targeting, projectiles, spatial grid, object pool)
-  └─ WaveService (wave definitions, endless scaling)
-  └─ StatusEffectService (SLOW/BURN/POISON, immunity, speed restoration)
+RunService
+  └─ runState$ BehaviorSubject (phase, act, node, gold, lives, relics, deck)
+  └─ nodeMap$ BehaviorSubject
+
+RunHubComponent → click combat node
+  ↳ RunService.prepareEncounter()
+      ↳ EncounterService.prepareEncounter()
+          ↳ WaveGeneratorService.generateWaves()
+          ↳ MapBridgeService.setEditorMapState()
+  ↳ router.navigate(['/play'])
+
+GameBoardComponent.ngOnInit
+  ↳ MapBridgeService.getMap() → board[row][col]
+  ↳ DeckService.initializeDeck(runState.deckCardIds, seed)
+  ↳ RelicService.applyRelics(runState.relicIds)
+  ↳ CombatLoopService (turn loop coordinator)
+      ↳ player plays cards → CardPlayService dispatches effects
+      ↳ End Turn → CombatLoopService.resolveTurn
+          ↳ tickTurn across 6 services (elevation, path-mutation,
+            tower-graph, status-effect, card-effect, mortar-zone)
+          ↳ EnemyService.stepEnemiesOneTurn
+          ↳ TowerCombatService.fireTurn (composeDamageStack prepass)
+          ↳ CombatLoopService wave-complete check
+      ↳ Auto-save via WaveCombatFacadeService.endTurn → EncounterCheckpointService
+
+On VICTORY / DEFEAT
+  ↳ GameEndService.recordResult()
+  ↳ RunService.recordEncounterResult()
+  ↳ router.navigate(['/run'])
+      ↳ show reward screen (victory) or summary (defeat)
 ```
 
-State changes flow through `GameStateService` BehaviorSubjects. All consumers subscribe; no direct method calls between sibling services except through `GameBoardComponent` as coordinator.
+## `composeDamageStack()` (Phase 4 refactor)
 
-## Service Dependency Graph (critical paths)
+Central damage / range composition in `TowerCombatService.composeDamageStack`.
+Consumes a `DamageStackContext` built once per `fireTurn` and returns
+`{ damage, range, towerVantagePointDmgMult, towerKothMult }` per tower.
 
+Multiplier chain (damage):
 ```
-TowerCombatService
-  ├── EnemyService          (reads enemy positions/health, hit flash on damage)
-  ├── StatusEffectService   (applies BURN/POISON on hit)
-  ├── ParticleService       (VFX on kill/impact — delegated to CombatVFXService)
-  ├── AudioService          (SFX on fire/kill)
-  ├── GameStatsService      (kill tracking, score)
-  ├── TowerAnimationService (muzzle flash on fire)
-  └── CombatVFXService      (chain arcs, impact flashes, mortar blast zones)
-
-EnemyService
-  ├── StatusEffectService      (speed modifier reads)
-  ├── GameStateService         (leak → decrement lives)
-  ├── PathfindingService       (A* path computation, path cache, flying straight paths)
-  ├── EnemyMeshFactoryService  (mesh creation for all 8 enemy types)
-  └── EnemyVisualService       (status particles, animations, tints per frame)
-
-GameBoardComponent
-  ├── GameBoardService         (board mutations)
-  ├── GameStateService         (phase transitions)
-  ├── TowerCombatService       (combat loop)
-  ├── EnemyService             (spawn/move loop)
-  ├── WaveService              (wave start/end)
-  ├── GameInputService         (keyboard hotkeys)
-  ├── MinimapService           (canvas overlay)
-  ├── TowerPreviewService      (ghost tower hover)
-  ├── PathVisualizationService (V-key overlay)
-  ├── SceneService             (Three.js scene/camera/renderer/lights/post-processing)
-  ├── TowerInteractionService  (place/sell/upgrade business logic)
-  ├── GameEndService           (victory/defeat/quit recording, challenge evaluation)
-  ├── ChallengeTrackingService (goldSpent, towersPlaced, towerTypesUsed tracking)
-  └── GameSessionService       (service reset orchestration, campaign wave loading)
+baseStats.damage
+  × towerDamageMultiplier          (relic: universal damage)
+  × relicDamage                    (relic: per-tower-type damage)
+  × (1 + cardDamageBoost)          (card: DAMAGE_BOOST stack)
+  × sniperBoost                    (card: SNIPER_FOCUS — SNIPER only)
+  × cardDamageMult                 (card-placement override)
+  × pathLengthMultiplier           (card: LABYRINTH_MIND)
+  × vantagePointDmgMult            (card: VANTAGE_POINT — elevation ≥ 1)
+  × kothMult                       (card: KING_OF_THE_HILL — max-elevation towers)
+  × handshakeMult                  (card: HANDSHAKE — ≥ 1 neighbor)
+  × gridSurgeMult                  (card: GRID_SURGE — 4 neighbors)
+  × tuningForkMult                 (relic: TUNING_FORK — ≥ 1 neighbor)
 ```
+
+Range: additive `rangeAdditive` (FORMATION) folds INSIDE `(base + additive)`
+per spike §13, then standard multipliers (relic / card / elevation / HIGH_PERCH).
+
+HIVE_MIND is handled OUTSIDE the stack via a per-fireTurn prepass so every
+tower sees every cluster member's composed damage before firing.
 
 ## Constants Architecture
 
-`game/game-board/constants/` (16 files) — rendering/physics/combat configs, with `index.ts` barrel:
+`game/game-board/constants/` — 20+ files, partial `index.ts` barrel.
+Not every file is re-exported (`elevation.constants.ts`, `conduit.constants.ts`,
+`cartographer.constants.ts` are imported directly to keep the barrel from
+growing unbounded).
 
 | File | Contents |
 |------|----------|
 | `board`, `camera`, `rendering`, `lighting` | Board geometry, camera, Three.js renderer, lights |
-| `combat`, `physics`, `status-effect` | Attack rates, `PHYSICS_CONFIG` (1/60 timestep), SLOW/BURN/POISON |
-| `particle`, `effects`, `minimap`, `path` | VFX, bloom, minimap canvas, path overlay |
-| `audio`, `ui`, `preview`, `damage-popup`, `touch` | SFX volumes, HUD, ghost tower, popups, touch targets |
+| `combat`, `physics`, `status-effect` | Combat rules, 1/60 timestep, SLOW / BURN / POISON |
+| `particle`, `effects`, `minimap`, `path` | VFX, bloom, minimap, path overlay |
+| `audio`, `ui`, `preview`, `damage-popup`, `touch` | SFX, HUD, ghost tower, popups, touch targets |
+| `elevation` | Highground-archetype config (ELEVATION_CONFIG.EXPOSED_DAMAGE_BONUS, HIGH_PERCH threshold, cliff material color, GRAVITY_WELL tiers) |
+| `conduit` | Conduit-archetype config (cardinal-4 adjacency, FORMATION min line, LINKWORK fire-rate bonus, HIVE_MIND tier) |
+| `cartographer` | Cartographer-archetype config (DETOUR damage tier) |
 
-`game/game-board/models/` — model interfaces with `index.ts` barrel.
+**Rule:** Balance values (tower stats, enemy stats, wave defs, card costs)
+live in `models/*.model.ts` or `run/constants/card-definitions.ts`
+`CARD_VALUES`; game-side constants files mirror what the game services read
+to avoid cross-boundary imports from `run/constants` into `game/constants`.
 
-`core/services/` — root-scoped services with `index.ts` barrel.
+## Coordinate Systems
 
-`core/models/` — shared models (map-schema, map-template) with `index.ts` barrel.
+- **Editor:** `tiles[x][z]` — column-major, `x` = column, `z` = row
+- **Game:** `board[row][col]` — row-major
+- **World:** `{x, y, z}` with `y` = height
+- **Conversion:** `board[row][col] = editor.tiles[col][row]`
 
-`games/novarise/constants/` (3 files): `editor-camera`, `editor-scene`, `editor-ui`
+## Red-Team Lessons (cumulative)
 
-`games/novarise/core/` — editor services with `index.ts` barrel.
+Short reminders; long-form discussion in session memory docs.
 
-**Rule:** Balance values (tower stats, enemy stats, wave defs) live in `models/`, not `constants/`.
-
-## Campaign System
-
-**Route:** `/campaign` — lazy-loaded `CampaignModule`
-
-**Map library** (`campaign/maps/`): 16 hand-crafted maps across 5 tiers, each a `CampaignMap` extending `MapData`. Maps range from 10×10 (Intro) to 20×20 (Endgame) with 1–4 spawners and 1–4 exits.
-
-| File | Maps | Tier |
-|------|------|------|
-| `intro-maps.ts` | First Light, The Bend, Serpentine, The Fork | Levels 1–4 |
-| `early-maps.ts` | Twin Gates, Open Ground, The Narrows, Crystal Maze | Levels 5–8 |
-| `mid-maps.ts` | Crossfire, The Spiral, Siege, Labyrinth | Levels 9–12 |
-| `late-maps.ts` | Fortress, Gauntlet, Storm, Novarise | Levels 13–16 |
-
-**Wave definitions** (`campaign/waves/campaign-waves.ts`): Per-level wave arrays (6–12 waves each) with tier-appropriate enemy rosters. `balance.spec.ts` contains 69 assertions codifying game economics.
-
-**Services:**
-- `CampaignService` — progress tracking, level unlock gates, localStorage persistence (root-scoped via `CampaignModule`)
-- `CampaignMapService` — map lookup by level index, `CampaignMap` → `MapData` bridging
-- `ChallengeEvaluatorService` — evaluates 32 challenges (6 types: NoDamage, SpeedRun, LimitedTowers, GoldEfficiency, PerfectWaves, NoSlow) across all 16 maps
-
-**Models** (`campaign/models/`):
-- `campaign.model.ts` — `CampaignLevel`, `CampaignProgress`, `CampaignMap`, unlock gate logic
-- `challenge.model.ts` — `ChallengeDefinition`, `ChallengeResult`, 6 `ChallengeType` variants
-
-**Endless mode** (`game-board/models/endless-wave.model.ts`): 7 wave templates with boss milestones at waves 5/10/15/20, score streak bonuses, and difficulty-scaled enemy rosters beyond wave 10.
-
-**Tutorial** (`game-board/services/tutorial.service.ts`): 6-step onboarding + 3 strategy tips (gated to game 2+), localStorage persistence, injected into `GameBoardComponent`.
-
-**Encyclopedia** (`game-board/models/enemy-info.model.ts`, `tower-info.model.ts`): Tabbed panel (Enemies/Towers) toggled with E key. Enemy tab: stats, weaknesses, lore. Tower tab: all 6 types with stats, descriptions, L3 specialization branches. Wave preview shows tactical badges (immunities, splits, shield HP, leak damage).
-
-**Achievement categories** (`achievement.model.ts`): 26 achievements across 4 categories: Combat, Campaign, Endless, Challenge. Threshold constants and helper functions extracted from `PlayerProfileService` into a dedicated model file.
-
-## Ascent Mode (Roguelite Shell)
-
-**Route:** `/ascent` — lazy-loaded `AscentModule`
-
-**Module structure:**
-- `AscentComponent` — root coordinator with view mode state machine (`start` | `map` | `reward` | `shop` | `rest` | `event` | `act-transition` | `summary`)
-- `NodeMapComponent` — SVG node map rendering with bezier-curve connections and absolute-positioned node buttons
-- `RewardScreenComponent` — post-combat relic choice (pick one of 3, or skip)
-- `ShopScreenComponent` — relic shop + per-life healing
-- `RestScreenComponent` — campfire heal with CSS-only fire animation
-- `EventScreenComponent` — narrative choice events with outcome panel
-- `ActTransitionComponent` — act completion overlay showing boss name and act stats
-- `RunSummaryComponent` — end-of-run stats: score, kills, gold, timeline, relic strip
-- `RelicInventoryComponent` — compact relic bar with mouse-position-clamped tooltips
-
-**Services (all root-scoped via `providedIn: 'root'`, survive `/ascent` ↔ `/play` transitions):**
-- `RunService` — central run orchestrator; BehaviorSubject state for `runState$` and `nodeMap$`; manages full lifecycle: start → encounter → reward → advance → end
-- `RelicService` — pull-model relic effects; cached `RelicModifiers` rebuilt only when relic set changes; trigger-based relics (`ARCHITECTS_BLUEPRINT`, `REINFORCED_WALLS`, `LUCKY_COIN`) handled separately
-- `NodeMapGeneratorService` — deterministic seeded node graph (mulberry32 RNG); 11 content rows + boss row; SHOP guaranteed row 5, REST guaranteed row 8
-- `WaveGeneratorService` — procedural wave composition with depth-tiered enemy pools; elite nodes inject a BOSS wave; boss nodes use themed presets from `boss-presets.ts`
-- `EncounterService` — node → `EncounterConfig` orchestration; loads campaign map into `MapBridgeService` before `/play` navigation
-- `RunEventBusService` — pub-sub `Subject<RunEvent>` for cross-service events (encounter start/end, wave, kills, gold)
-- `RunPersistenceService` — localStorage save/resume; keys: `novarise_ascent_run`, `novarise_ascent_map`, `novarise_ascent_max_ascension`
-
-**Constants** (`ascent/constants/ascent.constants.ts`):
-- `NODE_MAP_CONFIG` — row counts, node type weights, guaranteed row positions, elite row bounds
-- `ENCOUNTER_CONFIG` — wave counts per encounter type, enemy scaling, elite/boss health/gold multipliers
-- `REWARD_CONFIG` — gold base/per-row, relic choice counts, elite/boss gold reward multipliers
-- `SHOP_CONFIG` — relic count, price by rarity, heal cost/limit
-- `REST_CONFIG` — heal percentage (0.3), minimum heal (2)
-- `RUN_CONFIG` — seed primes for resume/act progression, score per kill, min starting gold/lives
-- `RELIC_EFFECT_CONFIG` — non-obvious relic numeric values (IRON_HEART bonus, LUCKY_COIN probability/multiplier, tower-specific multipliers)
-- `createSeededRng(seed)` — mulberry32 PRNG returning `[0, 1)` floats
-
-**Integration points with existing game:**
-- `TowerCombatService`: reads `RelicService.getDamageMultiplier()`, `getFireRateMultiplier()`, `getRangeMultiplier()`, `getSplashRadiusMultiplier()`, `getChainBounceBonus()`, `rollLuckyCoin()`
-- `CombatLoopService`: reads `RelicService.getGoldMultiplier()`, `shouldBlockLeak()`, emits `RunEventBusService` events
-- `TowerInteractionService`: reads `RelicService.getTowerCostMultiplier()`, `getUpgradeCostMultiplier()`, `getSellRefundRate()`, `isNextTowerFree()` / `consumeFreeTower()`
-- `EnemyService`: reads `RelicService.getEnemySpeedMultiplier()`, `getSpawnIntervalMultiplier()`
-- `GameStateService`: ascension modifier effects applied via `EncounterConfig`; `setInitialLives()` receives lives from `RunState`
-- `GameBoardComponent`: calls `RunService.recordEncounterResult()` on victory/defeat; reads `EncounterConfig` for wave definitions
-
-**Data flow:**
-```
-AscentComponent → RunService.prepareEncounter()
-  → EncounterService.prepareEncounter() + loadEncounterMap()
-      → WaveGeneratorService (waves)
-      → CampaignMapService.loadLevel() → MapBridgeService.setEditorMapState()
-  → navigate /play
-      → GameBoardComponent reads map + encounter waves
-      → on finish → RunService.recordEncounterResult()
-  → navigate /ascent
-      → AscentComponent.handleEncounterReturn()
-          → RunService.consumePendingEncounterResult()
-          → victory: show reward screen; defeat: show summary
-```
-
-## Extracted Services (hardening history)
-
-Services extracted from the god component and oversized services over multiple hardening branches:
-
-| Service | LOC | Extracted From | Responsibility |
-|---------|-----|----------------|----------------|
-| `GameEndService` | ~180 | `game-board.component.ts` | Victory/defeat/quit recording, `gameEndRecorded` guard, `buildGameEndStats`, challenge evaluation + campaign completion |
-| `ChallengeTrackingService` | ~80 | `game-board.component.ts` | Accumulates `totalGoldSpent`, `maxTowersPlaced`, `towerTypesUsed` during gameplay |
-| `GameSessionService` | ~120 | `game-board.component.ts` | `resetAllServices()` orchestration across all game services, campaign wave loading |
-| `PathfindingService` | ~200 | `enemy.service.ts` | A* with MinHeap, path cache, straight-line paths for flying enemies |
-| `CombatVFXService` | ~115 | `tower-combat.service.ts` | Chain arcs, impact flashes, mortar blast zone meshes |
-| `SceneService` | ~459 | `game-board.component.ts` | Three.js scene, camera, renderer, lights, post-processing, skybox, particles, GLSL shaders |
-| `TowerInteractionService` | ~252 | `game-board.component.ts` | Tower place/sell/upgrade business logic with path-block + affordability validation |
-| `EnemyMeshFactoryService` | ~234 | `enemy.service.ts` | Enemy mesh creation for all 8 types (hardening-viii S26) |
-| `EnemyVisualService` | ~312 | `enemy.service.ts` | Status particles, animations, tints per frame (hardening-viii S27) |
-| `GameInputService` | ~90 | `game-board.component.ts` | Keyboard handling and hotkey management (hardening-viii S8) |
-| `TerrainEditService` | ~291 | `novarise.component.ts` | Terrain editing logic — brush, flood-fill, rectangle, clear (hardening-viii S19) |
-| `AchievementModel` | — | `player-profile.service.ts` | 26 achievement definitions, threshold constants, helper functions (now in `achievement.model.ts`) |
+- Root-scoped services (CardEffectService, DeckService, RelicService,
+  TowerGraphService via `GameSessionService`) survive route transitions —
+  MUST be explicitly reset between encounters.
+- Capture mutable state into locals BEFORE calling methods that null it
+  (tryPlaceTower pattern).
+- GameState must track its own maxLives / initialLives — never derive from
+  DIFFICULTY_PRESETS in run mode.
+- DeckService pile searches must include ALL 4 piles (drawPile, hand,
+  discardPile, exhaustPile).
+- Restore ordering: towers BEFORE enemies (pathfinding grid), turn number
+  BEFORE mortar zones (expiry), GameState LAST (triggers UI subscribers).
+- `DeckService.resetForEncounter()` must NOT be called during restore —
+  it reshuffles the deck.
+- `GameStateService.setPhase()` has transition validation — use
+  `restoreFromCheckpoint()` which bypasses it.
+- Per-wave / per-encounter flags (RelicService.firstLeakBlockedThisWave,
+  CardEffectService.TERRAFORM_REFUND_USED_THIS_TURN) must be serialized
+  or ride in `cardModifiers` to avoid double-trigger after restore.
+- Cross-service composition on shared `GameBoardTile` fields is latent:
+  per-service unit specs cannot see it. `setTileType` / `placeTower` /
+  `removeTower` MUST preserve every read-only field of the existing tile,
+  not just reconstruct from the factory.
+- When a component's `providers:` list hosts peer services, sibling services
+  must live there too — NOT in the module. Flat TestBeds hide
+  `NullInjectorError` that only fires in the browser.
+- Tier-sentinel modifiers (TERRAFORM_ANCHOR, HIVE_MIND_CLUSTER_MAX) must
+  gate on `getMaxModifierEntryValue`, NOT `getModifierValue` aggregate —
+  two base-tier copies (aggregate = 2) otherwise spoof the upgraded tier.
 
 ## File Size Reference
 
-Files over 500 LOC — be careful editing these, they are dense:
+Files over 500 LOC — dense, edit carefully:
 
-| File | LOC | Notes |
-|------|-----|-------|
-| `game-board/game-board.component.ts` | ~2337 | Main coordinator — delegates to CombatLoopService, GameInputService |
-| `games/novarise/novarise.component.ts` | ~1513 | Editor coordinator — delegates to EditorSceneService, TerrainEditService |
-| `services/enemy.service.ts` | ~798 | Spawn + movement + death/hit/shield (mesh in EnemyMeshFactory, visuals in EnemyVisual) |
-| `services/tower-combat.service.ts` | ~862 | Targeting + projectiles + per-tower visuals (VFX in CombatVFXService) |
-| `services/scene.service.ts` | ~459 | Game Three.js infrastructure |
-| `core/editor-scene.service.ts` | ~463 | Editor Three.js infrastructure |
-| `game-board/game-board.service.ts` | ~432 | Board gen + path-block BFS |
-| `services/enemy-visual.service.ts` | ~312 | Status particles, animations, tints (extracted from EnemyService) |
-| `services/enemy-mesh-factory.service.ts` | ~234 | Enemy mesh creation (extracted from EnemyService) |
-| `games/novarise/core/terrain-edit.service.ts` | ~291 | Terrain editing logic (extracted from novarise.component.ts) |
-| `services/combat-loop.service.ts` | ~250 | Physics stepping, kill/leak/wave processing |
-| `services/tower-mesh-factory.service.ts` | ~300 | Tower mesh creation (extracted from GameBoardService) |
-| `services/game-input.service.ts` | ~90 | Keyboard handling and hotkey management |
-| `services/tile-highlight.service.ts` | ~204 | Tile heatmap highlighting for tower placement |
-| `services/range-visualization.service.ts` | ~135 | Range ring and selection ring lifecycle |
-| `services/tower-animation.service.ts` | ~155 | Tower idle animations, tile pulse, muzzle flash |
+| File | LOC |
+|------|-----|
+| `game-board/game-board.component.ts` | ~1900 |
+| `game-board/services/tower-combat.service.ts` | ~1190 |
+| `game-board/services/enemy.service.ts` | ~1120 |
+| `games/novarise/novarise.component.ts` | ~780 |

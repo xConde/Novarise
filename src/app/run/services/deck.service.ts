@@ -1,15 +1,18 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import {
+  CardArchetype,
   CardId,
   CardInstance,
   DECK_CONFIG,
   DeckState,
   EnergyState,
 } from '../models/card.model';
-import { getCardDefinition } from '../constants/card-definitions';
+import { getCardDefinition, getEffectiveEnergyCost } from '../constants/card-definitions';
 import { SeededRng, createSeededRng } from '../constants/run.constants';
 import { SerializableDeckState } from '../../game/game-board/models/encounter-checkpoint.model';
+import { RelicService } from './relic.service';
+import { SeenCardsService } from '../../core/services/seen-cards.service';
 
 /**
  * DeckService — deck management for Ascent Mode encounters.
@@ -37,6 +40,11 @@ export class DeckService {
   readonly deckState$: Observable<DeckState> = this.deckStateSubject.asObservable();
   readonly energy$: Observable<EnergyState> = this.energySubject.asObservable();
 
+  constructor(
+    @Optional() private relicService: RelicService | null = null,
+    @Optional() private seenCardsService: SeenCardsService | null = null,
+  ) {}
+
   // ── Lifecycle ─────────────────────────────────────────────
 
   /** Initialize deck from card IDs (run start). */
@@ -51,6 +59,8 @@ export class DeckService {
       exhaustPile: [],
     };
     this.energyState = { current: 0, max: DECK_CONFIG.baseEnergy };
+    // Starter deck counts as "seen" — every cardId in the initial deck.
+    this.seenCardsService?.markSeenMany(cardIds);
     this.emit();
   }
 
@@ -163,7 +173,8 @@ export class DeckService {
 
     const card = this.deckState.hand[index];
     const def = getCardDefinition(card.cardId);
-    const cost = def.energyCost;
+    const costModifier = this.relicService ? this.relicService.getCardEnergyCostModifier(def) : 0;
+    const cost = Math.max(0, getEffectiveEnergyCost(card) + costModifier);
 
     if (this.energyState.current < cost) return false;
 
@@ -207,6 +218,7 @@ export class DeckService {
       drawPile: this.deckState.drawPile.slice(1),
       hand: [...this.deckState.hand, drawn],
     };
+    this.seenCardsService?.markSeen(drawn.cardId);
     return true;
   }
 
@@ -217,6 +229,7 @@ export class DeckService {
       ...this.deckState,
       discardPile: [...this.deckState.discardPile, instance],
     };
+    this.seenCardsService?.markSeen(cardId);
     this.emit();
   }
 
@@ -268,6 +281,36 @@ export class DeckService {
       ...this.deckState.discardPile,
       ...this.deckState.exhaustPile,
     ];
+  }
+
+  /**
+   * Phase 1 Sprint 8 — return the spatial archetype with the most cards in
+   * the deck. Returns `'neutral'` when:
+   *   - the deck is empty
+   *   - the deck has no archetype-tagged cards
+   *   - two or more archetypes are tied for the lead (avoids the run flapping
+   *     between archetypes on a single card pickup)
+   *
+   * Used by RunService to weight the reward pool toward the dominant archetype
+   * (60% archetype-aligned / 40% neutral). Excluded from the count: STARTER
+   * cards (these are universal and shouldn't bias the early run) and any
+   * card whose archetype is `'neutral'`.
+   */
+  getDominantArchetype(): CardArchetype {
+    const counts: Partial<Record<CardArchetype, number>> = {};
+    for (const instance of this.getAllCards()) {
+      const def = getCardDefinition(instance.cardId);
+      const archetype: CardArchetype = def.archetype ?? 'neutral';
+      if (archetype === 'neutral') continue;
+      counts[archetype] = (counts[archetype] ?? 0) + 1;
+    }
+
+    const entries = Object.entries(counts) as Array<[CardArchetype, number]>;
+    if (entries.length === 0) return 'neutral';
+
+    entries.sort((a, b) => b[1] - a[1]);
+    if (entries.length >= 2 && entries[0][1] === entries[1][1]) return 'neutral';
+    return entries[0][0];
   }
 
   /** Get current energy state. */

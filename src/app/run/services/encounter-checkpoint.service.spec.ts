@@ -65,7 +65,7 @@ function createTestCheckpoint(overrides: Partial<EncounterCheckpoint> = {}): Enc
       instanceCounter: 5,
     },
     cardModifiers: [],
-    relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+    relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false, orogenyTurnCounter: 0 },
     gameStats: {
       totalGoldEarned: 100,
       totalDamageDealt: 500,
@@ -86,6 +86,9 @@ function createTestCheckpoint(overrides: Partial<EncounterCheckpoint> = {}): Enc
     turnHistory: [],
     itemInventory: { entries: [] } as SerializedItemInventory,
     runStateFlags: { entries: [], consumedEventIds: [] },
+    pathMutations: { mutations: [], nextId: 0 },
+    tileElevations: { elevations: [], changes: [], nextId: 0 },
+    towerGraph: { virtualEdges: [], disruptedUntil: [] },
     ...overrides,
   };
 }
@@ -373,7 +376,7 @@ describe('EncounterCheckpointService', () => {
       expect(service.hasCheckpoint()).toBeFalse();
     });
 
-    it('passes validation for a valid full v7 checkpoint with itemInventory and runStateFlags', () => {
+    it('passes validation for a valid full v9 checkpoint with all required fields', () => {
       const checkpoint = createTestCheckpoint();
       service.saveCheckpoint(checkpoint);
 
@@ -451,6 +454,251 @@ describe('EncounterCheckpointService', () => {
       const loaded = service.loadCheckpoint();
 
       expect(loaded).toBeNull();
+    });
+
+    it('returns null when pathMutations is missing (v8 requirement)', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data: Record<string, any> = { ...createTestCheckpoint() };
+      delete data['pathMutations'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('returns null when pathMutations.mutations is not an array', () => {
+      const data = {
+        ...createTestCheckpoint(),
+        pathMutations: { mutations: 'bad', nextId: 0 },
+      };
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('returns null when tileElevations is missing (v9 requirement)', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data: Record<string, any> = { ...createTestCheckpoint() };
+      delete data['tileElevations'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('returns null when tileElevations.elevations is not an array', () => {
+      const data = {
+        ...createTestCheckpoint(),
+        tileElevations: { elevations: 'bad', changes: [], nextId: 0 },
+      };
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('returns null when tileElevations.changes is not an array', () => {
+      const data = {
+        ...createTestCheckpoint(),
+        tileElevations: { elevations: [], changes: 'bad', nextId: 0 },
+      };
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+  });
+
+  describe('loadCheckpoint() v7 → v8 migration', () => {
+    it('migrates v7 checkpoint to v8 by inserting empty pathMutations', () => {
+      // Build a v7 checkpoint (no pathMutations field)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v7Data: Record<string, any> = {
+        ...createTestCheckpoint(),
+        version: 7,
+        // pathMutations intentionally absent — simulating a pre-v8 save
+      };
+      delete v7Data['pathMutations'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v7Data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.version).toBe(CHECKPOINT_VERSION);
+      expect(loaded!.pathMutations).toBeDefined();
+      expect(loaded!.pathMutations.mutations.length).toBe(0);
+      expect(loaded!.pathMutations.nextId).toBe(0);
+    });
+
+    it('v7 checkpoint after migration passes structural validation', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v7Data: Record<string, any> = {
+        ...createTestCheckpoint(),
+        version: 7,
+      };
+      delete v7Data['pathMutations'];
+      delete v7Data['tileElevations'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v7Data));
+
+      const loaded = service.loadCheckpoint();
+
+      // Should pass validation and not return null
+      expect(loaded).not.toBeNull();
+    });
+  });
+
+  describe('loadCheckpoint() v8 → v9 migration', () => {
+    it('migrates v8 checkpoint to v9 by inserting empty tileElevations', () => {
+      // Build a v8 checkpoint (no tileElevations field)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v8Data: Record<string, any> = {
+        ...createTestCheckpoint(),
+        version: 8,
+        // tileElevations intentionally absent — simulating a pre-v9 save
+      };
+      delete v8Data['tileElevations'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v8Data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.version).toBe(CHECKPOINT_VERSION);
+      expect(loaded!.tileElevations).toBeDefined();
+      expect(loaded!.tileElevations.elevations.length).toBe(0);
+      expect(loaded!.tileElevations.changes.length).toBe(0);
+      expect(loaded!.tileElevations.nextId).toBe(0);
+    });
+
+    it('v8 checkpoint after migration passes structural validation', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v8Data: Record<string, any> = {
+        ...createTestCheckpoint(),
+        version: 8,
+      };
+      delete v8Data['tileElevations'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v8Data));
+
+      const loaded = service.loadCheckpoint();
+
+      // Should pass validation and not return null
+      expect(loaded).not.toBeNull();
+    });
+
+    it('tileElevations round-trips correctly when populated', () => {
+      const checkpoint = createTestCheckpoint({
+        tileElevations: {
+          elevations: [{ row: 3, col: 4, value: 2 }],
+          changes: [],
+          nextId: 1,
+        },
+      });
+
+      service.saveCheckpoint(checkpoint);
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.tileElevations.elevations.length).toBe(1);
+      expect(loaded!.tileElevations.elevations[0]).toEqual({ row: 3, col: 4, value: 2 });
+      expect(loaded!.tileElevations.nextId).toBe(1);
+    });
+  });
+
+  describe('loadCheckpoint() v9 → v10 migration (Conduit)', () => {
+    it('migrates v9 checkpoint to v10 by inserting empty towerGraph', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v9Data: Record<string, any> = {
+        ...createTestCheckpoint(),
+        version: 9,
+      };
+      delete v9Data['towerGraph'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v9Data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.version).toBe(CHECKPOINT_VERSION);
+      expect(loaded!.towerGraph).toBeDefined();
+      expect(loaded!.towerGraph.virtualEdges.length).toBe(0);
+      expect(loaded!.towerGraph.disruptedUntil.length).toBe(0);
+    });
+
+    it('v9 checkpoint after migration passes structural validation', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v9Data: Record<string, any> = {
+        ...createTestCheckpoint(),
+        version: 9,
+      };
+      delete v9Data['towerGraph'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v9Data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+    });
+
+    it('returns null when towerGraph is missing (v10 requirement)', () => {
+      const checkpoint = createTestCheckpoint();
+      const data = JSON.parse(JSON.stringify(checkpoint));
+      delete data['towerGraph'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('returns null when towerGraph.virtualEdges is not an array', () => {
+      const checkpoint = createTestCheckpoint({
+        towerGraph: { virtualEdges: 'bad' as unknown as [], disruptedUntil: [] },
+      });
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(checkpoint));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('returns null when towerGraph.disruptedUntil is not an array', () => {
+      const checkpoint = createTestCheckpoint({
+        towerGraph: { virtualEdges: [], disruptedUntil: 'bad' as unknown as [] },
+      });
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(checkpoint));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('towerGraph round-trips correctly when populated', () => {
+      const checkpoint = createTestCheckpoint({
+        towerGraph: {
+          virtualEdges: [
+            { aRow: 1, aCol: 2, bRow: 5, bCol: 6, expiresOnTurn: 12, sourceId: 'conduit_bridge_1' },
+          ],
+          disruptedUntil: [
+            { key: '3-3', untilTurn: 10, sourceId: 'disruptor_7' },
+          ],
+        },
+      });
+
+      service.saveCheckpoint(checkpoint);
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.towerGraph.virtualEdges.length).toBe(1);
+      expect(loaded!.towerGraph.virtualEdges[0]).toEqual({
+        aRow: 1, aCol: 2, bRow: 5, bCol: 6, expiresOnTurn: 12, sourceId: 'conduit_bridge_1',
+      });
+      expect(loaded!.towerGraph.disruptedUntil.length).toBe(1);
+      expect(loaded!.towerGraph.disruptedUntil[0]).toEqual({
+        key: '3-3', untilTurn: 10, sourceId: 'disruptor_7',
+      });
     });
   });
 });

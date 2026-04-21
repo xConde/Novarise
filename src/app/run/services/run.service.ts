@@ -50,8 +50,9 @@ import { RunPersistenceService } from './run-persistence.service';
 import { RunEventBusService, RunEventType } from './run-event-bus.service';
 import { RUN_EVENTS } from '../constants/run-events';
 import { PlayerProfileService } from '../../core/services/player-profile.service';
+import { SeenCardsService } from '../../core/services/seen-cards.service';
 import { getStarterDeck, CARD_DEFINITIONS } from '../constants/card-definitions';
-import { CardId, CardInstance, CardRarity } from '../models/card.model';
+import { CardArchetype, CardId, CardInstance, CardRarity } from '../models/card.model';
 import { EncounterCheckpointService } from './encounter-checkpoint.service';
 
 /**
@@ -96,6 +97,14 @@ export class RunService {
   /** RNG seeded per-run, advanced by each random action. */
   private runRng: SeededRng | null = null;
 
+  /**
+   * Last dominant archetype surfaced on a reward screen this run. Null before
+   * the first reward screen or after run teardown. Drives the chip flip
+   * animation: the next generateRewards() compares current vs this and passes
+   * the delta through RewardScreenConfig.previousDominantArchetype.
+   */
+  private lastShownDominantArchetype: CardArchetype | null = null;
+
   constructor(
     private nodeMapGenerator: NodeMapGeneratorService,
     private encounterService: EncounterService,
@@ -107,6 +116,7 @@ export class RunService {
     private eventBus: RunEventBusService,
     private playerProfile: PlayerProfileService,
     private encounterCheckpointService: EncounterCheckpointService,
+    private seenCards: SeenCardsService,
   ) {}
 
   // ── Queries ─────────────────────────────────────────────
@@ -194,6 +204,17 @@ export class RunService {
     }
   }
 
+  /**
+   * Phase 1 closer (Finding 3) — public bridge to the seeded run RNG.
+   * Returns a [0, 1) random number from the run PRNG when one is active,
+   * else falls back to {@link Math.random}. Used by component-scoped services
+   * (e.g. CardPlayService) that need deterministic randomness without exposing
+   * the SeededRng instance itself. Calling this advances the run PRNG state.
+   */
+  nextRandom(): number {
+    return this.runRng ? this.runRng.next() : Math.random();
+  }
+
   // ── Run Lifecycle ───────────────────────────────────────
 
   /** Start a new run with a fresh seed. */
@@ -213,6 +234,7 @@ export class RunService {
     this.shopItems = [];
     this.currentEvent = null;
     this.runRng = null;
+    this.lastShownDominantArchetype = null;
 
     const seed = Date.now();
     const config = this.applyAscensionToConfig(DEFAULT_RUN_CONFIG, ascensionLevel);
@@ -451,6 +473,18 @@ export class RunService {
     // Pick cards weighted by rarity (skip call entirely when 0 cards due).
     const cardChoices = cardCount > 0 ? this.pickCardRewards(this.computeCardChoiceCount(cardCount), rng) : [];
 
+    // Phase 2 Sprint 10.5 — snapshot the dominant archetype at reward-
+    // generation time so the chip reflects the state that shaped the pool.
+    // Reading from DeckService live at render time would desync after a
+    // card pick (new card shifts the dominant archetype while the screen
+    // is still showing the pre-pick rewards).
+    const dominantArchetype = this.deckService.getDominantArchetype();
+    // Phase 3 prep — pass the prior screen's archetype through so the chip
+    // can fire a flip animation when the player transitions archetypes
+    // between rewards. Null on the first reward screen of a run.
+    const previousDominantArchetype = this.lastShownDominantArchetype;
+    this.lastShownDominantArchetype = dominantArchetype;
+
     return {
       goldPickup,
       relicChoices,
@@ -458,6 +492,8 @@ export class RunService {
       bonusRewards: [],
       completedChallenges,
       nodeType: encounter?.nodeType ?? NodeType.COMBAT,
+      dominantArchetype,
+      previousDominantArchetype,
     };
   }
 
@@ -492,16 +528,63 @@ export class RunService {
       { rarity: CardRarity.RARE, weight: REWARD_RARITY_WEIGHTS.rare },
     ];
 
+    // Phase 1 Sprint 8 — archetype-aware pool. When the deck has a dominant
+    // spatial archetype, weight the candidate pool toward that archetype
+    // (60% archetype-aligned / 40% neutral). Neutral dominant → no biasing.
+    //
+    // NOTE: pickCardRewards re-queries getDominantArchetype() so it stays
+    // consistent with the rarely-used code paths that call it directly.
+    // generateRewards() queries it once separately for the RewardScreenConfig
+    // snapshot — both reads hit the same deck state so they agree.
+    const dominant = this.deckService.getDominantArchetype();
+
     const picked: CardReward[] = [];
     for (let i = 0; i < count; i++) {
       const rarity = this.pickWeightedRarity(rarityWeights, byRarity, rng);
       const pool = byRarity[rarity];
       if (pool.length === 0) continue;
-      const card = pool[Math.floor(rng() * pool.length)];
+      const card = this.pickArchetypeAwareCard(pool, dominant, rng);
       picked.push({ type: 'card', cardId: card.id });
     }
 
+    // Every offered card counts as seen — QA user wants "what haven't I
+    // encountered yet?" not "what did I keep".
+    this.seenCards.markSeenMany(picked.map(r => r.cardId));
+
     return picked;
+  }
+
+  /**
+   * Phase 1 Sprint 8 — pick a single card from `pool` biased toward the
+   * dominant archetype when one is set. Implementation:
+   *   - Dominant === 'neutral' → uniform pick across pool.
+   *   - Otherwise: 60% chance pick from archetype-tagged subset, 40% neutral
+   *     subset. Falls back to uniform when the chosen subset is empty
+   *     (e.g. no rare archetype cards exist yet).
+   *
+   * Re-used from `pickCardRewards` and the card section of `generateShopItems`
+   * so both reward surfaces feel coherent during a run.
+   */
+  private pickArchetypeAwareCard<T extends { archetype?: CardArchetype }>(
+    pool: T[],
+    dominant: CardArchetype,
+    rng: () => number,
+  ): T {
+    if (dominant === 'neutral' || pool.length === 0) {
+      return pool[Math.floor(rng() * pool.length)];
+    }
+
+    const archetypeMatches = pool.filter(c => c.archetype === dominant);
+    const neutralMatches = pool.filter(c => (c.archetype ?? 'neutral') === 'neutral');
+    const wantArchetype = rng() < 0.6;
+    const preferred = wantArchetype ? archetypeMatches : neutralMatches;
+    if (preferred.length > 0) {
+      return preferred[Math.floor(rng() * preferred.length)];
+    }
+    // Preferred subset empty → fall back to the other subset, or full pool.
+    const fallback = wantArchetype ? neutralMatches : archetypeMatches;
+    if (fallback.length > 0) return fallback[Math.floor(rng() * fallback.length)];
+    return pool[Math.floor(rng() * pool.length)];
   }
 
   /** Collect a reward (relic, gold, card, or item). */
@@ -626,6 +709,8 @@ export class RunService {
       { rarity: CardRarity.RARE, weight: REWARD_RARITY_WEIGHTS.rare },
     ];
     const pickedCardIds = new Set<CardId>();
+    // Phase 1 Sprint 8 — same archetype-aware selection used by combat rewards.
+    const dominant = this.deckService.getDominantArchetype();
     for (let i = 0; i < cardsInShop; i++) {
       const remaining: Record<CardRarity, typeof allCards> = {
         [CardRarity.STARTER]: [],
@@ -636,8 +721,9 @@ export class RunService {
       const rarity = this.pickWeightedRarity(cardRarityWeights, remaining, rng);
       const pool = remaining[rarity];
       if (pool.length === 0) continue;
-      const card = pool[Math.floor(rng() * pool.length)];
+      const card = this.pickArchetypeAwareCard(pool, dominant, rng);
       pickedCardIds.add(card.id);
+      this.seenCards.markSeen(card.id);
       const rarityKey = card.rarity as keyof typeof SHOP_CONFIG.priceByRarity;
       const basePrice = SHOP_CONFIG.priceByRarity[rarityKey] ?? SHOP_CONFIG.priceByRarity.common;
       items.push({
@@ -694,6 +780,51 @@ export class RunService {
   /** Leave shop (marks node as completed). */
   leaveShop(): void {
     this.markCurrentNodeCompleted();
+  }
+
+  /**
+   * Phase 1 Sprint 4 — pay {@link SHOP_CONFIG.cardRemoveCost} gold to permanently
+   * remove the named card instance from the deck. Returns true on success.
+   *
+   * Validation:
+   *   - run state must exist
+   *   - card must currently exist in any deck pile
+   *   - card must NOT be a starter card (StS convention)
+   *   - player must have enough gold
+   *
+   * The shop component enforces one-use-per-visit locally; this method does
+   * not, so balance changes can cap usage elsewhere if ever needed.
+   */
+  removeCardFromShop(instanceId: string): boolean {
+    const state = this.runState;
+    if (!state) return false;
+    if (state.gold < SHOP_CONFIG.cardRemoveCost) return false;
+
+    const allCards = this.deckService.getAllCards();
+    const target = allCards.find(c => c.instanceId === instanceId);
+    if (!target) return false;
+
+    const def = CARD_DEFINITIONS[target.cardId as CardId];
+    if (!def || def.rarity === CardRarity.STARTER) return false;
+
+    const removed = this.deckService.removeCard(instanceId);
+    if (!removed) return false;
+
+    // Phase 1 red-team Finding 1: derive deckCardIds from the live deck after
+    // removal rather than splicing the persisted array by CardId. The previous
+    // approach silently desynced when the player owned duplicates of the same
+    // card (indexOf removed the first match, but deck.removeCard removed the
+    // specific instance), so on save/restore the wrong copy was preserved and
+    // the 75g purchase appeared to refund itself.
+    const newDeckCardIds = this.deckService.getAllCards().map(c => c.cardId);
+
+    this.updateState({
+      ...state,
+      gold: state.gold - SHOP_CONFIG.cardRemoveCost,
+      deckCardIds: newDeckCardIds,
+    });
+    this.persist();
+    return true;
   }
 
   /** Resolve an event choice by index. */
@@ -1036,6 +1167,7 @@ export class RunService {
     this.shopItems = [];
     this.currentEvent = null;
     this.runRng = null;
+    this.lastShownDominantArchetype = null;
     this.relicService.clearRelics();
     this.deckService.clear();
     this.itemService.resetForRun();

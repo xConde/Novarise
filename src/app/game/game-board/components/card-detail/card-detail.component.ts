@@ -69,10 +69,14 @@ export class CardDetailComponent implements OnInit {
   get activeKeywords(): Array<{ label: string; className: string }> {
     const def = this.definition;
     const out: Array<{ label: string; className: string }> = [];
-    if (def.innate)   out.push({ label: 'Innate',   className: 'card-detail__keyword--innate' });
-    if (def.retain)   out.push({ label: 'Retain',   className: 'card-detail__keyword--retain' });
-    if (def.ethereal) out.push({ label: 'Ethereal', className: 'card-detail__keyword--ethereal' });
-    if (def.exhaust)  out.push({ label: 'Exhaust',  className: 'card-detail__keyword--exhaust' });
+    if (def.innate)    out.push({ label: 'Innate',    className: 'card-detail__keyword--innate' });
+    if (def.retain)    out.push({ label: 'Retain',    className: 'card-detail__keyword--retain' });
+    if (def.ethereal)  out.push({ label: 'Ethereal',  className: 'card-detail__keyword--ethereal' });
+    if (def.exhaust)   out.push({ label: 'Exhaust',   className: 'card-detail__keyword--exhaust' });
+    // Phase 1 Sprints 6/7 — archetype keyword primitives (no cards use these
+    // yet; surfaced so the chip shows up the moment archetype content lands).
+    if (def.terraform) out.push({ label: 'Terraform', className: 'card-detail__keyword--terraform' });
+    if (def.link)      out.push({ label: 'Link',      className: 'card-detail__keyword--link' });
     return out;
   }
 

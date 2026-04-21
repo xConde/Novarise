@@ -3,6 +3,9 @@ import { RelicService } from './relic.service';
 import { RelicId, RelicRarity, RELIC_DEFINITIONS } from '../models/relic.model';
 import { TowerType } from '../../game/game-board/models/tower.model';
 import { SerializableRelicFlags } from '../../game/game-board/models/encounter-checkpoint.model';
+import { CardDefinition, CardRarity, CardType } from '../models/card.model';
+import { CardId } from '../models/card.model';
+import { getCardDefinition } from '../constants/card-definitions';
 
 describe('RelicService', () => {
   let service: RelicService;
@@ -284,6 +287,129 @@ describe('RelicService', () => {
     expect(available.find(r => r.id === RelicId.COMMANDERS_BANNER)).toBeUndefined();
   });
 
+  // ── SURVEYOR_COMPASS ─────────────────────────────────────────
+
+  describe('SURVEYOR_COMPASS', () => {
+    it('recordTileVisited is a no-op when relic is not active', () => {
+      service.recordTileVisited(1, 2);
+      expect(service.consumeSurveyorGold()).toBe(0);
+    });
+
+    it('consumeSurveyorGold returns 0 when relic is not active', () => {
+      expect(service.consumeSurveyorGold()).toBe(0);
+    });
+
+    it('unique tiles aggregate correctly: n unique tiles → n * 5 gold', () => {
+      service.setActiveRelics([RelicId.SURVEYOR_COMPASS]);
+      service.recordTileVisited(0, 0);
+      service.recordTileVisited(0, 1);
+      service.recordTileVisited(1, 0);
+      expect(service.consumeSurveyorGold()).toBe(15); // 3 unique tiles × 5
+    });
+
+    it('duplicate tile visits do not double-count', () => {
+      service.setActiveRelics([RelicId.SURVEYOR_COMPASS]);
+      service.recordTileVisited(0, 0);
+      service.recordTileVisited(0, 0);
+      service.recordTileVisited(0, 0);
+      expect(service.consumeSurveyorGold()).toBe(5); // 1 unique tile × 5
+    });
+
+    it('consumeSurveyorGold clears the set (second call returns 0)', () => {
+      service.setActiveRelics([RelicId.SURVEYOR_COMPASS]);
+      service.recordTileVisited(0, 0);
+      service.consumeSurveyorGold();
+      expect(service.consumeSurveyorGold()).toBe(0);
+    });
+
+    it('resetWaveState clears the visited-tile set', () => {
+      service.setActiveRelics([RelicId.SURVEYOR_COMPASS]);
+      service.recordTileVisited(0, 0);
+      service.recordTileVisited(0, 1);
+      service.resetWaveState();
+      expect(service.consumeSurveyorGold()).toBe(0);
+    });
+
+    it('clearRelics clears the visited-tile set', () => {
+      service.setActiveRelics([RelicId.SURVEYOR_COMPASS]);
+      service.recordTileVisited(0, 0);
+      service.clearRelics();
+      // Re-activate to allow consumeSurveyorGold to run (otherwise bails early)
+      service.setActiveRelics([RelicId.SURVEYOR_COMPASS]);
+      expect(service.consumeSurveyorGold()).toBe(0);
+    });
+  });
+
+  // ── WORLD_SPIRIT ──────────────────────────────────────────────
+
+  describe('WORLD_SPIRIT', () => {
+    it('getCardEnergyCostModifier returns 0 when relic is not active', () => {
+      const def = getCardDefinition(CardId.LAY_TILE); // cartographer archetype
+      expect(service.getCardEnergyCostModifier(def)).toBe(0);
+    });
+
+    it('getCardEnergyCostModifier returns -1 for cartographer card when WORLD_SPIRIT is active', () => {
+      service.setActiveRelics([RelicId.WORLD_SPIRIT]);
+      const def = getCardDefinition(CardId.LAY_TILE);
+      expect(def.archetype).toBe('cartographer');
+      expect(service.getCardEnergyCostModifier(def)).toBe(-1);
+    });
+
+    it('getCardEnergyCostModifier returns 0 for non-cartographer card when WORLD_SPIRIT is active', () => {
+      service.setActiveRelics([RelicId.WORLD_SPIRIT]);
+      const def = getCardDefinition(CardId.GOLD_RUSH); // no archetype (undefined, not cartographer)
+      expect(def.archetype).not.toBe('cartographer');
+      expect(service.getCardEnergyCostModifier(def)).toBe(0);
+    });
+
+    it('effective cost for a 0-energy cartographer card stays 0 (Math.max prevents negative)', () => {
+      service.setActiveRelics([RelicId.WORLD_SPIRIT]);
+      // SCOUT_AHEAD is 0-cost; archetype may be neutral but test the math guarantee:
+      // Math.max(0, 0 + (-1)) = 0 when modifier applies, or 0 + 0 = 0 otherwise
+      const def = getCardDefinition(CardId.SCOUT_AHEAD);
+      const modifier = service.getCardEnergyCostModifier(def);
+      const effectiveCost = Math.max(0, def.energyCost + modifier);
+      expect(effectiveCost).toBe(0); // never negative
+    });
+
+    it('getCardEnergyCostModifier returns 0 after clearRelics', () => {
+      service.setActiveRelics([RelicId.WORLD_SPIRIT]);
+      service.clearRelics();
+      const def = getCardDefinition(CardId.LAY_TILE);
+      expect(service.getCardEnergyCostModifier(def)).toBe(0);
+    });
+  });
+
+  // ── Reward pool integration ───────────────────────────────────
+
+  describe('Reward pool — new relics appear in getAvailableRelics()', () => {
+    it('SURVEYOR_COMPASS appears in available uncommon relics when not owned', () => {
+      const available = service.getAvailableRelics(RelicRarity.UNCOMMON);
+      const found = available.find(r => r.id === RelicId.SURVEYOR_COMPASS);
+      expect(found).toBeDefined();
+    });
+
+    it('WORLD_SPIRIT appears in available rare relics when not owned', () => {
+      const available = service.getAvailableRelics(RelicRarity.RARE);
+      const found = available.find(r => r.id === RelicId.WORLD_SPIRIT);
+      expect(found).toBeDefined();
+    });
+
+    it('SURVEYOR_COMPASS is excluded from available relics when already owned', () => {
+      service.setActiveRelics([RelicId.SURVEYOR_COMPASS]);
+      const available = service.getAvailableRelics(RelicRarity.UNCOMMON);
+      const found = available.find(r => r.id === RelicId.SURVEYOR_COMPASS);
+      expect(found).toBeUndefined();
+    });
+
+    it('WORLD_SPIRIT is excluded from available relics when already owned', () => {
+      service.setActiveRelics([RelicId.WORLD_SPIRIT]);
+      const available = service.getAvailableRelics(RelicRarity.RARE);
+      const found = available.find(r => r.id === RelicId.WORLD_SPIRIT);
+      expect(found).toBeUndefined();
+    });
+  });
+
   // ── checkpoint serialization ──────────────────────────────────
 
   describe('checkpoint serialization', () => {
@@ -309,6 +435,7 @@ describe('RelicService', () => {
       const flags: SerializableRelicFlags = {
         firstLeakBlockedThisWave: true,
         freeTowerUsedThisEncounter: true,
+        orogenyTurnCounter: 0,
       };
 
       service.setActiveRelics([RelicId.ARCHITECTS_BLUEPRINT, RelicId.REINFORCED_WALLS]);
@@ -341,4 +468,146 @@ describe('RelicService', () => {
       expect(service.shouldBlockLeak()).toBeFalse();
     });
   });
+
+  // ── Sprint 36: SURVEYOR_ROD + OROGENY ────────────────────────────────────
+
+  describe('hasSurveyorRod()', () => {
+    it('returns false when SURVEYOR_ROD is not active', () => {
+      expect(service.hasSurveyorRod()).toBeFalse();
+    });
+
+    it('returns true when SURVEYOR_ROD is active', () => {
+      service.setActiveRelics([RelicId.SURVEYOR_ROD]);
+      expect(service.hasSurveyorRod()).toBeTrue();
+    });
+  });
+
+  describe('OROGENY — incrementOrogenyCounter + isOrogenyTrigger', () => {
+    it('getOrogenyTurnCounter() returns 0 at encounter start', () => {
+      expect(service.getOrogenyTurnCounter()).toBe(0);
+    });
+
+    it('incrementOrogenyCounter() returns incremented value', () => {
+      expect(service.incrementOrogenyCounter()).toBe(1);
+      expect(service.incrementOrogenyCounter()).toBe(2);
+      expect(service.getOrogenyTurnCounter()).toBe(2);
+    });
+
+    it('resetEncounterState() resets orogenyTurnCounter to 0', () => {
+      service.incrementOrogenyCounter();
+      service.incrementOrogenyCounter();
+      service.resetEncounterState();
+      expect(service.getOrogenyTurnCounter()).toBe(0);
+    });
+
+    it('isOrogenyTrigger() returns false when OROGENY relic is not active', () => {
+      // Counter at 5 — would trigger if relic was active
+      expect(service.isOrogenyTrigger(5, 5)).toBeFalse();
+    });
+
+    it('isOrogenyTrigger() returns false when counter is not a multiple of interval', () => {
+      service.setActiveRelics([RelicId.OROGENY]);
+      expect(service.isOrogenyTrigger(3, 5)).toBeFalse();
+      expect(service.isOrogenyTrigger(4, 5)).toBeFalse();
+    });
+
+    it('isOrogenyTrigger() returns false when counter is 0', () => {
+      service.setActiveRelics([RelicId.OROGENY]);
+      expect(service.isOrogenyTrigger(0, 5)).toBeFalse();
+    });
+
+    it('isOrogenyTrigger() returns true at turn 5 (first interval)', () => {
+      service.setActiveRelics([RelicId.OROGENY]);
+      expect(service.isOrogenyTrigger(5, 5)).toBeTrue();
+    });
+
+    it('isOrogenyTrigger() returns true at turn 10 (second interval)', () => {
+      service.setActiveRelics([RelicId.OROGENY]);
+      expect(service.isOrogenyTrigger(10, 5)).toBeTrue();
+    });
+
+    it('isOrogenyTrigger() returns false at turn 4', () => {
+      service.setActiveRelics([RelicId.OROGENY]);
+      expect(service.isOrogenyTrigger(4, 5)).toBeFalse();
+    });
+
+    it('full counter advancement: trigger fires at 5, not at 4, fires again at 10', () => {
+      service.setActiveRelics([RelicId.OROGENY]);
+      let counter = 0;
+      // Advance to 4
+      for (let t = 1; t <= 4; t++) {
+        counter = service.incrementOrogenyCounter();
+        expect(service.isOrogenyTrigger(counter, 5)).toBeFalse();
+      }
+      // Turn 5 — trigger
+      counter = service.incrementOrogenyCounter();
+      expect(service.isOrogenyTrigger(counter, 5)).toBeTrue();
+      // Turns 6–9 — no trigger
+      for (let t = 6; t <= 9; t++) {
+        counter = service.incrementOrogenyCounter();
+        expect(service.isOrogenyTrigger(counter, 5)).toBeFalse();
+      }
+      // Turn 10 — trigger again
+      counter = service.incrementOrogenyCounter();
+      expect(service.isOrogenyTrigger(counter, 5)).toBeTrue();
+    });
+  });
+
+  describe('OROGENY serialization — save/restore counter', () => {
+    it('serializeEncounterFlags() includes orogenyTurnCounter', () => {
+      service.incrementOrogenyCounter();
+      service.incrementOrogenyCounter();
+      service.incrementOrogenyCounter(); // counter = 3
+
+      const flags = service.serializeEncounterFlags();
+      expect(flags.orogenyTurnCounter).toBe(3);
+    });
+
+    it('restoreEncounterFlags() restores orogenyTurnCounter', () => {
+      const flags: SerializableRelicFlags = {
+        firstLeakBlockedThisWave: false,
+        freeTowerUsedThisEncounter: false,
+        orogenyTurnCounter: 7,
+      };
+      service.restoreEncounterFlags(flags);
+      expect(service.getOrogenyTurnCounter()).toBe(7);
+    });
+
+    it('save at turn 7, restore, next trigger fires at turn 10 (counter interval = 5)', () => {
+      service.setActiveRelics([RelicId.OROGENY]);
+      // Advance to turn 7
+      for (let t = 0; t < 7; t++) service.incrementOrogenyCounter();
+      expect(service.getOrogenyTurnCounter()).toBe(7);
+
+      // Save + restore
+      const flags = service.serializeEncounterFlags();
+      service.resetEncounterState();
+      service.restoreEncounterFlags(flags);
+      expect(service.getOrogenyTurnCounter()).toBe(7);
+
+      // Turns 8, 9 — no trigger
+      let counter = service.incrementOrogenyCounter(); // 8
+      expect(service.isOrogenyTrigger(counter, 5)).toBeFalse();
+      counter = service.incrementOrogenyCounter(); // 9
+      expect(service.isOrogenyTrigger(counter, 5)).toBeFalse();
+      // Turn 10 — trigger
+      counter = service.incrementOrogenyCounter(); // 10
+      expect(service.isOrogenyTrigger(counter, 5)).toBeTrue();
+    });
+
+    it('restoreEncounterFlags() defaults orogenyTurnCounter to 0 when missing from legacy saves', () => {
+      // Simulate a pre-sprint-36 checkpoint with no orogenyTurnCounter field
+      const legacyFlags = {
+        firstLeakBlockedThisWave: false,
+        freeTowerUsedThisEncounter: false,
+        // intentionally omitting orogenyTurnCounter
+      } as unknown as SerializableRelicFlags;
+
+      service.incrementOrogenyCounter(); // set to 1
+      service.restoreEncounterFlags(legacyFlags);
+
+      expect(service.getOrogenyTurnCounter()).toBe(0);
+    });
+  });
 });
+

@@ -3,6 +3,10 @@ import { RelicId, RELIC_DEFINITIONS, RelicRarity, getRelicsByRarity, RelicDefini
 import { TowerType } from '../../game/game-board/models/tower.model';
 import { RELIC_EFFECT_CONFIG } from '../constants/run.constants';
 import { SerializableRelicFlags } from '../../game/game-board/models/encounter-checkpoint.model';
+import { CardDefinition } from '../models/card.model';
+
+/** Gold awarded per unique tile crossed when SURVEYOR_COMPASS is active. */
+const SURVEYOR_TILE_GOLD = 5;
 
 /**
  * Relic effect engine — pull model.
@@ -60,6 +64,19 @@ export class RelicService {
   /** Per-wave state: whether first leak has been blocked (REINFORCED_WALLS). */
   private firstLeakBlockedThisWave = false;
 
+  /**
+   * Sprint 36 OROGENY — turn counter tracking elapsed turns since encounter start.
+   * OROGENY triggers at every multiple of OROGENY_INTERVAL_TURNS (5).
+   * Serialized into SerializableRelicFlags for save/restore.
+   */
+  private orogenyTurnCounter = 0;
+
+  /**
+   * Per-wave state: unique tile keys visited by enemies this wave (SURVEYOR_COMPASS).
+   * Not serialized — half-wave gold loss on save is acceptable.
+   */
+  private surveyorVisitedTiles: Set<string> = new Set();
+
   // ── Lifecycle ───────────────────────────────────────────
 
   /** Set the active relic IDs (called when run state changes). */
@@ -78,16 +95,48 @@ export class RelicService {
     this.activeRelicIds.clear();
     this.modifiersDirty = true;
     this.cachedModifiers = { ...BASELINE_MODIFIERS };
+    this.surveyorVisitedTiles.clear();
   }
 
   /** Reset per-encounter relic state. */
   resetEncounterState(): void {
     this.freeTowerUsedThisEncounter = false;
+    this.orogenyTurnCounter = 0;
+  }
+
+  /**
+   * Sprint 36 OROGENY — increment the per-encounter turn counter.
+   * Returns the new counter value so the caller can check if OROGENY should fire.
+   * Call once per turn from CombatLoopService.resolveTurn.
+   */
+  incrementOrogenyCounter(): number {
+    this.orogenyTurnCounter++;
+    return this.orogenyTurnCounter;
+  }
+
+  /** Returns the current OROGENY turn counter (read-only). */
+  getOrogenyTurnCounter(): number {
+    return this.orogenyTurnCounter;
+  }
+
+  /**
+   * Sprint 36 OROGENY — true when OROGENY is active and the counter is a
+   * multiple of OROGENY_INTERVAL_TURNS (5). Callers increment via
+   * incrementOrogenyCounter() first, then call this to check for a trigger.
+   */
+  isOrogenyTrigger(counter: number, intervalTurns: number): boolean {
+    return this.hasRelic(RelicId.OROGENY) && counter > 0 && counter % intervalTurns === 0;
+  }
+
+  /** Returns true when SURVEYOR_ROD is active. */
+  hasSurveyorRod(): boolean {
+    return this.hasRelic(RelicId.SURVEYOR_ROD);
   }
 
   /** Reset per-wave relic state. */
   resetWaveState(): void {
     this.firstLeakBlockedThisWave = false;
+    this.surveyorVisitedTiles.clear();
   }
 
   /** Check if a specific relic is active. */
@@ -199,6 +248,22 @@ export class RelicService {
   }
 
   /**
+   * TUNING_FORK: gates a per-tower damage multiplier inside composeDamageStack
+   * when the tower has ≥ 1 non-disrupted 4-dir neighbor.
+   */
+  hasTuningFork(): boolean {
+    return this.hasRelic(RelicId.TUNING_FORK);
+  }
+
+  /**
+   * CONSTELLATION: gates a gold multiplier in processKill when the killing
+   * tower is in a cluster of ≥ `constellationMinClusterSize`.
+   */
+  hasConstellation(): boolean {
+    return this.hasRelic(RelicId.CONSTELLATION);
+  }
+
+  /**
    * FROST_NOVA: returns +1 when owned, 0 otherwise.
    * StatusEffectService adds this bonus turns to every SLOW application.
    */
@@ -252,6 +317,38 @@ export class RelicService {
       : 1;
   }
 
+  // ── Cartographer Relic Methods ──────────────────────────
+
+  /**
+   * SURVEYOR_COMPASS: Record that an enemy stepped on a tile.
+   * No-op when relic is not active — cheap bail-out for the hot path.
+   */
+  recordTileVisited(row: number, col: number): void {
+    if (!this.hasRelic(RelicId.SURVEYOR_COMPASS)) return;
+    this.surveyorVisitedTiles.add(`${row}-${col}`);
+  }
+
+  /**
+   * SURVEYOR_COMPASS: Consume the visited-tile count and return gold earned.
+   * Clears the set. Returns 0 when relic is not active.
+   * Name is "consume" — callers must not call this more than once per wave.
+   */
+  consumeSurveyorGold(): number {
+    if (!this.hasRelic(RelicId.SURVEYOR_COMPASS)) return 0;
+    const gold = this.surveyorVisitedTiles.size * SURVEYOR_TILE_GOLD;
+    this.surveyorVisitedTiles.clear();
+    return gold;
+  }
+
+  /**
+   * WORLD_SPIRIT: Returns -1 when relic is active and the card is
+   * cartographer-archetype; 0 otherwise. Callers must apply Math.max(0, ...).
+   */
+  getCardEnergyCostModifier(def: CardDefinition): number {
+    if (!this.hasRelic(RelicId.WORLD_SPIRIT)) return 0;
+    return def.archetype === 'cartographer' ? -1 : 0;
+  }
+
   // ── Checkpoint Serialization ────────────────────────────
 
   /** Serialize per-encounter relic flags for checkpoint save. */
@@ -259,6 +356,7 @@ export class RelicService {
     return {
       firstLeakBlockedThisWave: this.firstLeakBlockedThisWave,
       freeTowerUsedThisEncounter: this.freeTowerUsedThisEncounter,
+      orogenyTurnCounter: this.orogenyTurnCounter,
     };
   }
 
@@ -266,6 +364,9 @@ export class RelicService {
   restoreEncounterFlags(flags: SerializableRelicFlags): void {
     this.firstLeakBlockedThisWave = flags.firstLeakBlockedThisWave;
     this.freeTowerUsedThisEncounter = flags.freeTowerUsedThisEncounter;
+    // Sprint 36 OROGENY — restore the turn counter so saves at turn 7 resume
+    // with the counter at 7, firing the next OROGENY at turn 10.
+    this.orogenyTurnCounter = flags.orogenyTurnCounter ?? 0;
   }
 
   // ── Relic Pool Management ───────────────────────────────
@@ -328,6 +429,9 @@ export class RelicService {
           break;
         // BOUNTY_HUNTER — handled in getGoldMultiplier()
 
+        // Uncommon (archetype)
+        // SURVEYOR_COMPASS — trigger-based, handled by recordTileVisited() / consumeSurveyorGold()
+
         // Rare
         // ARCHITECTS_BLUEPRINT — trigger-based
         case RelicId.TEMPORAL_RIFT:
@@ -337,6 +441,12 @@ export class RelicService {
           mods.damageMultiplier *= 1.15;
           mods.rangeMultiplier *= 1.15;
           break;
+        // WORLD_SPIRIT — trigger-based, handled by getCardEnergyCostModifier()
+
+        // Highground uncommon
+        // SURVEYOR_ROD — encounter-start hook, handled in game-board.component.ts initFreshEncounter
+        // Highground rare
+        // OROGENY — per-turn hook, handled in CombatLoopService.resolveTurn
       }
     }
 

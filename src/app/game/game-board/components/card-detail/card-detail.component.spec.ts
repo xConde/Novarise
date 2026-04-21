@@ -6,10 +6,12 @@ import { CardId } from '../../../../run/models/card.model';
 import { getCardDefinition } from '../../../../run/constants/card-definitions';
 
 function makeHandCard(cardId: CardId, overrides: Partial<HandCard> = {}): HandCard {
+  const definition = getCardDefinition(cardId);
   return {
     instance: { cardId, instanceId: 'inst-1', upgraded: false },
-    definition: getCardDefinition(cardId),
+    definition,
     canPlay: true,
+    effectiveEnergyCost: definition.energyCost,
     goldCost: null,
     ...overrides,
   };
@@ -82,6 +84,7 @@ describe('CardDetailComponent', () => {
         instance: { cardId, instanceId: 'i', upgraded: false },
         definition: { ...def, upgradedDescription: undefined },
         canPlay: true,
+        effectiveEnergyCost: def.energyCost,
         goldCost: null,
       };
       fixture.detectChanges();
@@ -104,6 +107,7 @@ describe('CardDetailComponent', () => {
         instance: { cardId: CardId.GOLD_RUSH, instanceId: 'i', upgraded: false },
         definition: { ...def, innate: true, retain: true, ethereal: false, exhaust: true },
         canPlay: true,
+        effectiveEnergyCost: def.energyCost,
         goldCost: null,
       };
       fixture.detectChanges();

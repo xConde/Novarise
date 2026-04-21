@@ -1,7 +1,10 @@
 import { TestBed } from '@angular/core/testing';
+import * as THREE from 'three';
 import { GameBoardService } from './game-board.service';
 import { BlockType, GameBoardTile } from './models/game-board-tile';
 import { TowerType } from './models/tower.model';
+import { MutationOp } from './services/path-mutation.types';
+import { TerraformMaterialPoolService } from './services/terraform-material-pool.service';
 
 describe('GameBoardService', () => {
   let service: GameBoardService;
@@ -243,6 +246,66 @@ describe('GameBoardService', () => {
 
       // Placing at (2,2) should be fine — many paths around
       expect(service.canPlaceTower(2, 2)).toBeTrue();
+    });
+
+    // Phase 2 Sprint 15 — BRIDGEHEAD side-channel
+    describe('bridgehead side-channel', () => {
+      it('allows placement on a WALL tile with mutationOp="bridgehead"', () => {
+        const board = createTestBoard(5, 5);
+        board[0][0] = GameBoardTile.createSpawner(0, 0);
+        board[4][4] = GameBoardTile.createExit(4, 4);
+        // Place a bridgehead-marked WALL at (2,2) — simulating BRIDGEHEAD applied
+        board[2][2] = GameBoardTile.createMutated(2, 2, BlockType.WALL, BlockType.WALL, 'bridgehead');
+        service.importBoard(board, 5, 5);
+
+        expect(service.canPlaceTower(2, 2)).toBeTrue();
+      });
+
+      it('still rejects placement on a plain WALL (no mutationOp)', () => {
+        const board = createTestBoard(5, 5);
+        board[2][2] = GameBoardTile.createWall(2, 2);
+        service.importBoard(board, 5, 5);
+
+        expect(service.canPlaceTower(2, 2)).toBeFalse();
+      });
+
+      it('rejects a WALL tile with a DIFFERENT mutationOp (block/destroy)', () => {
+        const board = createTestBoard(5, 5);
+        board[2][2] = GameBoardTile.createMutated(2, 2, BlockType.WALL, BlockType.BASE, 'block');
+        service.importBoard(board, 5, 5);
+
+        expect(service.canPlaceTower(2, 2)).toBeFalse();
+      });
+
+      it('does NOT run wouldBlockPath for bridgehead tiles (they never added traversability)', () => {
+        // Corridor where placing a tower on the ONLY path row would normally fail.
+        // A bridgehead tile sits in row 1 (non-traversable to begin with) and
+        // must be placeable even though row 0 has no alternative — placing a
+        // tower on a bridgehead can't block a path that never existed.
+        const board = createTestBoard(5, 3);
+        board[0][0] = GameBoardTile.createSpawner(0, 0);
+        board[0][4] = GameBoardTile.createExit(0, 4);
+        for (let col = 0; col < 5; col++) {
+          board[1][col] = GameBoardTile.createWall(1, col);
+          board[2][col] = GameBoardTile.createWall(2, col);
+        }
+        board[1][2] = GameBoardTile.createMutated(2, 1, BlockType.WALL, BlockType.WALL, 'bridgehead');
+        service.importBoard(board, 5, 3);
+
+        expect(service.canPlaceTower(1, 2)).toBeTrue();
+      });
+
+      it('rejects a bridgehead tile that already has a tower', () => {
+        const board = createTestBoard(5, 5);
+        board[0][0] = GameBoardTile.createSpawner(0, 0);
+        board[4][4] = GameBoardTile.createExit(4, 4);
+        board[2][2] = GameBoardTile.createMutated(2, 2, BlockType.WALL, BlockType.WALL, 'bridgehead');
+        service.importBoard(board, 5, 5);
+
+        service.placeTower(2, 2, TowerType.BASIC);
+        // Tile is now TOWER — second placement rejected.
+        expect(service.canPlaceTower(2, 2)).toBeFalse();
+      });
     });
   });
 
@@ -492,6 +555,219 @@ describe('GameBoardService', () => {
       service.resetBoard();
       expect(service.getBoardWidth()).toBe(25);
       expect(service.getBoardHeight()).toBe(20);
+    });
+  });
+
+  // --- setTileType ---
+
+  describe('setTileType', () => {
+    beforeEach(() => {
+      const board = createTestBoard(5, 5);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[0][1] = GameBoardTile.createSpawner(0, 1);
+      board[4][4] = GameBoardTile.createExit(4, 4);
+      service.importBoard(board, 5, 5);
+    });
+
+    it('returns null for out-of-bounds row', () => {
+      expect(service.setTileType(-1, 0, BlockType.WALL, 'block')).toBeNull();
+      expect(service.setTileType(5, 0, BlockType.WALL, 'block')).toBeNull();
+    });
+
+    it('returns null for out-of-bounds col', () => {
+      expect(service.setTileType(0, -1, BlockType.WALL, 'block')).toBeNull();
+      expect(service.setTileType(0, 5, BlockType.WALL, 'block')).toBeNull();
+    });
+
+    it('returns null when tile is SPAWNER', () => {
+      expect(service.setTileType(0, 0, BlockType.WALL, 'block')).toBeNull();
+    });
+
+    it('returns null when tile is EXIT', () => {
+      expect(service.setTileType(4, 4, BlockType.WALL, 'block')).toBeNull();
+    });
+
+    it('returns null when tile is TOWER', () => {
+      service.placeTower(2, 2, TowerType.BASIC);
+      expect(service.setTileType(2, 2, BlockType.BASE, 'build')).toBeNull();
+    });
+
+    it('converts BASE → WALL and returns new tile', () => {
+      const result = service.setTileType(2, 2, BlockType.WALL, 'block' as MutationOp);
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe(BlockType.WALL);
+      expect(result!.isTraversable).toBeFalse();
+      expect(service.getGameBoard()[2][2].type).toBe(BlockType.WALL);
+    });
+
+    it('converts WALL → BASE and returns new tile', () => {
+      // First make tile a WALL
+      service.setTileType(3, 3, BlockType.WALL, 'block' as MutationOp);
+      const result = service.setTileType(3, 3, BlockType.BASE, 'build' as MutationOp);
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe(BlockType.BASE);
+      expect(result!.isTraversable).toBeTrue();
+    });
+
+    it('records priorType correctly when explicitly provided', () => {
+      const result = service.setTileType(2, 2, BlockType.WALL, 'block' as MutationOp, BlockType.BASE);
+      expect(result!.priorType).toBe(BlockType.BASE);
+    });
+
+    it('infers priorType from existing tile when not explicitly provided', () => {
+      // Tile at (2,2) is BASE by default
+      const result = service.setTileType(2, 2, BlockType.WALL, 'block' as MutationOp);
+      expect(result!.priorType).toBe(BlockType.BASE);
+    });
+
+    it('sets mutationOp on the returned tile', () => {
+      const result = service.setTileType(2, 2, BlockType.WALL, 'destroy' as MutationOp);
+      expect(result!.mutationOp).toBe('destroy' as MutationOp);
+    });
+
+    // Red-team Finding 1 (Phase 3 close): setTileType must preserve the
+    // existing tile's elevation across a path mutation. Prior to the fix,
+    // GameBoardTile.createMutated silently dropped elevation, causing
+    // Phase 2 × Phase 3 composition to corrupt board state.
+    it('preserves elevation when mutating a raised tile to a new BlockType', () => {
+      // Place tile (2, 2) at elevation 2, then mutate its type to WALL.
+      service.setTileElevation(2, 2, 2);
+      expect(service.getGameBoard()[2][2].elevation).toBe(2);
+
+      const result = service.setTileType(2, 2, BlockType.WALL, 'block' as MutationOp);
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe(BlockType.WALL);
+      expect(result!.elevation).toBe(2); // survives the mutation
+      expect(service.getGameBoard()[2][2].elevation).toBe(2);
+    });
+
+    it('leaves elevation undefined when mutating a non-elevated tile', () => {
+      const result = service.setTileType(2, 2, BlockType.WALL, 'destroy' as MutationOp);
+      expect(result).not.toBeNull();
+      expect(result!.elevation).toBeUndefined();
+    });
+
+    it('preserves depressed (negative) elevation across mutation', () => {
+      service.setTileElevation(2, 2, -1);
+      expect(service.getGameBoard()[2][2].elevation).toBe(-1);
+
+      const result = service.setTileType(2, 2, BlockType.WALL, 'block' as MutationOp);
+      expect(result!.elevation).toBe(-1);
+    });
+  });
+
+  // --- wouldBlockPathIfSet ---
+
+  describe('wouldBlockPathIfSet', () => {
+    function makeCorridorBoard(): void {
+      // 5×3 board: spawner at (0,0), exit at (0,4), single-row corridor along row 0
+      const board = createTestBoard(5, 3);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[0][4] = GameBoardTile.createExit(0, 4);
+      for (let col = 0; col < 5; col++) {
+        board[1][col] = GameBoardTile.createWall(1, col);
+        board[2][col] = GameBoardTile.createWall(2, col);
+      }
+      service.importBoard(board, 5, 3);
+    }
+
+    it('BlockType.WALL on a choke-point returns true (blocks path)', () => {
+      makeCorridorBoard();
+      // Tile (0,2) is mid-corridor — blocking it cuts the only path
+      expect(service.wouldBlockPathIfSet(0, 2, BlockType.WALL)).toBeTrue();
+    });
+
+    it('BlockType.WALL on a non-choke-point returns false', () => {
+      makeCorridorBoard();
+      // Tile (2,2) is already a wall — "adding" another wall doesn't change reachability
+      expect(service.wouldBlockPathIfSet(2, 2, BlockType.WALL)).toBeFalse();
+    });
+
+    it('BlockType.BASE on a tile does not block path', () => {
+      makeCorridorBoard();
+      // Proposing BASE at any existing tile is a connectivity-preserving no-op
+      expect(service.wouldBlockPathIfSet(0, 2, BlockType.BASE)).toBeFalse();
+    });
+
+    it('BlockType.TOWER on a choke-point returns true (same as wouldBlockPath)', () => {
+      makeCorridorBoard();
+      expect(service.wouldBlockPathIfSet(0, 2, BlockType.TOWER)).toBeTrue();
+    });
+
+    it('wouldBlockPath delegates to wouldBlockPathIfSet(row, col, TOWER)', () => {
+      makeCorridorBoard();
+      // Both APIs must agree
+      const direct = service.wouldBlockPath(0, 2);
+      const generalized = service.wouldBlockPathIfSet(0, 2, BlockType.TOWER);
+      expect(direct).toBe(generalized);
+    });
+
+    it('returns false when no spawners exist', () => {
+      // Board with no spawners — connectivity check is vacuously false
+      service.importBoard(createTestBoard(5, 5), 5, 5);
+      expect(service.wouldBlockPathIfSet(2, 2, BlockType.WALL)).toBeFalse();
+    });
+  });
+
+  // --- createTileMesh with mutationOp (pool material) ---
+
+  describe('createTileMesh with mutationOp', () => {
+    let pool: TerraformMaterialPoolService;
+    let serviceWithPool: GameBoardService;
+    const createdMeshes: THREE.Mesh[] = [];
+
+    beforeEach(() => {
+      pool = new TerraformMaterialPoolService();
+      serviceWithPool = new GameBoardService(pool);
+      const board = createTestBoard(5, 5);
+      serviceWithPool.importBoard(board, 5, 5);
+    });
+
+    afterEach(() => {
+      for (const m of createdMeshes) {
+        m.geometry.dispose();
+        // Do not dispose pool materials — pool.dispose() handles them.
+        const mat = m.material as THREE.Material;
+        if (!pool.isPoolMaterial(mat)) {
+          mat.dispose();
+        }
+      }
+      createdMeshes.length = 0;
+      pool.dispose();
+    });
+
+    it('createTileMesh with mutationOp returns a mesh whose material === pool.getMaterial(op)', () => {
+      const expected = pool.getMaterial('build');
+      const mesh = serviceWithPool.createTileMesh(1, 1, BlockType.BASE, 'build');
+      createdMeshes.push(mesh);
+      expect(mesh.material).toBe(expected);
+    });
+
+    it('createTileMesh without mutationOp allocates a fresh per-tile material (not from the pool)', () => {
+      const mesh = serviceWithPool.createTileMesh(1, 1, BlockType.BASE, undefined);
+      createdMeshes.push(mesh);
+      expect(pool.isPoolMaterial(mesh.material as THREE.Material)).toBeFalse();
+    });
+
+    it('two tiles with the same mutationOp share the same material reference', () => {
+      const mesh1 = serviceWithPool.createTileMesh(0, 0, BlockType.BASE, 'build');
+      const mesh2 = serviceWithPool.createTileMesh(0, 1, BlockType.BASE, 'build');
+      createdMeshes.push(mesh1, mesh2);
+      expect(mesh1.material).toBe(mesh2.material);
+    });
+
+    it('createTileMesh without a pool (no-DI) falls back to per-tile material', () => {
+      // Service created with no pool injected (matches spec test context where
+      // GameBoardService is new'd without arguments).
+      const svcNoPool = new GameBoardService();
+      const board = createTestBoard(5, 5);
+      svcNoPool.importBoard(board, 5, 5);
+      const mesh = svcNoPool.createTileMesh(1, 1, BlockType.BASE, 'build');
+      // The material is a plain MeshStandardMaterial, not a pool material
+      expect(pool.isPoolMaterial(mesh.material as THREE.Material)).toBeFalse();
+      // Dispose manually since there's no pool to clean up
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
     });
   });
 });

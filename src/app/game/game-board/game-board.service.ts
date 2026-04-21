@@ -1,12 +1,18 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { BlockType, GameBoardTile, SpawnerType } from './models/game-board-tile';
 import { TowerType } from './models/tower.model';
 import { BOARD_CONFIG } from './constants/board.constants';
 import { assertNever } from './utils/assert-never';
+import { MutationOp } from './services/path-mutation.types';
+import { TerraformMaterialPoolService } from './services/terraform-material-pool.service';
 
 @Injectable()
 export class GameBoardService {
+  constructor(
+    @Optional() private readonly terraformPool?: TerraformMaterialPoolService,
+  ) {}
+
   // Board configuration
   private gameBoardWidth = BOARD_CONFIG.width;
   private gameBoardHeight = BOARD_CONFIG.height;
@@ -94,22 +100,66 @@ export class GameBoardService {
     }
   }
 
-  // Create a visible tile mesh using BoxGeometry
-  createTileMesh(row: number, col: number, type: BlockType): THREE.Mesh {
-    const geometry = new THREE.BoxGeometry(this.tileSize * 0.95, this.tileHeight, this.tileSize * 0.95);
-    const color = this.getTileColor(type);
+  /**
+   * Set the elevation on a tile, returning the new tile or null on rejection.
+   *
+   * Rejected when:
+   *  - (row, col) is out of bounds
+   *  - existing tile is SPAWNER or EXIT (immutable for elevation per spike §7)
+   *
+   * TOWER tiles ARE allowed — that is the point of RAISE_PLATFORM (tower rides
+   * up with its tile). Does NOT invalidate pathfinding cache — elevation does not
+   * change isTraversable. Does NOT call mesh translate — ElevationService owns that.
+   *
+   * Returns the new tile for the caller to act on (e.g. mesh translate).
+   */
+  setTileElevation(row: number, col: number, newElevation: number): GameBoardTile | null {
+    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+      return null;
+    }
 
-    // Material — base tiles glow subtly to signal "buildable", walls are dark and inert
-    const isBase = type === BlockType.BASE;
-    const isWall = type === BlockType.WALL;
-    const material = new THREE.MeshStandardMaterial({
-      color: color,
-      emissive: isWall ? 0x0a0810 : isBase ? 0x303848 : color,
-      emissiveIntensity: isBase ? 0.35 : isWall ? 0.05 : 0.45,
-      metalness: isWall ? 0.5 : 0.1,
-      roughness: isBase ? 0.7 : isWall ? 0.95 : 0.7,
-      envMapIntensity: 0.3
-    });
+    const existing = this.gameBoard[row][col];
+
+    if (existing.type === BlockType.SPAWNER || existing.type === BlockType.EXIT) {
+      return null;
+    }
+
+    const newTile = existing.withElevation(newElevation);
+    this.gameBoard[row][col] = newTile;
+    return newTile;
+  }
+
+  // Create a visible tile mesh using BoxGeometry.
+  // When mutationOp is provided, the mesh shares the pooled material from
+  // TerraformMaterialPoolService (NOT a freshly-allocated material).
+  // When mutationOp is undefined, behavior is unchanged — a new per-tile
+  // material is created as before.
+  // When elevation is provided and non-zero, the mesh is positioned at
+  // Y = elevation + tileHeight / 2 instead of the default tileHeight / 2.
+  // Default elevation = 0 preserves all existing call sites unchanged.
+  createTileMesh(row: number, col: number, type: BlockType, mutationOp?: MutationOp, elevation = 0): THREE.Mesh {
+    const geometry = new THREE.BoxGeometry(this.tileSize * 0.95, this.tileHeight, this.tileSize * 0.95);
+
+    let material: THREE.MeshStandardMaterial;
+
+    if (mutationOp !== undefined && this.terraformPool) {
+      // Shared pool material — do NOT dispose this on individual mesh swap.
+      material = this.terraformPool.getMaterial(mutationOp);
+    } else {
+      const color = this.getTileColor(type);
+
+      // Material — base tiles glow subtly to signal "buildable", walls are dark and inert
+      const isBase = type === BlockType.BASE;
+      const isWall = type === BlockType.WALL;
+      material = new THREE.MeshStandardMaterial({
+        color: color,
+        emissive: isWall ? 0x0a0810 : isBase ? 0x303848 : color,
+        emissiveIntensity: isBase ? 0.35 : isWall ? 0.05 : 0.45,
+        metalness: isWall ? 0.5 : 0.1,
+        roughness: isBase ? 0.7 : isWall ? 0.95 : 0.7,
+        envMapIntensity: 0.3,
+      });
+    }
 
     const mesh = new THREE.Mesh(geometry, material);
 
@@ -117,7 +167,7 @@ export class GameBoardService {
     const x = (col - this.gameBoardWidth / 2) * this.tileSize;
     const z = (row - this.gameBoardHeight / 2) * this.tileSize;
 
-    mesh.position.set(x, this.tileHeight / 2, z);
+    mesh.position.set(x, elevation + this.tileHeight / 2, z);
     mesh.receiveShadow = true;
     mesh.castShadow = true;
 
@@ -270,12 +320,35 @@ export class GameBoardService {
 
     const tile = this.gameBoard[row][col];
 
-    // Can only place on BASE tiles that are purchasable
-    if (tile.type !== BlockType.BASE || !tile.isPurchasable || tile.towerType !== null) {
+    // Standard case: BASE tile that is purchasable and unoccupied.
+    const isStandardBase =
+      tile.type === BlockType.BASE &&
+      tile.isPurchasable &&
+      tile.towerType === null;
+
+    // Phase 2 Sprint 15 — BRIDGEHEAD exception. A WALL tile carrying
+    // mutationOp === 'bridgehead' is intentionally tower-placeable: the
+    // Cartographer card creates a "tower-only platform" that does NOT admit
+    // enemies (tile stays non-traversable) but DOES admit a tower.
+    // No wouldBlockPath check is needed because the tile is already a WALL —
+    // placing a tower on top does not change traversability.
+    const isBridgehead =
+      tile.type === BlockType.WALL &&
+      tile.mutationOp === 'bridgehead' &&
+      tile.towerType === null;
+
+    if (!isStandardBase && !isBridgehead) {
       return false;
     }
 
-    // Reject placement if it would block all paths from spawners to exits
+    // Bridgehead tiles are already non-traversable, so a tower on them can
+    // never turn a currently-open path into a blocked one. Skip the BFS.
+    if (isBridgehead) {
+      return true;
+    }
+
+    // Standard BASE path: reject placement if it would block all paths from
+    // spawners to exits.
     if (this.wouldBlockPath(row, col)) {
       return false;
     }
@@ -287,46 +360,12 @@ export class GameBoardService {
    * Check whether placing a tower at (row, col) would block every path
    * from any spawner to any exit. Uses BFS with the same traversability
    * logic as EnemyService.findPath.
+   *
+   * Delegates to `wouldBlockPathIfSet(row, col, BlockType.TOWER)` for
+   * backward compatibility. All existing callers remain unchanged.
    */
   wouldBlockPath(row: number, col: number): boolean {
-    if (this.spawnerTiles.length === 0 || this.exitTiles.length === 0) {
-      return false;
-    }
-
-    // Temporarily mark the tile as non-traversable
-    const originalTile = this.gameBoard[row][col];
-    this.gameBoard[row][col] = new GameBoardTile(
-      originalTile.x,
-      originalTile.y,
-      BlockType.TOWER,
-      false,
-      false,
-      originalTile.cost,
-      TowerType.BASIC // placeholder — type doesn't matter for traversability
-    );
-
-    try {
-      // Build a set of exit positions for fast lookup
-      const exitSet = new Set<string>();
-      for (const [eRow, eCol] of this.exitTiles) {
-        exitSet.add(`${eRow},${eCol}`);
-      }
-
-      // BFS from each spawner to any exit. If ANY spawner cannot reach
-      // ANY exit, the placement blocks the path.
-      let blocked = false;
-      for (const [sRow, sCol] of this.spawnerTiles) {
-        if (!this.bfsCanReachExit(sRow, sCol, exitSet)) {
-          blocked = true;
-          break;
-        }
-      }
-
-      return blocked;
-    } finally {
-      // Always restore the original tile, even if BFS throws
-      this.gameBoard[row][col] = originalTile;
-    }
+    return this.wouldBlockPathIfSet(row, col, BlockType.TOWER);
   }
 
   /**
@@ -450,6 +489,106 @@ export class GameBoardService {
     // Restore tile to traversable BASE state
     this.gameBoard[row][col] = GameBoardTile.createBase(row, col);
     return true;
+  }
+
+  /**
+   * Mutate a tile's type in-place, returning the new GameBoardTile or null on rejection.
+   *
+   * Rejected when:
+   *  - (row, col) is out of bounds
+   *  - existing tile is SPAWNER or EXIT (immutable)
+   *  - existing tile is TOWER (sell the tower first)
+   *
+   * Does NOT call pathfinding invalidate or enemy repath — that is
+   * PathMutationService's responsibility.
+   *
+   * Note: the tile's x/y fields use (col, row) to match the existing placeTower/
+   * forceSetTower convention (see line 405-414 of the original file).
+   */
+  setTileType(
+    row: number,
+    col: number,
+    type: BlockType,
+    mutationOp: MutationOp,
+    priorType?: BlockType,
+  ): GameBoardTile | null {
+    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+      return null;
+    }
+
+    const existing = this.gameBoard[row][col];
+
+    if (
+      existing.type === BlockType.SPAWNER ||
+      existing.type === BlockType.EXIT ||
+      existing.type === BlockType.TOWER
+    ) {
+      return null;
+    }
+
+    const newTile = GameBoardTile.createMutated(
+      col,
+      row,
+      type,
+      priorType ?? existing.type,
+      mutationOp,
+    );
+    // Red-team Finding 1 (Phase 3 close): `createMutated` does not take an
+    // elevation parameter; path mutations on an elevated tile would silently
+    // wipe the elevation field. Preserve it by cloning the newly-created tile
+    // with the existing tile's elevation when non-zero.
+    const preserved = existing.elevation !== undefined && existing.elevation !== 0
+      ? newTile.withElevation(existing.elevation)
+      : newTile;
+    this.gameBoard[row][col] = preserved;
+    return preserved;
+  }
+
+  /**
+   * Generalized version of wouldBlockPath.
+   *
+   * Temporarily sets (row, col) to the proposed `type` and runs the same
+   * spawner→exit BFS. The tile is traversable during BFS iff
+   * `type === BASE` (or `type === EXIT`).
+   *
+   * `wouldBlockPath` is preserved as a one-liner wrapper for backward compat.
+   */
+  wouldBlockPathIfSet(row: number, col: number, type: BlockType): boolean {
+    if (this.spawnerTiles.length === 0 || this.exitTiles.length === 0) {
+      return false;
+    }
+
+    const originalTile = this.gameBoard[row][col];
+
+    // Temporarily substitute the proposed tile type
+    const traversable = type === BlockType.BASE || type === BlockType.EXIT;
+    this.gameBoard[row][col] = new GameBoardTile(
+      originalTile.x,
+      originalTile.y,
+      type,
+      traversable,
+      false,
+      originalTile.cost,
+      originalTile.towerType,
+    );
+
+    try {
+      const exitSet = new Set<string>();
+      for (const [eRow, eCol] of this.exitTiles) {
+        exitSet.add(`${eRow},${eCol}`);
+      }
+
+      let blocked = false;
+      for (const [sRow, sCol] of this.spawnerTiles) {
+        if (!this.bfsCanReachExit(sRow, sCol, exitSet)) {
+          blocked = true;
+          break;
+        }
+      }
+      return blocked;
+    } finally {
+      this.gameBoard[row][col] = originalTile;
+    }
   }
 
 }

@@ -76,6 +76,35 @@ export class EncounterCheckpointService {
       data['version'] = 7;
       return data;
     },
+    // 7 → 8: add `pathMutations` field. PathMutationService introduced in Sprint 9
+    // (archetype-depth plan). Pre-v8 saves had no path mutations; default to an
+    // empty journal so existing runs continue without terrain modifications in flight.
+    7: (data) => {
+      data['pathMutations'] = { mutations: [], nextId: 0 };
+      data['version'] = 8;
+      return data;
+    },
+    // 8 → 9: add `tileElevations` field. ElevationService introduced in Sprint 25
+    // (archetype-depth plan, Highground phase). Pre-v9 saves had no elevation
+    // state; default to empty so existing runs continue without any raised tiles.
+    8: (data) => {
+      data['tileElevations'] = { elevations: [], changes: [], nextId: 0 };
+      data['version'] = 9;
+      return data;
+    },
+    // 9 → 10: add `towerGraph` field (TowerGraphService virtual-edge /
+    // disruption persistence). Pre-v10 saves had no overlay state; default
+    // to empty — spatial adjacency is rederived from towers on restore, so
+    // existing encounters continue without any virtual edges or disruption.
+    // (The schema bump also brings turn-scoped ActiveModifier.remainingTurns
+    // along for free — ActiveModifier.remainingTurns is optional, so pre-v10
+    // entries without the field decode correctly; no per-modifier migration
+    // is needed.)
+    9: (data) => {
+      data['towerGraph'] = { virtualEdges: [], disruptedUntil: [] };
+      data['version'] = 10;
+      return data;
+    },
   };
 
   /**
@@ -161,6 +190,9 @@ export class EncounterCheckpointService {
   private isValidCheckpoint(data: Record<string, unknown>): boolean {
     const itemInventory = data['itemInventory'] as Record<string, unknown> | undefined;
     const runStateFlags = data['runStateFlags'] as Record<string, unknown> | undefined;
+    const pathMutations = data['pathMutations'] as Record<string, unknown> | undefined;
+    const tileElevations = data['tileElevations'] as Record<string, unknown> | undefined;
+    const towerGraph = data['towerGraph'] as Record<string, unknown> | undefined;
 
     return (
       typeof data['version'] === 'number' &&
@@ -176,7 +208,18 @@ export class EncounterCheckpointService {
       runStateFlags !== null &&
       runStateFlags !== undefined &&
       Array.isArray(runStateFlags['entries']) &&
-      Array.isArray(runStateFlags['consumedEventIds'])
+      Array.isArray(runStateFlags['consumedEventIds']) &&
+      pathMutations !== null &&
+      pathMutations !== undefined &&
+      Array.isArray(pathMutations['mutations']) &&
+      tileElevations !== null &&
+      tileElevations !== undefined &&
+      Array.isArray(tileElevations['elevations']) &&
+      Array.isArray(tileElevations['changes']) &&
+      towerGraph !== null &&
+      towerGraph !== undefined &&
+      Array.isArray(towerGraph['virtualEdges']) &&
+      Array.isArray(towerGraph['disruptedUntil'])
     );
   }
 }

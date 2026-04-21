@@ -4,6 +4,7 @@ export * from './map-share.service';
 export * from './map-storage.service';
 export * from './map-template.service';
 export * from './player-profile.service';
+export * from './seen-cards.service';
 export * from './settings.service';
 export * from './storage.service';
 export * from './tutorial.service';

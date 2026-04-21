@@ -6,9 +6,11 @@
  *
  * Design:
  *  - Spell cards are applied immediately (gold, lives, damage, slow).
- *  - Modifier cards register a stat bonus with a wave-countdown duration.
+ *  - Modifier cards register a stat bonus with a wave- OR turn-countdown.
  *  - TowerCombatService reads modifier values each combat frame.
- *  - tickWave() is called on wave completion to expire modifiers.
+ *  - tickWave() is called on wave completion to expire wave-scoped modifiers.
+ *  - tickTurn() is called at the END of each turn to expire turn-scoped
+ *    modifiers.
  */
 
 import { Injectable } from '@angular/core';
@@ -19,14 +21,39 @@ import { EnemyService } from '../../game/game-board/services/enemy.service';
 import { Enemy } from '../../game/game-board/models/enemy.model';
 import { StatusEffectService } from '../../game/game-board/services/status-effect.service';
 import { StatusEffectType } from '../../game/game-board/constants/status-effect.constants';
+import { CARTOGRAPHER_CONFIG } from '../../game/game-board/constants/cartographer.constants';
 import { DeckService } from './deck.service';
 import { WavePreviewService } from '../../game/game-board/services/wave-preview.service';
 
-/** A single active modifier with a wave-based countdown. */
+/**
+ * Upgraded CARTOGRAPHER_SEAL sets TERRAFORM_ANCHOR.value to 2 via the tier-
+ * sentinel scheme on its card effect. Refund logic scans for a single active
+ * TERRAFORM_ANCHOR entry whose `value >= threshold` — NOT aggregate — so two
+ * base seals (value 1 + 1 = aggregate 2) don't spoof the upgrade. Mirror of
+ * CARD_VALUES.cartographerSealUpgradedValue.
+ */
+const CARTOGRAPHER_SEAL_UPGRADED_VALUE = 2;
+
+/** A single active modifier with a wave- or turn-based countdown. */
 export interface ActiveModifier {
   readonly stat: ModifierStat;
   readonly value: number;
-  remainingWaves: number;
+  /**
+   * Wave-countdown (legacy default). `null` = encounter-scoped (never
+   * expires in tickWave, cleared only by reset() at encounter teardown).
+   * Used by flag-style modifiers (CARTOGRAPHER_SEAL → TERRAFORM_ANCHOR,
+   * LABYRINTH_MIND). A turn-scoped modifier MUST set this to `null` so
+   * tickWave does not collide with its tickTurn countdown.
+   */
+  remainingWaves: number | null;
+  /**
+   * Turn-countdown (v10 / Phase 4 Conduit). When set, decremented by
+   * `tickTurn()` at the start of each turn; removed on reaching 0.
+   * Undefined for wave-scoped modifiers. A modifier is EITHER wave-scoped
+   * OR turn-scoped — never both — so `remainingWaves === null` when this
+   * field is populated.
+   */
+  remainingTurns?: number;
 }
 
 /** Per-encounter context bundle passed to spell handlers from the component layer. */
@@ -75,29 +102,24 @@ export class CardEffectService {
         break;
 
       case 'frost_wave':
-        // Apply SLOW status to every non-flying, non-dying enemy. SLOW lasts
-        // STATUS_EFFECT_CONFIGS[SLOW].duration turns and reduces tilesPerTurn by 1
-        // (full stop for 1-tile movers, half for 2-tile movers). Flying enemies
-        // are immune (handled inside StatusEffectService.apply). The effect.value
-        // field is ignored — duration is fixed by status config. Ignored value is
-        // a balance lever for a future content sprint.
-        this.applyStatusToAllEnemies(ctx, StatusEffectType.SLOW);
+        // Apply SLOW to every non-flying, non-dying enemy. effect.value is the
+        // duration in turns (Phase 1 Sprint 5: previously ignored). FROST_NOVA
+        // relic still adds +1 to whatever duration we pass — bonus stacks on
+        // top of the override inside StatusEffectService.apply.
+        this.applyStatusToAllEnemies(ctx, StatusEffectType.SLOW, effect.value);
         break;
 
       case 'incinerate':
         // Apply BURN to every non-dying enemy. Flying enemies are NOT immune to BURN
         // (flying immunity is scoped to SLOW only inside StatusEffectService.apply).
-        // Duration is governed by STATUS_EFFECT_CONFIGS[BURN].duration. The effect.value
-        // flag (0 = base, 1 = upgraded) is reserved for a future balance sprint that may
-        // extend duration; this handler intentionally ignores it.
-        this.applyStatusToAllEnemies(ctx, StatusEffectType.BURN);
+        // effect.value = duration in turns (Phase 1 Sprint 5: previously a 0/1 flag).
+        this.applyStatusToAllEnemies(ctx, StatusEffectType.BURN, effect.value);
         break;
 
       case 'toxic_spray':
         // Apply POISON to every non-dying enemy. Same flying-not-immune caveat as INCINERATE.
-        // POISON stacks over 4 turns (vs BURN's 3) at 3 dmg/tick — higher sustained value.
-        // effect.value flag reserved for future balance; ignored here.
-        this.applyStatusToAllEnemies(ctx, StatusEffectType.POISON);
+        // effect.value = duration in turns (Phase 1 Sprint 5: previously a 0/1 flag).
+        this.applyStatusToAllEnemies(ctx, StatusEffectType.POISON, effect.value);
         break;
 
       case 'cryo_pulse': {
@@ -168,10 +190,30 @@ export class CardEffectService {
         this.addModifier(MODIFIER_STAT.FIRE_RATE, effect.value, 1);
         break;
 
+      case 'detour':
+        // Force all non-flying, non-dying enemies onto their longest valid path
+        // for one movement step. See EnemyService.applyDetour for full semantics.
+        // effect.value is a tier sentinel: 1 = reroute-only (base card),
+        // 2 = reroute + per-extra-step max-HP damage (upgraded card).
+        this.applyDetour(ctx, effect.value);
+        break;
+
       // 'salvage' and 'fortify': handled in GameBoardComponent (need tower selection UI).
       default:
         break;
     }
+  }
+
+  /**
+   * Delegate DETOUR routing override to EnemyService. Upgraded tier (value ≥ 2)
+   * also passes the per-extra-step damage fraction so each rerouted enemy
+   * takes proportional burst damage at cast time.
+   */
+  private applyDetour(ctx: SpellContext, tierValue: number): void {
+    const damageFraction = tierValue >= CARTOGRAPHER_CONFIG.DETOUR_UPGRADED_VALUE
+      ? CARTOGRAPHER_CONFIG.DETOUR_DAMAGE_FRACTION_PER_EXTRA_STEP
+      : 0;
+    ctx.enemyService.applyDetour(damageFraction);
   }
 
   // ── Modifier Effects ─────────────────────────────────────
@@ -179,8 +221,22 @@ export class CardEffectService {
   /**
    * Register a modifier card effect.
    * Multiple modifiers with the same stat stack additively.
+   * Routes to either wave- or turn-countdown depending on `effect.durationScope`.
    */
   applyModifier(effect: ModifierCardEffect): void {
+    if (effect.durationScope === 'turn') {
+      // Turn-scoped modifiers set remainingWaves to null so tickWave ignores
+      // them. effect.duration must be a positive integer per the card-model
+      // contract — null is not a legal turn-scope duration.
+      const turns = effect.duration ?? 0;
+      this.activeModifiers.push({
+        stat: effect.stat,
+        value: effect.value,
+        remainingWaves: null,
+        remainingTurns: turns,
+      });
+      return;
+    }
     this.activeModifiers.push({
       stat: effect.stat,
       value: effect.value,
@@ -191,13 +247,44 @@ export class CardEffectService {
   // ── Wave Tick ────────────────────────────────────────────
 
   /**
-   * Decrement remaining-wave countdown on all active modifiers.
-   * Modifiers that reach 0 are removed. Call once per wave completion.
+   * Decrement remaining-wave countdown on wave-scoped modifiers. Modifiers
+   * that reach 0 are removed. Call once per wave completion.
+   *
+   * Wave-scoped with `remainingWaves === null` are encounter-scoped
+   * (CARTOGRAPHER_SEAL, LABYRINTH_MIND) and skip the decrement — cleared
+   * only by reset() at encounter teardown.
+   *
+   * Turn-scoped modifiers (remainingTurns !== undefined) are left untouched
+   * — they tick via {@link tickTurn}.
    */
   tickWave(): void {
     this.activeModifiers = this.activeModifiers
-      .map(m => ({ ...m, remainingWaves: m.remainingWaves - 1 }))
-      .filter(m => m.remainingWaves > 0);
+      .map(m => {
+        if (m.remainingTurns !== undefined) return m; // turn-scoped; skip
+        if (m.remainingWaves === null) return m;       // encounter-scoped; skip
+        return { ...m, remainingWaves: m.remainingWaves - 1 };
+      })
+      .filter(m => m.remainingTurns !== undefined || m.remainingWaves === null || m.remainingWaves > 0);
+  }
+
+  // ── Turn Tick ────────────────────────────────────────────
+
+  /**
+   * Decrement remaining-turn countdown on turn-scoped modifiers. Modifiers
+   * reaching 0 are removed. Call at the END of each turn from
+   * `CombatLoopService.resolveTurn` — mirrors `tickWave`'s end-of-wave
+   * semantic so duration=N means "active for the next N turns after play."
+   * Ticking at the TOP of resolveTurn would expire a duration=1 modifier
+   * before fireTurn, so it would never fire.
+   *
+   * Wave-scoped modifiers (remainingTurns === undefined) are untouched.
+   */
+  tickTurn(): void {
+    this.activeModifiers = this.activeModifiers
+      .map(m => m.remainingTurns === undefined
+        ? m
+        : { ...m, remainingTurns: m.remainingTurns - 1 })
+      .filter(m => m.remainingTurns === undefined || m.remainingTurns > 0);
   }
 
   // ── Queries ───────────────────────────────────────────────
@@ -217,6 +304,47 @@ export class CardEffectService {
   /** All active modifiers (read-only snapshot for UI display). */
   getActiveModifiers(): ReadonlyArray<ActiveModifier> {
     return this.activeModifiers;
+  }
+
+  /**
+   * MAX value across active modifier entries for `stat`, or 0 when none are
+   * active. Use this instead of `getModifierValue` when a single-entry tier
+   * check is required — aggregating lets two base-tier entries (e.g., two
+   * CARTOGRAPHER_SEALs at value 1) spoof an upgraded-tier threshold. Scan is
+   * O(n) over activeModifiers; callers are fire-loop hot paths so the list
+   * is typically tiny (< 10 entries).
+   */
+  getMaxModifierEntryValue(stat: ModifierStat): number {
+    let max = 0;
+    for (const m of this.activeModifiers) {
+      if (m.stat === stat && m.value > max) max = m.value;
+    }
+    return max;
+  }
+
+  /**
+   * Upgraded CARTOGRAPHER_SEAL — attempt to claim the per-turn terraform
+   * refund. Returns true iff:
+   *  - TERRAFORM_ANCHOR's aggregate value ≥ upgraded-tier threshold (2), and
+   *  - no TERRAFORM_REFUND_USED_THIS_TURN modifier is currently active.
+   *
+   * When returning true, installs a 1-turn TERRAFORM_REFUND_USED_THIS_TURN
+   * modifier so a second terraform in the same turn sees it and is denied.
+   * The per-turn flag auto-expires via tickTurn at turn end, making the
+   * refund available again next turn. Rides along in cardModifiers
+   * serialization — no checkpoint version bump required.
+   */
+  tryConsumeTerraformRefund(): boolean {
+    if (this.getMaxModifierEntryValue(MODIFIER_STAT.TERRAFORM_ANCHOR) < CARTOGRAPHER_SEAL_UPGRADED_VALUE) return false;
+    if (this.hasActiveModifier(MODIFIER_STAT.TERRAFORM_REFUND_USED_THIS_TURN)) return false;
+
+    this.activeModifiers.push({
+      stat: MODIFIER_STAT.TERRAFORM_REFUND_USED_THIS_TURN,
+      value: 1,
+      remainingWaves: null,
+      remainingTurns: 1,
+    });
+    return true;
   }
 
   /**
@@ -242,12 +370,20 @@ export class CardEffectService {
 
   /** Serialize active modifiers for checkpoint save. */
   serializeModifiers(): ActiveModifier[] {
-    return this.activeModifiers.map(m => ({ stat: m.stat, value: m.value, remainingWaves: m.remainingWaves }));
+    return this.activeModifiers.map(m => {
+      const base: ActiveModifier = { stat: m.stat, value: m.value, remainingWaves: m.remainingWaves };
+      if (m.remainingTurns !== undefined) base.remainingTurns = m.remainingTurns;
+      return base;
+    });
   }
 
   /** Restore active modifiers from a checkpoint snapshot. Replaces current modifiers directly. */
   restoreModifiers(modifiers: ActiveModifier[]): void {
-    this.activeModifiers = modifiers.map(m => ({ stat: m.stat, value: m.value, remainingWaves: m.remainingWaves }));
+    this.activeModifiers = modifiers.map(m => {
+      const base: ActiveModifier = { stat: m.stat, value: m.value, remainingWaves: m.remainingWaves };
+      if (m.remainingTurns !== undefined) base.remainingTurns = m.remainingTurns;
+      return base;
+    });
   }
 
   // ── Lifecycle ─────────────────────────────────────────────
@@ -264,11 +400,14 @@ export class CardEffectService {
    * that broadcast a status across the whole board (FROST_WAVE → SLOW,
    * INCINERATE → BURN, TOXIC_SPRAY → POISON). StatusEffectService.apply
    * handles flying-immunity and refresh semantics internally.
+   *
+   * @param durationOverride Optional. Forwarded to StatusEffectService.apply
+   *   so card upgrades can extend status duration without per-enemy bookkeeping.
    */
-  private applyStatusToAllEnemies(ctx: SpellContext, statusType: StatusEffectType): void {
+  private applyStatusToAllEnemies(ctx: SpellContext, statusType: StatusEffectType, durationOverride?: number): void {
     for (const enemy of ctx.enemyService.getEnemies().values()) {
       if (enemy.dying) continue;
-      ctx.statusEffectService.apply(enemy.id, statusType, ctx.currentTurn);
+      ctx.statusEffectService.apply(enemy.id, statusType, ctx.currentTurn, undefined, durationOverride);
     }
   }
 

@@ -4,19 +4,23 @@ import { EnemyService } from './enemy.service';
 import { PathfindingService } from './pathfinding.service';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
-import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS } from '../models/enemy.model';
-import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
+import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS, MINER_STATS, MINER_DIG_INTERVAL_TURNS, UNSHAKEABLE_STATS, VEINSEEKER_STATS, VEINSEEKER_SPEED_BOOST_WINDOW, VEINSEEKER_BOOSTED_TILES_PER_TURN } from '../models/enemy.model';
 import { GameBoardTile } from '../models/game-board-tile';
+import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { HIT_FLASH_CONFIG, STATUS_EFFECT_VISUAL_CONFIG } from '../constants/effects.constants';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
-import { createTestBoard, createGameBoardServiceSpy, createCardEffectServiceSpy } from '../testing';
+import { createTestBoard, createGameBoardServiceSpy, createCardEffectServiceSpy, createRelicServiceSpy } from '../testing';
 import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { EnemyVisualService } from './enemy-visual.service';
 import { EnemyHealthService } from './enemy-health.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
+import { RelicService } from '../../../run/services/relic.service';
 import { SerializableEnemy } from '../models/encounter-checkpoint.model';
 import { createTestEnemy } from '../testing/test-enemy.factory';
+import { PathMutationService } from './path-mutation.service';
+import { ElevationService } from './elevation.service';
+import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 
 /**
  * Helper: configure modifier effects on the real GameStateService.
@@ -31,10 +35,12 @@ describe('EnemyService', () => {
   let service: EnemyService;
   let gameBoardService: jasmine.SpyObj<GameBoardService>;
   let gameStateService: GameStateService;
+  let relicServiceSpy: jasmine.SpyObj<RelicService>;
   let mockScene: THREE.Scene;
 
   beforeEach(() => {
     const gameBoardServiceSpy = createGameBoardServiceSpy(10, 10, 1, () => createTestBoard());
+    relicServiceSpy = createRelicServiceSpy();
 
     TestBed.configureTestingModule({
       providers: [
@@ -46,6 +52,7 @@ describe('EnemyService', () => {
         GameStateService,
         { provide: GameBoardService, useValue: gameBoardServiceSpy },
         { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+        { provide: RelicService, useValue: relicServiceSpy },
       ]
     });
 
@@ -110,7 +117,8 @@ describe('EnemyService', () => {
       const types: EnemyType[] = [
         EnemyType.BASIC, EnemyType.FAST, EnemyType.HEAVY,
         EnemyType.SWIFT, EnemyType.BOSS, EnemyType.SHIELDED,
-        EnemyType.SWARM, EnemyType.FLYING
+        EnemyType.SWARM, EnemyType.FLYING, EnemyType.MINER, EnemyType.UNSHAKEABLE,
+        EnemyType.VEINSEEKER,
       ];
       types.forEach(type => {
         const enemy = service.spawnEnemy(type, mockScene)!;
@@ -127,7 +135,10 @@ describe('EnemyService', () => {
         EnemyType.BOSS,
         EnemyType.SHIELDED,
         EnemyType.SWARM,
-        EnemyType.FLYING
+        EnemyType.FLYING,
+        EnemyType.MINER,
+        EnemyType.UNSHAKEABLE,
+        EnemyType.VEINSEEKER,
       ];
 
       types.forEach(type => {
@@ -875,6 +886,102 @@ describe('EnemyService', () => {
         expect(result.spawnedEnemies.length).toBe(0);
       });
     });
+
+    // ── Phase 3 Highground — "exposed" damage multiplier (Sprint 28) ──────────
+    //
+    // Enemies on tiles with negative elevation (DEPRESS_TILE effect) take +25%
+    // incoming damage from ALL sources routed through damageEnemy. The multiplier
+    // is applied before shield absorption by design (shield is structural defense;
+    // exposed is a positional bonus that amplifies raw incoming damage).
+
+    describe('exposed damage multiplier (DEPRESS_TILE — negative elevation)', () => {
+      let elevationSpy: jasmine.SpyObj<ElevationService>;
+
+      beforeEach(() => {
+        elevationSpy = jasmine.createSpyObj<ElevationService>('ElevationService', [
+          'getElevation', 'raise', 'depress', 'setAbsolute', 'collapse',
+          'getMaxElevation', 'getElevationMap', 'getActiveChanges',
+          'tickTurn', 'reset', 'serialize', 'restore',
+        ]);
+        // Default: neutral elevation (no bonus).
+        elevationSpy.getElevation.and.returnValue(0);
+        // Inject elevation service directly (bypasses @Optional DI in test bed).
+        (service as unknown as { elevationService: ElevationService | null }).elevationService = elevationSpy;
+      });
+
+      afterEach(() => {
+        // Restore null so other tests remain unaffected.
+        (service as unknown as { elevationService: ElevationService | null }).elevationService = null;
+      });
+
+      it('applies no bonus when tile elevation is 0 (boundary: exactly 0 does NOT expose)', () => {
+        elevationSpy.getElevation.and.returnValue(0);
+        const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+        const healthBefore = enemy.health;
+
+        service.damageEnemy(enemy.id, 100);
+
+        // 100 damage, no multiplier.
+        expect(enemy.health).toBe(healthBefore - 100);
+      });
+
+      it('applies no bonus when tile elevation is positive (raised tiles do NOT expose)', () => {
+        elevationSpy.getElevation.and.returnValue(2);
+        const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+        const healthBefore = enemy.health;
+
+        service.damageEnemy(enemy.id, 100);
+
+        // Positive elevation = no exposed bonus.
+        expect(enemy.health).toBe(healthBefore - 100);
+      });
+
+      it('applies +25% bonus when tile elevation is -1 (exposed)', () => {
+        elevationSpy.getElevation.and.returnValue(-1);
+        const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+        const healthBefore = enemy.health;
+
+        service.damageEnemy(enemy.id, 100);
+
+        // Math.round(100 * (1 + 0.25)) = 125.
+        expect(enemy.health).toBe(healthBefore - 125);
+      });
+
+      it('applies +25% bonus when tile elevation is -2 (max depress)', () => {
+        elevationSpy.getElevation.and.returnValue(-2);
+        const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+        const healthBefore = enemy.health;
+
+        service.damageEnemy(enemy.id, 80);
+
+        // Math.round(80 * 1.25) = 100.
+        expect(enemy.health).toBe(healthBefore - 100);
+      });
+
+      it('rounds the amplified damage correctly (Math.round, not floor)', () => {
+        elevationSpy.getElevation.and.returnValue(-1);
+        const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+        const healthBefore = enemy.health;
+
+        // 10 * 1.25 = 12.5 → Math.round → 13.
+        service.damageEnemy(enemy.id, 10);
+
+        expect(enemy.health).toBe(healthBefore - 13);
+      });
+
+      it('is a no-op when elevationService is null (test beds without elevation)', () => {
+        // Restore null to verify defensive guard: this simulates a test bed
+        // that didn't register ElevationService (the @Optional() path).
+        (service as unknown as { elevationService: ElevationService | null }).elevationService = null;
+        const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+        const healthBefore = enemy.health;
+
+        service.damageEnemy(enemy.id, 100);
+
+        // No bonus — fallback to 0 elevation.
+        expect(enemy.health).toBe(healthBefore - 100);
+      });
+    });
   });
 
   describe('Health Bars (updateHealthBars)', () => {
@@ -1388,6 +1495,13 @@ describe('EnemyService', () => {
       // Should NOT be one of the named geometry subclasses — it's a custom diamond
       expect(enemy.mesh!.geometry).not.toBeInstanceOf(THREE.SphereGeometry);
       expect(enemy.mesh!.geometry).not.toBeInstanceOf(THREE.BoxGeometry);
+    });
+
+    it('MINER enemy creates a BoxGeometry mesh', () => {
+      const enemy = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.BoxGeometry);
     });
 
     it('Mini-swarm mesh uses OctahedronGeometry', () => {
@@ -2901,6 +3015,207 @@ describe('EnemyService', () => {
       const { enemyCounter: counterAfterRestore } = service.serializeEnemies();
       expect(counterAfterRestore).toBe(enemyCounter);
     });
+
+    it('serializeEnemies() round-trips spawnedOnTurn for MINER', () => {
+      const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+      miner.spawnedOnTurn = 7;
+
+      const { enemies } = service.serializeEnemies();
+      const serialized = enemies.find(e => e.id === miner.id)!;
+
+      expect(serialized.spawnedOnTurn).toBe(7);
+    });
+
+    it('restoreEnemies() preserves spawnedOnTurn on MINER', () => {
+      const serialized: SerializableEnemy[] = [
+        {
+          id: 'miner-1',
+          type: EnemyType.MINER,
+          position: { x: 0, y: 0.35, z: 0 },
+          gridPosition: { row: 0, col: 0 },
+          health: MINER_STATS.health,
+          maxHealth: MINER_STATS.health,
+          speed: MINER_STATS.speed,
+          value: MINER_STATS.value,
+          leakDamage: MINER_STATS.leakDamage,
+          path: [],
+          pathIndex: 0,
+          distanceTraveled: 0,
+          spawnedOnTurn: 5,
+        }
+      ];
+      const meshMap = new Map<string, THREE.Mesh>([['miner-1', new THREE.Mesh()]]);
+
+      service.restoreEnemies(serialized, meshMap, 1);
+
+      const restored = service.getEnemies().get('miner-1')!;
+      expect(restored.spawnedOnTurn).toBe(5);
+    });
+
+    it('serializeEnemies() omits spawnedOnTurn for non-MINER enemies', () => {
+      const basic = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      const { enemies } = service.serializeEnemies();
+      const serialized = enemies.find(e => e.id === basic.id)!;
+
+      expect((serialized as unknown as Record<string, unknown>)['spawnedOnTurn']).toBeUndefined();
+    });
+  });
+
+  describe('MINER enemy', () => {
+    it('should spawn with correct stats from MINER_STATS', () => {
+      const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+
+      expect(miner.type).toBe(EnemyType.MINER);
+      expect(miner.health).toBe(MINER_STATS.health);
+      expect(miner.speed).toBeCloseTo(MINER_STATS.speed);
+      expect(miner.value).toBe(MINER_STATS.value);
+      expect(miner.leakDamage).toBe(MINER_STATS.leakDamage);
+    });
+
+    it('should NOT set spawnedOnTurn when currentTurn is omitted', () => {
+      const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+
+      expect(miner.spawnedOnTurn).toBeUndefined();
+    });
+
+    it('should set spawnedOnTurn when currentTurn is provided', () => {
+      const miner = service.spawnEnemy(EnemyType.MINER, mockScene, 1, 1, undefined, 4)!;
+
+      expect(miner.spawnedOnTurn).toBe(4);
+    });
+
+    it('should NOT set spawnedOnTurn on non-MINER enemies', () => {
+      const basic = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 1, undefined, 4)!;
+
+      expect(basic.spawnedOnTurn).toBeUndefined();
+    });
+
+    describe('MINER_STATS constants', () => {
+      it('MINER_STATS.health is 175', () => {
+        expect(MINER_STATS.health).toBe(175);
+      });
+
+      it('MINER_STATS.tilesPerTurn is 1', () => {
+        expect(MINER_STATS.tilesPerTurn).toBe(1);
+      });
+
+      it('MINER_DIG_INTERVAL_TURNS is 3', () => {
+        expect(MINER_DIG_INTERVAL_TURNS).toBe(3);
+      });
+    });
+
+    describe('tickMinerDigs (without PathMutationService — @Optional null)', () => {
+      it('should be a no-op when PathMutationService is null (early-out)', () => {
+        // PathMutationService is not registered — @Optional injects null
+        const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        miner.spawnedOnTurn = 1;
+
+        // Should not throw even though pathMutationService is null
+        expect(() => service.tickMinerDigs(4, mockScene)).not.toThrow();
+      });
+
+      it('should skip dying enemies', () => {
+        const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        miner.spawnedOnTurn = 1;
+        miner.dying = true;
+
+        expect(() => service.tickMinerDigs(4, mockScene)).not.toThrow();
+      });
+
+      it('should skip enemies with undefined spawnedOnTurn', () => {
+        service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        // spawnedOnTurn is undefined (no currentTurn passed to spawnEnemy)
+
+        expect(() => service.tickMinerDigs(4, mockScene)).not.toThrow();
+      });
+
+      it('should not fire on the spawn turn itself (turnsSinceSpawn === 0)', () => {
+        // Even if we had PathMutationService, the turn=0 guard must hold.
+        // We verify by ensuring the method exits early without error.
+        const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        miner.spawnedOnTurn = 4;
+
+        expect(() => service.tickMinerDigs(4, mockScene)).not.toThrow();
+      });
+    });
+
+    // Sprint 24 QA fix: findMinerDigTarget was originally path-scanning, but
+    // A* pathfinding never puts WALL tiles into enemy.path (they're non-
+    // traversable). Rewritten to scan the MINER's 4-direction neighbors for
+    // adjacent walls instead.
+    describe('findMinerDigTarget (adjacent-neighbor scan)', () => {
+      it('returns null when no adjacent tile is a WALL', () => {
+        const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        // Test board has all-BASE neighbors by default — no dig target.
+        const result = service.findMinerDigTarget(miner);
+        expect(result).toBeNull();
+      });
+
+      it('returns the first adjacent WALL (scan order up/down/left/right)', () => {
+        const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        miner.gridPosition = { row: 2, col: 2 };
+
+        const board = gameBoardService.getGameBoard();
+        const mockBoard = board.map(row => [...row]);
+        // Put a WALL to the left (row 2, col 1). Up/down come first in
+        // scan order but are BASE → should fall through to left.
+        mockBoard[2][1] = GameBoardTile.createWall(1, 2);
+        gameBoardService.getGameBoard.and.returnValue(mockBoard);
+
+        const result = service.findMinerDigTarget(miner);
+
+        expect(result).toEqual({ row: 2, col: 1 });
+      });
+
+      it('prefers UP over DOWN when both are walls (deterministic order)', () => {
+        const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        miner.gridPosition = { row: 2, col: 2 };
+
+        const board = gameBoardService.getGameBoard();
+        const mockBoard = board.map(row => [...row]);
+        mockBoard[1][2] = GameBoardTile.createWall(2, 1); // up
+        mockBoard[3][2] = GameBoardTile.createWall(2, 3); // down
+        gameBoardService.getGameBoard.and.returnValue(mockBoard);
+
+        const result = service.findMinerDigTarget(miner);
+
+        expect(result).toEqual({ row: 1, col: 2 });
+      });
+
+      it('skips player-built walls (isPlayerBlocked guard)', () => {
+        const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        miner.gridPosition = { row: 2, col: 2 };
+
+        const board = gameBoardService.getGameBoard();
+        const mockBoard = board.map(row => [...row]);
+        mockBoard[1][2] = GameBoardTile.createWall(2, 1); // up (player-built)
+        mockBoard[3][2] = GameBoardTile.createWall(2, 3); // down (original)
+        gameBoardService.getGameBoard.and.returnValue(mockBoard);
+
+        // Spy on PathMutationService.isPlayerBlocked — sprint-21 wiring makes
+        // this available via @Optional injection on EnemyService. In this
+        // spec we inject a spy via TestBed; if absent, the guard short-circuits.
+        const pathMutation = TestBed.inject(PathMutationService, null);
+        if (pathMutation) {
+          spyOn(pathMutation, 'isPlayerBlocked').and.callFake(
+            (r: number, c: number) => r === 1 && c === 2,
+          );
+
+          const result = service.findMinerDigTarget(miner);
+
+          // Up is player-blocked; MINER falls through to down.
+          expect(result).toEqual({ row: 3, col: 2 });
+        }
+      });
+
+      it('returns null for an out-of-bounds MINER (defensive)', () => {
+        const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        miner.gridPosition = { row: -5, col: -5 };
+        const result = service.findMinerDigTarget(miner);
+        expect(result).toBeNull();
+      });
+    });
   });
 
   describe('damageStrongestEnemy — flying exclusion', () => {
@@ -3045,6 +3360,170 @@ describe('EnemyService', () => {
   // Ground straight-line fallback — Fix #43: no-path case
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // applyDetour (DETOUR card — Sprint 14)
+  // ---------------------------------------------------------------------------
+
+  describe('applyDetour', () => {
+    it('returns 0 and mutates nothing when no exit tiles exist', () => {
+      // Board with no exit tile
+      const board: GameBoardTile[][] = [];
+      for (let row = 0; row < 10; row++) {
+        board[row] = [];
+        for (let col = 0; col < 10; col++) {
+          board[row][col] = row === 0 && col === 0
+            ? GameBoardTile.createSpawner(row, col)
+            : GameBoardTile.createBase(row, col);
+        }
+      }
+      gameBoardService.getGameBoard.and.returnValue(board);
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      // spawnEnemy itself returns null when no exit — but we can check applyDetour
+      // directly even when no enemy is present.
+      const count = service.applyDetour();
+      expect(count).toBe(0);
+    });
+
+    it('skips flying enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.FLYING, mockScene);
+      expect(enemy).toBeTruthy('FLYING enemy should spawn on a standard board');
+      const originalPath = [...(enemy?.path ?? [])];
+
+      const count = service.applyDetour();
+
+      expect(count).toBe(0);
+      expect(enemy?.path).toEqual(originalPath);
+    });
+
+    it('skips dying enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeTruthy();
+      enemy!.dying = true;
+      const originalPathLength = enemy!.path.length;
+
+      const count = service.applyDetour();
+
+      expect(count).toBe(0);
+      expect(enemy!.path.length).toBe(originalPathLength);
+    });
+
+    it('overrides path on a non-flying, non-dying enemy when a longer path exists', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeTruthy();
+
+      // Give the enemy a very short path (just 2 nodes) so the DFS will find longer.
+      enemy!.path = [
+        { x: 0, y: 0, g: 0, h: 0, f: 0 },
+        { x: 9, y: 9, g: 0, h: 0, f: 0 },
+      ];
+      enemy!.pathIndex = 0;
+
+      const count = service.applyDetour();
+
+      // On a 10×10 open board, the longest path is much longer than 2 nodes.
+      // The count should reflect 1 override.
+      expect(count).toBe(1);
+      expect(enemy!.pathIndex).toBe(0);
+      expect(enemy!.path.length).toBeGreaterThan(2);
+    });
+
+    it('returns the count of enemies whose path was overridden', () => {
+      // Spawn two enemies — both get short paths.
+      const e1 = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      const e2 = service.spawnEnemy(EnemyType.FAST, mockScene);
+      expect(e1).toBeTruthy();
+      expect(e2).toBeTruthy();
+
+      e1!.path = [{ x: 0, y: 0, g: 0, h: 0, f: 0 }, { x: 9, y: 9, g: 0, h: 0, f: 0 }];
+      e1!.pathIndex = 0;
+      e2!.path = [{ x: 0, y: 0, g: 0, h: 0, f: 0 }, { x: 9, y: 9, g: 0, h: 0, f: 0 }];
+      e2!.pathIndex = 0;
+
+      const count = service.applyDetour();
+
+      expect(count).toBeGreaterThanOrEqual(1);
+    });
+
+    // ── DETOUR upgraded — per-extra-step max-HP damage ─────────────────────
+    //
+    // Upgraded DETOUR passes a non-zero damageFractionPerExtraStep to
+    // applyDetour. Each rerouted enemy takes burst damage proportional to the
+    // length delta (longestPath.length - remainingCurrent), via damageEnemy
+    // so shields / expose / status / death-spawn logic all run normally.
+    it('upgraded (damageFraction 0.08): rerouted enemy takes proportional max-HP damage', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeTruthy();
+
+      enemy!.path = [
+        { x: 0, y: 0, g: 0, h: 0, f: 0 },
+        { x: 9, y: 9, g: 0, h: 0, f: 0 },
+      ];
+      enemy!.pathIndex = 0;
+      const healthBefore = enemy!.health;
+
+      const count = service.applyDetour(0.08);
+
+      // Rerouted — damage was applied.
+      expect(count).toBe(1);
+      expect(enemy!.health).toBeLessThan(healthBefore);
+    });
+
+    it('base tier (damageFraction default 0): rerouted enemy takes NO damage', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeTruthy();
+
+      enemy!.path = [
+        { x: 0, y: 0, g: 0, h: 0, f: 0 },
+        { x: 9, y: 9, g: 0, h: 0, f: 0 },
+      ];
+      enemy!.pathIndex = 0;
+      const healthBefore = enemy!.health;
+
+      const count = service.applyDetour();  // default = 0
+
+      expect(count).toBe(1);
+      expect(enemy!.health).toBe(healthBefore);
+    });
+
+    it('upgraded: damage is NOT applied to enemies whose path was NOT rerouted', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeTruthy();
+
+      // Already-long path so applyDetour finds nothing longer — no override.
+      const fullLongPath = [];
+      for (let i = 0; i < 100; i++) {
+        fullLongPath.push({ x: i, y: i, g: 0, h: 0, f: 0 });
+      }
+      enemy!.path = fullLongPath;
+      enemy!.pathIndex = 0;
+      const healthBefore = enemy!.health;
+
+      const count = service.applyDetour(0.08);
+
+      expect(count).toBe(0);
+      expect(enemy!.health).toBe(healthBefore);
+    });
+
+    it('upgraded damage floors at 1 HP even when fraction × extraSteps rounds to 0', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeTruthy();
+      // Monkey-patch an unrealistically small maxHealth so fraction rounds low.
+      enemy!.maxHealth = 5;  // 5 × 0.0001 = 0.0005 → Math.round = 0 → floor 1.
+      enemy!.health = 5;
+      enemy!.path = [
+        { x: 0, y: 0, g: 0, h: 0, f: 0 },
+        { x: 9, y: 9, g: 0, h: 0, f: 0 },
+      ];
+      enemy!.pathIndex = 0;
+
+      service.applyDetour(0.0001);
+
+      // Floor-1 damage means the enemy took some damage even with a tiny fraction.
+      expect(enemy!.health).toBeLessThan(5);
+    });
+  });
+
   describe('ground enemy straight-line fallback — no A* path', () => {
     it('spawns a ground enemy with a straight-line path when A* is blocked', () => {
       // Block every tile except spawner column 0 and exit column 9, forcing
@@ -3069,4 +3548,691 @@ describe('EnemyService', () => {
       expect(enemy!.path.length).toBeGreaterThan(0);
     });
   });
+
+  // ── SURVEYOR_COMPASS tile tracking ───────────────────────────────────────
+
+  describe('stepEnemiesOneTurn — SURVEYOR_COMPASS tile tracking', () => {
+    it('calls relicService.recordTileVisited for each tile an enemy steps onto', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy).not.toBeNull();
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      // BASIC enemy moves 1 tile per turn — recordTileVisited should have been called
+      // at least once with the new position (row, col).
+      expect(relicServiceSpy.recordTileVisited).toHaveBeenCalled();
+      const calls = relicServiceSpy.recordTileVisited.calls.allArgs();
+      // Each call should be (row: number, col: number)
+      calls.forEach(([row, col]: [number, number]) => {
+        expect(typeof row).toBe('number');
+        expect(typeof col).toBe('number');
+      });
+    });
+
+    it('passes the enemy gridPosition values to recordTileVisited after stepping', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      relicServiceSpy.recordTileVisited.calls.reset();
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      // After stepping, enemy.gridPosition should match the last recordTileVisited call args.
+      const lastCall = relicServiceSpy.recordTileVisited.calls.mostRecent();
+      if (lastCall) {
+        const [row, col] = lastCall.args as [number, number];
+        expect(row).toBe(enemy.gridPosition.row);
+        expect(col).toBe(enemy.gridPosition.col);
+      } else {
+        // If enemy has no path remaining it won't step — not a failure
+        expect(enemy.pathIndex).toBe(enemy.path.length - 1);
+      }
+    });
+  });
+
+  // ── UNSHAKEABLE elite enemy (Sprint 22) ──────────────────────────────────
+
+  describe('UNSHAKEABLE enemy', () => {
+    it('should spawn with correct stats from UNSHAKEABLE_STATS', () => {
+      const enemy = service.spawnEnemy(EnemyType.UNSHAKEABLE, mockScene)!;
+
+      expect(enemy.type).toBe(EnemyType.UNSHAKEABLE);
+      expect(enemy.health).toBe(UNSHAKEABLE_STATS.health);
+      expect(enemy.speed).toBeCloseTo(UNSHAKEABLE_STATS.speed);
+      expect(enemy.value).toBe(UNSHAKEABLE_STATS.value);
+      expect(enemy.leakDamage).toBe(UNSHAKEABLE_STATS.leakDamage);
+    });
+
+    it('should set immuneToDetour = true on spawn', () => {
+      const enemy = service.spawnEnemy(EnemyType.UNSHAKEABLE, mockScene)!;
+
+      expect(enemy.immuneToDetour).toBe(true);
+    });
+
+    it('should NOT set immuneToDetour on non-UNSHAKEABLE enemies', () => {
+      const basic = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const heavy = service.spawnEnemy(EnemyType.HEAVY, mockScene)!;
+
+      expect(basic.immuneToDetour).toBeUndefined();
+      expect(heavy.immuneToDetour).toBeUndefined();
+    });
+  });
+
+  // ── applyDetour with UNSHAKEABLE ─────────────────────────────────────────
+
+  describe('applyDetour with UNSHAKEABLE', () => {
+    it('does not override path on UNSHAKEABLE enemy', () => {
+      const unshakeable = service.spawnEnemy(EnemyType.UNSHAKEABLE, mockScene)!;
+      const originalPath = [...unshakeable.path];
+      const originalIndex = unshakeable.pathIndex;
+
+      // Give it a short path so applyDetour would normally override it.
+      unshakeable.path = [
+        { x: 0, y: 0, g: 0, h: 0, f: 0 },
+        { x: 9, y: 9, g: 0, h: 0, f: 0 },
+      ];
+      unshakeable.pathIndex = 0;
+
+      const count = service.applyDetour();
+
+      // UNSHAKEABLE is immune — count is 0, path unchanged.
+      expect(count).toBe(0);
+      expect(unshakeable.path.length).toBe(2);
+      expect(unshakeable.pathIndex).toBe(0);
+    });
+
+    it('overrides HEAVY path but skips UNSHAKEABLE path in the same applyDetour call', () => {
+      const heavy = service.spawnEnemy(EnemyType.HEAVY, mockScene)!;
+      const unshakeable = service.spawnEnemy(EnemyType.UNSHAKEABLE, mockScene)!;
+
+      // Give both enemies a short 2-node path so applyDetour would override if eligible.
+      const shortPath = (): Array<{ x: number; y: number; g: number; h: number; f: number }> => [
+        { x: 0, y: 0, g: 0, h: 0, f: 0 },
+        { x: 9, y: 9, g: 0, h: 0, f: 0 },
+      ];
+
+      heavy.path = shortPath();
+      heavy.pathIndex = 0;
+      unshakeable.path = shortPath();
+      unshakeable.pathIndex = 0;
+
+      const count = service.applyDetour();
+
+      // Only HEAVY is eligible — UNSHAKEABLE is immune.
+      expect(count).toBe(1);
+      // HEAVY gets a longer rerouted path.
+      expect(heavy.path.length).toBeGreaterThan(2);
+      // UNSHAKEABLE path is unchanged.
+      expect(unshakeable.path.length).toBe(2);
+    });
+  });
+
+  // ── UNSHAKEABLE serialize round-trip ─────────────────────────────────────
+
+  describe('UNSHAKEABLE serialize round-trip', () => {
+    it('serializeEnemies() preserves immuneToDetour for UNSHAKEABLE', () => {
+      const enemy = service.spawnEnemy(EnemyType.UNSHAKEABLE, mockScene)!;
+
+      const { enemies } = service.serializeEnemies();
+      const serialized = enemies.find(e => e.id === enemy.id)!;
+
+      expect(serialized.immuneToDetour).toBe(true);
+    });
+
+    it('serializeEnemies() omits immuneToDetour for non-UNSHAKEABLE enemies', () => {
+      const basic = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      const { enemies } = service.serializeEnemies();
+      const serialized = enemies.find(e => e.id === basic.id)!;
+
+      expect((serialized as unknown as Record<string, unknown>)['immuneToDetour']).toBeUndefined();
+    });
+
+    it('restoreEnemies() preserves immuneToDetour on UNSHAKEABLE', () => {
+      const serialized: SerializableEnemy[] = [
+        {
+          id: 'unshakeable-1',
+          type: EnemyType.UNSHAKEABLE,
+          position: { x: 0, y: UNSHAKEABLE_STATS.size, z: 0 },
+          gridPosition: { row: 0, col: 0 },
+          health: UNSHAKEABLE_STATS.health,
+          maxHealth: UNSHAKEABLE_STATS.health,
+          speed: UNSHAKEABLE_STATS.speed,
+          value: UNSHAKEABLE_STATS.value,
+          leakDamage: UNSHAKEABLE_STATS.leakDamage,
+          path: [],
+          pathIndex: 0,
+          distanceTraveled: 0,
+          immuneToDetour: true,
+        }
+      ];
+      const meshMap = new Map<string, THREE.Mesh>([['unshakeable-1', new THREE.Mesh()]]);
+
+      service.restoreEnemies(serialized, meshMap, 1);
+
+      const restored = service.getEnemies().get('unshakeable-1')!;
+      expect(restored.immuneToDetour).toBe(true);
+    });
+  });
+
+  // ── VEINSEEKER boss (Sprint 23) — speed boost mechanic ───────────────────
+
+  describe('VEINSEEKER speed boost', () => {
+    /**
+     * PathMutationService has heavy DI (GameBoardService, BoardMeshRegistryService,
+     * PathfindingService, TerraformMaterialPoolService). We use a jasmine spy for the
+     * `wasMutatedInLastTurns` query so we can control the result without wiring up
+     * the full service graph. EnemyService injects PathMutationService as @Optional,
+     * so we provide a spy via the token.
+     */
+    let pathMutationSpy: jasmine.SpyObj<PathMutationService>;
+
+    beforeEach(() => {
+      TestBed.resetTestingModule();
+      const gameBoardServiceSpy = createGameBoardServiceSpy(10, 10, 1, () => createTestBoard());
+      const relicSpy = createRelicServiceSpy();
+      pathMutationSpy = jasmine.createSpyObj<PathMutationService>('PathMutationService', [
+        'wasMutatedInLastTurns',
+      ]);
+      // Default: no mutation active
+      pathMutationSpy.wasMutatedInLastTurns.and.returnValue(false);
+
+      TestBed.configureTestingModule({
+        providers: [
+          PathfindingService,
+          EnemyService,
+          EnemyVisualService,
+          EnemyHealthService,
+          EnemyMeshFactoryService,
+          GameStateService,
+          { provide: PathMutationService, useValue: pathMutationSpy },
+          { provide: GameBoardService, useValue: gameBoardServiceSpy },
+          { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+          { provide: RelicService, useValue: relicSpy },
+        ]
+      });
+
+      service = TestBed.inject(EnemyService);
+      mockScene = new THREE.Scene();
+    });
+
+    it('should spawn VEINSEEKER with correct stats from VEINSEEKER_STATS', () => {
+      const enemy = service.spawnEnemy(EnemyType.VEINSEEKER, mockScene)!;
+
+      expect(enemy.type).toBe(EnemyType.VEINSEEKER);
+      expect(enemy.health).toBe(VEINSEEKER_STATS.health);
+      expect(enemy.speed).toBe(VEINSEEKER_STATS.speed);
+      expect(enemy.value).toBe(VEINSEEKER_STATS.value);
+      expect(enemy.leakDamage).toBe(VEINSEEKER_STATS.leakDamage);
+    });
+
+    it('advances 2 tiles/turn when wasMutatedInLastTurns returns true', () => {
+      const enemy = service.spawnEnemy(EnemyType.VEINSEEKER, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      // Simulate: path was mutated recently → boost is active.
+      pathMutationSpy.wasMutatedInLastTurns.and.returnValue(true);
+      const currentTurn = 2;
+
+      service.stepEnemiesOneTurn(() => 0, currentTurn);
+
+      // Boosted: VEINSEEKER_BOOSTED_TILES_PER_TURN (2) instead of base 1
+      expect(enemy.pathIndex).toBe(startIndex + VEINSEEKER_BOOSTED_TILES_PER_TURN);
+      expect(enemy.distanceTraveled).toBe(VEINSEEKER_BOOSTED_TILES_PER_TURN);
+      // Confirm the spy was queried with the correct arguments
+      expect(pathMutationSpy.wasMutatedInLastTurns).toHaveBeenCalledWith(currentTurn, VEINSEEKER_SPEED_BOOST_WINDOW);
+    });
+
+    it('advances 1 tile/turn (base speed) when wasMutatedInLastTurns returns false', () => {
+      const enemy = service.spawnEnemy(EnemyType.VEINSEEKER, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      // No recent mutation — spy already returns false by default.
+      service.stepEnemiesOneTurn(() => 0, 10);
+
+      expect(enemy.pathIndex).toBe(startIndex + 1);
+      expect(enemy.distanceTraveled).toBe(1);
+    });
+
+    it('non-VEINSEEKER boss (BOSS type) is not affected by path mutation state', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      const startIndex = boss.pathIndex;
+
+      // Mutation active — must not affect BOSS
+      pathMutationSpy.wasMutatedInLastTurns.and.returnValue(true);
+      service.stepEnemiesOneTurn(() => 0, 2);
+
+      // BOSS always moves 1 tile/turn regardless of mutations.
+      expect(boss.pathIndex).toBe(startIndex + 1);
+    });
+
+    it('slowed VEINSEEKER during boost still respects floor-at-1', () => {
+      const enemy = service.spawnEnemy(EnemyType.VEINSEEKER, mockScene)!;
+
+      // Mutation active → boosted baseTiles = 2
+      pathMutationSpy.wasMutatedInLastTurns.and.returnValue(true);
+      // slowReduction=2 would take boosted 2 → 0, but floor-at-1 prevents paralysis.
+      service.stepEnemiesOneTurn(() => 2, 2);
+
+      // Floor-at-1 applies: Math.max(1, 2 - 2 - 0) = Math.max(1, 0) = 1
+      expect(enemy.distanceTraveled).toBe(1);
+    });
+  });
+
+  // ── Sprint 34 — GRAVITY_WELL movement gate ───────────────────────────────
+
+  describe('GRAVITY_WELL movement gate', () => {
+    /**
+     * GRAVITY_WELL: enemies on depressed tiles (elevation < 0) skip movement.
+     * Tested by injecting a CardEffectService spy that returns 1 for GRAVITY_WELL
+     * and an ElevationService spy for per-tile elevation.
+     */
+    let gravityCardSpy: jasmine.SpyObj<CardEffectService>;
+    let gravityElevSpy: jasmine.SpyObj<ElevationService>;
+
+    function buildGravityTestBed(
+      tileElevations: Map<string, number>,
+      gravityWellActive: boolean,
+    ): void {
+      TestBed.resetTestingModule();
+      const gameBoardServiceSpy = createGameBoardServiceSpy(10, 10, 1, () => createTestBoard());
+      const relicSpy = createRelicServiceSpy();
+
+      gravityCardSpy = jasmine.createSpyObj<CardEffectService>('CardEffectService', [
+        'getModifierValue',
+        'hasActiveModifier',
+        'applyModifier',
+        'applySpell',
+        'tickWave',
+        'getActiveModifiers',
+        'tryConsumeLeakBlock',
+        'serializeModifiers',
+        'restoreModifiers',
+        'reset',
+      ]);
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? (gravityWellActive ? 1 : 0) : 0
+      );
+
+      gravityElevSpy = jasmine.createSpyObj<ElevationService>('ElevationService', [
+        'getElevation',
+        'getMaxElevation',
+        'raise',
+        'depress',
+        'setAbsolute',
+        'collapse',
+        'getElevationMap',
+        'getActiveChanges',
+        'tickTurn',
+        'reset',
+        'serialize',
+        'restore',
+      ]);
+      gravityElevSpy.getElevation.and.callFake((row: number, col: number) =>
+        tileElevations.get(`${row}-${col}`) ?? 0
+      );
+      gravityElevSpy.getMaxElevation.and.returnValue(0);
+
+      TestBed.configureTestingModule({
+        providers: [
+          PathfindingService,
+          EnemyService,
+          EnemyVisualService,
+          EnemyHealthService,
+          EnemyMeshFactoryService,
+          GameStateService,
+          { provide: GameBoardService, useValue: gameBoardServiceSpy },
+          { provide: CardEffectService, useValue: gravityCardSpy },
+          { provide: RelicService, useValue: relicSpy },
+          { provide: ElevationService, useValue: gravityElevSpy },
+        ],
+      });
+
+      service = TestBed.inject(EnemyService);
+      mockScene = new THREE.Scene();
+    }
+
+    it('enemy on elevation-0 tile with GRAVITY_WELL active → moves normally', () => {
+      buildGravityTestBed(new Map(), true);  // all tiles elev 0
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      // Elevation 0 is NOT < 0 — no gating; enemy advances 1 tile.
+      expect(enemy.pathIndex).toBe(startIndex + 1);
+    });
+
+    it('enemy on elevation -1 tile with GRAVITY_WELL active → skips movement', () => {
+      // Place the enemy on tile row=1,col=0 (path[1] after spawning) at elevation -1.
+      // After spawn the enemy is at path[0]. Step once to move to path[1], which is elev -1.
+      // Then on the SECOND stepEnemiesOneTurn, the gate should fire and skip movement.
+      buildGravityTestBed(new Map(), false);  // GRAVITY_WELL inactive for first step
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);  // advance to path[1]
+      const indexAtDepressedTile = enemy.pathIndex;
+
+      // Now enable GRAVITY_WELL and set the current tile to elevation -1.
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 1 : 0
+      );
+      const { row, col } = enemy.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      // Enemy is on a depressed tile — GRAVITY_WELL gates movement; pathIndex unchanged.
+      expect(enemy.pathIndex).toBe(indexAtDepressedTile);
+    });
+
+    it('enemy on elevation -1 tile WITHOUT GRAVITY_WELL → moves normally', () => {
+      buildGravityTestBed(new Map(), false);  // GRAVITY_WELL inactive
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);  // advance to path[1]
+      const indexAfterFirstStep = enemy.pathIndex;
+
+      // Depressed tile, but no GRAVITY_WELL active.
+      const { row, col } = enemy.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      // No GRAVITY_WELL — moves normally.
+      expect(enemy.pathIndex).toBe(indexAfterFirstStep + 1);
+    });
+
+    it('enemy on elevation +1 tile with GRAVITY_WELL active → moves normally (only depressed tiles gate)', () => {
+      buildGravityTestBed(new Map(), false);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);  // advance to path[1]
+      const indexAfterFirstStep = enemy.pathIndex;
+
+      // Enable GRAVITY_WELL, but tile is elevated (+1), NOT depressed.
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 1 : 0
+      );
+      const { row, col } = enemy.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? 1 : 0
+      );
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      // Elevation +1 is NOT < 0 — enemy moves normally.
+      expect(enemy.pathIndex).toBe(indexAfterFirstStep + 1);
+    });
+
+    it('multiple enemies: only those on depressed tiles are gated per-enemy', () => {
+      // Spawn one enemy. Step it forward (GRAVITY_WELL inactive) to put it at path[1].
+      // Step a second time with GRAVITY_WELL active and tile depressed — enemy is gated.
+      // Then step a third time after disabling GRAVITY_WELL — enemy moves again.
+      // This validates the per-enemy independence logic without needing two enemies
+      // at different tile positions (which would be the same path node after 1 step).
+      buildGravityTestBed(new Map(), false);
+
+      const enemyA = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      // Step 1: advance to path[1], no GRAVITY_WELL.
+      service.stepEnemiesOneTurn(() => 0);
+      const indexAtPath1 = enemyA.pathIndex;
+
+      // Enable GRAVITY_WELL and depress the tile enemyA is currently on.
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 1 : 0
+      );
+      const { row: rowA, col: colA } = enemyA.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === rowA && c === colA ? -1 : 0
+      );
+
+      // Step 2: GRAVITY_WELL active + depressed tile → gated.
+      service.stepEnemiesOneTurn(() => 0);
+      expect(enemyA.pathIndex).toBe(indexAtPath1); // no movement
+
+      // Disable GRAVITY_WELL — verify per-enemy check is per-step (not permanent freeze).
+      gravityCardSpy.getModifierValue.and.returnValue(0);
+      service.stepEnemiesOneTurn(() => 0);
+      expect(enemyA.pathIndex).toBe(indexAtPath1 + 1); // moves again
+    });
+
+    // ── Sprint 37 GLIDER — ignoresElevation bypasses GRAVITY_WELL gate ─────
+    it('GLIDER on a depressed tile with GRAVITY_WELL active → moves normally (ignoresElevation)', () => {
+      buildGravityTestBed(new Map(), false);
+
+      const glider = service.spawnEnemy(EnemyType.GLIDER, mockScene)!;
+
+      // Advance to path[1] first (GRAVITY_WELL inactive).
+      service.stepEnemiesOneTurn(() => 0);
+      const indexAtPath1 = glider.pathIndex;
+
+      // Enable GRAVITY_WELL and depress the GLIDER's current tile.
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 1 : 0
+      );
+      const { row, col } = glider.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      // GRAVITY_WELL active + depressed tile + GLIDER → GLIDER moves (not gated).
+      service.stepEnemiesOneTurn(() => 0);
+      expect(glider.pathIndex).toBe(indexAtPath1 + 2); // tilesPerTurn = 2 for GLIDER
+    });
+
+    it('BASIC enemy on depressed tile is gated; GLIDER on same tile moves (independence)', () => {
+      buildGravityTestBed(new Map(), false);
+
+      const basic = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const glider = service.spawnEnemy(EnemyType.GLIDER, mockScene)!;
+
+      // Advance both once (GRAVITY_WELL inactive).
+      service.stepEnemiesOneTurn(() => 0);
+      const basicIdx = basic.pathIndex;
+      const gliderIdx = glider.pathIndex;
+
+      // Enable GRAVITY_WELL and depress the path tile.
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 1 : 0
+      );
+      // Depress ALL tiles so both enemies are affected (if they weren't GLIDER).
+      gravityElevSpy.getElevation.and.returnValue(-1);
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      // BASIC is gated (elevation check applies).
+      expect(basic.pathIndex).toBe(basicIdx);
+      // GLIDER moves normally (ignoresElevation = true).
+      expect(glider.pathIndex).toBeGreaterThan(gliderIdx);
+    });
+
+    // ── GRAVITY_WELL upgraded — bleed tier (value ≥ 2) ───────────────────────
+
+    /**
+     * Upgraded GRAVITY_WELL reports modifier value 2 instead of 1. When a
+     * gated enemy is skipped this turn, it additionally takes 10% of its max
+     * HP as damage (Math.max(1, ...) floor). Base tier (value 1) continues to
+     * gate without damage — the two tiers must remain distinguishable.
+     */
+    it('upgraded tier (value 2): gated enemy takes 10% max-HP damage (amplified by +25% exposed bonus)', () => {
+      // Bleed is resolved through damageEnemy, which applies the +25% exposed-
+      // damage multiplier on negative-elevation tiles. This is by design — an
+      // enemy already standing on a depressed tile takes amplified damage from
+      // every source, and the GRAVITY_WELL bleed should follow the same rule
+      // (documented in elevation.constants.ts + enemy.service.ts).
+      buildGravityTestBed(new Map(), false);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);  // advance to path[1]
+      const healthBeforeGate = enemy.health;
+      const maxHealth = enemy.maxHealth;
+
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 2 : 0
+      );
+      const { row, col } = enemy.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      const baseBleed = Math.max(1, Math.round(maxHealth * 0.10));
+      const expectedBleedAfterExpose = Math.round(baseBleed * 1.25);
+      expect(enemy.health).toBe(healthBeforeGate - expectedBleedAfterExpose);
+    });
+
+    it('upgraded tier (value 2): enemy still has movement gated (tier does not imply skip-damage-only)', () => {
+      buildGravityTestBed(new Map(), false);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);
+      const indexAtDepressedTile = enemy.pathIndex;
+
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 2 : 0
+      );
+      const { row, col } = enemy.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(enemy.pathIndex).toBe(indexAtDepressedTile);
+    });
+
+    it('base tier (value 1): gated enemy takes NO damage', () => {
+      buildGravityTestBed(new Map(), false);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);
+      const healthBeforeGate = enemy.health;
+
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 1 : 0
+      );
+      const { row, col } = enemy.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(enemy.health).toBe(healthBeforeGate);
+    });
+
+    it('upgraded tier (value 2) on elevation 0 (not depressed): no bleed, no gate', () => {
+      buildGravityTestBed(new Map(), false);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const healthBefore = enemy.health;
+      const startIndex = enemy.pathIndex;
+
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 2 : 0
+      );
+      // Elevation 0 — NOT depressed — so gate + bleed both skip.
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(enemy.pathIndex).toBe(startIndex + 1);  // moved
+      expect(enemy.health).toBe(healthBefore);       // untouched
+    });
+
+    it('upgraded tier (value 2) + GLIDER on depressed tile: ignoresElevation → no gate, no bleed', () => {
+      buildGravityTestBed(new Map(), false);
+      const glider = service.spawnEnemy(EnemyType.GLIDER, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);
+      const healthBefore = glider.health;
+      const indexAtPath1 = glider.pathIndex;
+
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 2 : 0
+      );
+      const { row, col } = glider.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(glider.pathIndex).toBeGreaterThan(indexAtPath1);  // moved (ignoresElevation)
+      expect(glider.health).toBe(healthBefore);                 // no bleed (same exemption)
+    });
+
+    it('upgraded tier (value 2): bleed damage can kill a low-HP enemy', () => {
+      buildGravityTestBed(new Map(), false);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);
+      // Reduce enemy health so the 10% bleed will kill it.
+      const expectedBleed = Math.max(1, Math.round(enemy.maxHealth * 0.10));
+      service.damageEnemy(enemy.id, enemy.health - expectedBleed);
+      expect(enemy.health).toBe(expectedBleed);
+
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 2 : 0
+      );
+      const { row, col } = enemy.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(enemy.health).toBeLessThanOrEqual(0);
+    });
+  });
+
+  // ── Sprint 37 GLIDER — exposed damage bypass ─────────────────────────────
+  describe('GLIDER damageEnemy — ignoresElevation skips the exposed bonus', () => {
+    let elevationSpy: jasmine.SpyObj<ElevationService>;
+
+    beforeEach(() => {
+      elevationSpy = jasmine.createSpyObj<ElevationService>('ElevationService', [
+        'getElevation', 'raise', 'depress', 'setAbsolute', 'collapse',
+        'getMaxElevation', 'getElevationMap', 'getActiveChanges',
+        'tickTurn', 'reset', 'serialize', 'restore',
+      ]);
+      elevationSpy.getElevation.and.returnValue(0);
+      (service as unknown as { elevationService: ElevationService | null }).elevationService = elevationSpy;
+    });
+
+    afterEach(() => {
+      (service as unknown as { elevationService: ElevationService | null }).elevationService = null;
+    });
+
+    it('BASIC enemy on depressed tile receives +25% bonus', () => {
+      elevationSpy.getElevation.and.returnValue(-1);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const healthBefore = enemy.health;
+
+      service.damageEnemy(enemy.id, 100);
+
+      // Math.round(100 * 1.25) = 125.
+      expect(enemy.health).toBe(healthBefore - 125);
+    });
+
+    it('GLIDER on depressed tile does NOT receive +25% exposed bonus', () => {
+      elevationSpy.getElevation.and.returnValue(-1);
+      const glider = service.spawnEnemy(EnemyType.GLIDER, mockScene)!;
+      const healthBefore = glider.health;
+
+      service.damageEnemy(glider.id, 100);
+
+      // ignoresElevation = true → no +25% → exactly 100 damage.
+      expect(glider.health).toBe(healthBefore - 100);
+    });
+
+    it('TITAN on depressed tile receives +25% bonus (halvesElevationDamageBonuses only halves VP/KOTH)', () => {
+      // TITAN does NOT ignoresElevation — only halves tower-fire VP/KOTH bonuses.
+      // It still takes the exposed damage bonus from EnemyService.damageEnemy.
+      elevationSpy.getElevation.and.returnValue(-1);
+      const titan = service.spawnEnemy(EnemyType.TITAN, mockScene)!;
+      const healthBefore = titan.health;
+
+      service.damageEnemy(titan.id, 100);
+
+      // TITAN is not immune to exposed — takes +25%.
+      expect(titan.health).toBe(healthBefore - 125);
+    });
+  });
 });
+

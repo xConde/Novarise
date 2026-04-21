@@ -313,6 +313,154 @@ describe('PathfindingService', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // findLongestPath (DETOUR Sprint 14)
+  // ---------------------------------------------------------------------------
+
+  describe('findLongestPath', () => {
+    it('returns [] when start is out of bounds', () => {
+      const result = service.findLongestPath({ x: -1, y: -1 }, { x: 9, y: 9 });
+      expect(result.length).toBe(0);
+    });
+
+    it('returns [] when end is completely walled off (unreachable)', () => {
+      // Wall off every neighbor of (9,9) — exit becomes unreachable.
+      const blocked = [
+        { row: 9, col: 8 },
+        { row: 8, col: 9 },
+      ];
+      gameBoardService.getGameBoard.and.returnValue(createTestBoard(10, blocked));
+      const result = service.findLongestPath({ x: 0, y: 0 }, { x: 9, y: 9 });
+      expect(result.length).toBe(0);
+    });
+
+    it('returns a valid path from corner to corner on an open 3×3 board', () => {
+      // 3×3 board: spawner at (0,0), exit at (2,2), all traversable.
+      const board: GameBoardTile[][] = [];
+      for (let row = 0; row < 3; row++) {
+        board[row] = [];
+        for (let col = 0; col < 3; col++) {
+          if (row === 0 && col === 0) {
+            board[row][col] = GameBoardTile.createSpawner(row, col);
+          } else if (row === 2 && col === 2) {
+            board[row][col] = GameBoardTile.createExit(row, col);
+          } else {
+            board[row][col] = GameBoardTile.createBase(row, col);
+          }
+        }
+      }
+      gameBoardService.getGameBoard.and.returnValue(board);
+      gameBoardService.getBoardWidth.and.returnValue(3);
+      gameBoardService.getBoardHeight.and.returnValue(3);
+
+      const longest = service.findLongestPath({ x: 0, y: 0 }, { x: 2, y: 2 });
+      const shortest = service.findPath({ x: 0, y: 0 }, { x: 2, y: 2 });
+
+      // Longest must be at least as long as shortest.
+      expect(longest.length).toBeGreaterThanOrEqual(shortest.length);
+      // And longer on an open 3×3 board (more winding route available).
+      expect(longest.length).toBeGreaterThan(shortest.length);
+
+      // Path starts at start and ends at end.
+      expect(longest[0]).toEqual(jasmine.objectContaining({ x: 0, y: 0 }));
+      expect(longest[longest.length - 1]).toEqual(jasmine.objectContaining({ x: 2, y: 2 }));
+    });
+
+    it('does not revisit any cell', () => {
+      const board: GameBoardTile[][] = [];
+      for (let row = 0; row < 3; row++) {
+        board[row] = [];
+        for (let col = 0; col < 3; col++) {
+          if (row === 0 && col === 0) {
+            board[row][col] = GameBoardTile.createSpawner(row, col);
+          } else if (row === 2 && col === 2) {
+            board[row][col] = GameBoardTile.createExit(row, col);
+          } else {
+            board[row][col] = GameBoardTile.createBase(row, col);
+          }
+        }
+      }
+      gameBoardService.getGameBoard.and.returnValue(board);
+      gameBoardService.getBoardWidth.and.returnValue(3);
+      gameBoardService.getBoardHeight.and.returnValue(3);
+
+      const path = service.findLongestPath({ x: 0, y: 0 }, { x: 2, y: 2 });
+      const seen = new Set<string>();
+      for (const node of path) {
+        const key = `${node.x},${node.y}`;
+        expect(seen.has(key)).toBe(false, `Cell ${key} visited twice`);
+        seen.add(key);
+      }
+    });
+
+    it('respects walls — cannot route through a WALL tile', () => {
+      // Block the direct interior — only one L-shaped corridor remains.
+      const blocked = [
+        { row: 0, col: 1 },
+        { row: 1, col: 0 },
+        { row: 1, col: 1 },
+      ];
+      gameBoardService.getGameBoard.and.returnValue(createTestBoard(3, blocked));
+      gameBoardService.getBoardWidth.and.returnValue(3);
+      gameBoardService.getBoardHeight.and.returnValue(3);
+
+      const path = service.findLongestPath({ x: 0, y: 0 }, { x: 2, y: 2 });
+      // Verify no blocked cell appears in the path.
+      const blockedKeys = new Set(blocked.map(b => `${b.col},${b.row}`));
+      for (const node of path) {
+        expect(blockedKeys.has(`${node.x},${node.y}`))
+          .toBe(false, `Wall cell ${node.x},${node.y} was traversed`);
+      }
+    });
+
+    it('on a narrow corridor (only one path), returns the same path as findPath', () => {
+      // Single-column board (1×5): spawner at (0,0), exit at (0,4).
+      const board: GameBoardTile[][] = [];
+      for (let row = 0; row < 5; row++) {
+        board[row] = [];
+        if (row === 0) {
+          board[row][0] = GameBoardTile.createSpawner(row, 0);
+        } else if (row === 4) {
+          board[row][0] = GameBoardTile.createExit(row, 0);
+        } else {
+          board[row][0] = GameBoardTile.createBase(row, 0);
+        }
+      }
+      gameBoardService.getGameBoard.and.returnValue(board);
+      gameBoardService.getBoardWidth.and.returnValue(1);
+      gameBoardService.getBoardHeight.and.returnValue(5);
+
+      const longest = service.findLongestPath({ x: 0, y: 0 }, { x: 0, y: 4 });
+      const shortest = service.findPath({ x: 0, y: 0 }, { x: 0, y: 4 });
+
+      expect(longest.length).toBe(shortest.length);
+    });
+
+    it('respects the maxDepth cap — returns best found when budget is tight', () => {
+      // Use a small maxDepth (1) so the budget fires on a 10×10 board.
+      const path = service.findLongestPath({ x: 0, y: 0 }, { x: 9, y: 9 }, 1);
+      // With budget of 1*1=1 iteration, the DFS aborts very early.
+      // Ensure it does not throw and returns an array (possibly empty or short).
+      expect(Array.isArray(path)).toBe(true);
+    });
+
+    it('longest path on a 10×10 open board is longer than the shortest path', () => {
+      gameBoardService.getGameBoard.and.returnValue(createTestBoard(10));
+      gameBoardService.getBoardWidth.and.returnValue(10);
+      gameBoardService.getBoardHeight.and.returnValue(10);
+
+      const shortest = service.findPath({ x: 0, y: 0 }, { x: 9, y: 9 });
+      // Use a low maxDepth to bound runtime for the open-board case in tests.
+      const longest = service.findLongestPath({ x: 0, y: 0 }, { x: 9, y: 9 }, 15);
+
+      expect(longest.length).toBeGreaterThanOrEqual(shortest.length);
+      // Verify the path ends at the correct exit.
+      if (longest.length > 0) {
+        expect(longest[longest.length - 1]).toEqual(jasmine.objectContaining({ x: 9, y: 9 }));
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // Boundary conditions
   // ---------------------------------------------------------------------------
 

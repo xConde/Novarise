@@ -31,7 +31,7 @@ import { PathVisualizationService } from './services/path-visualization.service'
 import { StatusEffectService } from './services/status-effect.service';
 import { StatusEffectType } from './constants/status-effect.constants';
 import { TutorialService, TutorialStep } from '../../core/services/tutorial.service';
-import { GameNotificationService, GameNotification } from './services/game-notification.service';
+import { GameNotificationService, GameNotification, NotificationType } from './services/game-notification.service';
 import { ChallengeTrackingService } from './services/challenge-tracking.service';
 import { GameEndService } from './services/game-end.service';
 import { TowerInteractionService } from './services/tower-interaction.service';
@@ -81,6 +81,15 @@ import { AscensionModifierService } from './services/ascension-modifier.service'
 import { TurnHistoryService, TurnEventRecord } from './services/turn-history.service';
 import { WavePreviewService, FutureWaveSummary } from './services/wave-preview.service';
 import { HandCard } from './components/card-hand/card-hand.component';
+import { PathMutationService } from './services/path-mutation.service';
+import { ElevationService } from './services/elevation.service';
+import { LineOfSightService } from './services/line-of-sight.service';
+import { TerraformMaterialPoolService } from './services/terraform-material-pool.service';
+import { TowerGraphService } from './services/tower-graph.service';
+import { LinkMeshService } from './services/link-mesh.service';
+import { ELEVATION_CONFIG } from './constants/elevation.constants';
+import { BlockType } from './models/game-board-tile';
+import { BOARD_CONFIG } from './constants/board.constants';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
 export interface EnemyBadge {
@@ -145,7 +154,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, WavePreviewService]
+  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, TowerGraphService, LinkMeshService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -373,11 +382,29 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private wavePreviewService: WavePreviewService,
     private itemService: ItemService,
     private runStateFlagService: RunStateFlagService,
+    private pathMutationService: PathMutationService,
+    private elevationService: ElevationService,
+    private towerGraphService: TowerGraphService,
+    private linkMeshService: LinkMeshService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
 
   ngOnInit(): void {
+    // Wire PathMutationService enemy repath callback. EnemyService is not injected
+    // by PathMutationService directly (that would create a DI cycle via CombatLoopService),
+    // so the component provides it here as a pluggable hook.
+    this.pathMutationService.setRepathHook((row, col) => {
+      this.enemyService.repathAffectedEnemies(row, col);
+    });
+
+    // Wire TowerGraphService's placed-towers getter. TowerGraphService does
+    // NOT inject TowerCombatService (would create a register-time DI cycle);
+    // the getter pattern mirrors setRepathHook.
+    this.towerGraphService.setPlacedTowersGetter(
+      () => this.towerCombatService.getPlacedTowers(),
+    );
+
     // Feed the RECAP panel off the turn-history buffer so every endTurn()
     // resolves into a fresh row without any call-site flashing logic.
     this.turnRecordsSubscription = this.turnHistoryService.records$.subscribe({
@@ -470,6 +497,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.sceneService.initLights();
     this.sceneService.initSkybox();
     this.sceneService.initParticles();
+    // Attach scene to LinkMeshService — it subscribes to TowerGraphService
+    // edge events at construction time but cannot render without a scene.
+    this.linkMeshService.attachScene(this.sceneService.getScene());
     this.renderGameBoard();
     this.addGridLines();
 
@@ -588,6 +618,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // onward because turnsUsed was cumulative).
     this.combatLoopService.reset();
 
+    // Sprint 36 SURVEYOR_ROD — pre-place elevated tiles at encounter start.
+    // Board is already imported and rendered before initFreshEncounter() fires,
+    // so tiles are valid. ElevationService.reset() ran in resetAllServices()
+    // before this point — the board is clean. Uses runService.nextRandom().
+    if (this.relicService.hasSurveyorRod()) {
+      this.applySurveyorRodEffect();
+    }
+
     // Reset one-shot scout bonuses so a previous encounter's SCOUT_AHEAD does
     // not leak preview depth into this one. (Permanent SCOUTING_LENS bonus
     // stays because it reads live from RelicService.)
@@ -645,7 +683,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const canvas = this.sceneService.getRenderer().domElement;
     this.boardPointer.init(canvas, {
       onTowerClick: (key) => this.selectPlacedTower(key),
-      onTilePlace: (row, col) => this.tryPlaceTower(row, col),
+      onTilePlace: (row, col) => this.onTilePlace(row, col),
       onDeselect: () => this.deselectTower(),
       onCancelPlacement: () => this.cancelPlacement(),
       onContextMenu: () => {
@@ -679,6 +717,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       onPause: () => this.togglePause(),
       onEscape: () => {
         if (this.isPaused) { this.togglePause(); }
+        else if (this.cardPlayService.getPendingTileTargetCard()) { this.cardPlayService.cancelTileTarget(); }
         else if (this.isPlaceMode) { this.cancelPlacement(); }
         else if (this.selectedTowerInfo) { this.deselectTower(); }
         else { this.togglePause(); }
@@ -713,6 +752,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         if (this.selectedTowerInfo?.id === salvageKey) {
           this.deselectTower();
         }
+      },
+      // Sprint 2 tile-target infrastructure: no visual highlighting yet (sprint 23).
+      // These callbacks are wired so GameBoardComponent can react when they land.
+      onEnterTileTargetMode: (_card, _op) => {
+        // Visual tile highlighting deferred to sprint 23. Callback is intentionally
+        // minimal here — the pending state in CardPlayService drives onTilePlace routing.
+      },
+      onExitTileTargetMode: () => {
+        // No tile-target-specific cleanup needed until sprint 23 adds highlights.
       },
     });
 
@@ -801,9 +849,22 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.previewTowerType = null;
   }
 
-  /** Exit PLACE mode — clears tower type selection, hides ghost preview, removes tile highlights. */
+  /**
+   * Exit PLACE mode — clears tower type selection, hides ghost preview,
+   * removes tile highlights, AND cancels any pending tile-target
+   * (terraform) card.
+   *
+   * Sprint 24 red-team Finding 1: tile-target cards must be cancelled
+   * here too. Otherwise a player clicking a terraform card then pressing
+   * End Turn would discard the card from hand while leaving
+   * `pendingTileTargetCard` stale — the next tile click would resolve a
+   * mutation for a card no longer in the deck. Cancelling here ensures
+   * the turn-end guard (via `hasPendingCard` → this) short-circuits
+   * both modes consistently.
+   */
   cancelPlacement(): void {
     this.cardPlayService.cancelPendingTowerCard();
+    this.cardPlayService.cancelTileTarget();
     this.selectedTowerType = null;
     this.boardPointer.clearSelectedTile();
     this.clearTileHighlights();
@@ -1149,6 +1210,63 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // Step 3: Restore CombatLoopService turn number (before mortar zone expiry checks)
       this.combatLoopService.setTurnNumber(checkpoint.turnNumber);
 
+      // Step 3.5: Restore path mutations BEFORE towers (towers can be placed on player-built
+      // BASE tiles) and BEFORE enemies (their serialized paths assume the mutated board state).
+      //
+      // Restore ordering:
+      //   a) restore() reloads the mutation journal + nextId counter (no tile/mesh side effects)
+      //   b) Re-apply each mutation's tile data change to the freshly-imported board
+      //   c) Swap the tile mesh to match the restored tile type
+      //
+      // The board was imported fresh from map data (Step 1), so tiles are at their
+      // original pre-mutation state. We must re-apply each mutation in journal order
+      // to get back to the mid-encounter board state.
+      this.pathMutationService.restore(checkpoint.pathMutations);
+      for (const mutation of checkpoint.pathMutations.mutations) {
+        // Determine what type the tile should be AFTER this mutation.
+        // op → target type mapping (mirrors PathMutationService.applyMutation):
+        //   build → BASE, block → WALL, destroy → WALL, bridgehead → WALL
+        const targetType =
+          mutation.op === 'build' ? BlockType.BASE : BlockType.WALL;
+
+        // Re-apply tile data (board starts fresh from importBoard)
+        this.gameBoardService.setTileType(
+          mutation.row,
+          mutation.col,
+          targetType,
+          mutation.op,
+          mutation.priorType,
+        );
+
+        // Swap the Three.js mesh to match restored tile type
+        this.pathMutationService.swapMesh(mutation.row, mutation.col, targetType, scene);
+      }
+      // Invalidate path cache once after all mutations are replayed
+      if (checkpoint.pathMutations.mutations.length > 0) {
+        this.enemyService.repathAffectedEnemies(-1, -1);
+      }
+
+      // Step 3.6: Restore tile elevations AFTER path mutations (mutations may have
+      // changed BlockType; elevations compose on top of the current BlockType) and
+      // BEFORE towers (tower Y is derived from tile elevation at placement time).
+      //
+      // Restore ordering:
+      //   a) restore() reloads the elevation journal + nextId (no tile/mesh side effects)
+      //   b) Re-apply each non-zero tile elevation to the board data
+      //   c) Translate tile mesh Y to the restored elevation
+      //
+      // Does NOT invalidate pathfinding cache — elevation does not affect isTraversable.
+      this.elevationService.restore(checkpoint.tileElevations);
+      for (const entry of checkpoint.tileElevations.elevations) {
+        this.gameBoardService.setTileElevation(entry.row, entry.col, entry.value);
+        const newTileY = entry.value + BOARD_CONFIG.tileHeight / 2;
+        this.meshRegistry.translateTileMesh(entry.row, entry.col, newTileY);
+      }
+      // Sprint 39: recreate cliff meshes for all restored elevated tiles.
+      // elevationService.restore() only reloads the journal; cliff meshes (visual-only)
+      // must be recreated separately since they are not serialized (derived from elevation).
+      this.elevationService.restoreCliffMeshes(checkpoint.tileElevations.elevations);
+
       // Step 4: Restore towers — create meshes, register in TowerCombatService
       const towerMeshes = new Map<string, THREE.Group>();
       for (const tower of checkpoint.towers) {
@@ -1156,6 +1274,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           tower.row, tower.col, tower.type,
           this.gameBoardService.getBoardWidth(), this.gameBoardService.getBoardHeight()
         );
+        // Tower factory always places the group at fixed tileHeight. If Step 3.6
+        // restored the underlying tile to a non-zero elevation, translate the
+        // tower group up so it sits on top of the raised tile instead of
+        // clipping into the ground. Disposal-neutral — identity-stable mesh.
+        const boardSnapshot = this.gameBoardService.getGameBoard();
+        const tileElevation = boardSnapshot?.[tower.row]?.[tower.col]?.elevation ?? 0;
+        if (tileElevation !== 0) {
+          mesh.position.y = tileElevation + BOARD_CONFIG.tileHeight;
+        }
         scene.add(mesh);
         this.meshRegistry.towerMeshes.set(tower.id, mesh);
         towerMeshes.set(tower.id, mesh);
@@ -1166,6 +1293,22 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
       this.towerCombatService.restoreTowers(checkpoint.towers, towerMeshes);
       this.meshRegistry.rebuildTowerChildrenArray();
+
+      // Step 4.5: Rebuild the tower adjacency graph from the restored placedTowers.
+      // Graph is DERIVED state (not persisted) — restoreTowers repopulates the
+      // source-of-truth map directly, bypassing the register/unregister hooks that
+      // would normally keep the graph in sync. This single rebuild() consumes the
+      // current `placedTowersGetter()` result and re-derives all 4-dir edges +
+      // cluster membership. O(N × 4) lookups — well under 0.1ms for realistic
+      // tower counts. See conduit-adjacency-graph.md §9 for the "graph state is
+      // derived, not checkpointed" rationale.
+      this.towerGraphService.rebuild();
+
+      // Step 4.6: Restore graph overlay state (virtual edges + disruption entries).
+      // v10 added — v9 checkpoints migrated to empty state by EncounterCheckpointService.
+      // MUST run after rebuild() so keyToId is populated — restore() maps virtual-edge
+      // coordinates to tower ids via that lookup.
+      this.towerGraphService.restore(checkpoint.towerGraph);
 
       // Step 5: Restore mortar zones
       this.towerCombatService.restoreMortarZones(checkpoint.mortarZones);
@@ -1358,6 +1501,51 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }, UI_CONFIG.pathBlockedDismissMs);
   }
 
+  /**
+   * Route a tile click to the correct handler based on which card mode is active.
+   *
+   * WHY THIS EXISTS: BoardPointerService calls onTilePlace for every tile click
+   * while a placement/targeting mode is active. Prior to this sprint only tower
+   * placement existed; now terraform-target cards need a parallel path. This
+   * method is the single dispatch point so neither path needs to know about the
+   * other.
+   *
+   * Priority: terraform-target > tower placement (spec §4).
+   */
+  private onTilePlace(row: number, col: number): void {
+    if (this.cardPlayService.getPendingTileTargetCard()) {
+      const scene = this.sceneService.getScene();
+      const currentTurn = this.combatLoopService.getTurnNumber();
+      const result = this.cardPlayService.resolveTileTarget(row, col, scene, currentTurn);
+      if (!result.ok) {
+        // Surface a toast so the player understands why the tile was rejected.
+        const reason = result.reason ?? 'unknown';
+        const reasonMessages: Record<string, string> = {
+          'would-block-all-paths': 'Cannot block — all paths would be cut off.',
+          'spawner-or-exit': 'Cannot modify spawner or exit tiles.',
+          'tower-occupied': 'A tower already occupies that tile.',
+          'out-of-bounds': 'Tile is out of bounds.',
+          'already-mutated-this-turn': 'That tile was already modified this turn.',
+          'no-op': 'That tile is already in the target state.',
+          'insufficient-energy': 'Not enough energy to play that card.',
+          'no-pending-card': 'No card is awaiting a tile target.',
+          'unknown-op': 'Unknown card operation.',
+        };
+        const message = reasonMessages[reason] ?? `Could not apply card (${reason}).`;
+        this.notificationService.show(NotificationType.INFO, 'Cannot place', message);
+      } else {
+        // Log card-play to turn history — mirrors the path in onCardPlayed.
+        this.turnHistoryService.recordCardPlayed();
+      }
+      return;
+    }
+
+    if (this.cardPlayService.hasPendingCard()) {
+      this.tryPlaceTower(row, col);
+      return;
+    }
+  }
+
   private tryPlaceTower(row: number, col: number): void {
     // Towers can ONLY be placed via tower cards. No card = no placement.
     if (!this.selectedTowerType || !this.cardPlayService.hasPendingCard()) return;
@@ -1461,6 +1649,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!willPause) {
       this.pauseFocusTrap.deactivate();
     } else {
+      // Clear tile-target mode when pausing — resuming with a dangling tile-
+      // target is confusing UX and the card stays in hand anyway.
+      this.cardPlayService.cancelTileTarget();
       this.activatePauseFocus();
     }
   }
@@ -1585,6 +1776,46 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.pathVisualizationService.showPath(worldPath, this.sceneService.getScene());
     } else {
       this.pathVisualizationService.hidePath(this.sceneService.getScene());
+    }
+  }
+
+  /**
+   * Sprint 36 SURVEYOR_ROD — pre-place SURVEYOR_ROD_TILE_COUNT (5) tiles at
+   * elevation +1 at encounter start. Uses runService.nextRandom() — no Math.random().
+   *
+   * Candidate tiles: any tile that is not SPAWNER or EXIT, currently at elevation 0,
+   * and not already occupied by something that would reject elevation (guard is in
+   * ElevationService.setAbsolute → validate). Iterates until 5 placements succeed
+   * or all candidates are exhausted — never crashes on pathological boards.
+   */
+  private applySurveyorRodEffect(): void {
+    const board = this.gameBoardService.getGameBoard();
+    // Build candidate list: non-spawner, non-exit, elevation-0 tiles.
+    const candidates: Array<{ row: number; col: number }> = [];
+    for (let row = 0; row < board.length; row++) {
+      for (let col = 0; col < board[row].length; col++) {
+        const tile = board[row][col];
+        if (tile.type === BlockType.SPAWNER || tile.type === BlockType.EXIT) continue;
+        const elevation = tile.elevation ?? 0;
+        if (elevation !== 0) continue; // skip already-elevated tiles
+        candidates.push({ row, col });
+      }
+    }
+
+    let placed = 0;
+    // Fisher-Yates shuffle using runService.nextRandom() for determinism.
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(this.runService.nextRandom() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+
+    for (const { row, col } of candidates) {
+      if (placed >= ELEVATION_CONFIG.SURVEYOR_ROD_TILE_COUNT) break;
+      const result = this.elevationService.setAbsolute(
+        row, col, ELEVATION_CONFIG.SURVEYOR_ROD_ELEVATION_AMOUNT,
+        'surveyor-rod', 0, 'relic',
+      );
+      if (result.ok) placed++;
     }
   }
 

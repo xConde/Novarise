@@ -2,6 +2,7 @@ import { Component, OnDestroy } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { filter } from 'rxjs/operators';
+import { environment } from '../environments/environment';
 
 const SETTINGS_PATH = '/settings';
 const DEFAULT_PATH = '/';
@@ -13,6 +14,7 @@ const DEFAULT_PATH = '/';
 })
 export class AppComponent implements OnDestroy {
   title = 'Novarise';
+  readonly enableDevTools = environment.enableDevTools;
   private previousUrl = DEFAULT_PATH;
   private currentUrl = DEFAULT_PATH;
   private routerSub: Subscription;

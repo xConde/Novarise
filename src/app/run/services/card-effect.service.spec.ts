@@ -23,8 +23,12 @@ function spellEffect(spellId: string, value: number): SpellCardEffect {
   return { type: 'spell', spellId, value };
 }
 
-function modifierEffect(stat: ModifierStat, value: number, duration: number): ModifierCardEffect {
+function modifierEffect(stat: ModifierStat, value: number, duration: number | null): ModifierCardEffect {
   return { type: 'modifier', stat, value, duration };
+}
+
+function turnModifierEffect(stat: ModifierStat, value: number, turns: number): ModifierCardEffect {
+  return { type: 'modifier', stat, value, duration: turns, durationScope: 'turn' };
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -111,11 +115,12 @@ describe('CardEffectService', () => {
 
       service.applySpell(spellEffect('frost_wave', 5), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 3, deckService: deckServiceSpy, wavePreviewService: wavePreviewSpy });
 
-      // All 3 non-dying enemies trigger an apply call; flying filter is inside StatusEffectService
+      // Phase 1 Sprint 5: spell now passes effect.value through as durationOverride.
+      // All 3 non-dying enemies trigger an apply call; flying filter is inside StatusEffectService.
       expect(statusEffectSpy.apply.calls.count()).toBe(3);
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e-basic', StatusEffectType.SLOW, 3);
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e-fast', StatusEffectType.SLOW, 3);
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e-flying', StatusEffectType.SLOW, 3);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e-basic', StatusEffectType.SLOW, 3, undefined, 5);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e-fast', StatusEffectType.SLOW, 3, undefined, 5);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e-flying', StatusEffectType.SLOW, 3, undefined, 5);
     });
 
     it('skips dying enemies', () => {
@@ -217,6 +222,132 @@ describe('CardEffectService', () => {
       service.tickWave();
       expect(service.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeFalse();
     });
+
+    // Phase 2 Sprints 17/18 — encounter-scoped (null duration) modifiers survive tickWave.
+    it('preserves encounter-scoped modifiers (duration=null) across any number of tickWave calls', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));
+      service.applyModifier(modifierEffect(MODIFIER_STAT.LABYRINTH_MIND, 0.02, null));
+
+      service.tickWave();
+      service.tickWave();
+      service.tickWave();
+      service.tickWave();
+      service.tickWave();
+
+      expect(service.hasActiveModifier(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBeTrue();
+      expect(service.hasActiveModifier(MODIFIER_STAT.LABYRINTH_MIND)).toBeTrue();
+      // And remaining count is still null — not decremented to some negative value.
+      const anchored = service.getActiveModifiers().find(m => m.stat === MODIFIER_STAT.TERRAFORM_ANCHOR);
+      expect(anchored?.remainingWaves).toBeNull();
+    });
+
+    it('reset() clears encounter-scoped modifiers (tickWave never could)', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));
+      service.reset();
+      expect(service.hasActiveModifier(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBeFalse();
+    });
+
+    it('mixed numeric + encounter-scoped: numeric expires normally, encounter-scoped survives', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 1));
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));
+
+      service.tickWave(); // DAMAGE expires (was 1, now 0), TERRAFORM_ANCHOR stays
+
+      expect(service.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeFalse();
+      expect(service.hasActiveModifier(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBeTrue();
+    });
+
+    // Turn-scoped modifiers MUST NOT tick via tickWave.
+    it('leaves turn-scoped modifiers untouched on tickWave', () => {
+      service.applyModifier(turnModifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 2));
+      service.tickWave();
+      service.tickWave();
+      service.tickWave();
+      const mods = service.getActiveModifiers();
+      expect(mods.length).toBe(1);
+      expect(mods[0].remainingTurns).toBe(2);
+      expect(mods[0].remainingWaves).toBeNull();
+    });
+  });
+
+  // ── tickTurn ──────────────────────────────────────────────────
+
+  describe('tickTurn (turn-scoped modifiers)', () => {
+    it('decrements remainingTurns on turn-scoped modifiers', () => {
+      service.applyModifier(turnModifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 3));
+      service.tickTurn();
+      const mods = service.getActiveModifiers();
+      expect(mods.length).toBe(1);
+      expect(mods[0].remainingTurns).toBe(2);
+    });
+
+    it('removes turn-scoped modifiers that reach 0', () => {
+      service.applyModifier(turnModifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 1));
+      service.tickTurn();
+      expect(service.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeFalse();
+    });
+
+    it('handles multiple turn ticks until expiry', () => {
+      service.applyModifier(turnModifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 3));
+      service.tickTurn();
+      service.tickTurn();
+      expect(service.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeTrue();
+      service.tickTurn();
+      expect(service.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeFalse();
+    });
+
+    it('leaves wave-scoped modifiers untouched', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.RANGE, 0.20, 2));
+      service.tickTurn();
+      service.tickTurn();
+      service.tickTurn();
+      const mods = service.getActiveModifiers();
+      expect(mods.length).toBe(1);
+      expect(mods[0].remainingWaves).toBe(2);
+      expect(mods[0].remainingTurns).toBeUndefined();
+    });
+
+    it('leaves encounter-scoped modifiers untouched', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));
+      service.tickTurn();
+      service.tickTurn();
+      expect(service.hasActiveModifier(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBeTrue();
+    });
+
+    it('mixed wave + turn + encounter: each decays on the correct tick', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 1));            // wave-scoped, 1 wave
+      service.applyModifier(turnModifierEffect(MODIFIER_STAT.RANGE, 0.20, 1));         // turn-scoped, 1 turn
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));  // encounter-scoped
+
+      service.tickTurn();
+      // RANGE should be expired; DAMAGE and TERRAFORM_ANCHOR still active.
+      expect(service.hasActiveModifier(MODIFIER_STAT.RANGE)).toBeFalse();
+      expect(service.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeTrue();
+      expect(service.hasActiveModifier(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBeTrue();
+
+      service.tickWave();
+      // DAMAGE now expired; TERRAFORM_ANCHOR still active.
+      expect(service.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeFalse();
+      expect(service.hasActiveModifier(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBeTrue();
+    });
+
+    it('applyModifier with durationScope=turn stores remainingTurns, not remainingWaves', () => {
+      service.applyModifier(turnModifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 2));
+      const mods = service.getActiveModifiers();
+      expect(mods[0].remainingTurns).toBe(2);
+      expect(mods[0].remainingWaves).toBeNull();
+    });
+
+    it('serializeModifiers round-trips remainingTurns', () => {
+      service.applyModifier(turnModifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 2));
+      const snapshot = service.serializeModifiers();
+      service.reset();
+      service.restoreModifiers(snapshot);
+      const mods = service.getActiveModifiers();
+      expect(mods.length).toBe(1);
+      expect(mods[0].remainingTurns).toBe(2);
+      expect(mods[0].remainingWaves).toBeNull();
+    });
   });
 
   // ── getModifierValue ──────────────────────────────────────────
@@ -267,11 +398,21 @@ describe('CardEffectService', () => {
       enemyMap.set(e1.id, e1);
       enemyMap.set(e2.id, e2);
 
-      service.applySpell(spellEffect('incinerate', 0), makeCtx({ currentTurn: 5 }));
+      // Phase 1 Sprint 5: incinerate value is now BURN duration in turns.
+      service.applySpell(spellEffect('incinerate', 3), makeCtx({ currentTurn: 5 }));
 
       expect(statusEffectSpy.apply.calls.count()).toBe(2);
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.BURN, 5);
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e2', StatusEffectType.BURN, 5);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.BURN, 5, undefined, 3);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e2', StatusEffectType.BURN, 5, undefined, 3);
+    });
+
+    it('passes upgraded duration value through to apply()', () => {
+      const e1 = createTestEnemy('e1', 0, 0, 100);
+      enemyMap.set(e1.id, e1);
+
+      // Phase 1 Sprint 5: upgraded incinerate carries a longer duration.
+      service.applySpell(spellEffect('incinerate', 5), makeCtx({ currentTurn: 5 }));
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.BURN, 5, undefined, 5);
     });
 
     it('skips dying enemies', () => {
@@ -293,9 +434,9 @@ describe('CardEffectService', () => {
       const e1 = createTestEnemy('e1', 0, 0, 100);
       enemyMap.set(e1.id, e1);
 
-      service.applySpell(spellEffect('incinerate', 0), makeCtx({ currentTurn: 7 }));
+      service.applySpell(spellEffect('incinerate', 3), makeCtx({ currentTurn: 7 }));
 
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.BURN, 7);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.BURN, 7, undefined, 3);
     });
   });
 
@@ -306,11 +447,21 @@ describe('CardEffectService', () => {
       enemyMap.set(e1.id, e1);
       enemyMap.set(e2.id, e2);
 
-      service.applySpell(spellEffect('toxic_spray', 0), makeCtx({ currentTurn: 3 }));
+      // Phase 1 Sprint 5: toxic_spray value is now POISON duration in turns.
+      service.applySpell(spellEffect('toxic_spray', 4), makeCtx({ currentTurn: 3 }));
 
       expect(statusEffectSpy.apply.calls.count()).toBe(2);
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.POISON, 3);
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e2', StatusEffectType.POISON, 3);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.POISON, 3, undefined, 4);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e2', StatusEffectType.POISON, 3, undefined, 4);
+    });
+
+    it('passes upgraded duration value through to apply()', () => {
+      const e1 = createTestEnemy('e1', 0, 0, 100);
+      enemyMap.set(e1.id, e1);
+
+      // Phase 1 Sprint 5: upgraded toxic_spray carries a longer duration.
+      service.applySpell(spellEffect('toxic_spray', 6), makeCtx({ currentTurn: 3 }));
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.POISON, 3, undefined, 6);
     });
 
     it('skips dying enemies', () => {
@@ -318,7 +469,7 @@ describe('CardEffectService', () => {
       dyingEnemy.dying = true;
       enemyMap.set(dyingEnemy.id, dyingEnemy);
 
-      service.applySpell(spellEffect('toxic_spray', 0), makeCtx());
+      service.applySpell(spellEffect('toxic_spray', 4), makeCtx());
 
       expect(statusEffectSpy.apply).not.toHaveBeenCalled();
     });
@@ -327,9 +478,9 @@ describe('CardEffectService', () => {
       const e1 = createTestEnemy('e1', 0, 0, 100);
       enemyMap.set(e1.id, e1);
 
-      service.applySpell(spellEffect('toxic_spray', 0), makeCtx({ currentTurn: 9 }));
+      service.applySpell(spellEffect('toxic_spray', 4), makeCtx({ currentTurn: 9 }));
 
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.POISON, 9);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.POISON, 9, undefined, 4);
     });
   });
 
@@ -684,6 +835,153 @@ describe('CardEffectService', () => {
       service.applySpell(spellEffect('cryo_pulse', 2), makeCtx());
 
       expect(deckServiceSpy.drawCards).toHaveBeenCalledWith(2);
+    });
+  });
+
+  // ── Spell: detour (Sprint 14) ─────────────────────────────────
+
+  describe('applySpell — detour', () => {
+    it('calls enemyService.applyDetour via the SpellContext', () => {
+      service.applySpell(spellEffect('detour', 1), makeCtx());
+      expect(enemyServiceSpy.applyDetour).toHaveBeenCalledTimes(1);
+    });
+
+    it('base tier (value 1): passes damageFraction = 0 to applyDetour', () => {
+      service.applySpell(spellEffect('detour', 1), makeCtx());
+      expect(enemyServiceSpy.applyDetour).toHaveBeenCalledWith(0);
+    });
+
+    it('upgraded tier (value 2): passes damageFraction = 0.08 to applyDetour', () => {
+      service.applySpell(spellEffect('detour', 2), makeCtx());
+      expect(enemyServiceSpy.applyDetour).toHaveBeenCalledWith(0.08);
+    });
+  });
+
+  // ── applyModifier — HIGH_PERCH_RANGE_BONUS (Sprint 29) ────────
+
+  describe('applyModifier — HIGH_PERCH_RANGE_BONUS', () => {
+    const HIGH_PERCH_STAT = MODIFIER_STAT.HIGH_PERCH_RANGE_BONUS;
+
+    it('getModifierValue returns 0 when no HIGH_PERCH modifier is active', () => {
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBe(0);
+    });
+
+    it('getModifierValue returns the bonus value after applyModifier (base: 0.25)', () => {
+      service.applyModifier(modifierEffect(HIGH_PERCH_STAT, 0.25, 1));
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBeCloseTo(0.25, 5);
+    });
+
+    it('getModifierValue returns upgraded bonus value (0.4) when upgraded modifier is applied', () => {
+      service.applyModifier(modifierEffect(HIGH_PERCH_STAT, 0.4, 1));
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBeCloseTo(0.4, 5);
+    });
+
+    it('stacking two HIGH_PERCH copies sums additively (0.25 + 0.25 = 0.5)', () => {
+      // Two copies of the same card → modifier aggregator sums them.
+      service.applyModifier(modifierEffect(HIGH_PERCH_STAT, 0.25, 1));
+      service.applyModifier(modifierEffect(HIGH_PERCH_STAT, 0.25, 1));
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBeCloseTo(0.5, 5);
+    });
+
+    it('modifier expires after tickWave (duration = 1)', () => {
+      service.applyModifier(modifierEffect(HIGH_PERCH_STAT, 0.25, 1));
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBeCloseTo(0.25, 5);
+
+      service.tickWave();
+
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBe(0);
+    });
+
+    it('modifier persists on tickWave when duration > 1', () => {
+      service.applyModifier(modifierEffect(HIGH_PERCH_STAT, 0.25, 2));
+      service.tickWave();
+
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBeCloseTo(0.25, 5);
+
+      service.tickWave();
+
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBe(0);
+    });
+
+    it('reset clears the HIGH_PERCH modifier', () => {
+      service.applyModifier(modifierEffect(HIGH_PERCH_STAT, 0.25, 1));
+      service.reset();
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBe(0);
+    });
+  });
+
+  // ── getMaxModifierEntryValue — single-entry tier check ──────────────────
+
+  describe('getMaxModifierEntryValue', () => {
+    it('returns 0 when no modifier for the stat is active', () => {
+      expect(service.getMaxModifierEntryValue(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBe(0);
+    });
+
+    it('returns a single entry\'s value when exactly one is active', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 2, null));
+      expect(service.getMaxModifierEntryValue(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBe(2);
+    });
+
+    it('returns the MAX across multiple entries, not the aggregate', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 2, null));
+      // Aggregate would be 3; max-entry is 2.
+      expect(service.getMaxModifierEntryValue(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBe(2);
+    });
+
+    it('ignores entries for other stats', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.DAMAGE, 5, null));
+      expect(service.getMaxModifierEntryValue(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBe(0);
+    });
+  });
+
+  // ── CARTOGRAPHER_SEAL upgraded — tryConsumeTerraformRefund ──────────────
+
+  describe('tryConsumeTerraformRefund', () => {
+    it('returns false when no TERRAFORM_ANCHOR modifier is active (no seal played)', () => {
+      expect(service.tryConsumeTerraformRefund()).toBeFalse();
+    });
+
+    it('returns false when BASE seal is active (value 1, below upgraded threshold)', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));
+      expect(service.tryConsumeTerraformRefund()).toBeFalse();
+    });
+
+    it('returns true when UPGRADED seal is active (value 2)', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 2, null));
+      expect(service.tryConsumeTerraformRefund()).toBeTrue();
+    });
+
+    it('returns false on the SECOND call in the same turn (refund consumed)', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 2, null));
+      expect(service.tryConsumeTerraformRefund()).toBeTrue();
+      expect(service.tryConsumeTerraformRefund()).toBeFalse();
+    });
+
+    it('returns true again AFTER tickTurn (the used-this-turn flag expires)', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 2, null));
+      expect(service.tryConsumeTerraformRefund()).toBeTrue();
+      service.tickTurn();  // auto-expires TERRAFORM_REFUND_USED_THIS_TURN
+      expect(service.tryConsumeTerraformRefund()).toBeTrue();
+    });
+
+    it('two stacked BASE seals (aggregate value 2) do NOT spoof upgraded tier', () => {
+      // Anti-spoofing: the refund gates on a SINGLE entry whose value ≥ 2, not
+      // the aggregate of multiple base entries. Documented in
+      // CARTOGRAPHER_SEAL_UPGRADED_VALUE comment in card-effect.service.ts.
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));
+      expect(service.tryConsumeTerraformRefund()).toBeFalse();
+    });
+
+    it('reset clears the used-this-turn flag so a fresh encounter starts refund-available', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 2, null));
+      service.tryConsumeTerraformRefund();  // consume
+      service.reset();
+      // New encounter: upgraded seal must be re-applied; refund unavailable until it is.
+      expect(service.tryConsumeTerraformRefund()).toBeFalse();
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 2, null));
+      expect(service.tryConsumeTerraformRefund()).toBeTrue();
     });
   });
 });

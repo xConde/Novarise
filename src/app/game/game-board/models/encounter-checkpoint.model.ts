@@ -11,9 +11,17 @@ import { EncounterConfig } from '../../../run/models/encounter.model';
 import { TurnEventRecord } from '../services/turn-history.service';
 import { SerializedItemInventory } from '../../../run/models/item.model';
 import { SerializedRunStateFlags } from '../../../run/services/run-state-flag.service';
+import { SerializablePathMutationState } from '../services/path-mutation.types';
+import { SerializableTileElevationState } from '../services/elevation.types';
+import { SerializableTowerGraphState } from '../services/tower-graph.service';
+
+// Re-export for consumers that need the types without importing from the service files.
+export type { SerializablePathMutationState };
+export type { SerializableTileElevationState };
+export type { SerializableTowerGraphState };
 
 /** Schema version — bump when the shape changes to enable migrations. */
-export const CHECKPOINT_VERSION = 7;
+export const CHECKPOINT_VERSION = 10;
 
 /** Plain-object snapshot of GameState (isPaused omitted — always false on restore). */
 export interface SerializableGameState {
@@ -86,6 +94,10 @@ export interface SerializableEnemy {
   readonly hitFlashTimer?: number;
   readonly shieldBreaking?: boolean;
   readonly shieldBreakTimer?: number;
+  /** Spawn turn for MINER enemies — drives 3-turn dig cadence. Undefined on non-MINER enemies. */
+  readonly spawnedOnTurn?: number;
+  /** True for UNSHAKEABLE elite — immune to DETOUR rerouting. Undefined on all other enemy types. */
+  readonly immuneToDetour?: boolean;
 }
 
 /**
@@ -154,6 +166,12 @@ export interface SerializableDeckState {
 export interface SerializableRelicFlags {
   readonly firstLeakBlockedThisWave: boolean;
   readonly freeTowerUsedThisEncounter: boolean;
+  /**
+   * Sprint 36 OROGENY — tracks how many turns have elapsed since the last
+   * OROGENY trigger (or encounter start). Restored from checkpoint so a
+   * save at turn 7 resumes with the counter at 7, firing next at turn 10.
+   */
+  readonly orogenyTurnCounter: number;
 }
 
 /** Game stats service snapshot. */
@@ -255,6 +273,28 @@ export interface EncounterCheckpoint {
    * v5 checkpoints are migrated with empty flag entries.
    */
   readonly runStateFlags: SerializedRunStateFlags;
+
+  /**
+   * Active path mutations (add/block/destroy/bridgehead) at save time.
+   * Added in v8. v7 checkpoints are migrated with empty mutation state.
+   */
+  readonly pathMutations: SerializablePathMutationState;
+
+  /**
+   * Per-tile elevation state at save time.
+   * Added in v9. v8 checkpoints are migrated with empty elevation state
+   * (no raised tiles, empty journal, nextId=0).
+   */
+  readonly tileElevations: SerializableTileElevationState;
+
+  /**
+   * Tower adjacency graph overlay state — virtual edges (CONDUIT_BRIDGE)
+   * and disruption entries (DISRUPTOR / ISOLATOR / DIVIDER). Spatial edges
+   * and cluster membership are derived from placed towers, not persisted.
+   *
+   * Added in v10; v9 migrates with empty state.
+   */
+  readonly towerGraph: SerializableTowerGraphState;
 }
 
 /** Serializable WavePreviewService state. */

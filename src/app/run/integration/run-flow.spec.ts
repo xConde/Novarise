@@ -30,6 +30,7 @@ import { RelicId, RELIC_DEFINITIONS, RelicRarity } from '../models/relic.model';
 import { REWARD_CONFIG, REST_CONFIG, NODE_MAP_CONFIG, SHOP_CONFIG } from '../constants/run.constants';
 import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
 import { CardId } from '../models/card.model';
+import { RUN_EVENTS } from '../constants/run-events';
 import { STUB_MAP_STATE } from './integration-fixtures';
 
 // ── Shared fixtures ──────────────────────────────────────────────────────────
@@ -328,14 +329,23 @@ describe('Ascent Mode — Integration Flow', () => {
 
   it('should generate an event and resolve a choice', fakeAsync(() => {
     runService.startNewRun();
-    runService.generateEvent();
+    // Pin a specific NON-GAMBLE event so the gold-delta assertion is
+    // deterministic. generateEvent() uses startNewRun()'s Date.now() seed to
+    // pick from RUN_EVENTS, occasionally landing on a gamble outcome whose
+    // resolved delta is RNG-branched (winGoldDelta vs loseGoldDelta) rather
+    // than the plain outcome.goldDelta this test asserts against. That was
+    // the pre-existing flake flagged in session-4.
+    const nonGambleEvent = RUN_EVENTS.find(
+      e => !e.requiresFlag && !e.requiresFlagAbsent && !e.firesOncePerRun && !e.choices[0].outcome.gamble,
+    );
+    expect(nonGambleEvent).toBeDefined();
+    runService['currentEvent'] = nonGambleEvent!;
 
     const event = runService.getCurrentEvent();
     expect(event).not.toBeNull();
     expect(event!.choices.length).toBeGreaterThan(0);
 
     const goldBefore = runService.runState!.gold;
-    const livesBefore = runService.runState!.lives;
     runService['updateState']({ ...runService.runState!, currentNodeId: 'event_node' });
     runService.resolveEvent(0);
 

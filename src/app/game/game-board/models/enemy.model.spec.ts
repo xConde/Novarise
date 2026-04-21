@@ -2,7 +2,7 @@ import { EnemyType, ENEMY_STATS, Enemy, GridNode, MINI_SWARM_STATS } from './ene
 
 describe('Enemy Model', () => {
   describe('EnemyType Enum', () => {
-    it('should have all 8 enemy types defined', () => {
+    it('should have all 9 enemy types defined', () => {
       expect(EnemyType.BASIC).toBe('BASIC');
       expect(EnemyType.FAST).toBe('FAST');
       expect(EnemyType.HEAVY).toBe('HEAVY');
@@ -11,6 +11,7 @@ describe('Enemy Model', () => {
       expect(EnemyType.SHIELDED).toBe('SHIELDED');
       expect(EnemyType.SWARM).toBe('SWARM');
       expect(EnemyType.FLYING).toBe('FLYING');
+      expect(EnemyType.MINER).toBe('MINER');
     });
   });
 
@@ -24,6 +25,7 @@ describe('Enemy Model', () => {
       expect(ENEMY_STATS[EnemyType.SHIELDED]).toBeDefined();
       expect(ENEMY_STATS[EnemyType.SWARM]).toBeDefined();
       expect(ENEMY_STATS[EnemyType.FLYING]).toBeDefined();
+      expect(ENEMY_STATS[EnemyType.MINER]).toBeDefined();
     });
 
     it('should have valid health values', () => {
@@ -84,6 +86,7 @@ describe('Enemy Model', () => {
       expect(ENEMY_STATS[EnemyType.SWIFT].leakDamage).toBe(1);
       expect(ENEMY_STATS[EnemyType.SWARM].leakDamage).toBe(1);
       expect(ENEMY_STATS[EnemyType.FLYING].leakDamage).toBe(1);
+      expect(ENEMY_STATS[EnemyType.MINER].leakDamage).toBe(1);
     });
 
     describe('BASIC enemy stats', () => {
@@ -155,11 +158,16 @@ describe('Enemy Model', () => {
     });
 
     describe('BOSS enemy stats', () => {
-      it('should have highest health and lowest speed', () => {
+      it('should have highest health and lowest speed among non-elite types', () => {
         const boss = ENEMY_STATS[EnemyType.BOSS];
+        // Boss-tier variants (VEINSEEKER, UNSHAKEABLE, WYRM_ASCENDANT) are excluded: they
+        // are co-equal boss-tier units, not subordinate enemy types.
+        // VEINSEEKER (sprint 23) shares BOSS health (1000) and exceeds BOSS value (100 vs 50).
+        // WYRM_ASCENDANT (sprint 39): 1400 HP > BOSS 1000 HP by design — apex boss counter.
+        const BOSS_TIER_VARIANTS: string[] = [EnemyType.VEINSEEKER, EnemyType.UNSHAKEABLE, EnemyType.WYRM_ASCENDANT];
 
         Object.entries(ENEMY_STATS).forEach(([type, stats]) => {
-          if (type !== EnemyType.BOSS) {
+          if (type !== EnemyType.BOSS && !BOSS_TIER_VARIANTS.includes(type)) {
             expect(boss.health).toBeGreaterThanOrEqual(stats.health);
             expect(boss.speed).toBeLessThanOrEqual(stats.speed);
             expect(boss.value).toBeGreaterThanOrEqual(stats.value);
@@ -272,8 +280,8 @@ describe('Enemy Model', () => {
         colors.add(stats.color);
       });
 
-      // All 8 enemy types should have unique colors
-      expect(colors.size).toBe(8);
+      // All enemy types should have unique colors
+      expect(colors.size).toBe(Object.values(ENEMY_STATS).length);
     });
 
     it('should have distinct sizes for visibility', () => {
@@ -427,4 +435,160 @@ describe('Enemy Model', () => {
       expect(EnemyType.FLYING).toBe('FLYING');
     });
   });
+
+  // ── Sprint 37 — GLIDER enemy stats ──────────────────────────────────────
+  describe('GLIDER enemy stats (sprint 37)', () => {
+    it('should have a defined GLIDER entry in ENEMY_STATS', () => {
+      expect(ENEMY_STATS[EnemyType.GLIDER]).toBeDefined();
+    });
+
+    it('ignoresElevation flag is true', () => {
+      expect(ENEMY_STATS[EnemyType.GLIDER].ignoresElevation).toBeTrue();
+    });
+
+    it('halvesElevationDamageBonuses flag is absent (falsy)', () => {
+      expect(ENEMY_STATS[EnemyType.GLIDER].halvesElevationDamageBonuses).toBeFalsy();
+    });
+
+    it('has tilesPerTurn = 2 (fast mover)', () => {
+      expect(ENEMY_STATS[EnemyType.GLIDER].tilesPerTurn).toBe(2);
+    });
+
+    it('has lower health than BASIC (fragile, fast)', () => {
+      expect(ENEMY_STATS[EnemyType.GLIDER].health).toBeLessThan(ENEMY_STATS[EnemyType.BASIC].health);
+    });
+
+    it('has leakDamage of 1', () => {
+      expect(ENEMY_STATS[EnemyType.GLIDER].leakDamage).toBe(1);
+    });
+
+    it('does not have maxShield or spawnOnDeath', () => {
+      expect(ENEMY_STATS[EnemyType.GLIDER].maxShield).toBeUndefined();
+      expect(ENEMY_STATS[EnemyType.GLIDER].spawnOnDeath).toBeUndefined();
+    });
+  });
+
+  // ── Sprint 38 — TITAN enemy stats ────────────────────────────────────────
+  describe('TITAN enemy stats (sprint 38)', () => {
+    it('should have a defined TITAN entry in ENEMY_STATS', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN]).toBeDefined();
+    });
+
+    it('halvesElevationDamageBonuses flag is true', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].halvesElevationDamageBonuses).toBeTrue();
+    });
+
+    it('ignoresElevation flag is absent (falsy)', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].ignoresElevation).toBeFalsy();
+    });
+
+    it('has high health (elite bulk — at least 3× BASIC)', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].health).toBeGreaterThanOrEqual(ENEMY_STATS[EnemyType.BASIC].health * 3);
+    });
+
+    it('has tilesPerTurn = 1 (slow elite)', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].tilesPerTurn).toBe(1);
+    });
+
+    it('has leakDamage of 3 (elite threat)', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].leakDamage).toBe(3);
+    });
+
+    it('has higher value than BASIC (elite reward)', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].value).toBeGreaterThan(ENEMY_STATS[EnemyType.BASIC].value);
+    });
+
+    it('does not have maxShield or spawnOnDeath', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].maxShield).toBeUndefined();
+      expect(ENEMY_STATS[EnemyType.TITAN].spawnOnDeath).toBeUndefined();
+    });
+  });
+
+  // ── Sprint 37/38 — EnemyStats optional fields default correctly ──────────
+  describe('optional EnemyStats flags default behaviour', () => {
+    it('BASIC has ignoresElevation = undefined (not true)', () => {
+      expect(ENEMY_STATS[EnemyType.BASIC].ignoresElevation).toBeFalsy();
+    });
+
+    it('BASIC has halvesElevationDamageBonuses = undefined (not true)', () => {
+      expect(ENEMY_STATS[EnemyType.BASIC].halvesElevationDamageBonuses).toBeFalsy();
+    });
+
+    it('BASIC has immuneToElevationDamageBonuses = undefined (not true)', () => {
+      expect(ENEMY_STATS[EnemyType.BASIC].immuneToElevationDamageBonuses).toBeFalsy();
+    });
+
+    it('TITAN ignoresElevation is undefined (only halves bonuses, does not ignore)', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].ignoresElevation).toBeFalsy();
+    });
+
+    it('TITAN immuneToElevationDamageBonuses is undefined (only halves, does not strip)', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].immuneToElevationDamageBonuses).toBeFalsy();
+    });
+
+    it('GLIDER halvesElevationDamageBonuses is undefined (immunity, does not halve)', () => {
+      expect(ENEMY_STATS[EnemyType.GLIDER].halvesElevationDamageBonuses).toBeFalsy();
+    });
+
+    it('WYRM_ASCENDANT halvesElevationDamageBonuses is undefined (immune, does not halve)', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].halvesElevationDamageBonuses).toBeFalsy();
+    });
+  });
+
+  // ── Sprint 39 — WYRM_ASCENDANT enemy stats ──────────────────────────────
+  describe('WYRM_ASCENDANT enemy stats (sprint 39)', () => {
+    it('should have a defined WYRM_ASCENDANT entry in ENEMY_STATS', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT]).toBeDefined();
+    });
+
+    it('immuneToElevationDamageBonuses flag is true', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].immuneToElevationDamageBonuses).toBeTrue();
+    });
+
+    it('ignoresElevation flag is absent (falsy) — WYRM does not ignore elevation penalties', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].ignoresElevation).toBeFalsy();
+    });
+
+    it('halvesElevationDamageBonuses flag is absent (falsy) — WYRM uses immune path, not halve path', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].halvesElevationDamageBonuses).toBeFalsy();
+    });
+
+    it('has very high health (boss-tier — must exceed BOSS baseline)', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].health)
+        .toBeGreaterThan(ENEMY_STATS[EnemyType.BOSS].health);
+    });
+
+    it('has tilesPerTurn = 1 (slow boss)', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].tilesPerTurn).toBe(1);
+    });
+
+    it('has leakDamage > BOSS leakDamage (apex boss-counter threat)', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].leakDamage)
+        .toBeGreaterThan(ENEMY_STATS[EnemyType.BOSS].leakDamage);
+    });
+
+    it('has size larger than BOSS (imposing visual)', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].size)
+        .toBeGreaterThan(ENEMY_STATS[EnemyType.BOSS].size);
+    });
+
+    it('has higher value than BOSS (boss-counter reward)', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].value)
+        .toBeGreaterThan(ENEMY_STATS[EnemyType.BOSS].value);
+    });
+
+    it('does not have maxShield or spawnOnDeath', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].maxShield).toBeUndefined();
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].spawnOnDeath).toBeUndefined();
+    });
+
+    it('has a distinct color from BOSS, VEINSEEKER, TITAN, and UNSHAKEABLE', () => {
+      const wyrmColor = ENEMY_STATS[EnemyType.WYRM_ASCENDANT].color;
+      expect(wyrmColor).not.toBe(ENEMY_STATS[EnemyType.BOSS].color);
+      expect(wyrmColor).not.toBe(ENEMY_STATS[EnemyType.VEINSEEKER].color);
+      expect(wyrmColor).not.toBe(ENEMY_STATS[EnemyType.TITAN].color);
+      expect(wyrmColor).not.toBe(ENEMY_STATS[EnemyType.UNSHAKEABLE].color);
+    });
+  });
 });
+

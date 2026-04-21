@@ -1,0 +1,81 @@
+<div
+  class="backdrop"
+  role="dialog"
+  aria-modal="true"
+  [attr.aria-labelledby]="'modal-title-' + definition.id"
+  (click)="onBackdropClick($event)">
+
+  <div #modal class="modal">
+
+    <!-- Header -->
+    <header class="modal__header">
+      <div class="modal__title-row">
+        <h2 [id]="'modal-title-' + definition.id" class="modal__title">{{ definition.name }}</h2>
+        <button
+          type="button"
+          class="modal__close"
+          aria-label="Close card details"
+          (click)="close()">✕</button>
+      </div>
+      <div class="modal__meta">
+        <span class="modal__cost-pill">
+          <strong>{{ definition.energyCost }}</strong>
+          <span>Energy</span>
+        </span>
+        <span class="modal__rarity modal__rarity--{{ definition.rarity }}">{{ definition.rarity }}</span>
+        <span class="modal__type modal__type--{{ definition.type }}">{{ effectTypeLabel(definition.effect) }}</span>
+        <span *ngIf="definition.archetype && definition.archetype !== 'neutral'"
+              class="modal__archetype modal__archetype--{{ definition.archetype }}">
+          {{ definition.archetype }}
+        </span>
+        <span *ngIf="goldCost !== null" class="modal__gold">{{ goldCost }}g</span>
+      </div>
+      <div *ngIf="keywordChips.length > 0" class="modal__keywords">
+        <span *ngFor="let kw of keywordChips" class="modal__keyword">{{ kw }}</span>
+      </div>
+    </header>
+
+    <!-- Base + upgraded panels (side-by-side when upgrade exists). -->
+    <section class="modal__panels" [class.modal__panels--single]="!hasUpgrade">
+      <article class="panel panel--base">
+        <h3 class="panel__label">Base</h3>
+        <p class="panel__description">{{ definition.description }}</p>
+      </article>
+      <article *ngIf="hasUpgrade" class="panel panel--upgraded">
+        <h3 class="panel__label">
+          <span class="panel__upgrade-badge" aria-hidden="true">+</span>
+          Upgraded
+        </h3>
+        <p class="panel__description">{{ definition.upgradedDescription || definition.description }}</p>
+      </article>
+    </section>
+
+    <!-- Balance numbers -->
+    <section class="modal__balance" aria-label="Balance numbers">
+      <h3 class="modal__section-title">Balance</h3>
+      <table class="balance">
+        <thead>
+          <tr>
+            <th scope="col">Stat</th>
+            <th scope="col">Base</th>
+            <th scope="col" *ngIf="hasUpgrade">Upgraded</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of balanceRows">
+            <th scope="row">{{ row.label }}</th>
+            <td>{{ row.base }}</td>
+            <td *ngIf="hasUpgrade">{{ row.upgraded || '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Raw JSON (collapsed by default). -->
+    <details class="modal__raw">
+      <summary>Raw effect JSON</summary>
+      <pre>{{ rawJson }}</pre>
+    </details>
+
+  </div>
+</div>

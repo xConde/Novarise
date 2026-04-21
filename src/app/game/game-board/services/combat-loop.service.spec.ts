@@ -17,6 +17,8 @@ import { AudioService } from './audio.service';
 import { ScreenShakeService } from './screen-shake.service';
 import { createRelicServiceSpy, createCardEffectServiceSpy } from '../testing';
 import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
+import { PathMutationService } from './path-mutation.service';
+import { ElevationService } from './elevation.service';
 
 import { GamePhase } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
@@ -48,6 +50,7 @@ describe('CombatLoopService', () => {
   let enemySpy: jasmine.SpyObj<EnemyService>;
   let gameStatsSpy: jasmine.SpyObj<GameStatsService>;
   let gameEndSpy: jasmine.SpyObj<GameEndService>;
+  let relicSpy: jasmine.SpyObj<RelicService>;
   let eventBusSpy: jasmine.SpyObj<RunEventBusService>;
   let notificationSpy: jasmine.SpyObj<GameNotificationService>;
   let audioSpy: jasmine.SpyObj<AudioService>;
@@ -122,6 +125,7 @@ describe('CombatLoopService', () => {
       'removeEnemy',
       'startDyingAnimation',
       'getLivingEnemyCount',
+      'tickMinerDigs',
     ]);
     enemySpy.getEnemies.and.returnValue(new Map());
     enemySpy.stepEnemiesOneTurn.and.returnValue([]);
@@ -177,12 +181,20 @@ describe('CombatLoopService', () => {
         { provide: GameStatsService, useValue: gameStatsSpy },
         { provide: GameEndService, useValue: gameEndSpy },
         { provide: StatusEffectService, useValue: statusEffectSpy },
-        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: RelicService, useValue: (relicSpy = createRelicServiceSpy()) },
         { provide: RunEventBusService, useValue: eventBusSpy },
         { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
         { provide: GameNotificationService, useValue: notificationSpy },
         { provide: AudioService, useValue: audioSpy },
         { provide: ScreenShakeService, useValue: screenShakeSpy },
+        {
+          provide: PathMutationService,
+          useValue: jasmine.createSpyObj<PathMutationService>('PathMutationService', ['tickTurn']),
+        },
+        {
+          provide: ElevationService,
+          useValue: jasmine.createSpyObj<ElevationService>('ElevationService', ['tickTurn']),
+        },
       ],
     });
 
@@ -337,10 +349,10 @@ describe('CombatLoopService', () => {
   // ─── resolveTurn() — spawning delegation ────────────────────────────────────
 
   describe('resolveTurn() — spawning', () => {
-    it('should call waveService.spawnForTurn(scene) each turn', () => {
+    it('should call waveService.spawnForTurn(scene, currentTurn) each turn', () => {
       service.resolveTurn(scene);
 
-      expect(waveSpy.spawnForTurn).toHaveBeenCalledWith(scene);
+      expect(waveSpy.spawnForTurn).toHaveBeenCalledWith(scene, 1);
     });
 
     it('should call spawnForTurn once per resolveTurn call', () => {
@@ -349,6 +361,27 @@ describe('CombatLoopService', () => {
       service.resolveTurn(scene);
 
       expect(waveSpy.spawnForTurn).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  // ─── resolveTurn() — VEINSEEKER turn-number forwarding ─────────────────────
+
+  describe('resolveTurn() — stepEnemiesOneTurn receives currentTurn', () => {
+    it('calls stepEnemiesOneTurn with the post-increment turn number on turn 1', () => {
+      service.resolveTurn(scene);
+
+      // resolveTurn increments turnNumber to 1 before calling stepEnemiesOneTurn.
+      // The second arg (currentTurn) must be 1 so VEINSEEKER's boost window check
+      // uses the correct reference point.
+      expect(enemySpy.stepEnemiesOneTurn).toHaveBeenCalledWith(jasmine.any(Function), 1);
+    });
+
+    it('calls stepEnemiesOneTurn with the correct turn number after multiple turns', () => {
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+
+      expect(enemySpy.stepEnemiesOneTurn).toHaveBeenCalledWith(jasmine.any(Function), 3);
     });
   });
 
@@ -1362,6 +1395,104 @@ describe('CombatLoopService', () => {
       service.resolveTurn(scene);
 
       expect(audioSpy.playLifeLoss).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── SURVEYOR_COMPASS wave-end gold award ──────────────────────────────────
+
+  describe('SURVEYOR_COMPASS gold award at wave completion', () => {
+    function setupWaveClearState(): void {
+      waveSpy.isSpawning.and.returnValue(false);
+      enemySpy.getLivingEnemyCount.and.returnValue(0);
+      enemySpy.stepEnemiesOneTurn.and.returnValue([]);
+
+      let callCount = 0;
+      gameStateSpy.getState.and.callFake(() => ({
+        phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
+        wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
+        isEndless: false, difficulty: 'normal', maxWaves: 10, elapsedTime: 0,
+        consecutiveWavesWithoutLeak: 0, highestWave: 0, activeModifiers: new Set(),
+      } as any));
+    }
+
+    it('awards surveyor gold via addGoldAndScore when consumeSurveyorGold returns > 0', () => {
+      setupWaveClearState();
+      relicSpy.consumeSurveyorGold.and.returnValue(25);
+
+      service.resolveTurn(scene);
+
+      expect(gameStateSpy.addGoldAndScore).toHaveBeenCalledWith(25);
+    });
+
+    it('does NOT call addGoldAndScore for surveyor gold when consumeSurveyorGold returns 0', () => {
+      setupWaveClearState();
+      relicSpy.consumeSurveyorGold.and.returnValue(0);
+      gameStateSpy.addGoldAndScore.calls.reset();
+
+      service.resolveTurn(scene);
+
+      // addGoldAndScore should not have been called with 0 (could be called for other reasons)
+      const calls = gameStateSpy.addGoldAndScore.calls.allArgs();
+      const surveyorZeroCall = calls.find(([amount]: [number]) => amount === 0);
+      expect(surveyorZeroCall).toBeUndefined();
+    });
+  });
+
+  // ─── resolveTurn() — MINER dig phase ────────────────────────────────────────
+
+  describe('resolveTurn() — MINER dig phase', () => {
+    it('should call tickMinerDigs with the current turn number and scene', () => {
+      service.resolveTurn(scene);
+
+      expect(enemySpy.tickMinerDigs).toHaveBeenCalledWith(1, scene);
+    });
+
+    it('should call tickMinerDigs after movement (called once per resolveTurn)', () => {
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+
+      expect(enemySpy.tickMinerDigs).toHaveBeenCalledTimes(2);
+    });
+
+    it('should pass incremented turn numbers across sequential calls', () => {
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+
+      expect(enemySpy.tickMinerDigs).toHaveBeenCalledWith(1, scene);
+      expect(enemySpy.tickMinerDigs).toHaveBeenCalledWith(2, scene);
+      expect(enemySpy.tickMinerDigs).toHaveBeenCalledWith(3, scene);
+    });
+  });
+
+  // ─── resolveTurn() — ElevationService integration ────────────────────────────
+
+  describe('resolveTurn() — ElevationService.tickTurn integration', () => {
+    let elevationSpy: jasmine.SpyObj<ElevationService>;
+
+    beforeEach(() => {
+      elevationSpy = TestBed.inject(ElevationService) as jasmine.SpyObj<ElevationService>;
+    });
+
+    it('calls elevationService.tickTurn with the current turn number each turn', () => {
+      service.resolveTurn(scene);
+      expect(elevationSpy.tickTurn).toHaveBeenCalledWith(1);
+    });
+
+    it('calls elevationService.tickTurn on each successive turn', () => {
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+
+      expect(elevationSpy.tickTurn).toHaveBeenCalledWith(1);
+      expect(elevationSpy.tickTurn).toHaveBeenCalledWith(2);
+      expect(elevationSpy.tickTurn).toHaveBeenCalledWith(3);
+    });
+
+    it('calls elevationService.tickTurn exactly once per resolveTurn()', () => {
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+      expect(elevationSpy.tickTurn).toHaveBeenCalledTimes(2);
     });
   });
 });

@@ -959,4 +959,104 @@ body.reduce-motion .pile-count--pulse .pile-value { animation: none; }
   }
 }
 
+// ── Phase 1 Sprint 3 — Card hover tooltip ────────────────────
+// Fixed positioning escapes overflow:hidden on every ancestor (game shell,
+// card-hand bar, app-root). Top/left are JS-anchored to the hovered card's
+// getBoundingClientRect; styles only handle look + theming.
+.card-tooltip {
+  position: fixed;
+  z-index: calc(var(--z-index-overlay) + 50);
+  width: 15rem; // matches TOOLTIP_WIDTH_ESTIMATE in the component (240px)
+  max-width: calc(100vw - 1rem);
+  padding: var(--spacing-sm);
+  background: var(--glass-bg-strong, rgba(0, 0, 0, 0.92));
+  border: var(--border-width-thin) solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.6);
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.75rem;
+  color: var(--text-primary);
+  pointer-events: none; // never blocks the hovered card or its siblings
+  animation: card-tooltip-enter 0.12s ease-out;
+
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-xxs);
+  }
+
+  &__name {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+  }
+
+  &__cost {
+    font-weight: 700;
+    color: var(--theme-cyan);
+  }
+
+  &__meta {
+    display: flex;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-xs);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+  }
+
+  &__type {
+    color: var(--text-secondary);
+  }
+
+  &__rarity {
+    font-weight: 700;
+    &--common   { color: rgba(255, 255, 255, 0.7); }
+    &--uncommon { color: rgb(100, 200, 255); }
+    &--rare     { color: rgb(255, 215, 0); }
+  }
+
+  &__upgraded {
+    color: var(--action-success);
+    font-weight: 700;
+  }
+
+  &__description {
+    margin: 0 0 var(--spacing-xs);
+    line-height: 1.35;
+    color: var(--text-primary);
+    white-space: normal;
+  }
+
+  &__keywords {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xxs);
+  }
+
+  &__keyword {
+    padding: 0.1rem 0.35rem;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-xs);
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+  }
+}
+
+@keyframes card-tooltip-enter {
+  from { opacity: 0; transform: translateY(0.25rem); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-tooltip { animation: none; }
+}
+
+body.reduce-motion .card-tooltip { animation: none; }
+
 body.reduce-motion .energy-pip--filled { animation: none; }

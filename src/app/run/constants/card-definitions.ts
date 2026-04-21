@@ -14,6 +14,7 @@ import {
   CardRarity,
   CardType,
   TowerCardEffect,
+  ElevationTargetCardEffect,
 } from '../models/card.model';
 import { MODIFIER_STAT } from './modifier-stat.constants';
 
@@ -83,8 +84,18 @@ const CARD_VALUES = {
   lightningStrikeUpgradedDamage: 150,
   frostWaveUpgradedDuration: 8,
   // salvage has no upgradedEffect; the base value of 1 is a boolean-style flag (full refund multiplier)
-  fortifyDefaultEnergy: 1,
-  fortifyUpgradedEnergy: 0,
+  // Phase 1 Sprint 5 — fortify value now means "number of towers to upgrade".
+  // Energy cost stays at 1 (set on the card definition); upgrade doubles output.
+  // The legacy fortifyDefaultEnergy / fortifyUpgradedEnergy fields are removed.
+  fortifyUpgradeCount: 1,
+  fortifyUpgradedUpgradeCount: 2,
+  // Phase 1 Sprint 5 — INCINERATE / TOXIC_SPRAY now read effect.value as the
+  // status duration in turns. Base values match prior STATUS_EFFECT_CONFIGS
+  // defaults (BURN: 3, POISON: 4); upgrades extend duration.
+  incinerateBurnDuration: 3,
+  incinerateUpgradedBurnDuration: 5,
+  toxicSprayPoisonDuration: 4,
+  toxicSprayUpgradedPoisonDuration: 6,
   overclockFireRateBoost: 0.5,
   overclockUpgradedFireRateBoost: 0.75,
 
@@ -168,6 +179,197 @@ const CARD_VALUES = {
   epidemicCost: 2,
   epidemicCriticalMass: 2,       // need 2+ poisoned enemies to trigger
   epidemicUpgradedCriticalMass: 1, // upgraded: only need 1
+
+  // ── Cartographer archetype — terraform-target cards (Phase 2) ────────────
+  // LAY_TILE (sprint 11): 1E common, permanent path addition. Upgraded card
+  // additionally draws 1 card on success (cycle-card behavior); encoded as
+  // TerraformTargetCardEffect.drawOnSuccess on the upgraded effect object.
+  layTileCost: 1,
+  layTileUpgradedDrawCount: 1,
+  // BLOCK_PASSAGE (sprint 12): 1E common, temporary wall
+  blockPassageCost: 1,
+  blockPassageDuration: 2,
+  blockPassageUpgradedDuration: 3,
+  // BRIDGEHEAD (sprint 15): 2E uncommon, tower-only platform 3 turns (4 upgraded)
+  bridgeheadCost: 2,
+  bridgeheadDuration: 3,
+  bridgeheadUpgradedDuration: 4,
+  // COLLAPSE (sprint 16): 2E uncommon, permanent destroy + %max-HP damage
+  collapseCost: 2,
+  collapseDamagePctMaxHp: 0.5,
+  collapseUpgradedDamagePctMaxHp: 0.75,
+
+  // DETOUR (sprint 14): 2E uncommon, force all enemies onto the longest valid
+  // path for one step. Modifies enemy routing, NOT tile state — terraform: false.
+  // SpellCardEffect VALUE is a tier sentinel: 1 = reroute-only (base card),
+  // 2 = reroute + damage (upgraded card). CardEffectService.applyDetour
+  // branches on value ≥ 2 to pass a non-zero damage fraction through to
+  // EnemyService.applyDetour.
+  detourCost: 2,
+  detourBaseValue: 1,
+  detourUpgradedValue: 2,
+  detourDamageFractionPerExtraStep: 0.08,   // 8% max-HP per extra path tile added
+
+  // CARTOGRAPHER_SEAL (sprint 17): 2E rare anchor. All terraform mutations this
+  // encounter persist permanently (duration is forced to null at resolve time).
+  // VALUE acts as a tier sentinel — 1 = anchor-only (base card), 2 = anchor +
+  // first-terraform-per-turn refund (upgraded card). CardPlayService checks the
+  // anchor presence (base behavior) and separately calls
+  // CardEffectService.tryConsumeTerraformRefund to gate the 1E refund.
+  cartographerSealCost: 2,
+  cartographerSealBaseValue: 1,
+  cartographerSealUpgradedValue: 2,
+  cartographerSealRefundAmount: 1,        // energy refunded on first terraform each turn
+  // LABYRINTH_MIND (sprint 18): 2E rare build-around. Tower damage scales with
+  // current spawner→exit path length. Multiplier = 1 + (pathLength * k).
+  // k=0.02 → 30-tile path = 60% bonus, 50-tile path = 100% bonus.
+  labyrinthMindCost: 2,
+  labyrinthMindPathScaling: 0.02,
+  labyrinthMindUpgradedPathScaling: 0.03,
+
+  // ── Highground archetype — elevation-target cards (Phase 3, Sprints 27/28) ──
+  // RAISE_PLATFORM (sprint 27): 1E common, raise a tile by 1 elevation unit.
+  // Towers on raised tiles gain range (handled by TowerCombatService sprint 29).
+  raisePlatformCost: 1,
+  raisePlatformAmount: 1,       // +1 elevation unit per play
+  // DEPRESS_TILE (sprint 28): 1E common, lower a tile by 1 elevation unit.
+  // Enemies on lowered (negative-elevation) tiles take +25% incoming damage.
+  depressTileCost: 1,
+  depressTileAmount: 1,         // -1 elevation unit per play
+  // Damage bonus applied in EnemyService.damageEnemy when tile elevation < 0.
+  // +25% bonus received on exposed tiles (negative elevation).
+  exposedDamageBonus: 0.25,
+
+  // ── Highground archetype — HIGH_PERCH modifier (Sprint 29) ───────────────
+  // HIGH_PERCH (1E common): towers on elevation ≥ threshold gain +25% range
+  // for one wave (stacks additively with the passive per-elevation multiplier).
+  highPerchCost: 1,
+  highPerchBonus: 0.25,          // +25% range for qualifying towers (base)
+  highPerchUpgradedBonus: 0.4,   // +40% range when upgraded
+  highPerchThreshold: 2,         // minimum elevation to qualify for the bonus
+  highPerchDuration: 1,          // wave countdown duration (one wave)
+
+  // ── Highground archetype — CLIFFSIDE (Sprint 30) ────────────────────────
+  // CLIFFSIDE (2E uncommon): raise a horizontal 3-tile line by +1.
+  // Upgrade: 5-tile line (center + 2 wings each side).
+  cliffsideCost: 2,
+  cliffsideLineLength: 3,               // base: center + 1 wing on each side
+  cliffsideUpgradedLineLength: 5,       // upgraded: center + 2 wings on each side
+  cliffsideRaiseAmount: 1,              // elevation delta per tile in the line
+
+  // ── Highground — VANTAGE_POINT ─────────────────────────────────────────
+  vantagePointCost: 2,
+  vantagePointBonus: 0.5,               // +50% damage (base)
+  vantagePointUpgradedBonus: 0.75,      // +75% damage (upgraded)
+  vantagePointElevationThreshold: 1,    // tower must be on elevation ≥ 1
+  vantagePointDuration: 1,              // wave countdown (one wave, mirrors highPerchDuration)
+
+  // ── Highground archetype — AVALANCHE_ORDER (Sprint 32) ─────────────────
+  // AVALANCHE_ORDER (2E uncommon): target an elevated tile (elevation ≥ 1).
+  // Enemies on tile take (elevation × damagePerElevation) instant damage.
+  // After damage, tile collapses to elevation 0.
+  avalancheOrderCost: 2,
+  avalancheDamagePerElevation: 10,      // base: 10 damage per elevation unit
+  avalancheUpgradedDamagePerElevation: 15, // upgraded: 15 damage per elevation unit
+
+  // ── Highground archetype — KING_OF_THE_HILL (Sprint 33) ────────────────
+  // KING_OF_THE_HILL (3E rare): the tower(s) at the highest elevation on the
+  // board deal +100% damage (base) or +150% (upgraded). Only activates when
+  // maxElevation ≥ 1. Encounter-scoped (duration: null).
+  kingOfTheHillCost: 3,
+  kingOfTheHillBonus: 1.0,             // +100% damage (×2) at max elevation
+  kingOfTheHillUpgradedBonus: 1.5,     // +150% damage (×2.5) when upgraded
+
+  // ── Highground archetype — GRAVITY_WELL (Sprint 34) ────────────────────
+  // GRAVITY_WELL (3E rare): enemies on tiles with elevation < 0 (depressed)
+  // skip their movement for the turn. Encounter-scoped (duration: null).
+  // Modifier-stat VALUE is a tier sentinel: 1 = gate-only (base), 2 = gate + bleed
+  // (upgraded). EnemyService.stepEnemiesOneTurn branches on value ≥ 2 to apply
+  // the per-turn max-HP bleed to every enemy it gates that step.
+  gravityWellCost: 3,
+  gravityWellBaseValue: 1,
+  gravityWellUpgradedValue: 2,
+  gravityWellBleedFraction: 0.10,   // 10% max-HP per turn on gated enemies (upgraded only)
+
+  // ── Conduit — HANDSHAKE ─────────────────────────────────────────────────
+  // Session-5 balance delta: +15%/+25% → +20%/+30%. Session-4 findings: as
+  // a Conduit-gated uncommon with a ≥1-neighbor requirement, HANDSHAKE's
+  // +15% base was strictly weaker than DAMAGE_BOOST's +25% unconditional
+  // at the same 1E cost. Bumping to +20% base keeps DAMAGE_BOOST as the
+  // ceiling for ungated bonus, while +30% upgraded rewards committing to
+  // the Conduit positional read.
+  handshakeCost: 1,
+  handshakeBonus: 0.20,
+  handshakeUpgradedBonus: 0.30,
+  handshakeDuration: 1,
+
+  // ── Conduit — FORMATION ─────────────────────────────────────────────────
+  // Session-5 balance delta: +1/+2 → +2/+3. Session-4 findings flagged the
+  // 3-in-a-row trigger as restrictive (rare on typical boards with bends)
+  // and the +1 payoff as underwhelming relative to the positional commitment.
+  // Doubling the additive makes FORMATION a "sniper-row" build-around rather
+  // than a mild buff — consistent with Conduit's "positional commitment =
+  // real payoff" identity.
+  formationCost: 1,
+  formationRangeAdditive: 2,
+  formationUpgradedRangeAdditive: 3,
+  formationDuration: 1,
+
+  // ── Conduit — LINKWORK ──────────────────────────────────────────────────
+  linkworkCost: 0,
+  linkworkValue: 1,                   // sentinel — flag modifier
+  linkworkDuration: 2,                // turns
+  linkworkUpgradedDuration: 3,
+
+  // ── Conduit — HARMONIC ──────────────────────────────────────────────────
+  harmonicCost: 2,
+  harmonicValue: 1,                   // sentinel — flag modifier
+  harmonicDuration: 3,                // turns
+  harmonicUpgradedDuration: 4,
+
+  // ── Conduit — GRID_SURGE ────────────────────────────────────────────────
+  gridSurgeCost: 2,
+  gridSurgeBonus: 1.0,
+  gridSurgeUpgradedBonus: 1.5,
+  gridSurgeDuration: 1,               // turn
+
+  // ── Conduit — CONDUIT_BRIDGE ────────────────────────────────────────────
+  // Session-5 full revert: 5/7 → 3/4 (original session-3 values).
+  //
+  // Session 4 bumped 3/4 → 5/7 reasoning "3 turns is a blip in a 7-10 turn
+  // wave." Reconsidered: CONDUIT_BRIDGE at 2E UNCOMMON sits in the genre's
+  // "temporary N-turn buff" tier (3-4 turns per convention — StS Wraith Form
+  // 3t, most temp effects 3-4t). "Permanent once cast" territory starts at
+  // 3E RARE (StS Demon Form, Infinite Blades); this card doesn't pay that
+  // cost, so it shouldn't have that duration.
+  //
+  // The card's real balance mechanism is the RANDOM 2-tower pick — player
+  // doesn't target. Long duration doesn't fix bad connections; short
+  // duration keeps good connections feeling tight and tactical. Pulling the
+  // duration knob was wrong; the randomness is the balancer.
+  conduitBridgeCost: 2,
+  conduitBridgeDuration: 3,           // turns
+  conduitBridgeUpgradedDuration: 4,
+
+  // ── Conduit — ARCHITECT ─────────────────────────────────────────────────
+  // Base: 3E rare flag (cluster super-node adjacency). Upgraded: cost drops
+  // to 2E to enable same-turn combo plays with HANDSHAKE / GRID_SURGE —
+  // intentionally a cost-only upgrade; the identity stays with "cluster
+  // becomes one big adjacency group for neighbor-gated cards."
+  architectCost: 3,
+  architectUpgradedCost: 2,
+  architectValue: 1,                  // sentinel — flag modifier
+
+  // ── Conduit — HIVE_MIND ─────────────────────────────────────────────────
+  // Tier sentinel on the modifier value: 1 = base (cluster fires with the
+  // strongest member's damage + range). 2 = upgraded (additionally propagates
+  // the strongest member's secondary stats — splash radius, chain bounces,
+  // blast radius, dot damage/duration, and on-hit status effect — to every
+  // cluster member's shots). TowerCombatService.fireTurn reads the numeric
+  // value in its HIVE_MIND prepass and branches on ≥ 2.
+  hiveMindCost: 3,
+  hiveMindValue: 1,                   // base tier — damage + range sharing only
+  hiveMindUpgradedValue: 2,           // upgraded tier — also secondary-stat sharing
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -377,6 +579,10 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     upgraded: false,
     effect: { type: 'spell', spellId: 'scout_ahead', value: CARD_VALUES.scoutAheadWaves },
     upgradedEffect: { type: 'spell', spellId: 'scout_ahead', value: CARD_VALUES.scoutAheadUpgradedWaves },
+    // Phase 2 Sprint 13 — Cartographer archetype. Scouting the battlefield
+    // matches Cartographer's intel/reshape identity. No terraform flag —
+    // the card reveals information, it doesn't modify tiles.
+    archetype: 'cartographer',
   },
 
   [CardId.LIGHTNING_STRIKE]: {
@@ -421,13 +627,15 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     id: CardId.FORTIFY,
     name: 'Fortify',
     description: 'Upgrade a random tower one level for free.',
-    upgradedDescription: 'Upgrade a random tower one level for free. Costs 0 energy.',
+    upgradedDescription: 'Upgrade two random towers one level for free.',
     type: CardType.SPELL,
     rarity: CardRarity.RARE,
-    energyCost: CARD_VALUES.fortifyDefaultEnergy,
+    energyCost: 1,
     upgraded: false,
-    effect: { type: 'spell', spellId: 'fortify', value: CARD_VALUES.fortifyDefaultEnergy },
-    upgradedEffect: { type: 'spell', spellId: 'fortify', value: CARD_VALUES.fortifyUpgradedEnergy },  // 0 energy when upgraded
+    // Phase 1 Sprint 5 — value is now "number of towers to upgrade" (1 base, 2 upgraded).
+    // Energy cost stays at 1 for both; the upgrade benefit is doubled output, not free play.
+    effect: { type: 'spell', spellId: 'fortify', value: CARD_VALUES.fortifyUpgradeCount },
+    upgradedEffect: { type: 'spell', spellId: 'fortify', value: CARD_VALUES.fortifyUpgradedUpgradeCount },
   },
 
   [CardId.OVERCLOCK]: {
@@ -448,29 +656,29 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.INCINERATE]: {
     id: CardId.INCINERATE,
     name: 'Incinerate',
-    description: 'Apply Burn to all enemies.',
+    description: 'Apply Burn to all enemies for 3 turns.',
+    upgradedDescription: 'Apply Burn to all enemies for 5 turns.',
     type: CardType.SPELL,
     rarity: CardRarity.COMMON,
     energyCost: CARD_VALUES.incinerateCost,
     upgraded: false,
-    // value field unused for gameplay — duration is governed by STATUS_EFFECT_CONFIGS[BURN].
-    // value > 0 in upgradedEffect is a balance flag reserved for a future content sprint
-    // (e.g. extend duration). Handler ignores value in Sprint 2b.
-    effect: { type: 'spell', spellId: 'incinerate', value: 0 },
-    upgradedEffect: { type: 'spell', spellId: 'incinerate', value: 1 },
+    // Phase 1 Sprint 5 — value is now BURN duration in turns; handler reads it.
+    effect: { type: 'spell', spellId: 'incinerate', value: CARD_VALUES.incinerateBurnDuration },
+    upgradedEffect: { type: 'spell', spellId: 'incinerate', value: CARD_VALUES.incinerateUpgradedBurnDuration },
   },
 
   [CardId.TOXIC_SPRAY]: {
     id: CardId.TOXIC_SPRAY,
     name: 'Toxic Spray',
-    description: 'Apply Poison to all enemies.',
+    description: 'Apply Poison to all enemies for 4 turns.',
+    upgradedDescription: 'Apply Poison to all enemies for 6 turns.',
     type: CardType.SPELL,
     rarity: CardRarity.UNCOMMON,
     energyCost: CARD_VALUES.toxicSprayCost,
     upgraded: false,
-    // Same value-as-flag convention as INCINERATE. Handler ignores value in Sprint 2b.
-    effect: { type: 'spell', spellId: 'toxic_spray', value: 0 },
-    upgradedEffect: { type: 'spell', spellId: 'toxic_spray', value: 1 },
+    // Phase 1 Sprint 5 — value is now POISON duration in turns; handler reads it.
+    effect: { type: 'spell', spellId: 'toxic_spray', value: CARD_VALUES.toxicSprayPoisonDuration },
+    upgradedEffect: { type: 'spell', spellId: 'toxic_spray', value: CARD_VALUES.toxicSprayUpgradedPoisonDuration },
   },
 
   [CardId.CRYO_PULSE]: {
@@ -1061,6 +1269,759 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     effect: { type: 'spell', spellId: 'gold_rush', value: CARD_VALUES.phantomGoldAmount },
     upgradedEffect: { type: 'spell', spellId: 'gold_rush', value: CARD_VALUES.phantomGoldUpgradedAmount },
   },
+
+  // ── Cartographer archetype — terraform-target cards (Phase 2) ────────────
+  //
+  // All three cards use `type: SPELL` because CardType is a runtime display
+  // classifier (tower vs spell vs modifier vs utility) that affects UI
+  // sorting and deck composition bookkeeping. The 'terraform_target' effect
+  // variant is the actual runtime dispatch discriminant (CardPlayService
+  // branches on `effect.type === 'terraform_target'`). Treating them as
+  // SPELLs keeps the UI treatment consistent with other instant-effect
+  // cards while the new effect type carries the terraform semantics.
+
+  /**
+   * LAY_TILE (Sprint 11) — add 1 path tile (WALL → BASE) at a chosen tile
+   * adjacent to existing path. Permanent. Anchors Cartographer's core
+   * "reshape the board" identity.
+   */
+  [CardId.LAY_TILE]: {
+    id: CardId.LAY_TILE,
+    name: 'Lay Tile',
+    description: 'Convert a wall into a path tile.',
+    upgradedDescription: 'Convert a wall into a path tile. Draw 1 card.',
+    type: CardType.SPELL,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.layTileCost,
+    upgraded: false,
+    effect: { type: 'terraform_target', op: 'build', duration: null },
+    upgradedEffect: {
+      type: 'terraform_target',
+      op: 'build',
+      duration: null,
+      drawOnSuccess: CARD_VALUES.layTileUpgradedDrawCount,
+    },
+    archetype: 'cartographer',
+    terraform: true,
+  },
+
+  /**
+   * BLOCK_PASSAGE (Sprint 12) — convert a path tile to wall for 2 turns.
+   * Upgrade extends to 3 turns.
+   */
+  [CardId.BLOCK_PASSAGE]: {
+    id: CardId.BLOCK_PASSAGE,
+    name: 'Block Passage',
+    description: 'Convert a path tile into a wall for 2 turns.',
+    upgradedDescription: 'Convert a path tile into a wall for 3 turns.',
+    type: CardType.SPELL,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.blockPassageCost,
+    upgraded: false,
+    effect: {
+      type: 'terraform_target',
+      op: 'block',
+      duration: CARD_VALUES.blockPassageDuration,
+    },
+    upgradedEffect: {
+      type: 'terraform_target',
+      op: 'block',
+      duration: CARD_VALUES.blockPassageUpgradedDuration,
+    },
+    archetype: 'cartographer',
+    terraform: true,
+  },
+
+  /**
+   * BRIDGEHEAD (Sprint 15) — create a tower-only platform on a WALL tile
+   * for 3 turns (4 upgraded). The tile stays non-traversable (enemies
+   * cannot walk on it), but a tower CAN be placed on it via the
+   * `canPlaceTower` bridgehead side-channel in GameBoardService.
+   *
+   * Interaction: if the player places a tower on an active bridgehead
+   * and the bridgehead later expires, the tower KEEPS the tile (the
+   * revert is a no-op because the tile is now TOWER — see
+   * PathMutationService.revertMutation). This is intentional: the card
+   * buys permanent territory if the player acts on it in time.
+   */
+  [CardId.BRIDGEHEAD]: {
+    id: CardId.BRIDGEHEAD,
+    name: 'Bridgehead',
+    description: 'Create a tower-only platform on a wall for 3 turns. Place a tower before it expires to keep the tile.',
+    upgradedDescription: 'Create a tower-only platform on a wall for 4 turns. Place a tower before it expires to keep the tile.',
+    type: CardType.SPELL,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.bridgeheadCost,
+    upgraded: false,
+    effect: {
+      type: 'terraform_target',
+      op: 'bridgehead',
+      duration: CARD_VALUES.bridgeheadDuration,
+    },
+    upgradedEffect: {
+      type: 'terraform_target',
+      op: 'bridgehead',
+      duration: CARD_VALUES.bridgeheadUpgradedDuration,
+    },
+    archetype: 'cartographer',
+    terraform: true,
+  },
+
+  /**
+   * COLLAPSE (Sprint 16) — permanently destroy a path tile and deal
+   * 50% max-HP damage to any enemies standing on it. Upgrade bumps
+   * damage to 75% max-HP. The damage side-effect is carried on the
+   * TerraformTargetCardEffect.damageOnHit rider, applied AFTER mutation
+   * success so rejected mutations cannot cause partial effects.
+   */
+  [CardId.COLLAPSE]: {
+    id: CardId.COLLAPSE,
+    name: 'Collapse',
+    description: 'Destroy a path tile. Enemies on it take 50% of max HP as damage.',
+    upgradedDescription: 'Destroy a path tile. Enemies on it take 75% of max HP as damage.',
+    type: CardType.SPELL,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.collapseCost,
+    upgraded: false,
+    effect: {
+      type: 'terraform_target',
+      op: 'destroy',
+      duration: null,
+      damageOnHit: { pctMaxHp: CARD_VALUES.collapseDamagePctMaxHp },
+    },
+    upgradedEffect: {
+      type: 'terraform_target',
+      op: 'destroy',
+      duration: null,
+      damageOnHit: { pctMaxHp: CARD_VALUES.collapseUpgradedDamagePctMaxHp },
+    },
+    archetype: 'cartographer',
+    terraform: true,
+  },
+
+  /**
+   * DETOUR (Sprint 14) — force all enemies onto the longest valid path for
+   * one step. Unlike the terraform-target cards, DETOUR modifies enemy routing
+   * rather than tile state, so it uses `type: 'spell'` and `terraform: false`.
+   *
+   * Design note: the "one step" framing means enemies walk the long route for
+   * one movement resolution and then fall back to normal shortest-path
+   * re-planning at the next waypoint via the existing executeRepath flow.
+   * This buys roughly 1–3 extra turns of travel time depending on the board.
+   */
+  [CardId.DETOUR]: {
+    id: CardId.DETOUR,
+    name: 'Detour',
+    description: 'Force all enemies onto the longest valid path for one step.',
+    upgradedDescription: 'Force all enemies onto the longest valid path for one step. Each detoured enemy also takes 8% max HP damage per extra tile of path walked.',
+    type: CardType.SPELL,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.detourCost,
+    upgraded: false,
+    effect: { type: 'spell', spellId: 'detour', value: CARD_VALUES.detourBaseValue },
+    upgradedEffect: { type: 'spell', spellId: 'detour', value: CARD_VALUES.detourUpgradedValue },
+    archetype: 'cartographer',
+    terraform: false,
+  },
+
+  /**
+   * CARTOGRAPHER_SEAL (Sprint 17) — RARE anchor. While this modifier is
+   * active, every terraform mutation resolved via CardPlayService is forced
+   * to permanent (duration = null). Flag-style modifier on
+   * MODIFIER_STAT.TERRAFORM_ANCHOR with encounter-scoped duration (null).
+   *
+   * Upgraded variant currently matches base — reserved for sprint 19 tuning
+   * (could extend to grant `+1E refund on first terraform` or similar).
+   */
+  [CardId.CARTOGRAPHER_SEAL]: {
+    id: CardId.CARTOGRAPHER_SEAL,
+    name: 'Cartographer\'s Seal',
+    description: 'All terraform you play this encounter is permanent.',
+    upgradedDescription: 'All terraform you play this encounter is permanent. The first terraform each turn refunds 1 energy.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.RARE,
+    energyCost: CARD_VALUES.cartographerSealCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier',
+      stat: MODIFIER_STAT.TERRAFORM_ANCHOR,
+      value: CARD_VALUES.cartographerSealBaseValue,
+      duration: null,  // encounter-scoped — see tickWave
+    },
+    upgradedEffect: {
+      type: 'modifier',
+      stat: MODIFIER_STAT.TERRAFORM_ANCHOR,
+      value: CARD_VALUES.cartographerSealUpgradedValue,
+      duration: null,
+    },
+    archetype: 'cartographer',
+    terraform: false,   // the card itself does NOT mutate tiles — it changes the rules for terraform cards
+  },
+
+  /**
+   * LABYRINTH_MIND (Sprint 18) — RARE build-around. While this modifier is
+   * active, every tower's damage is multiplied by
+   * `1 + (spawner→exit path length × labyrinthMindPathScaling)` at fire time.
+   *
+   * Reward: lay_tile / build cards stretch the enemy path, which in turn
+   * stretches tower damage. Pays off long-path Cartographer builds.
+   * Read live by TowerCombatService at fireTurn (pathLength queried via
+   * PathfindingService.getPathToExitLength()). Flag-style modifier on
+   * MODIFIER_STAT.LABYRINTH_MIND, value = scaling coefficient.
+   */
+  [CardId.LABYRINTH_MIND]: {
+    id: CardId.LABYRINTH_MIND,
+    name: 'Labyrinth Mind',
+    description: 'Tower damage scales with path length (+2% per tile) this encounter.',
+    upgradedDescription: 'Tower damage scales with path length (+3% per tile) this encounter.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.RARE,
+    energyCost: CARD_VALUES.labyrinthMindCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier',
+      stat: MODIFIER_STAT.LABYRINTH_MIND,
+      value: CARD_VALUES.labyrinthMindPathScaling,
+      duration: null,
+    },
+    upgradedEffect: {
+      type: 'modifier',
+      stat: MODIFIER_STAT.LABYRINTH_MIND,
+      value: CARD_VALUES.labyrinthMindUpgradedPathScaling,
+      duration: null,
+    },
+    archetype: 'cartographer',
+    terraform: false,
+  },
+
+  // ── Highground archetype — elevation-target cards (Phase 3) ─────────────────
+
+  /**
+   * RAISE_PLATFORM (Sprint 27) — raise a tile by 1 elevation unit permanently.
+   * Towers on raised tiles gain range (TowerCombatService integration: sprint 29).
+   * Uses the `terraform` keyword (shared Highground/Cartographer surface;
+   * elevation-model.md §3 confirms Highground cards share this keyword).
+   */
+  [CardId.RAISE_PLATFORM]: {
+    id: CardId.RAISE_PLATFORM,
+    name: 'Raise Platform',
+    description: 'Raise a tile by 1 unit. Towers on raised tiles gain range.',
+    upgradedDescription: 'Raise a tile by 1 unit permanently. Towers on raised tiles gain range.',
+    type: CardType.SPELL,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.raisePlatformCost,
+    upgraded: false,
+    effect: {
+      type: 'elevation_target',
+      op: 'raise',
+      amount: CARD_VALUES.raisePlatformAmount,
+      duration: null,
+    } satisfies ElevationTargetCardEffect,
+    upgradedEffect: {
+      type: 'elevation_target',
+      op: 'raise',
+      amount: CARD_VALUES.raisePlatformAmount,
+      duration: null,
+    } satisfies ElevationTargetCardEffect,
+    archetype: 'highground',
+    terraform: true,
+  },
+
+  /**
+   * DEPRESS_TILE (Sprint 28) — lower a tile by 1 elevation unit permanently.
+   * Enemies on lowered (negative-elevation) tiles take +25% incoming damage
+   * (EXPOSED_DAMAGE_BONUS applied in EnemyService.damageEnemy).
+   */
+  [CardId.DEPRESS_TILE]: {
+    id: CardId.DEPRESS_TILE,
+    name: 'Depress Tile',
+    description: 'Lower a tile by 1 unit. Enemies on lowered tiles take +25% damage.',
+    upgradedDescription: 'Lower a tile and one random adjacent tile by 1 unit. Enemies on lowered tiles take +25% damage.',
+    type: CardType.SPELL,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.depressTileCost,
+    upgraded: false,
+    effect: {
+      type: 'elevation_target',
+      op: 'depress',
+      amount: CARD_VALUES.depressTileAmount,
+      duration: null,
+      exposeEnemies: true,
+    } satisfies ElevationTargetCardEffect,
+    upgradedEffect: {
+      type: 'elevation_target',
+      op: 'depress',
+      amount: CARD_VALUES.depressTileAmount,
+      duration: null,
+      exposeEnemies: true,
+      spreadToAdjacent: true,
+    } satisfies ElevationTargetCardEffect,
+    archetype: 'highground',
+    terraform: true,
+  },
+
+  /**
+   * HIGH_PERCH — wave-scoped range bonus for towers on elevation ≥ 2.
+   * Composes multiplicatively with the passive elevation range bonus.
+   */
+  [CardId.HIGH_PERCH]: {
+    id: CardId.HIGH_PERCH,
+    name: 'High Perch',
+    description: 'Towers on elevation 2+ gain +25% range for this wave.',
+    upgradedDescription: 'Towers on elevation 2+ gain +40% range for this wave.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.highPerchCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.HIGH_PERCH_RANGE_BONUS,
+      value: CARD_VALUES.highPerchBonus,
+      duration: CARD_VALUES.highPerchDuration,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.HIGH_PERCH_RANGE_BONUS,
+      value: CARD_VALUES.highPerchUpgradedBonus,
+      duration: CARD_VALUES.highPerchDuration,
+    },
+    archetype: 'highground' as const,
+    terraform: false,
+  },
+
+  // ── Highground archetype — uncommon cards (Sprints 30/31/32) ─────────────
+
+  /**
+   * CLIFFSIDE (Sprint 30) — raise a 3-tile horizontal line by +1 elevation.
+   * Center tile must be valid; wings (east + west neighbors) that hit SPAWNER,
+   * EXIT, or out-of-bounds are silently skipped (partial success).
+   * Upgrade: 5-tile line (center + 2 wings on each side).
+   *
+   * Uses the `line` field on ElevationTargetCardEffect to signal multi-tile
+   * expansion in resolveElevationTarget. Marked terraform: true (modifies tile
+   * elevation state). elevation-model.md §3 confirms Highground shares this keyword.
+   */
+  [CardId.CLIFFSIDE]: {
+    id: CardId.CLIFFSIDE,
+    name: 'Cliffside',
+    description: 'Raise a horizontal 3-tile line by +1. Wings that hit spawn/exit are skipped.',
+    upgradedDescription: 'Raise a horizontal 5-tile line by +1. Wings that hit spawn/exit are skipped.',
+    type: CardType.SPELL,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.cliffsideCost,
+    upgraded: false,
+    effect: {
+      type: 'elevation_target',
+      op: 'raise',
+      amount: CARD_VALUES.cliffsideRaiseAmount,
+      duration: null,
+      line: {
+        direction: 'horizontal',
+        length: CARD_VALUES.cliffsideLineLength,
+      },
+    } satisfies ElevationTargetCardEffect,
+    upgradedEffect: {
+      type: 'elevation_target',
+      op: 'raise',
+      amount: CARD_VALUES.cliffsideRaiseAmount,
+      duration: null,
+      line: {
+        direction: 'horizontal',
+        length: CARD_VALUES.cliffsideUpgradedLineLength,
+      },
+    } satisfies ElevationTargetCardEffect,
+    archetype: 'highground',
+    terraform: true,
+  },
+
+  /**
+   * VANTAGE_POINT — wave-scoped damage bonus for towers on elevation ≥ 1.
+   */
+  [CardId.VANTAGE_POINT]: {
+    id: CardId.VANTAGE_POINT,
+    name: 'Vantage Point',
+    description: 'Elevated towers (elevation ≥ 1) gain +50% damage for this wave.',
+    upgradedDescription: 'Elevated towers (elevation ≥ 1) gain +75% damage for this wave.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.vantagePointCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS,
+      value: CARD_VALUES.vantagePointBonus,
+      duration: CARD_VALUES.vantagePointDuration,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS,
+      value: CARD_VALUES.vantagePointUpgradedBonus,
+      duration: CARD_VALUES.vantagePointDuration,
+    },
+    archetype: 'highground' as const,
+    terraform: false,
+  },
+
+  /**
+   * AVALANCHE_ORDER (Sprint 32) — target an elevated tile (elevation ≥ 1).
+   * Enemies on the tile take (elevation × damagePerElevation) instant damage
+   * BEFORE the collapse, so the prior elevation is intact at damage time. The
+   * tile then collapses to elevation 0.
+   *
+   * Rejection: if target tile elevation is 0, card rejects with 'not-elevated'.
+   * The `damageOnHit.damagePerElevation` rider signals to resolveElevationTarget
+   * that damage should be applied prior to the collapse call (order matters).
+   *
+   * Timing note: damageEnemy is called BEFORE elevationService.collapse so the
+   * "exposed" multiplier in EnemyService.damageEnemy does NOT double-fire —
+   * the tile is still at positive elevation during the damage call, so the
+   * exposed (negative elevation) check is false.
+   */
+  [CardId.AVALANCHE_ORDER]: {
+    id: CardId.AVALANCHE_ORDER,
+    name: 'Avalanche Order',
+    description: 'Target an elevated tile. Enemies on it take (elevation × 10) damage, then the tile collapses.',
+    upgradedDescription: 'Target an elevated tile. Enemies on it take (elevation × 15) damage, then the tile collapses.',
+    type: CardType.SPELL,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.avalancheOrderCost,
+    upgraded: false,
+    effect: {
+      type: 'elevation_target',
+      op: 'collapse',
+      amount: 0,  // collapse ignores amount — always sets to 0
+      duration: null,
+      damageOnHit: { damagePerElevation: CARD_VALUES.avalancheDamagePerElevation },
+    } satisfies ElevationTargetCardEffect,
+    upgradedEffect: {
+      type: 'elevation_target',
+      op: 'collapse',
+      amount: 0,
+      duration: null,
+      damageOnHit: { damagePerElevation: CARD_VALUES.avalancheUpgradedDamagePerElevation },
+    } satisfies ElevationTargetCardEffect,
+    archetype: 'highground',
+    terraform: true,
+  },
+
+  // ── Highground archetype — rare cards (Sprints 33/34) ────────────────────
+
+  /**
+   * KING_OF_THE_HILL — encounter-scoped. Tower(s) at the board-wide max
+   * elevation gain damage bonus. Only activates when maxElevation ≥ 1
+   * (flat boards confer no bonus). Ties: ALL towers at the max receive
+   * the bonus (anti-flapping).
+   */
+  [CardId.KING_OF_THE_HILL]: {
+    id: CardId.KING_OF_THE_HILL,
+    name: 'King of the Hill',
+    description: 'The tower(s) at the highest elevation deal +100% damage for this encounter.',
+    upgradedDescription: 'The tower(s) at the highest elevation deal +150% damage for this encounter.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.RARE,
+    energyCost: CARD_VALUES.kingOfTheHillCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.KING_OF_THE_HILL_DAMAGE_BONUS,
+      value: CARD_VALUES.kingOfTheHillBonus,
+      duration: null,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.KING_OF_THE_HILL_DAMAGE_BONUS,
+      value: CARD_VALUES.kingOfTheHillUpgradedBonus,
+      duration: null,
+    },
+    archetype: 'highground' as const,
+    terraform: false,
+  },
+
+  /**
+   * GRAVITY_WELL — encounter-scoped. Enemies on tiles with elevation < 0
+   * skip their movement for the turn. Checked per-enemy in
+   * EnemyService.stepEnemiesOneTurn.
+   */
+  [CardId.GRAVITY_WELL]: {
+    id: CardId.GRAVITY_WELL,
+    name: 'Gravity Well',
+    description: 'Enemies on depressed tiles (elevation < 0) cannot move this encounter.',
+    upgradedDescription: 'Enemies on depressed tiles (elevation < 0) cannot move this encounter. Each turn, gated enemies also take 10% of their max HP as damage.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.RARE,
+    energyCost: CARD_VALUES.gravityWellCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.GRAVITY_WELL,
+      value: CARD_VALUES.gravityWellBaseValue,
+      duration: null,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.GRAVITY_WELL,
+      value: CARD_VALUES.gravityWellUpgradedValue,
+      duration: null,
+    },
+    archetype: 'highground' as const,
+    terraform: false,
+  },
+
+  // ── Conduit archetype ────────────────────────────────────────────────────
+
+  /**
+   * HANDSHAKE — wave-scoped damage bonus for towers with ≥ 1 active 4-dir
+   * neighbor (read via TowerGraphService.getNeighbors in composeDamageStack).
+   */
+  [CardId.HANDSHAKE]: {
+    id: CardId.HANDSHAKE,
+    name: 'Handshake',
+    description: 'Towers with at least one adjacent tower gain +20% damage this wave.',
+    upgradedDescription: 'Towers with at least one adjacent tower gain +30% damage this wave.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.handshakeCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.HANDSHAKE_DAMAGE_BONUS,
+      value: CARD_VALUES.handshakeBonus,
+      duration: CARD_VALUES.handshakeDuration,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.HANDSHAKE_DAMAGE_BONUS,
+      value: CARD_VALUES.handshakeUpgradedBonus,
+      duration: CARD_VALUES.handshakeDuration,
+    },
+    archetype: 'conduit' as const,
+    link: true,
+    terraform: false,
+  },
+
+  /**
+   * FORMATION — wave-scoped additive range for towers in a straight 4-dir
+   * line of 3+. Folds INSIDE `(baseRange + additive) × multipliers` per
+   * spike §13.
+   */
+  [CardId.FORMATION]: {
+    id: CardId.FORMATION,
+    name: 'Formation',
+    description: 'Towers in a row of 3 or more gain +2 range this wave.',
+    upgradedDescription: 'Towers in a row of 3 or more gain +3 range this wave.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.formationCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.FORMATION_RANGE_ADDITIVE,
+      value: CARD_VALUES.formationRangeAdditive,
+      duration: CARD_VALUES.formationDuration,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.FORMATION_RANGE_ADDITIVE,
+      value: CARD_VALUES.formationUpgradedRangeAdditive,
+      duration: CARD_VALUES.formationDuration,
+    },
+    archetype: 'conduit' as const,
+    link: true,
+    terraform: false,
+  },
+
+  /**
+   * LINKWORK — turn-scoped flag. Every tower in a qualifying cluster gains
+   * LINKWORK_FIRE_RATE_BONUS shots/turn, folded into the fireRate ceil.
+   * First card with `durationScope: 'turn'` — ticks via tickTurn, NOT tickWave.
+   */
+  [CardId.LINKWORK]: {
+    id: CardId.LINKWORK,
+    name: 'Linkwork',
+    description: 'For 2 turns, linked towers share the highest fire rate in their cluster.',
+    upgradedDescription: 'For 3 turns, linked towers share the highest fire rate in their cluster.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.linkworkCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE,
+      value: CARD_VALUES.linkworkValue,
+      duration: CARD_VALUES.linkworkDuration,
+      durationScope: 'turn' as const,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE,
+      value: CARD_VALUES.linkworkValue,
+      duration: CARD_VALUES.linkworkUpgradedDuration,
+      durationScope: 'turn' as const,
+    },
+    archetype: 'conduit' as const,
+    link: true,
+    terraform: false,
+  },
+
+  /**
+   * HARMONIC — turn-scoped flag. When any tower fires, up to
+   * HARMONIC_NEIGHBOR_COUNT non-disrupted cluster members fire at the same
+   * target (range-gated). Non-recursive; seeded RNG for replay determinism.
+   */
+  [CardId.HARMONIC]: {
+    id: CardId.HARMONIC,
+    name: 'Harmonic',
+    description: 'For 3 turns, when a tower fires, 2 random linked neighbors fire at the same target.',
+    upgradedDescription: 'For 4 turns, when a tower fires, 2 random linked neighbors fire at the same target.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.harmonicCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.HARMONIC_SIMULTANEOUS_FIRE,
+      value: CARD_VALUES.harmonicValue,
+      duration: CARD_VALUES.harmonicDuration,
+      durationScope: 'turn' as const,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.HARMONIC_SIMULTANEOUS_FIRE,
+      value: CARD_VALUES.harmonicValue,
+      duration: CARD_VALUES.harmonicUpgradedDuration,
+      durationScope: 'turn' as const,
+    },
+    archetype: 'conduit' as const,
+    link: true,
+    terraform: false,
+  },
+
+  /**
+   * GRID_SURGE — turn-scoped damage multiplier for towers with all 4
+   * cardinal neighbors filled (and non-disrupted). High-burst, 1-turn
+   * window rewarding tight 4-neighbor clusters.
+   */
+  [CardId.GRID_SURGE]: {
+    id: CardId.GRID_SURGE,
+    name: 'Grid Surge',
+    description: 'Towers with all 4 neighbors filled deal double damage this turn.',
+    upgradedDescription: 'Towers with all 4 neighbors filled deal ×2.5 damage this turn.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.gridSurgeCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.GRID_SURGE_DAMAGE_BONUS,
+      value: CARD_VALUES.gridSurgeBonus,
+      duration: CARD_VALUES.gridSurgeDuration,
+      durationScope: 'turn' as const,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.GRID_SURGE_DAMAGE_BONUS,
+      value: CARD_VALUES.gridSurgeUpgradedBonus,
+      duration: CARD_VALUES.gridSurgeDuration,
+      durationScope: 'turn' as const,
+    },
+    archetype: 'conduit' as const,
+    link: true,
+    terraform: false,
+  },
+
+  /**
+   * CONDUIT_BRIDGE — utility card. Picks two random non-adjacent towers via
+   * seeded RNG and installs a virtual adjacency edge for N turns.
+   * `effect.value` is the duration (turns) passed to
+   * TowerGraphService.addVirtualEdge.
+   */
+  [CardId.CONDUIT_BRIDGE]: {
+    id: CardId.CONDUIT_BRIDGE,
+    name: 'Conduit Bridge',
+    description: 'Link two non-adjacent towers as neighbors for 3 turns.',
+    upgradedDescription: 'Link two non-adjacent towers as neighbors for 4 turns.',
+    type: CardType.UTILITY,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.conduitBridgeCost,
+    upgraded: false,
+    effect: {
+      type: 'utility' as const,
+      utilityId: 'bridge_towers',
+      value: CARD_VALUES.conduitBridgeDuration,
+    },
+    upgradedEffect: {
+      type: 'utility' as const,
+      utilityId: 'bridge_towers',
+      value: CARD_VALUES.conduitBridgeUpgradedDuration,
+    },
+    archetype: 'conduit' as const,
+    link: true,
+    terraform: false,
+  },
+
+  /**
+   * ARCHITECT — encounter-scoped flag. Neighbor-gated Conduit cards
+   * (HANDSHAKE, GRID_SURGE) substitute `clusterSize - 1` for their literal
+   * 4-dir neighbor count. Transforms the cluster into a single adjacency
+   * super-node.
+   */
+  [CardId.ARCHITECT]: {
+    id: CardId.ARCHITECT,
+    name: 'Architect',
+    description: 'Every tower in a cluster counts as adjacent to every other tower in that cluster for the rest of this encounter.',
+    upgradedDescription: 'Costs 2 energy. Every tower in a cluster counts as adjacent to every other tower in that cluster for the rest of this encounter.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.RARE,
+    energyCost: CARD_VALUES.architectCost,
+    upgradedEnergyCost: CARD_VALUES.architectUpgradedCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.ARCHITECT_CLUSTER_PROPAGATION,
+      value: CARD_VALUES.architectValue,
+      duration: null,                 // encounter-scoped
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.ARCHITECT_CLUSTER_PROPAGATION,
+      value: CARD_VALUES.architectValue,
+      duration: null,
+    },
+    archetype: 'conduit' as const,
+    link: true,
+    terraform: false,
+  },
+
+  /**
+   * HIVE_MIND — encounter-scoped flag. Every tower in a cluster fires with
+   * the MAX composed damage and range across cluster members. Fire-rate
+   * sharing is covered by LINKWORK. Two-pass prepass in fireTurn.
+   */
+  [CardId.HIVE_MIND]: {
+    id: CardId.HIVE_MIND,
+    name: 'Hive Mind',
+    description: 'For the rest of this encounter, every tower in a cluster fires with the strongest tower\u2019s damage and range.',
+    upgradedDescription: 'For the rest of this encounter, every tower in a cluster fires with the strongest tower\u2019s damage, range, and secondary effect (splash, chain bounces, status, and DoT).',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.RARE,
+    energyCost: CARD_VALUES.hiveMindCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
+      value: CARD_VALUES.hiveMindValue,
+      duration: null,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
+      value: CARD_VALUES.hiveMindUpgradedValue,
+      duration: null,
+    },
+    archetype: 'conduit' as const,
+    link: true,
+    terraform: false,
+  },
 };
 
 // ── Helper Functions ──────────────────────────────────────────
@@ -1103,6 +2064,21 @@ export function getActiveTowerEffect(card: CardInstance): TowerCardEffect | unde
   const def = getCardDefinition(card.cardId);
   const effect = (card.upgraded && def.upgradedEffect) ? def.upgradedEffect : def.effect;
   return effect.type === 'tower' ? effect : undefined;
+}
+
+/**
+ * Resolve the effective energy cost for a card instance, accounting for the
+ * upgrade-cost reduction (e.g., ARCHITECT 3E → 2E on upgrade). Falls back to
+ * the base `energyCost` when the card is not upgraded or no upgraded cost is
+ * declared. Callers in play paths should route through this helper — reading
+ * `def.energyCost` directly will miss cost-reduction upgrades.
+ */
+export function getEffectiveEnergyCost(card: CardInstance): number {
+  const def = getCardDefinition(card.cardId);
+  if (card.upgraded && def.upgradedEnergyCost !== undefined) {
+    return def.upgradedEnergyCost;
+  }
+  return def.energyCost;
 }
 
 export function getStarterDeck(): CardId[] {

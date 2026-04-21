@@ -136,12 +136,26 @@ describe('Card System — Balance', () => {
 
   it('modifier durations should be 1-3 waves (not permanent)', () => {
     const modifierCards = getCardsByType(CardType.MODIFIER);
+    // Encounter-scoped flag modifiers (duration=null) — rare anchors that
+    // persist the whole encounter by design (sprints 17/18, 33/34).
+    const encounterScopedIds: readonly CardId[] = [
+      CardId.CARTOGRAPHER_SEAL,
+      CardId.LABYRINTH_MIND,
+      CardId.KING_OF_THE_HILL,
+      CardId.GRAVITY_WELL,
+      CardId.ARCHITECT,
+      CardId.HIVE_MIND,
+    ];
     for (const card of modifierCards) {
       const effect = card.effect;
       if (effect.type === 'modifier') {
         // SHIELD_WALL uses duration 0 (block-based, not wave-based) — exempt
         if (card.id === CardId.SHIELD_WALL) {
           expect(effect.duration).toBe(0); // intentional exception
+        } else if (encounterScopedIds.includes(card.id)) {
+          // Flag-style modifiers use null duration (encounter-scoped, see
+          // ActiveModifier.remainingWaves widening and CardEffectService.tickWave).
+          expect(effect.duration).toBeNull();
         } else {
           expect(effect.duration)
             .withContext(`${card.id}: duration ${effect.duration} should be 1-3`)
@@ -221,9 +235,258 @@ describe('Card System — Balance', () => {
 
   // ── Total Card Count ──────────────────────────────────────────────────────
 
-  it('should have exactly 51 card definitions', () => {
-    // 40 original + 6 tower variant cards (sprint 2a) + 3 status-applying spells (sprint 2b) + 2 status payoff spells (sprint 2c)
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(51);
+  it('should have exactly 74 card definitions', () => {
+    // 40 original + 6 tower variant cards (sprint 2a) + 3 status-applying spells (sprint 2b)
+    // + 2 status payoff spells (sprint 2c) + 4 Cartographer terraform spells (phase 2 sprints 11/12/15/16)
+    // + 1 DETOUR routing spell (sprint 14) + 2 Cartographer rare anchors (phase 2 sprints 17/18)
+    // + 2 Highground elevation cards (phase 3 sprints 27/28: RAISE_PLATFORM + DEPRESS_TILE)
+    // + 1 Highground modifier card (phase 3 sprint 29: HIGH_PERCH)
+    // + 3 Highground uncommon cards (phase 3 sprints 30/31/32: CLIFFSIDE + VANTAGE_POINT + AVALANCHE_ORDER)
+    // + 2 Highground rare cards (phase 3 sprints 33/34: KING_OF_THE_HILL + GRAVITY_WELL)
+    // + 3 Conduit commons (phase 4 sprints 43/44/45: HANDSHAKE + FORMATION + LINKWORK)
+    // + 3 Conduit uncommons (phase 4 sprints 46/47/48: HARMONIC + GRID_SURGE + CONDUIT_BRIDGE)
+    // + 2 Conduit rares (phase 4 sprints 49/50: ARCHITECT + HIVE_MIND)
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(74);
+  });
+
+  // ── Phase 2 Sprint 19 — Cartographer economy validation ────────────────────
+  //
+  // Sprint 19 is a utility/tuning pass. The committed decision: keep the
+  // starter deck archetype-neutral. Every archetype earns its cards through
+  // the reward pool, not the starter. This prevents any archetype from
+  // accidentally flipping a fresh deck's `getDominantArchetype()` tag before
+  // the player has made a real choice.
+  //
+  // These specs codify the cost curve so balance regressions show up as test
+  // failures. Tune here by modifying expected costs; do NOT silently drop the
+  // spec when reworking.
+
+  describe('Cartographer economy (Sprint 19 utility pass)', () => {
+    const cartographerCards = Object.values(CARD_DEFINITIONS).filter(c => c.archetype === 'cartographer');
+
+    it('every Cartographer card has archetype = cartographer', () => {
+      // Sanity check the archetype tag round-trips correctly (failure mode:
+      // a copy-paste bug that drops the archetype field and defaults to neutral).
+      for (const card of cartographerCards) {
+        expect(card.archetype).toBe('cartographer');
+      }
+    });
+
+    it('common Cartographer cards cost 0-1 energy (cheap, frequent plays)', () => {
+      const commons = cartographerCards.filter(c => c.rarity === CardRarity.COMMON);
+      expect(commons.length).toBeGreaterThan(0);
+      for (const card of commons) {
+        expect(card.energyCost)
+          .withContext(`${card.id}: common should cost 0-1 energy`)
+          .toBeLessThanOrEqual(1);
+      }
+    });
+
+    it('uncommon Cartographer cards cost 1-2 energy', () => {
+      const uncommons = cartographerCards.filter(c => c.rarity === CardRarity.UNCOMMON);
+      expect(uncommons.length).toBeGreaterThan(0);
+      for (const card of uncommons) {
+        expect(card.energyCost)
+          .withContext(`${card.id}: uncommon should cost 1-2 energy`)
+          .toBeGreaterThanOrEqual(1);
+        expect(card.energyCost)
+          .withContext(`${card.id}: uncommon should cost 1-2 energy`)
+          .toBeLessThanOrEqual(2);
+      }
+    });
+
+    it('rare Cartographer cards cost 2-3 energy (strong effects, worth the cost)', () => {
+      const rares = cartographerCards.filter(c => c.rarity === CardRarity.RARE);
+      expect(rares.length).toBeGreaterThan(0);
+      for (const card of rares) {
+        expect(card.energyCost)
+          .withContext(`${card.id}: rare should cost 2-3 energy`)
+          .toBeGreaterThanOrEqual(2);
+        expect(card.energyCost)
+          .withContext(`${card.id}: rare should cost 2-3 energy`)
+          .toBeLessThanOrEqual(3);
+      }
+    });
+
+    it('no Cartographer card is seeded in the starter deck (archetype-neutral start)', () => {
+      // Deliberate design: a fresh run's dominant archetype must be 'neutral'
+      // so reward weighting doesn't lean before the player picks their path.
+      // See DeckService.getDominantArchetype + anti-flapping tie-break.
+      const starter = getStarterDeck();
+      for (const cardId of starter) {
+        const def = CARD_DEFINITIONS[cardId];
+        expect(def.archetype ?? 'neutral')
+          .withContext(`${cardId} in starter deck but tagged ${def.archetype}`)
+          .toBe('neutral');
+      }
+    });
+
+    it('tile-target Cartographer cards all set terraform=true for tooltip/keyword visibility', () => {
+      // Any Cartographer card with effect.type === 'terraform_target' must
+      // carry the terraform keyword (feeds hover tooltip + card-detail modal).
+      for (const card of cartographerCards) {
+        if (card.effect.type === 'terraform_target') {
+          expect(card.terraform)
+            .withContext(`${card.id}: tile-target Cartographer card must set terraform=true`)
+            .toBe(true);
+        }
+      }
+    });
+
+    it('non-terraform Cartographer cards (DETOUR, SEAL, LABYRINTH_MIND) explicitly set terraform=false', () => {
+      // These three change rules/routing without modifying tile state. They
+      // must be archetype-tagged but NOT carry the terraform keyword, so the
+      // tooltip keyword list doesn't lie about what they do.
+      const nonTerraformIds: readonly CardId[] = [
+        CardId.DETOUR,
+        CardId.CARTOGRAPHER_SEAL,
+        CardId.LABYRINTH_MIND,
+      ];
+      for (const cardId of nonTerraformIds) {
+        const def = CARD_DEFINITIONS[cardId];
+        expect(def.terraform)
+          .withContext(`${cardId}: must NOT be tagged terraform`)
+          .toBe(false);
+      }
+    });
+  });
+
+  // ── Phase 3 Sprints 27/28 — Highground economy validation ──────────────────
+  //
+  // Mirrors Cartographer economy specs (Sprint 19). Highground common cards must
+  // cost 0-1 energy and carry archetype='highground' + terraform=true.
+  // Codified here so balance regressions surface as test failures.
+
+  describe('Highground economy (Sprints 27/28 — RAISE_PLATFORM + DEPRESS_TILE)', () => {
+    const highgroundCards = Object.values(CARD_DEFINITIONS).filter(c => c.archetype === 'highground');
+
+    it('every Highground card has archetype = highground', () => {
+      for (const card of highgroundCards) {
+        expect(card.archetype)
+          .withContext(`${card.id}: archetype should be highground`)
+          .toBe('highground');
+      }
+    });
+
+    it('common Highground cards cost 0-1 energy (cheap, frequent plays)', () => {
+      const commons = highgroundCards.filter(c => c.rarity === CardRarity.COMMON);
+      expect(commons.length).toBeGreaterThan(0);
+      for (const card of commons) {
+        expect(card.energyCost)
+          .withContext(`${card.id}: common should cost 0-1 energy`)
+          .toBeLessThanOrEqual(1);
+      }
+    });
+
+    it('RAISE_PLATFORM has archetype=highground, terraform=true, energyCost=1', () => {
+      const def = CARD_DEFINITIONS[CardId.RAISE_PLATFORM];
+      expect(def.archetype).toBe('highground');
+      expect(def.terraform).toBe(true);
+      expect(def.energyCost).toBe(1);
+      expect(def.rarity).toBe(CardRarity.COMMON);
+    });
+
+    it('RAISE_PLATFORM effect is elevation_target op=raise amount=1 duration=null', () => {
+      const def = CARD_DEFINITIONS[CardId.RAISE_PLATFORM];
+      expect(def.effect.type).toBe('elevation_target');
+      if (def.effect.type === 'elevation_target') {
+        expect(def.effect.op).toBe('raise');
+        expect(def.effect.amount).toBe(1);
+        expect(def.effect.duration).toBeNull();
+        expect(def.effect.exposeEnemies).toBeFalsy();
+      }
+    });
+
+    it('RAISE_PLATFORM upgradedEffect matches effect shape', () => {
+      const def = CARD_DEFINITIONS[CardId.RAISE_PLATFORM];
+      expect(def.upgradedEffect).toBeDefined();
+      expect(def.upgradedEffect?.type).toBe('elevation_target');
+    });
+
+    it('DEPRESS_TILE has archetype=highground, terraform=true, energyCost=1', () => {
+      const def = CARD_DEFINITIONS[CardId.DEPRESS_TILE];
+      expect(def.archetype).toBe('highground');
+      expect(def.terraform).toBe(true);
+      expect(def.energyCost).toBe(1);
+      expect(def.rarity).toBe(CardRarity.COMMON);
+    });
+
+    it('DEPRESS_TILE effect is elevation_target op=depress amount=1 duration=null exposeEnemies=true', () => {
+      const def = CARD_DEFINITIONS[CardId.DEPRESS_TILE];
+      expect(def.effect.type).toBe('elevation_target');
+      if (def.effect.type === 'elevation_target') {
+        expect(def.effect.op).toBe('depress');
+        expect(def.effect.amount).toBe(1);
+        expect(def.effect.duration).toBeNull();
+        expect(def.effect.exposeEnemies).toBe(true);
+      }
+    });
+
+    it('DEPRESS_TILE upgradedEffect matches effect shape', () => {
+      const def = CARD_DEFINITIONS[CardId.DEPRESS_TILE];
+      expect(def.upgradedEffect).toBeDefined();
+      expect(def.upgradedEffect?.type).toBe('elevation_target');
+      if (def.upgradedEffect?.type === 'elevation_target') {
+        expect(def.upgradedEffect.exposeEnemies).toBe(true);
+      }
+    });
+
+    it('no Highground card is seeded in the starter deck (archetype-neutral start)', () => {
+      const starter = getStarterDeck();
+      for (const cardId of starter) {
+        const def = CARD_DEFINITIONS[cardId];
+        expect(def.archetype ?? 'neutral')
+          .withContext(`${cardId} in starter deck but tagged ${def.archetype}`)
+          .not.toBe('highground');
+      }
+    });
+
+    it('elevation-target Highground cards all set terraform=true for keyword visibility', () => {
+      for (const card of highgroundCards) {
+        if (card.effect.type === 'elevation_target') {
+          expect(card.terraform)
+            .withContext(`${card.id}: elevation-target card must set terraform=true`)
+            .toBe(true);
+        }
+      }
+    });
+
+    it('HIGH_PERCH has archetype=highground, terraform=false, energyCost=1, COMMON', () => {
+      const def = CARD_DEFINITIONS[CardId.HIGH_PERCH];
+      expect(def.archetype).toBe('highground');
+      expect(def.terraform).toBe(false); // reads elevation, does not mutate tiles
+      expect(def.energyCost).toBe(1);
+      expect(def.rarity).toBe(CardRarity.COMMON);
+      expect(def.type).toBe(CardType.MODIFIER);
+    });
+
+    it('HIGH_PERCH effect is modifier stat=highPerchRangeBonus, value=0.25, duration=1', () => {
+      const def = CARD_DEFINITIONS[CardId.HIGH_PERCH];
+      expect(def.effect.type).toBe('modifier');
+      if (def.effect.type === 'modifier') {
+        expect(def.effect.stat).toBe('highPerchRangeBonus');
+        expect(def.effect.value).toBeCloseTo(0.25, 5);
+        expect(def.effect.duration).toBe(1);
+      }
+    });
+
+    it('HIGH_PERCH upgraded effect has value=0.4', () => {
+      const def = CARD_DEFINITIONS[CardId.HIGH_PERCH];
+      expect(def.upgradedEffect).toBeDefined();
+      if (def.upgradedEffect?.type === 'modifier') {
+        expect(def.upgradedEffect.value).toBeCloseTo(0.4, 5);
+        expect(def.upgradedEffect.duration).toBe(1);
+      }
+    });
+
+    it('non-terraform Highground cards (HIGH_PERCH) explicitly set terraform=false', () => {
+      // HIGH_PERCH is archetype-tagged highground but reads elevation rather than
+      // mutating tiles. Must carry terraform=false so tooltip keyword list is accurate.
+      const def = CARD_DEFINITIONS[CardId.HIGH_PERCH];
+      expect(def.terraform)
+        .withContext('HIGH_PERCH: must NOT be tagged terraform')
+        .toBe(false);
+    });
   });
 
   it('starter cards should all have STARTER rarity', () => {

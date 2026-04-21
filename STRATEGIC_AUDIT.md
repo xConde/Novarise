@@ -1707,3 +1707,244 @@ Scope: 57 files changed on `feat/engine-depth-pass` vs main. This review covers 
 - [ ] Step 3: Update PR #30 description with a consolidated summary of what landed since the original PR body: mobile polish pass, rest-screen bonfire, red-team hardening (Findings 1 & 2). Include the mobile smoke checklist for the user to verify visually before merge.
 - [ ] Step 4: Add a mobile-smoke section to the PR manual test checklist — iPhone SE (320/375) + iPhone 12 Pro (390) verification that the end-turn button clears the gear on all three.
 
+---
+
+## Red Team Critique — Phase 1 of feat/archetype-depth (2026-04-17)
+
+Branch: `feat/archetype-depth` | Diff: 24 files / +1204 / −82 / 5618 specs passing
+Phase 1 sprints shipped: reward rarity (already done), exhaust UI (already done), card hover tooltip, shop card-removal slot, effect.value through status spells + FORTIFY upgrades, Terraform/Link keywords, archetype tag + pool weighting.
+
+### Finding 1: `removeCardFromShop` splices `deckCardIds` by CardId, not instance — silent save/restore desync (HIGH)
+**Location:** `src/app/run/services/run.service.ts:767-769`
+**Risk:** `deckCardIds` is `CardId[]` (one entry per card type, duplicates allowed). When the player has two copies of the same card and removes one, `newDeckCardIds.indexOf(target.cardId)` removes whichever copy is first. `deckService.removeCard(instanceId)` removes the correct instance. The two arrays desync silently. On reload, `initializeDeck(state.deckCardIds, state.seed)` re-seeds the deck from the persisted `deckCardIds` — restoring the removed card. The 75g purchase is silently refunded with no signal.
+**Fix:** Splice `deckCardIds` by removing exactly one matching entry (already correct via `indexOf` + 1-element splice — but the array becomes incorrect when the *other* copy was the target). The clean fix: derive `deckCardIds` from `deckService.getAllCards().map(c => c.cardId)` at persist time so the live deck is the source of truth. Alternatively, drop `deckCardIds` entirely and serialize a flat list of instance ids.
+
+### Finding 2: `ngOnChanges` resets `cardRemoveUsed` on any input change — slot refund attack (HIGH)
+**Location:** `src/app/run/components/shop-screen/shop-screen.component.ts:55-59` + `src/app/run/run.component.html:142`
+**Risk:** `ngOnChanges()` fires whenever ANY `@Input()` reference changes. The new `[deckCards]="getDeckCards()"` template binding invokes `getDeckCards()` on every change-detection tick; `getDeckCards()` → `deckService.getAllCards()` returns a brand-new array each call. Angular sees the new reference → ngOnChanges fires → `cardRemoveUsed = false` resets. The "one use per visit" guard becomes effectively absent — the slot reopens on every CD tick.
+**Fix:** Guard the reset with `SimpleChanges`: `if (changes['shopItems']) { ... }`. Additionally, change `[deckCards]="getDeckCards()"` to a memoized property (assign once when entering the shop view) to eliminate the per-CD allocation thrash.
+
+### Finding 3: `FORTIFY` uses `Math.random()` — non-deterministic, breaks seed reproducibility (MEDIUM)
+**Location:** `src/app/game/game-board/services/card-play.service.ts:543`
+**Risk:** Upgraded FORTIFY's loop uses `Math.floor(Math.random() * remaining.length)` — bypasses the seeded run RNG used by every other random selection in the codebase. Any feature relying on determinism (save/restore replay, run seeds, automated regression tests, future telemetry) will diverge whenever FORTIFY fires.
+**Fix:** Inject the seeded RNG (already exposed via `RunService.runRng`) through `SpellContext` or a dedicated provider, then replace `Math.random()` calls in `fortifyRandomTower` with the seeded source. Pre-Sprint-5 base FORTIFY had the same bug; the upgrade doubles the exposure.
+
+### Hardening for this gate
+Picked Finding 2 as the hardening fix — it's the most immediately exploitable (no duplicate-card prerequisite) and slot-reset can corrupt mid-encounter. Findings 1 + 3 enter the Closer Protocol checklist below.
+
+## Deployment Checklist — Phase 1 archetype-depth
+
+- [ ] Step 1: Apply Finding 1 fix — derive `deckCardIds` from live deck pile contents at persist time so `removeCardFromShop` never desyncs duplicate-card removal. Spec: remove one of two duplicate cards, persist, restore, verify count.
+- [ ] Step 2: Apply Finding 3 fix — thread the seeded run RNG through `SpellContext` so `fortifyRandomTower` uses the deterministic RNG instead of `Math.random()`. Spec: same seed → same upgrade selection.
+- [ ] Step 3: Devil's-advocate review of Phase 1 as a whole — what would have made this phase stronger? What's the next-most-likely thing to break in Phase 2 that we should bake in defense for now?
+- [ ] Step 4: Full quality gate — `tsc --noEmit` (both configs), `ng build --configuration=production`, full `ng test`, all green.
+- [ ] Step 5: Update memory (`MEMORY.md` + sprint plan) to reflect what shipped vs deferred from Phase 1.
+
+---
+
+## Red Team Critique — 2026-04-17 (Phase 2 boundary)
+
+Branch: `feat/archetype-depth` | Diff: 86 files / +9185 / −256
+Sprints reviewed: 9, 10, 10.5, 10.75, 11–24
+
+### Finding 0: No `.claude/settings.json` or hooks directory (LOW)
+**Location:** `.claude/settings.json` (absent), `.claude/hooks/` (absent)
+**Risk:** The red-team protocol mandates verifying hook configuration before review. Pre-commit hooks that enforce `tsc --noEmit`, linting, or test runs are not registered. A bad commit (e.g., a TypeScript error introduced mid-sprint) can land silently. Low severity because CI presumably catches it downstream, but the local gate is missing.
+**Fix:** Create `.claude/settings.json` with the project's hook configuration and add pre-commit entries for `tsc --noEmit` and `npm test -- --watch=false`.
+
+---
+
+### Finding 1: `endTurn` does NOT cancel tile-target mode — pending terraform card survives across turn boundaries (HIGH)
+**Location:** `src/app/game/game-board/services/wave-combat-facade.service.ts:191-194`
+**Risk:** `endTurn()` guards only on `hasPendingCard()`, which checks `pendingTowerCard` only (`card-play.service.ts:119-121`). If the player has clicked a terraform card (entering tile-target mode) but has NOT yet clicked a tile, then presses End Turn, the turn resolves normally. `deckService.discardHand()` then fires (`wave-combat-facade.service.ts:249`) — discarding the hand including the terraform card. The `pendingTileTargetCard` reference still holds the now-discarded `CardInstance`. On the next turn's first tile click, `resolveTileTarget` re-checks energy, mutates the board, then calls `deckService.playCard(card.instanceId)`. `playCard` searches all four piles for the instanceId — it may find it in the discard pile, successfully consuming it there. Net effect: the mutation is applied with a one-turn delay that the player didn't pay for, and the card is consumed from an incorrect pile. If the card is NOT found in any pile (e.g. exhausted or already reshuffled), `playCard` returns false but the board mutation already succeeded — free tile mutation with no card cost.
+**Fix:** In `WaveCombatFacadeService.endTurn()`, mirror the tower-card guard: check `cardPlayService.getPendingTileTargetCard()` and call `cardPlayService.cancelTileTarget()` (returning without resolving the turn) the same way tower-card placement is handled. Alternatively, resolve the tile-target automatically on end-turn if a valid tile is selectable, but cancellation is simpler and consistent with tower behavior.
+
+---
+
+### Finding 2: `turnsSinceLastMutation` returns negative on checkpoint restore — VEINSEEKER buffs every turn forever (MEDIUM)
+**Location:** `src/app/game/game-board/services/path-mutation.service.ts:210-214`, `wasMutatedInLastTurns:195-198`
+**Risk:** `turnsSinceLastMutation(currentTurn)` returns `currentTurn - latestTurn`. If a checkpoint is restored with `turnNumber` set to a value smaller than `appliedOnTurn` stored in journal entries (a plausible edge case: the player saves, then the encounter is replayed from an earlier wave checkpoint), `since` is negative. `wasMutatedInLastTurns(currentTurn, 3)` does `since !== Infinity && since <= 3` — a negative number satisfies `<= 3`. VEINSEEKER's sprint-23 speed boost reads this predicate each turn; it would fire every turn for the entire encounter, making VEINSEEKER permanently boosted regardless of actual board activity. While pathological checkpoint restore is the precondition, the math is also silent: there is no assertion or clamp, and the caller has no way to know the result is semantically wrong.
+**Fix:** Clamp `turnsSinceLastMutation` to `Math.max(0, currentTurn - latestTurn)`. Zero means "mutated this very turn," which is the safest fallback — it keeps any "just mutated" effect active rather than leaving VEINSEEKER thinking the board is quiet when the data is ambiguous. Add a `console.warn` when the raw difference is negative (indicates a clock inconsistency worth investigating).
+
+---
+
+### Finding 3: `Number.MAX_SAFE_INTEGER` sentinel for anchored `block`/`bridgehead` is arithmetically safe but semantically diverges from `destroy` permanence — anchor carry-over on encounter boundary (MEDIUM)
+**Location:** `src/app/game/game-board/services/card-play.service.ts:346-360`, `path-mutation.service.ts:256`
+**Risk:** `destroy` uses `duration = null` → `expiresOnTurn = null` → never filtered by `tickTurn`. Anchored `block`/`bridgehead` use `duration = Number.MAX_SAFE_INTEGER` → `expiresOnTurn = currentTurn + MAX_SAFE_INT` (a value outside `Number.isSafeInteger` range; confirmed via `node -e`). `tickTurn` checks `m.expiresOnTurn === currentTurn` — this will never match a floating-point imprecision value, so it won't accidentally expire mid-encounter. However, `PathMutationService.reset()` is called on encounter teardown and clears the journal. The tile-type mutation applied to `GameBoardService` is NOT reverted on reset — only the journal is cleared. This means a WALL tile converted via anchored BLOCK survives into the next encounter (the underlying `GameBoardService` board data was mutated but the journal entry tracking the revert is gone). The next encounter loads the same map from `MapBridgeService` — if the board is re-initialized from the serialized map (not from `GameBoardService` live state), this is fine. If it uses live state, the mutation leaks. Verify the board re-initialization path: if `GameSessionService.resetAllServices()` reinitializes the board from the original map data, the leak doesn't occur; if it reads `gameBoardService.getGameBoard()` live, anchored mutations carry over.
+**Fix:** Verify `GameSessionService.resetAllServices()` or `GameBoardComponent.restartGame()` reinitializes the board from the source map, not from live `GameBoardService` state. If the board is re-read live, `PathMutationService.reset()` must revert all active journal entries before clearing, or `GameBoardService.resetBoard()` must be called with the original map data.
+
+
+---
+
+## Deployment Checklist — Phase 2 archetype-depth
+
+- [x] Step 1: Apply Finding 1 fix — `hasPendingCard` now includes tile-target mode; `cancelPlacement` cancels both. Committed in `ce6e1d7`.
+- [x] Step 2: Apply Finding 2 fix — clamp `turnsSinceLastMutation` negative delta to 0 with console.warn. Committed in `ce6e1d7`.
+- [x] Step 3: Investigate Finding 3 — verified NON-ISSUE. `GameBoardService` is component-scoped; each `/play` navigation gets a fresh injector. `ngOnInit` always calls `importBoard`/`resetBoard` which rebuilds the board from `TerrainGridState` (not live `GameBoardService` state). Anchored mutations cannot leak across encounters. Logged in closer protocol.
+- [x] Step 4: MINER placed in wave 7 with placeholder balance numbers. Committed in `37772a6`.
+- [x] Step 5: Devil's-advocate review appended below as the "Phase 2 Close" section — 4 Phase-2 critiques, 4 Phase-3 predictions, deferred-item verdict.
+- [x] Step 6: `MEMORY.md` updated with Phase 2 close test count (6005 passing). New `project_phase3_kickoff.md` handoff doc written with mandatory elevation-model spike prep and deferred-item carry-over list.
+
+---
+
+## Devil's Advocate — Phase 2 Close (2026-04-17)
+
+### What would have made Phase 2 stronger?
+
+**1. The `canPlaceTower` side-channel is already a smell, and Highground will make it worse.**
+`BRIDGEHEAD` lands on a `WALL` tile with `mutationOp = 'bridgehead'` because adding a `TOWER_ONLY` BlockType was deemed unnecessary. That's a reasonable call for one special case. But Phase 3 needs elevated tiles to also signal "tower gets a bonus here" — a second semantic that `BlockType` doesn't express and that `mutationOp` can't cleanly encode (elevation is not a mutation in the `MutationOp` union sense). The moment Highground lands, you'll have two side-channels (`mutationOp` for path state, something new for elevation) queried in different code paths — none of which the type system enforces. Sprint 25 should open with an explicit decision: extend `GameBoardTile` with a real `elevation: number` field (0 = ground) rather than discovering mid-sprint that the current model forces a third side-channel.
+
+**2. UNSHAKEABLE and VEINSEEKER shipped with zero wave placement.**
+The plan's sprint 22-23 enemies were built but not wired into any wave definition. MINER got a last-minute wave-7 placement only because the deployment checklist explicitly called it out. Two named enemies exist in code that no player can encounter. This is an authoring debt that compounds: if Phase 3 ships GLIDER and TITAN under the same pattern, four enemies will be unreachable before Phase 4 begins. The correct fix is a firm invariant: **every new enemy must be in at least one wave definition before the phase closes, even at placeholder weight.** It should be a checklist item in the phase template, not an afterthought.
+
+**3. Sprint 19's utility pass validated syntax, not balance.**
+The Cartographer utility pass codified a cost curve (C=1E, U=2E, R=variable) and added test assertions confirming card costs conform to the curve. That's useful. What it didn't do is verify that the 8 cards are actually playable in a real run — that you can draft enough of them to make path mutation feel powerful, that `LABYRINTH_MIND` (damage scales with path length) has any meaningful path-length range to work with on real maps, or that `CARTOGRAPHER_SEAL` (rare anchor) is acquirable at a rate that makes it worth building around. All balance remains speculative because no playtest happened. This matters most for `WORLD_SPIRIT` (−1E on path-modifying cards): if the dominant archetype feedback loop works correctly and the player drafts 60% Cartographer cards, this relic may trivialize energy — or be invisible because the path-mutation cards see so little play. Without at least one manual run-through, the 60/40 reward pool weighting is an untested hypothesis presented as a shipped feature.
+
+**4. The "Deck leaning" chip (sprint 10.5) was the right idea but ships with no motion when archetype transitions.**
+The chip renders the current dominant archetype. It has no animation on flip. Archetype dominance changes when the player acquires new cards at the reward screen — the exact moment the chip is visible. A player who picks a Cartographer card and pushes the deck from neutral to Cartographer-dominant will see the chip label change with no visual signal that the transition happened. Given the 60/40 weighting is the core Phase 1 system payoff, this is the one piece of feedback the player needs to notice. A 300ms pulse or color-tween on `dominantArchetype` change is a one-hour add; skipping it means the archetype system will read as "broken" to a first-time player even when it's working correctly.
+
+---
+
+### What's the next most likely thing to break in Phase 3 (Highground)?
+
+**1. `GameBoardTile` has no elevation field — sprint 25 will be forced to add one, triggering `CHECKPOINT_VERSION` bump 9 before the first Highground card ships.**
+The design spike explicitly deferred this: "No elevation. Highground will extend this service, not the `GameBoardTile` model." That deferral is correct — but the consequence is that sprint 25 (primitives) must simultaneously land `elevation: number` on `GameBoardTile`, migrate the checkpoint schema to v9, extend `GameBoardService.setTileType` to accept elevation, and wire the serialization. That's four load-bearing changes before a single card is authored. The risk is that an implementation decision made quickly at sprint 25 (how elevation composes with `mutationOp` — do they share a field or are they independent?) gets wrong and creates a revert cost in sprint 27+ when cards reveal the gap. Mitigation: do a written design spike for Highground primitives before sprint 25 code opens, same as sprint 8.5 did for Phase 2. The specific question to answer upfront: does elevation live on `GameBoardTile` as a first-class field (simplest, checkpoint-bumping), or does `PathMutationService` track elevation as a fourth mutation op (reuses the journal, but `modifyElevation` is semantically different from `build`/`block`/`destroy` — it doesn't change `BlockType`)? These two designs have different serialization, different Three.js handling, and different pathfinding implications. Pick one explicitly before touching code.
+
+**2. Line-of-sight is incompatible with the current 2D pathfinding model — it is not a small add.**
+The plan says "simple elevation-gap check; higher towers ignore intervening low ground." `PathfindingService` operates on a 2D grid where `isTraversable` is the only spatial dimension. LOS for towers requires a raycast through tile space accounting for elevation differences between the tower tile, any intervening tiles, and the target enemy. Nothing in `PathfindingService`, `TowerCombatService`, or `EnemyService` supports this. The closest existing code is the spatial grid used for tower targeting (radius-based, no elevation). The LOS implementation is likely a standalone `LineOfSightService` — but it needs to be integrated into the tower-fire decision in `TowerCombatService`, which currently fires at any enemy within range without any occlusion logic. This is not a sprint-26 afternoon addition; it is a multi-day subsystem. The risk is that sprint 26 gets scoped as "simple" and shipped as a flag check that doesn't actually do geometry — making KING_OF_THE_HILL and VANTAGE_POINT feel like stat buffs rather than spatial play. Mitigation: explicitly scope LOS as "geometric raycast through the 2D elevation grid" in the sprint 26 description, not "elevation gap check," and allocate a full sprint for it rather than bundling it with the elevation model sprint.
+
+**3. Tower mesh repositioning on tile raise/lower is a Three.js lifecycle problem with no existing pattern.**
+The plan notes "tower auto-reposition on tile raise/lower" in sprint 39's polish pass. The problem is earlier: the moment `RAISE_PLATFORM` (sprint 27) is implemented, a tower sitting on that tile needs its Y position updated. Tower meshes are placed once in `GameBoardComponent.renderGameBoard()` using a fixed `tileHeight` constant. There is no `repositionTower(row, col, newElevation)` method anywhere. The disposal-safe pattern (per CLAUDE.md) requires either: (a) remove + recreate the tower mesh on elevation change (expensive, risks one-frame flicker), or (b) translate the existing mesh object's Y without rebuild (cheaper, but the mesh was not designed to be repositioned post-creation). Option (b) is the right call but requires adding a `towerMeshes` accessor path that can move individual meshes without rebuilding geometry. The `BoardMeshRegistryService` already has a `replaceTileMesh` pattern — a `translateTowerMesh(row, col, deltaY)` method should be designed in the sprint 25 spike, not discovered mid-sprint 27 when the first elevation card runs into the missing affordance.
+
+**4. The pathfinding cache invalidation strategy needs elevation-awareness.**
+Sprint 9 established that any tile mutation calls `PathfindingService.invalidateCache()`. Elevation changes do not change `BlockType` or `isTraversable` — they change damage/range scaling only. The pathfinding cache therefore does NOT need to be invalidated on an elevation change, which is correct and efficient. The risk is the mirror case: a Highground card like `AVALANCHE_ORDER` that collapses an elevated tile (changing its elevation to 0 AND possibly removing its traversability) must invalidate the cache — but the elevation-change path through `PathMutationService` may not call `invalidateCache()` because elevation changes were never wired to do so. The developer implementing sprint 27-32 will need to distinguish "elevation change only" (no invalidation) from "elevation collapse that blocks the tile" (invalidation required). If this distinction is not made explicitly in the design, all elevation changes will either over-invalidate (safe, wasteful) or under-invalidate (tile blocked but pathfinding still routes through it).
+
+---
+
+### What was deferred — is Phase 3 blocked by it?
+
+**Deferred items from Phase 2:**
+- **Wave placement for UNSHAKEABLE and VEINSEEKER:** both enemies exist in code but appear in no wave definition. Phase 3 is not blocked — the Phase 3 enemy work (GLIDER, TITAN) is independent. But by the time Phase 3 closes, the total count of unreachable enemies will be four. Include UNSHAKEABLE/VEINSEEKER placement in the sprint 35 utility pass, not as a Phase 4 afterthought.
+- **Numeric balance tuning:** all card costs, relic values, and enemy stats are design-time guesses with no playtest signal. Phase 3 is not blocked — balance is always iterative — but the 60/40 pool weighting and WORLD_SPIRIT's −1E effect are both load-bearing enough that a single manual run-through should happen before Phase 3 cards land. If WORLD_SPIRIT trivializes energy, Phase 3 Highground cards (also energy-costed) will be balanced against a broken baseline.
+- **Shader/shimmer polish (sprint 23's Three.js VFX pass):** the pathfinding-recompute shimmer animation and the per-mutation visual distinction are listed as deferred. Phase 3 is not blocked by the absence of these animations, and the terraform material pool is already shared infrastructure. However, sprint 39's Highground VFX pass (vertex-height manipulation, tower auto-reposition, Avalanche InstancedMesh debris) will be the first time elevation is rendered in 3D. If the tile mesh rendering pipeline is still the flat-mesh approach from sprint 10, sprint 39 will have to extend an un-polished system. Not a blocker, but plan for sprint 39 to also fold in sprint 23's skipped shimmer work.
+- **`CARTOGRAPHER_SEAL` anchor permanence across encounter boundary (Finding 3):** verified non-issue — `GameBoardService` is component-scoped, fresh injector per `/play` navigation. Closed.
+
+**Verdict:** Phase 3 can proceed. None of the deferred items are hard blockers. The two items that carry real risk into Phase 3 are (a) the unplaytested balance baseline and (b) the absence of a written design spike for Highground primitives. The first costs a 2-hour manual playthrough before sprint 25 opens. The second is a repeat of the exact mistake that required sprint 8.5 — and should be pre-scheduled as sprint 24.5 before the first line of elevation code is written.
+
+---
+
+## Red Team Critique — Phase 3 Close (2026-04-18)
+
+Hostile review of commits `a7446ac..012d54a` (Phase 3 / Highground: spike → chip animation → sprints 25–40 integration spec). Scope-locked to changed files only. Findings ordered by severity.
+
+### Finding 1: `setTileType` strips `elevation` on path mutations (HIGH)
+
+**Location:** `src/app/game/game-board/game-board.service.ts:529-536` (`setTileType`)
+
+**Risk:** Phase 3's elevation field is defined on `GameBoardTile` as `readonly elevation?: number`. Phase 2's path-mutation flow (build/block/destroy/bridgehead) calls `setTileType`, which constructs a replacement tile via `GameBoardTile.createMutated(x, y, type, priorType, mutationOp)`. That factory **does not pass elevation through**, so any path mutation on an elevated tile silently erases its elevation. Cascades:
+
+1. **AVALANCHE_ORDER on a tile also held by an active `block` mutation** — the block's expiry-revert calls `setTileType(BASE)`, which wipes elevation. The elevation journal still holds the pre-wipe entry; `tickTurn` will later attempt `setTileElevation(priorElevation)` on a tile whose "prior" elevation has already been destroyed by the intervening mutation. The elevation comes back, but the mesh translate chain has been confused in between.
+2. **BRIDGEHEAD on an already-raised WALL** — the WALL's raised elevation disappears the moment the bridgehead applies. The cliff mesh is still in the scene. Tower placed on the bridgehead lands at the fresh-tile Y while the cliff column remains — visible mesh desync.
+3. **COLLAPSE (destroy) on elevated path** — elevation is wiped; the elevation journal entry (permanent or otherwise) is now inconsistent with board state. `getMaxElevation()` can drop, which changes KING_OF_THE_HILL bonus targets mid-combat without any card having been played.
+
+Surfaced by the Phase 3 integration spec during sprint 40 writing — not by any per-sprint spec.
+
+**Fix:** In `setTileType`, preserve the existing tile's elevation onto the new tile:
+
+```ts
+const newTile = GameBoardTile.createMutated(col, row, type, priorType ?? existing.type, mutationOp);
+const preserved = existing.elevation !== undefined && existing.elevation !== 0
+  ? newTile.withElevation(existing.elevation)
+  : newTile;
+this.gameBoard[row][col] = preserved;
+return preserved;
+```
+
+Symmetric fix for any other tile-factory path the Cartographer flow touches (none identified in the diff, but grep after applying). Add an integration spec: raise tile +2 → block it → unblock → elevation still == 2.
+
+### Finding 2: Cliff mesh lifecycle on path-mutation swap (MEDIUM)
+
+**Location:** `src/app/game/game-board/services/path-mutation.service.ts:338-342` (`swapMesh`) + `elevation.service.ts` cliff management (from sprint 39)
+
+**Risk:** `PathMutationService.swapMesh` passes `currentElevation` to `createTileMesh` so the new tile mesh is positioned correctly, but it does **not** touch the cliff-column mesh. If a WALL tile mutated from an elevated BASE keeps its cliff but loses its elevation (Finding 1), or if the cliff-creation logic only fires through ElevationService apply paths, a stale cliff can survive on a tile that now has elevation 0 — or a cliff is missing from a tile that is still elevated after the swap.
+
+Worst case: a cliff mesh leaks (no disposal path through the mutation swap) and lingers to encounter teardown, then disposes correctly there. Not a runtime crash, but a cosmetic + memory issue.
+
+**Fix path-dependent:** once Finding 1 is fixed, verify the cliff mesh survives a path mutation on an elevated tile (it should, since elevation is now preserved). Add an integration spec. If cliffs are owned by ElevationService and keyed by (row, col), no code change needed — the cliff stays attached as long as elevation stays non-zero.
+
+### Finding 3: `ElevationService.reset()` does not clear board elevation (LOW — design-time, not a bug)
+
+**Location:** `src/app/game/game-board/services/elevation.service.ts` (`reset` method)
+
+**Risk:** `reset()` clears the journal and `nextId`, but does **not** iterate board tiles and zero their `elevation` field. Two possible test-harness pitfalls:
+
+1. A spec that calls `reset()` and then queries `getMaxElevation()` sees the pre-reset values. Documented in the sprint 40 integration spec; not a runtime bug since `GameBoardService.resetBoard()` or `importBoard()` builds a fresh tile array on every encounter start.
+2. If a future refactor reuses the board array across encounters (perf optimization), `reset()` would silently carry elevation into the next encounter.
+
+**Fix (prophylactic, not urgent):** make `reset()` iterate the board and clear non-zero elevation in place. Keep the existing component-scoped guarantee but add defense in depth against a future refactor. Alternatively: leave as-is and add a comment documenting the board-teardown assumption.
+
+---
+
+### Summary
+
+- **Finding 1 is blocking and will be fixed in this protocol phase.** It is the Phase 2 × Phase 3 composition seam breaking silently — exactly the class of bug the red-team gate exists to catch. The per-sprint unit specs were too narrow to hit it. The Phase 3 integration spec (sprint 40) surfaced it.
+- Finding 2 is a cascade; a Finding 1 fix may close it. Verify after.
+- Finding 3 is a test-discipline note, not a correctness bug. Flag in the Phase 4 kickoff for prophylactic hardening.
+
+---
+
+## Deployment Checklist — Phase 3 Close (2026-04-18)
+
+- [x] Step 1: Verify Finding 2 (cliff-mesh-on-mutation) is closed by Finding 1's elevation-preservation fix — added integration spec `G4` in `highground-integration.spec.ts`: raise → block → revert → elevation still 2, tile type cycles correctly, journal is in sync.
+- [x] Step 2: Appended "Devil's Advocate — Phase 3 Close" section with 4 phase-3 critiques (`setTileType` composition gap, damage-stack complexity, TITAN's approximate formula, cliff-mesh lifecycle fragility) and 4 phase-4 predictions (linkSlot composition, FORMATION ordering, link-mesh disposal, chip flip per-transition color).
+- [x] Step 3: Updated `MEMORY.md` with Phase-3 close line (6423 passing / +418 over Phase 2 baseline) + added pointer to `project_phase4_kickoff.md`. Appended Phase-3 Finding 1 lesson to the Red-Team Lessons list: cross-service composition on shared `GameBoardTile` fields is latent; any new tile-level field must preserve prior fields on factory reconstruction.
+- [x] Step 4: Wrote `project_phase4_kickoff.md` — Phase 3 shipped summary, open playtest questions (damage-stack complexity, TITAN formula, cliff-mesh service extraction), deferred items, Phase 4 mandatory prep (adjacency graph spike + `composeDamageStack` refactor), predicted blow-ups, load-bearing non-regressions, three startup commands.
+
+---
+
+## Devil's Advocate — Phase 3 Close (2026-04-18)
+
+Adversarial review of what shipped in Phase 3 (Highground archetype, sprints 25–40 + spike + chip animation). Same format as the Phase 2 close.
+
+### What would have made Phase 3 stronger?
+
+**1. The `setTileType` elevation-strip was latent for 13 sprints before the integration spec caught it.**
+Finding 1 of the red-team gate was a Phase 2 × Phase 3 composition bug: `GameBoardService.setTileType` dropped the elevation field on every path mutation. Every per-sprint unit spec passed. Every Cartographer regression spec passed. Only the sprint-40 integration spec composed the two services on the same tile and surfaced the divergence. The lesson: **per-service specs are insufficient when two services share a data record**. Phase 2 shipped `mutationOp` and `priorType`; Phase 3 shipped `elevation`; both live on `GameBoardTile`, but no spec anywhere asserted the cross-service composition until sprint 40. This should be a Phase 4 entry criterion: the primitives sprint (41) includes a composition spec between `GameBoardTile.linkSlot` (Conduit's new field) and every existing field on the tile BEFORE any card code opens.
+
+**2. HIGH_PERCH and VANTAGE_POINT silently drive five-multiplier damage formulas that are impossible to reason about without pulling up the source file.**
+The final damage composition in `TowerCombatService.fireTurn` is now: `base × towerDamageMult × relicDamage × (1 + cardDamageBoost) × sniperBoost × cardDamageMult × pathLengthMult × vantagePointDmgMult × kothMult`. Eight multiplicative stages. Each was introduced atomically and guarded by a unit spec, but there is no single document, constant block, or comment that lists the full stack in order. A player reporting "my tower damage feels wrong with 3 relics + HIGH_PERCH + KOTH on wave 10" would need an implementer to trace 8 lines across 3 files. Phase 3's contribution (VP, KOTH) doubled this surface and did not refactor the chain into a named pipeline. Phase 4 Conduit is about to add network-buff propagation — probably another 2-3 multipliers. Recommendation: before phase-4 primitives open, extract the per-tower damage-stack composition into a named function `composeDamageStack(tower, context)` with each stage explicit and commented. Moving complexity behind a name doesn't fix it, but it makes the total surface visible.
+
+**3. TITAN's damage-halving logic mathematically *approximates* the design intent but is not what the plan said.**
+Plan §archetype-38: *"elevation bonuses halved against it."* Implementation: TITAN recomputes damage at the fire site by isolating the elevation-derived portion of the multiplier (VP × KOTH), halving that portion, adding it to the baseline. This works for the two existing elevation-bonus sources, but the formula is *not* "halve elevation bonuses" in general — it is "halve the combined VP×KOTH multiplier portion." If Phase 3 ever ships a third elevation damage bonus (a future relic, or a different card), TITAN's formula will silently exclude it. The correct shape is either (a) a list of named "elevation-origin" multipliers whose union the TITAN formula halves, or (b) a per-tower `elevationDamageBonus` aggregate that the formula halves. Today it's an inlined special case. Sprint 79 balance pass should refactor.
+
+**4. Cliff mesh lifecycle is correct today but fragile.**
+Sprint 39's cliff management lives inside `ElevationService.applyElevation` and `revertChange`. The restore path hooks in `GameBoardComponent.restoreFromCheckpoint` Step 3.6. `GameSessionService.cleanupScene` disposes on teardown. Four call sites, three services. If any of them is modified without touching all three, cliffs leak. The architecturally clean answer is a dedicated `CliffMeshService` that owns the cliff lifecycle and is wired to `ElevationService` via a hook (like `PathMutationService.setRepathHook`). Today's implementation isn't broken — sprint 40's QA confirmed it — but the coupling between ElevationService (state), BoardMeshRegistryService (storage), and TerraformMaterialPoolService (materials) is what the disposal-audit checklist is supposed to be automating. It isn't. Phase 4 should add a lightweight "Three.js object leak audit" spec that compares `renderer.info.memory.geometries` before and after a full Phase 3 encounter cycle.
+
+---
+
+### What's the next most likely thing to break in Phase 4 (Conduit)?
+
+**1. Tower adjacency graph will want a `linkSlots` field on `GameBoardTile` OR on `PlacedTower`, and the same "orthogonal composition bug" from Finding 1 will recur if we pick tile.**
+Conduit (sprints 41–56) tracks adjacency between towers and propagates buffs along links. The natural data shape is `linkSlot` and `linkedNeighbors[]` on the tower, not the tile. But if any designer argues "it's a board-level concept, put it on the tile" (and someone will), we'll repeat Finding 1: `setTileType`, `placeTower`, `removeTower` all construct fresh tiles. Any tile-level link state will silently wipe on tile churn. Recommendation: lock the decision in the Phase 4 design spike (sprint 40.5 equivalent). Link state lives on `PlacedTower`, not `GameBoardTile`. `TowerGraphService` rebuilds graph state on every `registerTower` / `unregisterTower` — no field serialization needed beyond what `PlacedTower` already carries.
+
+**2. Conduit's "towers in a row of 3+ gain +1 range" reads as an integer boost, but FORMATION composed with the existing `elevationRangeMult × highPerchMult` stack may go non-linear in surprising ways.**
+Example: tower at elevation 2 (×1.5) + HIGH_PERCH active (×1.25) + FORMATION (+1 tile range additive? or +N%?). If FORMATION is additive-to-base, the order of operations matters: `(base + 1) × 1.5 × 1.25` vs `base × 1.5 × 1.25 + 1`. The plan is silent on this (FORMATION isn't specified yet). Phase 4 primitives sprint should lock the "additive before multiplicative" convention explicitly, with a regression spec.
+
+**3. Link visualization (sprint 42) WILL leak meshes unless the disposal audit is proactive.**
+`LinkMeshService` (or wherever adjacency lines live) will create a `THREE.Line` per link, a shared material per link type, and an `InstancedMesh` for aura orbs. Three sources of disposal: (a) on tower unregister, (b) on `GameSessionService.cleanupScene`, (c) on encounter restart. Every cliff-mesh bug from Phase 3 will replay on links. Recommendation: make the adjacency-graph primitive sprint (41) introduce a `Three.jsResourceTracker` utility class (base class or strategy pattern) that every per-primitive mesh owner implements. Formalize the disposal contract up front.
+
+**4. The dominant-archetype chip assumes 4 archetypes; adding 'conduit' as a full archetype is fine, but the deck-leaning flip animation now fires on 4×4 = 16 possible transitions. Visual tuning per-transition is untested.**
+Phase 3 shipped the chip flip but never tested a neutral→conduit or cartographer→conduit transition (conduit deck cards don't exist yet). The animation is the same keyframe regardless of direction. That's fine for correctness, but the glow color (`--archetype-accent`) morphs from the previous archetype's color to the new one's via CSS — and the CSS `animation` property samples color at keyframe time, which is post-transition. Result: the flip glows in the NEW archetype's color the entire 600ms, not the transitioning color. Cosmetic; documented as a phase-4 polish item, not a bug.
+
+---
+
+### What was deferred — is Phase 4 blocked by it?
+
+**Deferred items from Phase 3:**
+- **Terraform shimmer polish (sprint 23 carryover, re-deferred from sprint 39):** still not shipped. Phase 4 is not blocked — the terraform material pool is shared infrastructure, not polish-gated. Fold into sprint 55 (Conduit VFX pass) or skip to sprint 77 polish.
+- **Avalanche debris VFX (sprint 39 skipped):** not shipped. Not blocking — AVALANCHE_ORDER already deals its damage + collapses without the cosmetic. Sprint 55 or later.
+- **`ElevationService.reset()` prophylactic board-clearing (Finding 3):** flagged as design-time, not a bug. Phase 4 is not blocked. Add to sprint 56 QA as a low-severity correctness spec — currently relies on component teardown to zero board elevations; a future perf refactor that reuses board arrays would regress silently. Prophylactic test would catch it.
+- **Balance tuning:** Phase 3 cost curve is codified by invariants, not playtested. Same status as Phase 2. Phase 4 is not blocked; sprint 79 balance pass accumulates carryovers.
+- **WYRM_ASCENDANT wave placement:** currently in wave 10 alongside VEINSEEKER (hard cohabitation). If Phase 4 or balance PR adds wave 15/20 boss slots, migrate WYRM out. Tracked in the sprint-39 commit body TODO.
+
+**Verdict:** Phase 4 can proceed. The carryover list is **smaller** than Phase 2's close — Phase 3's red-team gate surfaced exactly one production-blocking bug (Finding 1), which was fixed this phase. The composition-spec lesson should become a Phase 4 entry criterion. The damage-stack refactor (critique #2) and the cliff-mesh-service extraction (critique #4) are polish backlog — neither gates Phase 4 primitives or card work.

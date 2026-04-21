@@ -91,7 +91,7 @@ export function createEnemyServiceSpy(
   const methods: (keyof EnemyService)[] = [
     'getEnemies', 'damageEnemy', 'damageStrongestEnemy',
     'spawnEnemy', 'removeEnemy', 'startHitFlash', 'stepEnemiesOneTurn',
-    'buildOccupiedSpawnerSet',
+    'buildOccupiedSpawnerSet', 'applyDetour',
   ];
   const spy = jasmine.createSpyObj<EnemyService>('EnemyService', methods);
   spy.getEnemies.and.returnValue(enemyMap);
@@ -103,6 +103,7 @@ export function createEnemyServiceSpy(
   });
   spy.stepEnemiesOneTurn.and.returnValue([]);
   spy.buildOccupiedSpawnerSet.and.returnValue(new Set<string>());
+  spy.applyDetour.and.returnValue(0);
   return spy;
 }
 
@@ -386,7 +387,7 @@ export function createTowerAnimationServiceSpy(): jasmine.SpyObj<TowerAnimationS
 }
 
 // ---------------------------------------------------------------------------
-// Cross-module service spies (added in Hardening VIII Sprint 44)
+// Cross-module service spies
 // ---------------------------------------------------------------------------
 
 /**
@@ -894,6 +895,10 @@ export function createRelicServiceSpy(): jasmine.SpyObj<RelicService> {
     'getDotDamageMultiplier', 'isNextTowerFree', 'consumeFreeTower',
     'shouldBlockLeak', 'rollLuckyCoin', 'getAvailableRelics',
     'hasQuickDraw', 'getSlowDurationBonus', 'getTurnDelayPerWave',
+    'recordTileVisited', 'consumeSurveyorGold', 'getCardEnergyCostModifier',
+    'incrementOrogenyCounter', 'getOrogenyTurnCounter', 'isOrogenyTrigger',
+    'hasSurveyorRod', 'serializeEncounterFlags', 'restoreEncounterFlags',
+    'hasTuningFork', 'hasConstellation',
   ], ['relicCount']);
 
   spy.getDamageMultiplier.and.returnValue(1);
@@ -915,6 +920,14 @@ export function createRelicServiceSpy(): jasmine.SpyObj<RelicService> {
   spy.shouldBlockLeak.and.returnValue(false);
   spy.rollLuckyCoin.and.returnValue(1);
   spy.getAvailableRelics.and.returnValue([]);
+  spy.consumeSurveyorGold.and.returnValue(0);
+  spy.getCardEnergyCostModifier.and.returnValue(0);
+  spy.incrementOrogenyCounter.and.returnValue(0);
+  spy.getOrogenyTurnCounter.and.returnValue(0);
+  spy.isOrogenyTrigger.and.returnValue(false);
+  spy.hasSurveyorRod.and.returnValue(false);
+  spy.hasTuningFork.and.returnValue(false);
+  spy.hasConstellation.and.returnValue(false);
   (Object.getOwnPropertyDescriptor(spy, 'relicCount')!.get as jasmine.Spy).and.returnValue(0);
 
   return spy;
@@ -975,23 +988,28 @@ export function createRunServiceSpy(): jasmine.SpyObj<RunService> {
  *   - getModifierValue() — 0 (no active modifiers)
  *   - hasActiveModifier() — false
  *   - getActiveModifiers() — empty readonly array
- *   - applySpell / applyModifier / tickWave / reset — no-op void
+ *   - applySpell / applyModifier / tickWave / tickTurn / reset — no-op void
  */
 export function createCardEffectServiceSpy(): jasmine.SpyObj<CardEffectService> {
   const spy = jasmine.createSpyObj<CardEffectService>('CardEffectService', [
     'applySpell',
     'applyModifier',
     'tickWave',
+    'tickTurn',
     'getModifierValue',
+    'getMaxModifierEntryValue',
     'hasActiveModifier',
     'getActiveModifiers',
     'tryConsumeLeakBlock',
+    'tryConsumeTerraformRefund',
     'reset',
   ]);
   spy.getModifierValue.and.returnValue(0);
+  spy.getMaxModifierEntryValue.and.returnValue(0);
   spy.hasActiveModifier.and.returnValue(false);
   spy.getActiveModifiers.and.returnValue([]);
   spy.tryConsumeLeakBlock.and.returnValue(false);
+  spy.tryConsumeTerraformRefund.and.returnValue(false);
   return spy;
 }
 

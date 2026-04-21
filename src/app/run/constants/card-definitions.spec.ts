@@ -4,14 +4,17 @@ import {
   getCardDefinition,
   getCardsByRarity,
   getCardsByType,
+  getEffectiveEnergyCost,
   getStarterDeck,
 } from './card-definitions';
-import { CardId, CardInstance, CardRarity, CardType, TowerCardEffect } from '../models/card.model';
+import { CardId, CardInstance, CardRarity, CardType, TowerCardEffect, ModifierCardEffect, ElevationTargetCardEffect } from '../models/card.model';
 import { TowerType } from '../../game/game-board/models/tower.model';
+import { MODIFIER_STAT } from './modifier-stat.constants';
 
 describe('CARD_DEFINITIONS', () => {
-  it('has exactly 51 cards', () => {
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(51);
+  it('has exactly 74 cards', () => {
+    // Phase 4 adds HANDSHAKE (43) + FORMATION (44) + LINKWORK (45) + HARMONIC (46) + GRID_SURGE (47) + CONDUIT_BRIDGE (48) + ARCHITECT (49) + HIVE_MIND (50).
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(74);
   });
 
   it('contains all CardId enum values', () => {
@@ -50,16 +53,16 @@ describe('CARD_DEFINITIONS', () => {
       expect(getCardsByType(CardType.TOWER).length).toBe(12);
     });
 
-    it('has 21 spell cards (16 original + 3 status-applying + 2 status payoff spells)', () => {
-      expect(getCardsByType(CardType.SPELL).length).toBe(21);
+    it('has 30 spell cards (16 original + 3 status-applying + 2 status payoff + 4 Cartographer terraform + 1 DETOUR + 2 Highground elevation + CLIFFSIDE + AVALANCHE_ORDER)', () => {
+      expect(getCardsByType(CardType.SPELL).length).toBe(30);
     });
 
-    it('has 12 modifier cards', () => {
-      expect(getCardsByType(CardType.MODIFIER).length).toBe(12);
+    it('has 25 modifier cards', () => {
+      expect(getCardsByType(CardType.MODIFIER).length).toBe(25);
     });
 
-    it('has 6 utility cards', () => {
-      expect(getCardsByType(CardType.UTILITY).length).toBe(6);
+    it('has 7 utility cards', () => {
+      expect(getCardsByType(CardType.UTILITY).length).toBe(7);
     });
   });
 
@@ -547,6 +550,787 @@ describe('CARD_DEFINITIONS', () => {
       const instance = makeInstance(CardId.GOLD_RUSH, true);
       const result = getActiveTowerEffect(instance);
       expect(result).toBeUndefined();
+    });
+  });
+
+  // ── Phase 2 Sprint 13 — Cartographer archetype tagging ─────────────────────
+  describe('archetype tagging', () => {
+    it('SCOUT_AHEAD is tagged as cartographer', () => {
+      // Retagged in sprint 13 — SCOUT_AHEAD's intel-reveal mechanic aligns
+      // with the Cartographer identity (reshape + reveal the battlefield).
+      // This means cartographer-dominant decks get more scouts offered.
+      expect(CARD_DEFINITIONS[CardId.SCOUT_AHEAD].archetype).toBe('cartographer');
+    });
+
+    it('SCOUT_AHEAD does NOT carry the terraform flag (reveals, does not mutate tiles)', () => {
+      expect(CARD_DEFINITIONS[CardId.SCOUT_AHEAD].terraform).toBeFalsy();
+    });
+
+    it('SCOUT_ELITE stays neutral (uncommon+innate tier retains neutral identity)', () => {
+      // SCOUT_ELITE is an innate keyword card, not a Cartographer-identity
+      // card. Keep neutral so innate-deck builds don't auto-lean Cartographer.
+      expect(CARD_DEFINITIONS[CardId.SCOUT_ELITE].archetype ?? 'neutral').toBe('neutral');
+    });
+  });
+
+  // ── Phase 2 Sprints 11/12/16 — Cartographer terraform cards ────────────────
+  describe('Cartographer terraform cards', () => {
+    describe('LAY_TILE (sprint 11)', () => {
+      const def = CARD_DEFINITIONS[CardId.LAY_TILE];
+
+      it('exists', () => {
+        expect(def).toBeDefined();
+      });
+      it('is tagged as cartographer', () => {
+        expect(def.archetype).toBe('cartographer');
+      });
+      it('carries the terraform keyword', () => {
+        expect(def.terraform).toBeTrue();
+      });
+      it('costs 1 energy (common)', () => {
+        expect(def.energyCost).toBe(1);
+        expect(def.rarity).toBe(CardRarity.COMMON);
+      });
+      it('has a terraform_target effect with op=build, duration=null (permanent)', () => {
+        expect(def.effect.type).toBe('terraform_target');
+        if (def.effect.type === 'terraform_target') {
+          expect(def.effect.op).toBe('build');
+          expect(def.effect.duration).toBeNull();
+        }
+      });
+
+      it('upgraded effect carries drawOnSuccess = 1 (cycle-card behavior)', () => {
+        expect(def.upgradedEffect?.type).toBe('terraform_target');
+        if (def.upgradedEffect?.type === 'terraform_target') {
+          expect(def.upgradedEffect.drawOnSuccess).toBe(1);
+          expect(def.upgradedEffect.op).toBe('build');
+          expect(def.upgradedEffect.duration).toBeNull();
+        }
+      });
+
+      it('base effect does NOT carry drawOnSuccess (only upgraded cycles)', () => {
+        if (def.effect.type === 'terraform_target') {
+          expect(def.effect.drawOnSuccess).toBeUndefined();
+        }
+      });
+
+      it('upgraded description mentions the draw', () => {
+        expect(def.upgradedDescription).toMatch(/draw 1 card/i);
+      });
+    });
+
+    describe('BLOCK_PASSAGE (sprint 12)', () => {
+      const def = CARD_DEFINITIONS[CardId.BLOCK_PASSAGE];
+
+      it('exists', () => {
+        expect(def).toBeDefined();
+      });
+      it('is tagged as cartographer with terraform keyword', () => {
+        expect(def.archetype).toBe('cartographer');
+        expect(def.terraform).toBeTrue();
+      });
+      it('costs 1 energy (common)', () => {
+        expect(def.energyCost).toBe(1);
+        expect(def.rarity).toBe(CardRarity.COMMON);
+      });
+      it('has a terraform_target effect with op=block, duration=2', () => {
+        expect(def.effect.type).toBe('terraform_target');
+        if (def.effect.type === 'terraform_target') {
+          expect(def.effect.op).toBe('block');
+          expect(def.effect.duration).toBe(2);
+        }
+      });
+      it('upgraded effect extends duration to 3', () => {
+        expect(def.upgradedEffect?.type).toBe('terraform_target');
+        if (def.upgradedEffect?.type === 'terraform_target') {
+          expect(def.upgradedEffect.duration).toBe(3);
+        }
+      });
+    });
+
+    describe('BRIDGEHEAD (sprint 15)', () => {
+      const def = CARD_DEFINITIONS[CardId.BRIDGEHEAD];
+
+      it('exists', () => {
+        expect(def).toBeDefined();
+      });
+      it('is tagged as cartographer with terraform keyword', () => {
+        expect(def.archetype).toBe('cartographer');
+        expect(def.terraform).toBeTrue();
+      });
+      it('costs 2 energy (uncommon)', () => {
+        expect(def.energyCost).toBe(2);
+        expect(def.rarity).toBe(CardRarity.UNCOMMON);
+      });
+      it('has a terraform_target effect with op=bridgehead, duration=3', () => {
+        expect(def.effect.type).toBe('terraform_target');
+        if (def.effect.type === 'terraform_target') {
+          expect(def.effect.op).toBe('bridgehead');
+          expect(def.effect.duration).toBe(3);
+        }
+      });
+      it('upgraded effect extends duration to 4', () => {
+        expect(def.upgradedEffect?.type).toBe('terraform_target');
+        if (def.upgradedEffect?.type === 'terraform_target') {
+          expect(def.upgradedEffect.duration).toBe(4);
+        }
+      });
+    });
+
+    describe('COLLAPSE (sprint 16)', () => {
+      const def = CARD_DEFINITIONS[CardId.COLLAPSE];
+
+      it('exists', () => {
+        expect(def).toBeDefined();
+      });
+      it('is tagged as cartographer with terraform keyword', () => {
+        expect(def.archetype).toBe('cartographer');
+        expect(def.terraform).toBeTrue();
+      });
+      it('costs 2 energy (uncommon)', () => {
+        expect(def.energyCost).toBe(2);
+        expect(def.rarity).toBe(CardRarity.UNCOMMON);
+      });
+      it('has a terraform_target effect with op=destroy, permanent', () => {
+        expect(def.effect.type).toBe('terraform_target');
+        if (def.effect.type === 'terraform_target') {
+          expect(def.effect.op).toBe('destroy');
+          expect(def.effect.duration).toBeNull();
+        }
+      });
+      it('deals 50% max-HP damage on hit (base)', () => {
+        if (def.effect.type === 'terraform_target') {
+          expect(def.effect.damageOnHit?.pctMaxHp).toBe(0.5);
+        }
+      });
+      it('deals 75% max-HP damage when upgraded', () => {
+        if (def.upgradedEffect?.type === 'terraform_target') {
+          expect(def.upgradedEffect.damageOnHit?.pctMaxHp).toBe(0.75);
+        }
+      });
+    });
+
+    describe('DETOUR (Sprint 14)', () => {
+      const def = CARD_DEFINITIONS[CardId.DETOUR];
+
+      it('exists in CARD_DEFINITIONS', () => {
+        expect(def).toBeDefined();
+      });
+
+      it('is tagged archetype: cartographer', () => {
+        expect(def.archetype).toBe('cartographer');
+      });
+
+      it('terraform is explicitly false — DETOUR is NOT a tile-state card', () => {
+        expect(def.terraform).toBe(false);
+      });
+
+      it('costs 2 energy and is UNCOMMON', () => {
+        expect(def.energyCost).toBe(2);
+        expect(def.rarity).toBe(CardRarity.UNCOMMON);
+      });
+
+      it('has type SPELL', () => {
+        expect(def.type).toBe(CardType.SPELL);
+      });
+
+      it('effect is { type: spell, spellId: detour, value: 1 }', () => {
+        expect(def.effect).toEqual({ type: 'spell', spellId: 'detour', value: 1 });
+      });
+
+      it('upgradedEffect uses value 2 (damage tier sentinel)', () => {
+        expect(def.upgradedEffect).toEqual({ type: 'spell', spellId: 'detour', value: 2 });
+      });
+
+      it('upgradedDescription mentions the max-HP damage per extra step', () => {
+        expect(def.upgradedDescription).toMatch(/8%.*max HP/i);
+      });
+    });
+
+    // ── Phase 2 Sprints 17/18 — Cartographer rare anchors ──────────────────
+    describe('CARTOGRAPHER_SEAL (Sprint 17)', () => {
+      const def = CARD_DEFINITIONS[CardId.CARTOGRAPHER_SEAL];
+
+      it('exists', () => {
+        expect(def).toBeDefined();
+      });
+      it('is a rare cartographer MODIFIER card', () => {
+        expect(def.type).toBe(CardType.MODIFIER);
+        expect(def.rarity).toBe(CardRarity.RARE);
+        expect(def.archetype).toBe('cartographer');
+      });
+      it('has NO terraform flag (the card changes rules for terraform cards; it does not terraform itself)', () => {
+        expect(def.terraform).toBe(false);
+      });
+      it('costs 2 energy', () => {
+        expect(def.energyCost).toBe(2);
+      });
+      it('uses stat TERRAFORM_ANCHOR with duration = null (encounter-scoped)', () => {
+        if (def.effect.type === 'modifier') {
+          expect(def.effect.stat).toBe('terraformAnchor');
+          expect(def.effect.duration).toBeNull();
+        } else {
+          fail('effect is not a modifier');
+        }
+      });
+
+      it('base value is 1 (anchor-only tier)', () => {
+        if (def.effect.type === 'modifier') {
+          expect(def.effect.value).toBe(1);
+        } else {
+          fail('effect is not a modifier');
+        }
+      });
+
+      it('upgraded value is 2 (anchor + refund tier sentinel)', () => {
+        if (def.upgradedEffect && def.upgradedEffect.type === 'modifier') {
+          expect(def.upgradedEffect.value).toBe(2);
+          expect(def.upgradedEffect.stat).toBe('terraformAnchor');
+          expect(def.upgradedEffect.duration).toBeNull();
+        } else {
+          fail('upgradedEffect is not a modifier');
+        }
+      });
+
+      it('upgraded description mentions the 1-energy refund each turn', () => {
+        expect(def.upgradedDescription).toMatch(/refunds? 1 energy/i);
+      });
+    });
+
+    describe('LABYRINTH_MIND (Sprint 18)', () => {
+      const def = CARD_DEFINITIONS[CardId.LABYRINTH_MIND];
+
+      it('exists', () => {
+        expect(def).toBeDefined();
+      });
+      it('is a rare cartographer MODIFIER card', () => {
+        expect(def.type).toBe(CardType.MODIFIER);
+        expect(def.rarity).toBe(CardRarity.RARE);
+        expect(def.archetype).toBe('cartographer');
+      });
+      it('costs 2 energy', () => {
+        expect(def.energyCost).toBe(2);
+      });
+      it('uses stat LABYRINTH_MIND with duration = null (encounter-scoped)', () => {
+        if (def.effect.type === 'modifier') {
+          expect(def.effect.stat).toBe('labyrinthMind');
+          expect(def.effect.duration).toBeNull();
+        } else {
+          fail('effect is not a modifier');
+        }
+      });
+      it('base scaling is 2% per path tile', () => {
+        if (def.effect.type === 'modifier') {
+          expect(def.effect.value).toBeCloseTo(0.02, 5);
+        }
+      });
+      it('upgraded scaling is 3% per path tile', () => {
+        if (def.upgradedEffect?.type === 'modifier') {
+          expect(def.upgradedEffect.value).toBeCloseTo(0.03, 5);
+        }
+      });
+    });
+  });
+
+  // ── Phase 3 Sprints 30/31/32 — Highground uncommon cards ───────────────────
+  describe('Highground uncommon cards (sprints 30/31/32)', () => {
+
+    describe('CLIFFSIDE (Sprint 30)', () => {
+      const def = CARD_DEFINITIONS[CardId.CLIFFSIDE];
+
+      it('exists in CARD_DEFINITIONS', () => {
+        expect(def).toBeDefined();
+      });
+
+      it('is an UNCOMMON highground SPELL card with terraform flag', () => {
+        expect(def.type).toBe(CardType.SPELL);
+        expect(def.rarity).toBe(CardRarity.UNCOMMON);
+        expect(def.archetype).toBe('highground');
+        expect(def.terraform).toBe(true);
+      });
+
+      it('costs 2 energy', () => {
+        expect(def.energyCost).toBe(2);
+      });
+
+      it('has elevation_target op=raise effect', () => {
+        expect(def.effect.type).toBe('elevation_target');
+        const effect = def.effect as ElevationTargetCardEffect;
+        expect(effect.op).toBe('raise');
+        expect(effect.amount).toBe(1);
+        expect(effect.duration).toBeNull();
+      });
+
+      it('base effect has horizontal line length 3', () => {
+        const effect = def.effect as ElevationTargetCardEffect;
+        expect(effect.line).toBeDefined();
+        expect(effect.line!.direction).toBe('horizontal');
+        expect(effect.line!.length).toBe(3);
+      });
+
+      it('upgraded effect has horizontal line length 5', () => {
+        const upgraded = def.upgradedEffect as ElevationTargetCardEffect;
+        expect(upgraded.line).toBeDefined();
+        expect(upgraded.line!.direction).toBe('horizontal');
+        expect(upgraded.line!.length).toBe(5);
+      });
+
+      it('has upgradedDescription defined', () => {
+        expect(def.upgradedDescription?.trim().length).toBeGreaterThan(0);
+      });
+    });
+
+    describe('VANTAGE_POINT (Sprint 31)', () => {
+      const def = CARD_DEFINITIONS[CardId.VANTAGE_POINT];
+
+      it('exists in CARD_DEFINITIONS', () => {
+        expect(def).toBeDefined();
+      });
+
+      it('is an UNCOMMON highground MODIFIER card', () => {
+        expect(def.type).toBe(CardType.MODIFIER);
+        expect(def.rarity).toBe(CardRarity.UNCOMMON);
+        expect(def.archetype).toBe('highground');
+      });
+
+      it('costs 2 energy', () => {
+        expect(def.energyCost).toBe(2);
+      });
+
+      it('does NOT carry terraform flag (reads elevation, does not mutate tiles)', () => {
+        expect(def.terraform).toBe(false);
+      });
+
+      it('has a modifier effect with stat = vantagePointDamageBonus', () => {
+        expect(def.effect.type).toBe('modifier');
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.stat).toBe(MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS);
+      });
+
+      it('base value is 0.5 (+50% damage bonus)', () => {
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.value).toBeCloseTo(0.5, 5);
+      });
+
+      it('base duration is 1 wave (mirrors HIGH_PERCH pattern)', () => {
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.duration).toBe(1);
+      });
+
+      it('upgraded value is 0.75 (+75% damage bonus)', () => {
+        const upgraded = def.upgradedEffect as ModifierCardEffect;
+        expect(upgraded.value).toBeCloseTo(0.75, 5);
+      });
+
+      it('upgraded duration is still 1 wave', () => {
+        const upgraded = def.upgradedEffect as ModifierCardEffect;
+        expect(upgraded.duration).toBe(1);
+      });
+
+      it('has upgradedDescription defined', () => {
+        expect(def.upgradedDescription?.trim().length).toBeGreaterThan(0);
+      });
+    });
+
+    describe('AVALANCHE_ORDER (Sprint 32)', () => {
+      const def = CARD_DEFINITIONS[CardId.AVALANCHE_ORDER];
+
+      it('exists in CARD_DEFINITIONS', () => {
+        expect(def).toBeDefined();
+      });
+
+      it('is an UNCOMMON highground SPELL card with terraform flag', () => {
+        expect(def.type).toBe(CardType.SPELL);
+        expect(def.rarity).toBe(CardRarity.UNCOMMON);
+        expect(def.archetype).toBe('highground');
+        expect(def.terraform).toBe(true);
+      });
+
+      it('costs 2 energy', () => {
+        expect(def.energyCost).toBe(2);
+      });
+
+      it('has elevation_target op=collapse effect', () => {
+        expect(def.effect.type).toBe('elevation_target');
+        const effect = def.effect as ElevationTargetCardEffect;
+        expect(effect.op).toBe('collapse');
+        expect(effect.duration).toBeNull();
+      });
+
+      it('base damageOnHit.damagePerElevation is 10', () => {
+        const effect = def.effect as ElevationTargetCardEffect;
+        expect(effect.damageOnHit).toBeDefined();
+        expect(effect.damageOnHit!.damagePerElevation).toBe(10);
+      });
+
+      it('upgraded damageOnHit.damagePerElevation is 15', () => {
+        const upgraded = def.upgradedEffect as ElevationTargetCardEffect;
+        expect(upgraded.damageOnHit).toBeDefined();
+        expect(upgraded.damageOnHit!.damagePerElevation).toBe(15);
+      });
+
+      it('has upgradedDescription defined', () => {
+        expect(def.upgradedDescription?.trim().length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  // ── Phase 3 Sprint 29 — Highground modifier cards ───────────────────────────
+  describe('Highground modifier cards', () => {
+    describe('HIGH_PERCH (Sprint 29)', () => {
+      const def = CARD_DEFINITIONS[CardId.HIGH_PERCH];
+
+      it('exists in CARD_DEFINITIONS', () => {
+        expect(def).toBeDefined();
+      });
+
+      it('is a COMMON highground MODIFIER card', () => {
+        expect(def.type).toBe(CardType.MODIFIER);
+        expect(def.rarity).toBe(CardRarity.COMMON);
+        expect(def.archetype).toBe('highground');
+      });
+
+      it('costs 1 energy (common modifier cost curve)', () => {
+        expect(def.energyCost).toBe(1);
+      });
+
+      it('does NOT carry the terraform flag (reads elevation, does not mutate tiles)', () => {
+        expect(def.terraform).toBe(false);
+      });
+
+      it('has a modifier effect with stat = highPerchRangeBonus', () => {
+        expect(def.effect.type).toBe('modifier');
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.stat).toBe('highPerchRangeBonus');
+      });
+
+      it('base value is 0.25 (+25% range bonus)', () => {
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.value).toBeCloseTo(0.25, 5);
+      });
+
+      it('base duration is 1 wave', () => {
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.duration).toBe(1);
+      });
+
+      it('has an upgradedEffect defined', () => {
+        expect(def.upgradedEffect).toBeDefined();
+      });
+
+      it('upgraded value is 0.4 (+40% range bonus)', () => {
+        const upgraded = def.upgradedEffect as ModifierCardEffect;
+        expect(upgraded.value).toBeCloseTo(0.4, 5);
+      });
+
+      it('upgraded duration is still 1 wave', () => {
+        const upgraded = def.upgradedEffect as ModifierCardEffect;
+        expect(upgraded.duration).toBe(1);
+      });
+
+      it('upgradedDescription is defined and non-empty', () => {
+        expect(def.upgradedDescription).toBeDefined();
+        expect(def.upgradedDescription!.trim().length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  // ── Phase 3 Sprints 33/34 — Highground rare cards ───────────────────────
+  describe('Highground rare cards', () => {
+    describe('KING_OF_THE_HILL (Sprint 33)', () => {
+      const def = CARD_DEFINITIONS[CardId.KING_OF_THE_HILL];
+
+      it('exists in CARD_DEFINITIONS', () => {
+        expect(def).toBeDefined();
+      });
+
+      it('is a RARE highground MODIFIER card', () => {
+        expect(def.type).toBe(CardType.MODIFIER);
+        expect(def.rarity).toBe(CardRarity.RARE);
+        expect(def.archetype).toBe('highground');
+      });
+
+      it('costs 3 energy (rare cost curve)', () => {
+        expect(def.energyCost).toBe(3);
+      });
+
+      it('does NOT carry the terraform flag (reads elevation, does not mutate tiles)', () => {
+        expect(def.terraform).toBe(false);
+      });
+
+      it('has a modifier effect with stat = kingOfTheHillDamageBonus', () => {
+        expect(def.effect.type).toBe('modifier');
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.stat).toBe(MODIFIER_STAT.KING_OF_THE_HILL_DAMAGE_BONUS);
+      });
+
+      it('base value is 1.0 (+100% damage bonus)', () => {
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.value).toBeCloseTo(1.0, 5);
+      });
+
+      it('base duration is null (encounter-scoped)', () => {
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.duration).toBeNull();
+      });
+
+      it('upgraded value is 1.5 (+150% damage bonus)', () => {
+        const upgraded = def.upgradedEffect as ModifierCardEffect;
+        expect(upgraded.value).toBeCloseTo(1.5, 5);
+      });
+
+      it('upgraded duration is still null (encounter-scoped)', () => {
+        const upgraded = def.upgradedEffect as ModifierCardEffect;
+        expect(upgraded.duration).toBeNull();
+      });
+
+      it('has upgradedDescription defined and non-empty', () => {
+        expect(def.upgradedDescription?.trim().length).toBeGreaterThan(0);
+      });
+    });
+
+    describe('GRAVITY_WELL (Sprint 34)', () => {
+      const def = CARD_DEFINITIONS[CardId.GRAVITY_WELL];
+
+      it('exists in CARD_DEFINITIONS', () => {
+        expect(def).toBeDefined();
+      });
+
+      it('is a RARE highground MODIFIER card', () => {
+        expect(def.type).toBe(CardType.MODIFIER);
+        expect(def.rarity).toBe(CardRarity.RARE);
+        expect(def.archetype).toBe('highground');
+      });
+
+      it('costs 3 energy (rare cost curve)', () => {
+        expect(def.energyCost).toBe(3);
+      });
+
+      it('does NOT carry the terraform flag (reads elevation, does not mutate tiles)', () => {
+        expect(def.terraform).toBe(false);
+      });
+
+      it('has a modifier effect with stat = gravityWell', () => {
+        expect(def.effect.type).toBe('modifier');
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.stat).toBe(MODIFIER_STAT.GRAVITY_WELL);
+      });
+
+      it('base value is 1 (gate-only tier)', () => {
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.value).toBe(1);
+      });
+
+      it('base duration is null (encounter-scoped)', () => {
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.duration).toBeNull();
+      });
+
+      it('upgraded value is 2 (gate + bleed tier)', () => {
+        const upgraded = def.upgradedEffect as ModifierCardEffect;
+        expect(upgraded.value).toBe(2);
+      });
+
+      it('upgraded duration is still null (encounter-scoped)', () => {
+        const upgraded = def.upgradedEffect as ModifierCardEffect;
+        expect(upgraded.duration).toBeNull();
+      });
+
+      it('upgraded description mentions the max-HP bleed', () => {
+        expect(def.upgradedDescription).toMatch(/10%.*max HP/i);
+      });
+
+      it('has upgradedDescription defined and non-empty', () => {
+        expect(def.upgradedDescription?.trim().length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  // ── Sprint 35 — Starter deck neutrality check ───────────────────────────
+  describe('Sprint 35 — starter deck neutrality check', () => {
+    it('getStarterDeck() does not contain KING_OF_THE_HILL or GRAVITY_WELL (starter is neutral)', () => {
+      const starterIds = new Set(getStarterDeck());
+      expect(starterIds.has(CardId.KING_OF_THE_HILL)).toBeFalse();
+      expect(starterIds.has(CardId.GRAVITY_WELL)).toBeFalse();
+    });
+  });
+
+  // ── getEffectiveEnergyCost — upgrade cost reduction ─────────────────────
+  describe('getEffectiveEnergyCost', () => {
+    it('returns base cost when the card instance is not upgraded', () => {
+      const instance: CardInstance = { instanceId: 'c1', cardId: CardId.ARCHITECT, upgraded: false };
+      expect(getEffectiveEnergyCost(instance)).toBe(3);
+    });
+
+    it('returns upgradedEnergyCost when the card instance IS upgraded and field is set (ARCHITECT)', () => {
+      const instance: CardInstance = { instanceId: 'c1', cardId: CardId.ARCHITECT, upgraded: true };
+      expect(getEffectiveEnergyCost(instance)).toBe(2);
+    });
+
+    it('falls back to base cost when upgraded but no upgradedEnergyCost field is set (LAY_TILE)', () => {
+      const instance: CardInstance = { instanceId: 'c1', cardId: CardId.LAY_TILE, upgraded: true };
+      // LAY_TILE upgrade uses drawOnSuccess, not cost reduction — upgradedEnergyCost undefined.
+      expect(getEffectiveEnergyCost(instance)).toBe(1);
+    });
+  });
+
+  // ── CONDUIT_BRIDGE (Sprint 48) — session-5 full revert ──────────────────
+  describe('CONDUIT_BRIDGE (sprint 48)', () => {
+    const def = CARD_DEFINITIONS[CardId.CONDUIT_BRIDGE];
+
+    it('base duration is 3 turns (session-5 full revert from 5 → 3)', () => {
+      if (def.effect.type === 'utility') {
+        expect(def.effect.value).toBe(3);
+      } else {
+        fail('effect is not a utility');
+      }
+    });
+
+    it('upgraded duration is 4 turns (session-5 full revert from 7 → 4)', () => {
+      if (def.upgradedEffect?.type === 'utility') {
+        expect(def.upgradedEffect.value).toBe(4);
+      } else {
+        fail('upgradedEffect is not a utility');
+      }
+    });
+
+    it('description mentions 3 turns', () => {
+      expect(def.description).toMatch(/3 turns/);
+    });
+
+    it('upgraded description mentions 4 turns', () => {
+      expect(def.upgradedDescription).toMatch(/4 turns/);
+    });
+  });
+
+  // ── HANDSHAKE (Sprint 43) — session-5 balance bump ──────────────────────
+  describe('HANDSHAKE (sprint 43)', () => {
+    const def = CARD_DEFINITIONS[CardId.HANDSHAKE];
+
+    it('base damage bonus is 20% (session-5 bump from 15%)', () => {
+      if (def.effect.type === 'modifier') {
+        expect(def.effect.value).toBeCloseTo(0.20, 5);
+      } else {
+        fail('effect is not a modifier');
+      }
+    });
+
+    it('upgraded damage bonus is 30% (session-5 bump from 25%)', () => {
+      if (def.upgradedEffect?.type === 'modifier') {
+        expect(def.upgradedEffect.value).toBeCloseTo(0.30, 5);
+      } else {
+        fail('upgradedEffect is not a modifier');
+      }
+    });
+
+    it('description mentions +20% damage', () => {
+      expect(def.description).toMatch(/\+20%/);
+    });
+
+    it('upgraded description mentions +30% damage', () => {
+      expect(def.upgradedDescription).toMatch(/\+30%/);
+    });
+  });
+
+  // ── FORMATION (Sprint 44) — session-5 balance bump ──────────────────────
+  describe('FORMATION (sprint 44)', () => {
+    const def = CARD_DEFINITIONS[CardId.FORMATION];
+
+    it('base range additive is 2 (session-5 bump from 1)', () => {
+      if (def.effect.type === 'modifier') {
+        expect(def.effect.value).toBe(2);
+      } else {
+        fail('effect is not a modifier');
+      }
+    });
+
+    it('upgraded range additive is 3 (session-5 bump from 2)', () => {
+      if (def.upgradedEffect?.type === 'modifier') {
+        expect(def.upgradedEffect.value).toBe(3);
+      } else {
+        fail('upgradedEffect is not a modifier');
+      }
+    });
+
+    it('description mentions +2 range (base)', () => {
+      expect(def.description).toMatch(/\+2 range/);
+    });
+
+    it('upgraded description mentions +3 range', () => {
+      expect(def.upgradedDescription).toMatch(/\+3 range/);
+    });
+  });
+
+  // ── HIVE_MIND (Sprint 50) — secondary-stat sharing upgrade ──────────────
+  describe('HIVE_MIND (sprint 50)', () => {
+    const def = CARD_DEFINITIONS[CardId.HIVE_MIND];
+
+    it('exists as a rare conduit MODIFIER card', () => {
+      expect(def).toBeDefined();
+      expect(def.type).toBe(CardType.MODIFIER);
+      expect(def.rarity).toBe(CardRarity.RARE);
+      expect(def.archetype).toBe('conduit');
+    });
+
+    it('base effect value is 1 (tier sentinel: damage + range sharing)', () => {
+      if (def.effect.type === 'modifier') {
+        expect(def.effect.value).toBe(1);
+        expect(def.effect.stat).toBe('hiveMindClusterMax');
+      } else {
+        fail('effect is not a modifier');
+      }
+    });
+
+    it('upgraded effect value is 2 (tier sentinel: +secondary sharing)', () => {
+      if (def.upgradedEffect?.type === 'modifier') {
+        expect(def.upgradedEffect.value).toBe(2);
+        expect(def.upgradedEffect.stat).toBe('hiveMindClusterMax');
+      } else {
+        fail('upgradedEffect is not a modifier');
+      }
+    });
+
+    it('upgraded description mentions the secondary effect', () => {
+      expect(def.upgradedDescription).toMatch(/secondary|splash|chain|status/i);
+    });
+
+    it('does NOT change cost on upgrade (stays at 3E — secondary sharing IS the upgrade identity)', () => {
+      expect(def.energyCost).toBe(3);
+      expect(def.upgradedEnergyCost).toBeUndefined();
+    });
+  });
+
+  // ── ARCHITECT (Sprint 49) — cost-reduction upgrade ──────────────────────
+  describe('ARCHITECT (sprint 49)', () => {
+    const def = CARD_DEFINITIONS[CardId.ARCHITECT];
+
+    it('exists as a rare conduit MODIFIER card', () => {
+      expect(def).toBeDefined();
+      expect(def.type).toBe(CardType.MODIFIER);
+      expect(def.rarity).toBe(CardRarity.RARE);
+      expect(def.archetype).toBe('conduit');
+    });
+
+    it('base costs 3 energy', () => {
+      expect(def.energyCost).toBe(3);
+    });
+
+    it('upgrade reduces cost to 2 energy via upgradedEnergyCost', () => {
+      expect(def.upgradedEnergyCost).toBe(2);
+    });
+
+    it('upgraded description mentions the 2-energy cost', () => {
+      expect(def.upgradedDescription).toMatch(/2 energy/i);
+    });
+
+    it('upgraded effect is structurally identical to base (cost-only upgrade)', () => {
+      if (def.effect.type === 'modifier' && def.upgradedEffect?.type === 'modifier') {
+        expect(def.upgradedEffect.stat).toBe(def.effect.stat);
+        expect(def.upgradedEffect.value).toBe(def.effect.value);
+        expect(def.upgradedEffect.duration).toBe(def.effect.duration);
+      } else {
+        fail('ARCHITECT effect or upgradedEffect is not a modifier');
+      }
     });
   });
 });

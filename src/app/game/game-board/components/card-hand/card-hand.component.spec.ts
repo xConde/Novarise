@@ -255,6 +255,7 @@ describe('CardHandComponent', () => {
         instance: { cardId: CardId.TOWER_BASIC, instanceId: 'x', upgraded: false },
         definition: { ...getCardDefinition(CardId.TOWER_BASIC), innate: undefined, retain: undefined, ethereal: undefined, exhaust: undefined } as any,
         canPlay: true,
+        effectiveEnergyCost: 1,
         goldCost: 50,
       };
       expect(component.keywordAriaLabel(card)).toBe('');
@@ -265,6 +266,7 @@ describe('CardHandComponent', () => {
         instance: { cardId: CardId.TOWER_BASIC, instanceId: 'x', upgraded: false },
         definition: { ...getCardDefinition(CardId.TOWER_BASIC), innate: true, retain: true, ethereal: false, exhaust: true } as any,
         canPlay: true,
+        effectiveEnergyCost: 1,
         goldCost: 50,
       };
       expect(component.keywordAriaLabel(card)).toBe('Keywords: Innate, Retain, Exhaust');
@@ -440,12 +442,16 @@ describe('CardHandComponent', () => {
   });
 
   describe('fan overlap', () => {
-    const stubHandCard = (id: string, cardId: CardId): HandCard => ({
-      instance: { instanceId: id, cardId, upgraded: false },
-      definition: getCardDefinition(cardId),
-      canPlay: true,
-      goldCost: null,
-    });
+    const stubHandCard = (id: string, cardId: CardId): HandCard => {
+      const definition = getCardDefinition(cardId);
+      return {
+        instance: { instanceId: id, cardId, upgraded: false },
+        definition,
+        canPlay: true,
+        effectiveEnergyCost: definition.energyCost,
+        goldCost: null,
+      };
+    };
 
     const makeCards = (count: number): HandCard[] => {
       const ids: CardId[] = [
@@ -507,6 +513,135 @@ describe('CardHandComponent', () => {
     it('cardFanMargin caps at -1.5rem with very large hands', () => {
       component.handCards = makeCards(20);
       expect(parseFloat(component.cardFanMargin)).toBeGreaterThanOrEqual(-1.5);
+    });
+  });
+
+  // ── Phase 1 Sprint 3 — Card hover tooltip ──────────────────────────────
+  describe('hover tooltip', () => {
+    function makeMouseEvent(target?: HTMLElement): PointerEvent {
+      return {
+        pointerType: 'mouse',
+        currentTarget: target ?? document.createElement('button'),
+        clientX: 0,
+        clientY: 0,
+      } as unknown as PointerEvent;
+    }
+
+    function makeTouchEvent(): PointerEvent {
+      return { pointerType: 'touch' } as unknown as PointerEvent;
+    }
+
+    function makeCard(id: CardId = CardId.TOWER_BASIC, upgraded = false): HandCard {
+      const def = getCardDefinition(id);
+      return {
+        instance: makeInstance(id, upgraded),
+        definition: def,
+        canPlay: true,
+        effectiveEnergyCost: def.energyCost,
+        goldCost: null,
+      };
+    }
+
+    it('does not show tooltip on touch pointerenter', fakeAsync(() => {
+      component.onCardPointerEnter(makeTouchEvent(), makeCard());
+      tick(300);
+      expect(component.hoveredCard).toBeNull();
+    }));
+
+    it('does not show tooltip while a card is in placement mode', fakeAsync(() => {
+      component.pendingCardId = 'some-other-card';
+      component.onCardPointerEnter(makeMouseEvent(), makeCard());
+      tick(300);
+      expect(component.hoveredCard).toBeNull();
+    }));
+
+    it('shows tooltip after hover delay', fakeAsync(() => {
+      const card = makeCard();
+      component.onCardPointerEnter(makeMouseEvent(), card);
+      expect(component.hoveredCard).toBeNull(); // not yet
+      tick(200);
+      expect(component.hoveredCard).toBe(card);
+    }));
+
+    it('clears tooltip on pointerleave', fakeAsync(() => {
+      const card = makeCard();
+      component.onCardPointerEnter(makeMouseEvent(), card);
+      tick(200);
+      expect(component.hoveredCard).toBe(card);
+
+      component.onCardPointerLeave(makeMouseEvent());
+      expect(component.hoveredCard).toBeNull();
+      expect(component.hoveredCardRect).toBeNull();
+    }));
+
+    it('cancels pending hover delay on pointerleave', fakeAsync(() => {
+      component.onCardPointerEnter(makeMouseEvent(), makeCard());
+      component.onCardPointerLeave(makeMouseEvent());
+      tick(300); // delay would have fired by now
+      expect(component.hoveredCard).toBeNull();
+    }));
+
+    it('hoverTooltipId returns stable id for hovered card', fakeAsync(() => {
+      const card = makeCard();
+      component.onCardPointerEnter(makeMouseEvent(), card);
+      tick(200);
+      expect(component.hoverTooltipId).toBe(`card-tooltip-inst_${CardId.TOWER_BASIC}`);
+    }));
+
+    it('hoverTooltipId returns empty string when no card hovered', () => {
+      expect(component.hoverTooltipId).toBe('');
+    });
+
+    it('hoverTooltipDescription uses upgradedDescription when card is upgraded', () => {
+      const upgradedCard = makeCard(CardId.TOWER_BASIC, true);
+      const text = component.hoverTooltipDescription(upgradedCard);
+      // Must equal upgradedDescription when present, otherwise fall back to base
+      const def = upgradedCard.definition;
+      expect(text).toBe(def.upgradedDescription ?? def.description);
+    });
+
+    it('hoverTooltipDescription uses base description for non-upgraded card', () => {
+      const card = makeCard(CardId.TOWER_BASIC, false);
+      expect(component.hoverTooltipDescription(card)).toBe(card.definition.description);
+    });
+
+    it('clears tooltip on ngOnDestroy', fakeAsync(() => {
+      component.onCardPointerEnter(makeMouseEvent(), makeCard());
+      tick(200);
+      expect(component.hoveredCard).not.toBeNull();
+
+      component.ngOnDestroy();
+      expect(component.hoveredCard).toBeNull();
+    }));
+
+    it('hoverTooltipLeft clamps to viewport edges', () => {
+      // Force a rect that would push the tooltip off the right edge.
+      component.hoveredCardRect = {
+        left: window.innerWidth - 10,
+        top: 100,
+        right: window.innerWidth,
+        bottom: 200,
+        width: 100,
+        height: 100,
+      } as DOMRect;
+      component.hoveredCard = {} as HandCard;
+      const left = component.hoverTooltipLeft;
+      expect(left).toBeLessThanOrEqual(window.innerWidth - 240 - 8 + 1);
+    });
+
+    it('hoverTooltipTop falls back below the card when too close to viewport top', () => {
+      component.hoveredCardRect = {
+        left: 100,
+        top: 10, // very close to top edge — tooltip wouldn't fit above
+        right: 200,
+        bottom: 110,
+        width: 100,
+        height: 100,
+      } as DOMRect;
+      component.hoveredCard = {} as HandCard;
+      const top = component.hoverTooltipTop;
+      // Should anchor below (bottom + gap), not negative
+      expect(top).toBeGreaterThanOrEqual(110);
     });
   });
 });

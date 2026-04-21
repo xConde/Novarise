@@ -62,6 +62,103 @@ describe('Wave Model', () => {
       const hasBoss = finalWave.entries!.some(e => e.type === EnemyType.BOSS);
       expect(hasBoss).toBeTrue();
     });
+
+    // ── Sprint 35 — Phase 2 carryover: UNSHAKEABLE + VEINSEEKER placement ──
+
+    it('UNSHAKEABLE appears in at least one wave definition (regression guard)', () => {
+      // Sprint 35: UNSHAKEABLE placed in wave 9 as elite reinforcement.
+      // If this test fails, an UNSHAKEABLE entry was accidentally removed during
+      // a balance pass — restore it before merging.
+      const appearsInAnyWave = WAVE_DEFINITIONS.some(wave =>
+        wave.entries!.some(e => e.type === EnemyType.UNSHAKEABLE)
+      );
+      expect(appearsInAnyWave).toBeTrue();
+    });
+
+    it('VEINSEEKER appears in at least one wave definition (regression guard)', () => {
+      // Sprint 35: VEINSEEKER placed in wave 10 (boss wave).
+      // If this test fails, a VEINSEEKER entry was accidentally removed — restore it.
+      const appearsInAnyWave = WAVE_DEFINITIONS.some(wave =>
+        wave.entries!.some(e => e.type === EnemyType.VEINSEEKER)
+      );
+      expect(appearsInAnyWave).toBeTrue();
+    });
+
+    it('VEINSEEKER appears in a wave that also contains a BOSS (boss-wave placement guard)', () => {
+      // VEINSEEKER is a boss-tier enemy — must live in a wave with at least one BOSS entry.
+      const veinseekerWaves = WAVE_DEFINITIONS.filter(wave =>
+        wave.entries!.some(e => e.type === EnemyType.VEINSEEKER)
+      );
+      expect(veinseekerWaves.length).toBeGreaterThan(0);
+      const allInBossWaves = veinseekerWaves.every(wave =>
+        wave.entries!.some(e => e.type === EnemyType.BOSS)
+      );
+      expect(allInBossWaves).toBeTrue();
+    });
+
+    // ── Sprint 37 — GLIDER wave placement regression guard ─────────────────
+    it('GLIDER appears in at least one wave definition (sprint 37 regression guard)', () => {
+      // Sprint 37: GLIDER placed in wave 6 as an elevation-immunity threat.
+      // If this test fails, a GLIDER entry was accidentally removed — restore it.
+      const hasGlider = WAVE_DEFINITIONS.some(wave =>
+        wave.entries!.some(e => e.type === EnemyType.GLIDER)
+      );
+      expect(hasGlider).toBeTrue();
+    });
+
+    it('GLIDER is in a pre-boss wave (wave index < 9)', () => {
+      // GLIDER is a non-elite threat — should appear before elite/boss waves.
+      const gliderWaveIndex = WAVE_DEFINITIONS.findIndex(wave =>
+        wave.entries!.some(e => e.type === EnemyType.GLIDER)
+      );
+      expect(gliderWaveIndex).toBeGreaterThanOrEqual(0);
+      expect(gliderWaveIndex).toBeLessThan(8); // before wave 9 (elite) and wave 10 (boss)
+    });
+
+    // ── Sprint 38 — TITAN wave placement regression guard ──────────────────
+    it('TITAN appears in at least one wave definition (sprint 38 regression guard)', () => {
+      // Sprint 38: TITAN placed in wave 8 as an elite-tier threat countering elevation damage.
+      // If this test fails, a TITAN entry was accidentally removed — restore it.
+      const hasTitan = WAVE_DEFINITIONS.some(wave =>
+        wave.entries!.some(e => e.type === EnemyType.TITAN)
+      );
+      expect(hasTitan).toBeTrue();
+    });
+
+    // ── Sprint 39 — WYRM_ASCENDANT wave placement regression guard ───────────
+    it('WYRM_ASCENDANT appears in at least one wave definition (sprint 39 regression guard)', () => {
+      // Sprint 39: WYRM_ASCENDANT placed in wave 10 (boss wave) as the Highground boss counter.
+      // It is appended after VEINSEEKER and does NOT replace it.
+      // If this test fails, a WYRM_ASCENDANT entry was accidentally removed — restore it.
+      const hasWyrm = WAVE_DEFINITIONS.some(wave =>
+        wave.entries!.some(e => e.type === EnemyType.WYRM_ASCENDANT)
+      );
+      expect(hasWyrm).toBeTrue();
+    });
+
+    it('WYRM_ASCENDANT appears in a wave that also contains a BOSS (boss-wave placement guard)', () => {
+      // WYRM_ASCENDANT is a boss-counter — must live in a wave with at least one BOSS entry.
+      // This mirrors the VEINSEEKER placement guard above.
+      const wyrmWaves = WAVE_DEFINITIONS.filter(wave =>
+        wave.entries!.some(e => e.type === EnemyType.WYRM_ASCENDANT)
+      );
+      expect(wyrmWaves.length).toBeGreaterThan(0);
+      const allInBossWaves = wyrmWaves.every(wave =>
+        wave.entries!.some(e => e.type === EnemyType.BOSS)
+      );
+      expect(allInBossWaves).toBeTrue();
+    });
+
+    it('WYRM_ASCENDANT and VEINSEEKER coexist — neither replaced the other', () => {
+      // Sprint 39: WYRM was added to wave 10 ALONGSIDE VEINSEEKER.
+      // Both must be present in the same boss wave (wave 10 as of sprint 39).
+      // If one is missing, a conflation during balance editing removed a boss-counter.
+      const bothPresentInSameWave = WAVE_DEFINITIONS.some(wave =>
+        wave.entries!.some(e => e.type === EnemyType.WYRM_ASCENDANT) &&
+        wave.entries!.some(e => e.type === EnemyType.VEINSEEKER)
+      );
+      expect(bothPresentInSameWave).toBeTrue();
+    });
   });
 
   describe('WaveEntry interface', () => {

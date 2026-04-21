@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 
 import { GameStateService } from './game-state.service';
@@ -25,6 +25,11 @@ import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { CombatLoopService } from './combat-loop.service';
 import { WavePreviewService } from './wave-preview.service';
 import { GamePauseService } from './game-pause.service';
+import { PathMutationService } from './path-mutation.service';
+import { ElevationService } from './elevation.service';
+import { TowerGraphService } from './tower-graph.service';
+import { LinkMeshService } from './link-mesh.service';
+import { TerraformMaterialPoolService } from './terraform-material-pool.service';
 import { disposeMaterial } from '../utils/three-utils';
 
 /**
@@ -58,6 +63,15 @@ export class GameSessionService {
     private combatLoopService: CombatLoopService,
     private wavePreviewService: WavePreviewService,
     private gamePauseService: GamePauseService,
+    private pathMutationService: PathMutationService,
+    private elevationService: ElevationService,
+    @Optional() private terraformPool?: TerraformMaterialPoolService,
+    // @Optional() so pre-Conduit test beds don't need to register this.
+    // Production wires it via GameBoardComponent.providers.
+    @Optional() private towerGraphService?: TowerGraphService,
+    // @Optional() — LinkMeshService owns all link-mesh disposal; cleanupScene
+    // delegates to its dispose().
+    @Optional() private linkMeshService?: LinkMeshService,
   ) {}
 
   /**
@@ -86,6 +100,16 @@ export class GameSessionService {
     // Clear stale autoPaused / showQuitConfirm state from a prior encounter so
     // the pause menu doesn't open mid-new-encounter stuck on the quit dialog.
     this.gamePauseService.reset();
+    // Clear active path mutations from a prior encounter (defense-in-depth; the
+    // service is component-scoped so it would be destroyed anyway, but explicit
+    // reset matches the pattern for all other encounter-scoped services).
+    this.pathMutationService.reset();
+    // Clear active elevation state from a prior encounter (same lifecycle as pathMutationService).
+    this.elevationService.reset();
+    // Clear adjacency graph state (virtual edges, disruption entries).
+    // Explicit call makes the encounter-teardown contract visible even
+    // though the graph is derived from placedTowers (already reset above).
+    this.towerGraphService?.reset();
   }
 
   /**
@@ -108,6 +132,11 @@ export class GameSessionService {
 
     // Clean up tower combat state (projectiles)
     this.towerCombatService.cleanup(scene);
+
+    // Dispose link-mesh lines + shared materials before tower meshes are
+    // disposed. Contract: link meshes are torn down by their dedicated owner
+    // first (defensive — positions aren't needed on dispose).
+    this.linkMeshService?.dispose();
 
     // Clean up tower placement preview
     this.towerPreviewService.cleanup(scene);
@@ -143,13 +172,39 @@ export class GameSessionService {
     });
     this.meshRegistry.towerMeshes.clear();
 
-    // Dispose tile meshes
+    // Dispose tile meshes.
+    // Pool materials (terraformed tiles) are NOT disposed here — they are
+    // disposed in batch by terraformPool.dispose() below, after all meshes
+    // have been removed from the scene. Per-tile materials are disposed
+    // individually as before.
     this.meshRegistry.tileMeshes.forEach(mesh => {
       scene.remove(mesh);
       mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
+      const mat = mesh.material as THREE.Material | THREE.Material[];
+      const mats = Array.isArray(mat) ? mat : [mat];
+      mats.forEach(m => {
+        // Skip pool materials — they are disposed in batch by terraformPool.dispose() below.
+        if (!this.terraformPool?.isPoolMaterial(m)) {
+          m.dispose();
+        }
+      });
     });
     this.meshRegistry.tileMeshes.clear();
+
+    // Dispose cliff column meshes (sprint 39 Highground polish).
+    // Cliff geometry is disposed here; material is pool-owned and disposed below.
+    this.meshRegistry.cliffMeshes.forEach(cliffMesh => {
+      scene.remove(cliffMesh);
+      cliffMesh.geometry.dispose();
+      // Material is pool-owned — disposed in the terraformPool.dispose() call below.
+    });
+    this.meshRegistry.cliffMeshes.clear();
+
+    // Dispose all pooled terraform materials in one batch.
+    // Must run AFTER tileMeshes.clear() and cliffMeshes.clear() so no mesh still
+    // references a pool material. terraformPool is optional (not present in test contexts
+    // without full GameModule).
+    this.terraformPool?.dispose();
 
     // Dispose grid lines
     if (this.meshRegistry.gridLines) {
