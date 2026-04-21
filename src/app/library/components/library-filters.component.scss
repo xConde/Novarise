@@ -6,10 +6,13 @@
   display: block;
   user-select: none;
 
-  /* Sticky under the library header (header is 44-48px tall). Use a subtle
-     backdrop-blur when stuck so content behind doesn't bleed through. */
+  /* Sticky below both the library header AND the sticky view-mode tabs.
+     Header ≈ 64px (2× spacing-sm + 2.75rem back-button height); tabs ≈ 44px
+     (tab min-height 2.75rem). Without this the filter slides up behind them
+     when stuck. Backdrop-blur keeps scrolled content readable through the
+     panel's translucent background. */
   position: sticky;
-  top: 48px;
+  top: calc(2 * var(--spacing-sm) + 2.75rem + 2.75rem);
   z-index: 5;
 }
 

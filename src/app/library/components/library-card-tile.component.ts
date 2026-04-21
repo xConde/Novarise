@@ -93,4 +93,17 @@ export class LibraryCardTileComponent {
     const up = this.definition.upgradedDescription;
     return up !== undefined && up !== this.definition.description;
   }
+
+  /**
+   * Energy cost shown in the tile's cost pill — reflects the upgraded cost
+   * when the preview toggle is on AND the card has a cost-reducing upgrade
+   * (e.g., ARCHITECT 3E → 2E). Without this, the tile showed the base cost
+   * while the description text claimed 2E — visually inconsistent.
+   */
+  get displayEnergyCost(): number {
+    if (this.showUpgraded && this.definition.upgradedEnergyCost !== undefined) {
+      return this.definition.upgradedEnergyCost;
+    }
+    return this.definition.energyCost;
+  }
 }

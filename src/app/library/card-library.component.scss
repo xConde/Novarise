@@ -12,6 +12,19 @@
   color: var(--text-color);
   user-select: none;
 
+  /* Dark scrollbar — matches app-profile/app-settings treatment in
+     src/app/app.component.css. Default browser scrollbar is jarring in the
+     dark Codex and was flagged as "wrong" in the pre-merge UX pass. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+    &:hover { background: rgba(255, 255, 255, 0.15); }
+  }
+
   &::before {
     content: '';
     position: fixed;
@@ -42,7 +55,12 @@
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  padding: var(--spacing-sm) var(--spacing-md);
+  /* Extra right padding reserves space for the global settings cog
+     (position: fixed; top: 50px; right: var(--spacing-md); width: 28px).
+     Without it the "X / Y seen" tally collides with the cog at the viewport
+     edge. Cog width (28px) + its own right offset + a small gap = ~60px. */
+  padding: var(--spacing-sm) calc(28px + var(--spacing-md) + var(--spacing-sm))
+           var(--spacing-sm) var(--spacing-md);
   background: var(--bg-color);
   border-bottom: 1px solid var(--border-structural);
 }
@@ -108,11 +126,21 @@
 }
 
 /* --- View-mode tabs --- */
+/* Stick the tabs directly under the sticky library header so the Discovered
+   / Undiscovered / All switch stays reachable after scrolling. Without this,
+   a player reading card 40 has to scroll back to the top to switch views. */
 
 .library__tabs {
+  position: sticky;
+  top: calc(2 * var(--spacing-sm) + 2.75rem);   /* header height — see filter sticky comment */
+  z-index: 8;
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
+  padding: 0 var(--spacing-md);
+  margin-left: calc(-1 * var(--spacing-md));    /* bleed into content padding so the bg covers */
+  margin-right: calc(-1 * var(--spacing-md));
+  background: var(--bg-color);
   border-bottom: 1px solid var(--border-structural);
 }
 

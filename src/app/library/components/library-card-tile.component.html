@@ -17,9 +17,10 @@
     ? 'Undiscovered ' + definition.rarity + ' ' + definition.type + ' — ' + definition.energyCost + ' energy.'
     : definition.name + ' — ' + definition.rarity + ' ' + definition.type + '. Energy cost ' + definition.energyCost + '. ' + effectiveDescription">
 
-  <!-- Energy cost corner pill -->
+  <!-- Energy cost corner pill — reflects the upgraded cost when preview is on
+       and the card has an upgradedEnergyCost (e.g., ARCHITECT 3 → 2). -->
   <span class="tile__cost" aria-hidden="true">
-    <strong>{{ definition.energyCost }}</strong>
+    <strong>{{ displayEnergyCost }}</strong>
     <span class="tile__cost-label">E</span>
   </span>
 

@@ -59,6 +59,18 @@
     0 0 0 1px var(--theme-purple-a20);
   animation: modal-slide-in 180ms ease-out;
 
+  /* Dark scrollbar — matches app-profile / Codex treatment. Default browser
+     scrollbar looks off on the dark modal gradient. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+    &:hover { background: rgba(255, 255, 255, 0.15); }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
