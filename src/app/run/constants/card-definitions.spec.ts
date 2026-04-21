@@ -1174,32 +1174,32 @@ describe('CARD_DEFINITIONS', () => {
     });
   });
 
-  // ── CONDUIT_BRIDGE (Sprint 48) — session-5 walkback ─────────────────────
+  // ── CONDUIT_BRIDGE (Sprint 48) — session-5 full revert ──────────────────
   describe('CONDUIT_BRIDGE (sprint 48)', () => {
     const def = CARD_DEFINITIONS[CardId.CONDUIT_BRIDGE];
 
-    it('base duration is 4 turns (session-5 walkback from 5)', () => {
+    it('base duration is 3 turns (session-5 full revert from 5 → 3)', () => {
       if (def.effect.type === 'utility') {
-        expect(def.effect.value).toBe(4);
+        expect(def.effect.value).toBe(3);
       } else {
         fail('effect is not a utility');
       }
     });
 
-    it('upgraded duration is 5 turns (session-5 walkback from 7)', () => {
+    it('upgraded duration is 4 turns (session-5 full revert from 7 → 4)', () => {
       if (def.upgradedEffect?.type === 'utility') {
-        expect(def.upgradedEffect.value).toBe(5);
+        expect(def.upgradedEffect.value).toBe(4);
       } else {
         fail('upgradedEffect is not a utility');
       }
     });
 
-    it('description mentions 4 turns', () => {
-      expect(def.description).toMatch(/4 turns/);
+    it('description mentions 3 turns', () => {
+      expect(def.description).toMatch(/3 turns/);
     });
 
-    it('upgraded description mentions 5 turns', () => {
-      expect(def.upgradedDescription).toMatch(/5 turns/);
+    it('upgraded description mentions 4 turns', () => {
+      expect(def.upgradedDescription).toMatch(/4 turns/);
     });
   });
 

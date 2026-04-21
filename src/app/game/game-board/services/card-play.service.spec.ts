@@ -409,16 +409,16 @@ describe('CardPlayService', () => {
         const card: CardInstance = { instanceId: 'cb-4', cardId: CardId.CONDUIT_BRIDGE, upgraded: false };
         service.onCardPlayed(card);
 
-        // CARD_VALUES.conduitBridgeDuration = 4 (session-5 walkback from 5).
-        // Expires at 7 + 4 + 1 = 12 (see applyConduitBridge docstring: +1
-        // compensates for top-of-turn graph tickTurn so the edge lasts
-        // `duration` turns of play).
+        // CARD_VALUES.conduitBridgeDuration = 3 (session-5 full revert to
+        // session-3 original). Expires at 7 + 3 + 1 = 11 (see
+        // applyConduitBridge docstring: +1 compensates for top-of-turn graph
+        // tickTurn so the edge lasts `duration` turns of play).
         expect(graphSpy.addVirtualEdge).toHaveBeenCalledWith(
-          5, 5, 5, 10, 12, jasmine.any(String),
+          5, 5, 5, 10, 11, jasmine.any(String),
         );
       });
 
-      it('upgraded card uses upgradedDuration (5 turns)', () => {
+      it('upgraded card uses upgradedDuration (4 turns)', () => {
         const graphSpy = jasmine.createSpyObj<TowerGraphService>('TowerGraphService', ['addVirtualEdge']);
         (service as unknown as { towerGraphService: TowerGraphService }).towerGraphService = graphSpy;
         graphSpy.addVirtualEdge.and.returnValue(true);
@@ -431,9 +431,10 @@ describe('CardPlayService', () => {
         const card: CardInstance = { instanceId: 'cb-5', cardId: CardId.CONDUIT_BRIDGE, upgraded: true };
         service.onCardPlayed(card);
 
-        // upgradedDuration=5 (session-5 walkback from 7) → expiresOnTurn = 0 + 5 + 1 = 6.
+        // upgradedDuration=4 (session-5 full revert to session-3 original) →
+        // expiresOnTurn = 0 + 4 + 1 = 5.
         expect(graphSpy.addVirtualEdge).toHaveBeenCalledWith(
-          5, 5, 5, 10, 6, jasmine.any(String),
+          5, 5, 5, 10, 5, jasmine.any(String),
         );
       });
     });

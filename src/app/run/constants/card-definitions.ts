@@ -334,15 +334,22 @@ const CARD_VALUES = {
   gridSurgeDuration: 1,               // turn
 
   // ── Conduit — CONDUIT_BRIDGE ────────────────────────────────────────────
-  // Session-5 balance walkback: 5/7 → 4/5. Session-4 bumped 3/4 → 5/7 with
-  // reasoning "3 turns is a blip inside a 7-10 turn wave" — but the blip
-  // was the card's identity. At 7 turns upgraded, playing CONDUIT_BRIDGE
-  // turn 1 of a 7-turn wave covers the entire wave, erasing the "when do
-  // I play this?" decision. 4/5 restores that decision while still giving
-  // enough uptime to matter (50-70% on an average wave).
+  // Session-5 full revert: 5/7 → 3/4 (original session-3 values).
+  //
+  // Session 4 bumped 3/4 → 5/7 reasoning "3 turns is a blip in a 7-10 turn
+  // wave." Reconsidered: CONDUIT_BRIDGE at 2E UNCOMMON sits in the genre's
+  // "temporary N-turn buff" tier (3-4 turns per convention — StS Wraith Form
+  // 3t, most temp effects 3-4t). "Permanent once cast" territory starts at
+  // 3E RARE (StS Demon Form, Infinite Blades); this card doesn't pay that
+  // cost, so it shouldn't have that duration.
+  //
+  // The card's real balance mechanism is the RANDOM 2-tower pick — player
+  // doesn't target. Long duration doesn't fix bad connections; short
+  // duration keeps good connections feeling tight and tactical. Pulling the
+  // duration knob was wrong; the randomness is the balancer.
   conduitBridgeCost: 2,
-  conduitBridgeDuration: 4,           // turns
-  conduitBridgeUpgradedDuration: 5,
+  conduitBridgeDuration: 3,           // turns
+  conduitBridgeUpgradedDuration: 4,
 
   // ── Conduit — ARCHITECT ─────────────────────────────────────────────────
   // Base: 3E rare flag (cluster super-node adjacency). Upgraded: cost drops
@@ -1931,8 +1938,8 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.CONDUIT_BRIDGE]: {
     id: CardId.CONDUIT_BRIDGE,
     name: 'Conduit Bridge',
-    description: 'Link two non-adjacent towers as neighbors for 4 turns.',
-    upgradedDescription: 'Link two non-adjacent towers as neighbors for 5 turns.',
+    description: 'Link two non-adjacent towers as neighbors for 3 turns.',
+    upgradedDescription: 'Link two non-adjacent towers as neighbors for 4 turns.',
     type: CardType.UTILITY,
     rarity: CardRarity.UNCOMMON,
     energyCost: CARD_VALUES.conduitBridgeCost,

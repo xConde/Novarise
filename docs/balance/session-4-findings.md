@@ -102,9 +102,14 @@ and things that should NOT ship without playtest verification.
 - Tile hides the upgrade `+` badge + glow when `upgradedDescription` is
   absent or identical to the base.
 
-**Balance — CONDUIT_BRIDGE 3/4 → 5/7 turns (shipped).**
-See separate commit. Reasoning: 3-turn virtual edge was a blip inside a
-7-10 turn wave. 5/7 gives meaningful uptime.
+**Balance — CONDUIT_BRIDGE 3/4 → 5/7 turns (shipped session 4, REVERTED session 5).**
+Session 4 bumped reasoning "3 turns is a blip in a 7-10 turn wave."
+Session 5 reconsidered and reverted to original 3/4. Card's real
+balance mechanism is the random 2-tower pick, not duration — long
+duration doesn't fix bad connections. And at 2E uncommon, the card
+sits in the genre's "temporary N-turn buff" tier (3-4 turns per
+convention), not the "permanent once cast" tier (3E rare). See
+session-5 revert commit for full reasoning.
 
 **Branch audit cleanups (shipped).**
 See separate commit: SUPERSEDED banner on the conduit-adjacency-graph
@@ -156,10 +161,12 @@ Per the session-4 kickoff rule "do not rebalance based on solo runs",
 none of the following ship here. Each is a proposed delta with reasoning
 for the user's playtest + decision.
 
-### 1. CONDUIT_BRIDGE duration — SHIPPED THIS SESSION (3/4 → 5/7)
+### 1. CONDUIT_BRIDGE duration — session-4 shipped 5/7, session-5 REVERTED to 3/4
 
-See commit. Monitor during playtest: if >90% of combat turns have an
-active bridge, dial back to 4/6.
+Back at original values. Playtest gate if re-examined: if player
+feedback is "too short to matter," revisit — but genre convention
+for 2E uncommon "temporary N-turn buff" cards is 3-4 turns. Longer
+durations belong at 3E rare with "permanent once cast" semantics.
 
 ### 2. TUNING_FORK multiplier (1.10) — plausibly fine; kickoff flagged over-tuned
 
