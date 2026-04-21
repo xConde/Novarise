@@ -960,7 +960,7 @@ export class EnemyService {
    *        the reroute added. 0 (default) = base card, no damage.
    * @returns Number of enemies whose path was overridden.
    */
-  applyDetour(damageFractionPerExtraStep: number = 0): number {
+  applyDetour(damageFractionPerExtraStep = 0): number {
     const exitTiles = this.pathfindingService.getExitTiles();
     if (exitTiles.length === 0) return 0;
 

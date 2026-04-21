@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Subject } from 'rxjs';
 import { PlacedTower } from '../models/tower.model';
-import { CONDUIT_CONFIG } from '../constants/conduit.constants';
 
 /**
  * Serializable snapshot of `TowerGraphService` state that CANNOT be derived
@@ -340,7 +339,7 @@ export class TowerGraphService {
     let count = 0;
     let r = row + dr;
     let c = col + dc;
-    while (true) {
+    for (;;) {
       const id = this.keyToId.get(`${r}-${c}`);
       if (id === undefined) break;
       if (this.isDisruptedId(id, currentTurn)) break;

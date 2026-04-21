@@ -773,7 +773,7 @@ export class CardPlayService {
    * Only L1→L2 upgrades are applied; L2→L3 requires specialization choice
    * which cannot be automated, so those towers are excluded.
    */
-  private fortifyRandomTower(count: number = 1): void {
+  private fortifyRandomTower(count = 1): void {
     if (count < 1) return;
     const towers = Array.from(this.towerCombatService.getPlacedTowers().values());
     // Exclude max-level towers and L2 towers (L2→L3 requires specialization).

@@ -137,7 +137,7 @@ export class GameBoardService {
   // When elevation is provided and non-zero, the mesh is positioned at
   // Y = elevation + tileHeight / 2 instead of the default tileHeight / 2.
   // Default elevation = 0 preserves all existing call sites unchanged.
-  createTileMesh(row: number, col: number, type: BlockType, mutationOp?: MutationOp, elevation: number = 0): THREE.Mesh {
+  createTileMesh(row: number, col: number, type: BlockType, mutationOp?: MutationOp, elevation = 0): THREE.Mesh {
     const geometry = new THREE.BoxGeometry(this.tileSize * 0.95, this.tileHeight, this.tileSize * 0.95);
 
     let material: THREE.MeshStandardMaterial;
