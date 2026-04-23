@@ -233,6 +233,28 @@ export const REWARD_RARITY_WEIGHTS = {
   rare: 10,
 } as const;
 
+// ── Archetype Card Draw Bias ──────────────────────────────────
+
+/**
+ * Probability of selecting an archetype-aligned card when the deck has a
+ * dominant spatial archetype (60% archetype / 40% neutral).
+ * Used by RunService.pickArchetypeAwareCard for both combat rewards and shop.
+ */
+export const ARCHETYPE_CARD_BIAS_CHANCE = 0.6;
+
+// ── Unknown Node Reveal Thresholds ───────────────────────────
+
+/**
+ * Cumulative probability thresholds for revealing UNKNOWN node types.
+ * Distribution: combat 50% / event 25% / shop 15% / rest 10%.
+ * Roll < combat → COMBAT; < event → EVENT; < shop → SHOP; else → REST.
+ */
+export const UNKNOWN_NODE_REVEAL_THRESHOLDS = {
+  combat: 0.5,
+  event: 0.75,
+  shop: 0.9,
+} as const;
+
 // ── Relic Effect Constants ────────────────────────────────────
 
 /**

@@ -29,6 +29,7 @@ import { ChallengeDefinition, computeChallengeGoldBonus } from '../data/challeng
 import { RelicId, RelicRarity, RelicDefinition } from '../models/relic.model';
 import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
 import {
+  ARCHETYPE_CARD_BIAS_CHANCE,
   RELIC_EFFECT_CONFIG,
   REWARD_CONFIG,
   REWARD_RARITY_WEIGHTS,
@@ -36,6 +37,7 @@ import {
   RUN_CONFIG,
   SHOP_CONFIG,
   ITEM_CONFIG,
+  UNKNOWN_NODE_REVEAL_THRESHOLDS,
   SeededRng,
   createSeededRng,
 } from '../constants/run.constants';
@@ -52,7 +54,7 @@ import { RUN_EVENTS } from '../constants/run-events';
 import { PlayerProfileService } from '../../core/services/player-profile.service';
 import { SeenCardsService } from '../../core/services/seen-cards.service';
 import { getStarterDeck, CARD_DEFINITIONS } from '../constants/card-definitions';
-import { CardArchetype, CardId, CardInstance, CardRarity } from '../models/card.model';
+import { CardArchetype, CardDefinition, CardId, CardInstance, CardRarity } from '../models/card.model';
 import { EncounterCheckpointService } from './encounter-checkpoint.service';
 
 /**
@@ -514,13 +516,7 @@ export class RunService {
     if (!this.runState) return [];
 
     // Pool: all non-starter cards grouped by rarity
-    const allCards = Object.values(CARD_DEFINITIONS).filter(c => c.rarity !== CardRarity.STARTER);
-    const byRarity: Record<CardRarity, typeof allCards> = {
-      [CardRarity.STARTER]: [],
-      [CardRarity.COMMON]: allCards.filter(c => c.rarity === CardRarity.COMMON),
-      [CardRarity.UNCOMMON]: allCards.filter(c => c.rarity === CardRarity.UNCOMMON),
-      [CardRarity.RARE]: allCards.filter(c => c.rarity === CardRarity.RARE),
-    };
+    const byRarity = this.buildNonStarterCardPool();
 
     const rarityWeights: Array<{ rarity: CardRarity; weight: number }> = [
       { rarity: CardRarity.COMMON, weight: REWARD_RARITY_WEIGHTS.common },
@@ -541,6 +537,7 @@ export class RunService {
     const picked: CardReward[] = [];
     for (let i = 0; i < count; i++) {
       const rarity = this.pickWeightedRarity(rarityWeights, byRarity, rng);
+      if (rarity === null) continue;
       const pool = byRarity[rarity];
       if (pool.length === 0) continue;
       const card = this.pickArchetypeAwareCard(pool, dominant, rng);
@@ -576,7 +573,7 @@ export class RunService {
 
     const archetypeMatches = pool.filter(c => c.archetype === dominant);
     const neutralMatches = pool.filter(c => (c.archetype ?? 'neutral') === 'neutral');
-    const wantArchetype = rng() < 0.6;
+    const wantArchetype = rng() < ARCHETYPE_CARD_BIAS_CHANCE;
     const preferred = wantArchetype ? archetypeMatches : neutralMatches;
     if (preferred.length > 0) {
       return preferred[Math.floor(rng() * preferred.length)];
@@ -666,11 +663,7 @@ export class RunService {
 
     // Relic items — weighted by rarity
     const available = this.relicService.getAvailableRelics();
-    const relicByRarity: Record<RelicRarity, RelicDefinition[]> = {
-      [RelicRarity.COMMON]: available.filter(r => r.rarity === RelicRarity.COMMON),
-      [RelicRarity.UNCOMMON]: available.filter(r => r.rarity === RelicRarity.UNCOMMON),
-      [RelicRarity.RARE]: available.filter(r => r.rarity === RelicRarity.RARE),
-    };
+    const relicByRarity = this.buildRelicPool(available);
     const relicRarityWeights: Array<{ rarity: RelicRarity; weight: number }> = [
       { rarity: RelicRarity.COMMON, weight: REWARD_RARITY_WEIGHTS.common },
       { rarity: RelicRarity.UNCOMMON, weight: REWARD_RARITY_WEIGHTS.uncommon },
@@ -683,7 +676,8 @@ export class RunService {
         [RelicRarity.UNCOMMON]: relicByRarity[RelicRarity.UNCOMMON].filter(r => !pickedRelicIds.has(r.id)),
         [RelicRarity.RARE]: relicByRarity[RelicRarity.RARE].filter(r => !pickedRelicIds.has(r.id)),
       };
-      const rarity = this.pickWeightedRelicRarity(relicRarityWeights, remaining, rng);
+      const rarity = this.pickWeightedRarity(relicRarityWeights, remaining, rng);
+      if (rarity === null) continue;
       const pool = remaining[rarity];
       if (pool.length === 0) continue;
       const relic = pool[Math.floor(rng() * pool.length)];
@@ -696,13 +690,7 @@ export class RunService {
     }
 
     // Card items — weighted by rarity
-    const allCards = Object.values(CARD_DEFINITIONS).filter(c => c.rarity !== CardRarity.STARTER);
-    const cardByRarity: Record<CardRarity, typeof allCards> = {
-      [CardRarity.STARTER]: [],
-      [CardRarity.COMMON]: allCards.filter(c => c.rarity === CardRarity.COMMON),
-      [CardRarity.UNCOMMON]: allCards.filter(c => c.rarity === CardRarity.UNCOMMON),
-      [CardRarity.RARE]: allCards.filter(c => c.rarity === CardRarity.RARE),
-    };
+    const cardByRarity = this.buildNonStarterCardPool();
     const cardRarityWeights: Array<{ rarity: CardRarity; weight: number }> = [
       { rarity: CardRarity.COMMON, weight: REWARD_RARITY_WEIGHTS.common },
       { rarity: CardRarity.UNCOMMON, weight: REWARD_RARITY_WEIGHTS.uncommon },
@@ -712,13 +700,14 @@ export class RunService {
     // Phase 1 Sprint 8 — same archetype-aware selection used by combat rewards.
     const dominant = this.deckService.getDominantArchetype();
     for (let i = 0; i < cardsInShop; i++) {
-      const remaining: Record<CardRarity, typeof allCards> = {
+      const remaining: Record<CardRarity, CardDefinition[]> = {
         [CardRarity.STARTER]: [],
         [CardRarity.COMMON]: cardByRarity[CardRarity.COMMON].filter(c => !pickedCardIds.has(c.id)),
         [CardRarity.UNCOMMON]: cardByRarity[CardRarity.UNCOMMON].filter(c => !pickedCardIds.has(c.id)),
         [CardRarity.RARE]: cardByRarity[CardRarity.RARE].filter(c => !pickedCardIds.has(c.id)),
       };
       const rarity = this.pickWeightedRarity(cardRarityWeights, remaining, rng);
+      if (rarity === null) continue;
       const pool = remaining[rarity];
       if (pool.length === 0) continue;
       const card = this.pickArchetypeAwareCard(pool, dominant, rng);
@@ -952,9 +941,9 @@ export class RunService {
 
     // Unknown nodes reveal as: combat (50%), event (25%), shop (15%), rest (10%)
     let revealedType: NodeType;
-    if (roll < 0.5) revealedType = NodeType.COMBAT;
-    else if (roll < 0.75) revealedType = NodeType.EVENT;
-    else if (roll < 0.9) revealedType = NodeType.SHOP;
+    if (roll < UNKNOWN_NODE_REVEAL_THRESHOLDS.combat) revealedType = NodeType.COMBAT;
+    else if (roll < UNKNOWN_NODE_REVEAL_THRESHOLDS.event) revealedType = NodeType.EVENT;
+    else if (roll < UNKNOWN_NODE_REVEAL_THRESHOLDS.shop) revealedType = NodeType.SHOP;
     else revealedType = NodeType.REST;
 
     // Update the node in the map
@@ -1023,11 +1012,7 @@ export class RunService {
     if (available.length === 0) return [];
 
     // Group available relics by rarity
-    const byRarity: Record<RelicRarity, RelicDefinition[]> = {
-      [RelicRarity.COMMON]: available.filter(r => r.rarity === RelicRarity.COMMON),
-      [RelicRarity.UNCOMMON]: available.filter(r => r.rarity === RelicRarity.UNCOMMON),
-      [RelicRarity.RARE]: available.filter(r => r.rarity === RelicRarity.RARE),
-    };
+    const byRarity = this.buildRelicPool(available);
 
     const rarityWeights: Array<{ rarity: RelicRarity; weight: number }> = [
       { rarity: RelicRarity.COMMON, weight: REWARD_RARITY_WEIGHTS.common },
@@ -1047,7 +1032,8 @@ export class RunService {
         [RelicRarity.RARE]: byRarity[RelicRarity.RARE].filter(r => !pickedIds.has(r.id)),
       };
 
-      const rarity = this.pickWeightedRelicRarity(rarityWeights, remaining, rng);
+      const rarity = this.pickWeightedRarity(rarityWeights, remaining, rng);
+      if (rarity === null) continue;
       const pool = remaining[rarity];
       if (pool.length === 0) continue;
       const relic = pool[Math.floor(rng() * pool.length)];
@@ -1120,17 +1106,17 @@ export class RunService {
   }
 
   /**
-   * Select a rarity tier using weighted random selection (card pool).
-   * Falls back to the next-lower rarity when the chosen tier is empty,
-   * rather than leaving the slot blank.
+   * Select a rarity tier using weighted random selection.
+   * Returns null when every tier in the pool is empty (all slots exhausted).
+   * Callers must handle null — skip the slot rather than leaving it blank.
    */
-  private pickWeightedRarity(
-    weights: Array<{ rarity: CardRarity; weight: number }>,
-    pool: Record<CardRarity, Array<{ rarity: CardRarity }>>,
+  private pickWeightedRarity<R extends string>(
+    weights: Array<{ rarity: R; weight: number }>,
+    pool: Record<R, unknown[]>,
     rng: () => number,
-  ): CardRarity {
+  ): R | null {
     const available = weights.filter(w => pool[w.rarity].length > 0);
-    if (available.length === 0) return CardRarity.COMMON; // safety valve
+    if (available.length === 0) return null;
     const total = available.reduce((sum, w) => sum + w.weight, 0);
     let roll = rng() * total;
     for (const entry of available) {
@@ -1141,23 +1127,31 @@ export class RunService {
   }
 
   /**
-   * Select a rarity tier using weighted random selection (relic pool).
-   * Falls back to the next non-empty tier rather than leaving the slot blank.
+   * Build a pool of all non-starter cards grouped by rarity.
+   * STARTER bucket is always empty — it exists only to satisfy the
+   * Record<CardRarity, …> shape so callers can index by any rarity key.
    */
-  private pickWeightedRelicRarity(
-    weights: Array<{ rarity: RelicRarity; weight: number }>,
-    pool: Record<RelicRarity, RelicDefinition[]>,
-    rng: () => number,
-  ): RelicRarity {
-    const available = weights.filter(w => pool[w.rarity].length > 0);
-    if (available.length === 0) return RelicRarity.COMMON; // safety valve
-    const total = available.reduce((sum, w) => sum + w.weight, 0);
-    let roll = rng() * total;
-    for (const entry of available) {
-      roll -= entry.weight;
-      if (roll < 0) return entry.rarity;
-    }
-    return available[available.length - 1].rarity;
+  private buildNonStarterCardPool(): Record<CardRarity, CardDefinition[]> {
+    const pool = Object.values(CARD_DEFINITIONS).filter(c => c.rarity !== CardRarity.STARTER);
+    return {
+      [CardRarity.STARTER]: [],
+      [CardRarity.COMMON]: pool.filter(c => c.rarity === CardRarity.COMMON),
+      [CardRarity.UNCOMMON]: pool.filter(c => c.rarity === CardRarity.UNCOMMON),
+      [CardRarity.RARE]: pool.filter(c => c.rarity === CardRarity.RARE),
+    };
+  }
+
+  /**
+   * Build a pool of relics grouped by rarity from the provided source array.
+   * Accepts a pre-filtered list (e.g. from RelicService.getAvailableRelics())
+   * so callers control the source of truth.
+   */
+  private buildRelicPool(source: RelicDefinition[]): Record<RelicRarity, RelicDefinition[]> {
+    return {
+      [RelicRarity.COMMON]: source.filter(r => r.rarity === RelicRarity.COMMON),
+      [RelicRarity.UNCOMMON]: source.filter(r => r.rarity === RelicRarity.UNCOMMON),
+      [RelicRarity.RARE]: source.filter(r => r.rarity === RelicRarity.RARE),
+    };
   }
 
   private cleanup(): void {
