@@ -28,9 +28,6 @@ import { RectangleToolService } from './core/rectangle-tool.service';
 import { EditorModalService } from './core/editor-modal.service';
 import { EditorKeyboardService } from './core/editor-keyboard.service';
 
-// Re-export types for template compatibility
-export { EditMode, BrushTool } from './core/editor-state.service';
-
 @Component({
   selector: 'app-novarise',
   templateUrl: './novarise.component.html',
