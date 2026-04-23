@@ -270,58 +270,6 @@
     letter-spacing: 0.05rem;
   }
 
-  /* Campaign level info — single compact line */
-  .board-container .setup-panel .campaign-level-info {
-    padding: 0.15rem 0.35rem;
-    gap: 0.2rem 0.4rem;
-    margin-bottom: 0.1rem;
-  }
-
-  .board-container .setup-panel .campaign-level-info__number {
-    font-size: var(--font-size-tiny);
-  }
-
-  .board-container .setup-panel .campaign-level-info__name {
-    font-size: 0.6rem;
-    flex: 0 1 auto;  /* Don't force full row — stay inline */
-  }
-
-  .board-container .setup-panel .campaign-level-info__tier,
-  .board-container .setup-panel .campaign-level-info__waves {
-    font-size: 0.4rem;
-  }
-
-  /* Challenges block */
-  .board-container .setup-panel .campaign-challenges-preview {
-    padding: 0.2rem 0.3rem;
-    gap: 0.15rem;
-  }
-
-  .board-container .setup-panel .campaign-challenges-preview__title {
-    font-size: var(--font-size-tiny);
-    margin-bottom: 0.1rem;
-    letter-spacing: 0.05rem;
-  }
-
-  .board-container .setup-panel .challenge-preview-item {
-    padding: 0.15rem 0.3rem;
-    font-size: var(--font-size-tiny);
-    gap: 0.2rem;
-  }
-
-  .board-container .setup-panel .challenge-preview-item__name {
-    font-size: 0.65rem;
-  }
-
-  .board-container .setup-panel .challenge-preview-item__desc {
-    font-size: 0.55rem;
-    color: rgba(200, 184, 255, 1);
-  }
-
-  .board-container .setup-panel .challenge-preview-item__bonus {
-    font-size: 0.6rem;
-  }
-
   /* Difficulty grid: 4 across */
   .board-container .setup-difficulty-grid {
     gap: 0.15rem;

@@ -24,7 +24,6 @@ import { EnemyService } from './services/enemy.service';
 import { EnemyVisualService } from './services/enemy-visual.service';
 import { TutorialService, TutorialStep } from '../../core/services/tutorial.service';
 import { BehaviorSubject, of } from 'rxjs';
-import { CampaignLevel, CampaignTier } from '../../run/data/campaign-levels';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
 import { GameNotificationService, NotificationType } from './services/game-notification.service';
 import { ChallengeTrackingService } from './services/challenge-tracking.service';
@@ -204,7 +203,7 @@ describe('GameBoardComponent', () => {
     it('isPaused getter should reflect gameState.isPaused', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
       // Put state into COMBAT so togglePause takes effect
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       gameStateService.togglePause();
 
       expect(component.isPaused).toBeTrue();
@@ -330,7 +329,7 @@ describe('GameBoardComponent', () => {
 
     it('pressing p toggles pause', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       spyOn(component, 'togglePause').and.callThrough();
       fireKey('p');
       expect(component.togglePause).toHaveBeenCalled();
@@ -338,7 +337,7 @@ describe('GameBoardComponent', () => {
 
     it('pressing P (uppercase) also toggles pause', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       spyOn(component, 'togglePause').and.callThrough();
       fireKey('P');
       expect(component.togglePause).toHaveBeenCalled();
@@ -710,7 +709,7 @@ describe('GameBoardComponent', () => {
       expect(component.isPaused).toBeFalse();
 
       // Enter COMBAT and pause
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       gameStateService.togglePause();
       // Update component's gameState reference
       component.gameState = gameStateService.getState();
@@ -730,7 +729,7 @@ describe('GameBoardComponent', () => {
     let gamePauseService: GamePauseService;
 
     function enterCombatAndPause(): void {
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       gameStateService.togglePause();
       component.gameState = gameStateService.getState();
     }
@@ -849,7 +848,7 @@ describe('GameBoardComponent', () => {
 
     it('ESC resumes when paused', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       gameStateService.togglePause();
       component.gameState = gameStateService.getState();
 
@@ -1681,7 +1680,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('visibility change to hidden during COMBAT triggers pause', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       spyOnProperty(document, 'hidden').and.returnValue(true);
       spyOn(gameStateService, 'togglePause').and.callThrough();
 
@@ -1702,7 +1701,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('visibility change to hidden when already paused does NOT double-toggle', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       gameStateService.togglePause(); // already paused
       spyOnProperty(document, 'hidden').and.returnValue(true);
       spyOn(gameStateService, 'togglePause').and.callThrough();
@@ -1714,7 +1713,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('window blur during COMBAT triggers pause', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       spyOn(gameStateService, 'togglePause').and.callThrough();
 
       window.dispatchEvent(new Event('blur'));
@@ -1724,7 +1723,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('autoPaused flag is set to true on auto-pause via visibilitychange', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       spyOnProperty(document, 'hidden').and.returnValue(true);
 
       document.dispatchEvent(new Event('visibilitychange'));
@@ -1733,7 +1732,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('autoPaused flag is set to true on auto-pause via window blur', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
 
       window.dispatchEvent(new Event('blur'));
 
@@ -1742,7 +1741,7 @@ describe('GameBoardComponent', () => {
 
     it('autoPaused flag is reset to false on manual togglePause (resume)', () => {
       const gamePauseService = fixture.debugElement.injector.get(GamePauseService);
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       // Simulate that the service flagged an auto-pause
       gamePauseService.autoPaused = true;
 
@@ -1900,7 +1899,7 @@ describe('GameBoardComponent', () => {
     it('upgradeTower delegates recordTowerUpgraded to ChallengeTrackingService', () => {
       // Set up a real selected tower in the INSPECT state
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       gameStateService.addGold(500);
 
       const mockTower: PlacedTower = {
@@ -1931,7 +1930,7 @@ describe('GameBoardComponent', () => {
 
     it('sellTower delegates recordTowerSold to ChallengeTrackingService', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
 
       const towerCombatService = fixture.debugElement.injector.get(TowerCombatService);
       const mockSoldTower: PlacedTower = {
@@ -1992,7 +1991,7 @@ describe('GameBoardComponent', () => {
 
     it('component activeModifiers is corrected when a state emission follows a no-op toggleModifier', () => {
       // Advance to COMBAT so setModifiers' phase guard rejects the call without emitting.
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
 
       // Wire the sync subscription (mirrors what ngOnInit does for activeModifiers).
       const sub = gameStateService.getState$().subscribe(state => {
@@ -2016,7 +2015,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('modifierScoreMultiplier is corrected after next state emission following no-op toggle', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
 
       // Wire the sync subscription that mirrors the ngOnInit fix.
       const sub = gameStateService.getState$().subscribe(state => {
@@ -2103,121 +2102,6 @@ describe('GameBoardComponent', () => {
 
       expect(meshRegistry.getTileMeshArray().length).toBe(0);
       expect(meshRegistry.getTowerChildrenArray().length).toBe(0);
-    });
-  });
-
-  describe('applySpecializationVisual', () => {
-    function makeMeshGroup(...names: string[]): THREE.Group {
-      const group = new THREE.Group();
-      for (const name of names) {
-        const geom = new THREE.BoxGeometry(1, 1, 1);
-        const mat = new THREE.MeshStandardMaterial({ color: 0xffffff });
-        const mesh = new THREE.Mesh(geom, mat);
-        mesh.name = name;
-        group.add(mesh);
-      }
-      return group;
-    }
-
-    afterEach(() => {
-      // Dispose geometries/materials created in helpers
-    });
-
-    it('should apply warm orange emissive tint for ALPHA specialization', () => {
-      const group = makeMeshGroup('base', 'top');
-      component.applySpecializationVisual(group, TowerSpecialization.ALPHA);
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
-          expect(child.material.emissive.getHex()).toBe(0xff6633);
-          expect(child.material.emissiveIntensity).toBe(0.4);
-        }
-      });
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          (child.material as THREE.MeshStandardMaterial).dispose();
-        }
-      });
-    });
-
-    it('should apply cool blue emissive tint for BETA specialization', () => {
-      const group = makeMeshGroup('base', 'top');
-      component.applySpecializationVisual(group, TowerSpecialization.BETA);
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
-          expect(child.material.emissive.getHex()).toBe(0x3366ff);
-          expect(child.material.emissiveIntensity).toBe(0.4);
-        }
-      });
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          (child.material as THREE.MeshStandardMaterial).dispose();
-        }
-      });
-    });
-
-    it('should not modify tip or orb meshes (animated by TowerAnimationService)', () => {
-      const group = makeMeshGroup('base', 'tip', 'orb');
-      const tipMesh = group.children.find(c => c.name === 'tip') as THREE.Mesh;
-      const orbMesh = group.children.find(c => c.name === 'orb') as THREE.Mesh;
-      const tipMat = tipMesh.material as THREE.MeshStandardMaterial;
-      const orbMat = orbMesh.material as THREE.MeshStandardMaterial;
-      const tipOriginalHex = tipMat.emissive.getHex();
-      const orbOriginalHex = orbMat.emissive.getHex();
-
-      component.applySpecializationVisual(group, TowerSpecialization.ALPHA);
-
-      expect(tipMat.emissive.getHex()).toBe(tipOriginalHex);
-      expect(orbMat.emissive.getHex()).toBe(orbOriginalHex);
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          (child.material as THREE.MeshStandardMaterial).dispose();
-        }
-      });
-    });
-
-    it('should apply tint to all non-animated mesh children in the group', () => {
-      const group = makeMeshGroup('base', 'mid', 'top', 'crystal');
-      const tinted: string[] = [];
-      component.applySpecializationVisual(group, TowerSpecialization.BETA);
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
-          if (child.material.emissive.getHex() === 0x3366ff) {
-            tinted.push(child.name);
-          }
-        }
-      });
-      expect(tinted).toContain('base');
-      expect(tinted).toContain('mid');
-      expect(tinted).toContain('top');
-      expect(tinted).toContain('crystal');
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          (child.material as THREE.MeshStandardMaterial).dispose();
-        }
-      });
-    });
-
-    it('should handle Material[] arrays on a mesh', () => {
-      const group = new THREE.Group();
-      const geom = new THREE.BoxGeometry(1, 1, 1);
-      const mat1 = new THREE.MeshStandardMaterial({ color: 0xffffff });
-      const mat2 = new THREE.MeshStandardMaterial({ color: 0x888888 });
-      const mesh = new THREE.Mesh(geom, [mat1, mat2]);
-      mesh.name = 'multi';
-      group.add(mesh);
-
-      component.applySpecializationVisual(group, TowerSpecialization.ALPHA);
-
-      expect(mat1.emissive.getHex()).toBe(0xff6633);
-      expect(mat2.emissive.getHex()).toBe(0xff6633);
-
-      geom.dispose();
-      mat1.dispose();
-      mat2.dispose();
     });
   });
 
@@ -2429,7 +2313,7 @@ describe('GameBoardComponent', () => {
     it('runPausedVisuals is NOT invoked when game is unpaused in COMBAT', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
       const gameRenderService = fixture.debugElement.injector.get(GameRenderService);
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       expect(gameStateService.getState().isPaused).toBeFalse();
 
       const pausedVisualsSpy = spyOn(gameRenderService, 'runPausedVisuals');
@@ -2446,7 +2330,7 @@ describe('GameBoardComponent', () => {
     it('runPausedVisuals IS invoked when game is paused in COMBAT', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
       const gameRenderService = fixture.debugElement.injector.get(GameRenderService);
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       gameStateService.togglePause();
       expect(gameStateService.getState().isPaused).toBeTrue();
 
@@ -2546,7 +2430,7 @@ describe('GameBoardComponent', () => {
   describe('endTurn re-entrant guard', () => {
     it('second call while first is in-flight is a no-op', () => {
       const gameStateSvc = fixture.debugElement.injector.get(GameStateService);
-      gameStateSvc.setPhase(GamePhase.COMBAT);
+      gameStateSvc.startWave();
       component.gameState = gameStateSvc.getState();
 
       const waveCombatSpy = spyOn(component.waveCombat, 'endTurn').and.callFake(() => {

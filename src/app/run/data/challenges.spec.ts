@@ -8,18 +8,9 @@ import {
   getChallengesForLevel,
   isChallengeSatisfied,
 } from './challenges';
-import { CAMPAIGN_LEVELS } from './campaign-levels';
 
 describe('challenge.model', () => {
   // ── CAMPAIGN_CHALLENGES structure ──────────────────────────────────────────
-
-  it('should have challenges defined for every campaign level', () => {
-    for (const level of CAMPAIGN_LEVELS) {
-      const challenges = CAMPAIGN_CHALLENGES[level.id];
-      expect(challenges).toBeDefined(`Expected challenges for ${level.id}`);
-      expect(challenges.length).toBeGreaterThanOrEqual(2, `Expected >= 2 challenges for ${level.id}`);
-    }
-  });
 
   it('should have only 2-3 challenges per level', () => {
     for (const [levelId, challenges] of Object.entries(CAMPAIGN_CHALLENGES)) {
