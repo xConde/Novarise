@@ -20,7 +20,7 @@ import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
 
-import { GamePhase } from '../models/game-state.model';
+import { GamePhase, INITIAL_GAME_STATE, DifficultyLevel } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
 import { EnemyType } from '../models/enemy.model';
 import { WaveDefinition } from '../models/wave.model';
@@ -69,6 +69,7 @@ describe('CombatLoopService', () => {
    */
   function setupState(phase: GamePhase = GamePhase.COMBAT, wave = 1): void {
     gameStateSpy.getState.and.returnValue({
+      ...INITIAL_GAME_STATE,
       phase,
       wave,
       lives: 10,
@@ -76,14 +77,13 @@ describe('CombatLoopService', () => {
       score: 0,
       isPaused: false,
       isEndless: false,
-      
-      difficulty: 'normal',
+      difficulty: DifficultyLevel.NORMAL,
       maxWaves: 10,
       elapsedTime: 0,
       consecutiveWavesWithoutLeak: 0,
       highestWave: 0,
       activeModifiers: new Set(),
-    } as any);
+    });
   }
 
   beforeEach(() => {
@@ -267,12 +267,13 @@ describe('CombatLoopService', () => {
 
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
+        ...INITIAL_GAME_STATE,
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, difficulty: 'normal',
+        isEndless: false, difficulty: DifficultyLevel.NORMAL,
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
-      } as any));
+      }));
 
       service.resolveTurn(scene);
 
@@ -303,12 +304,13 @@ describe('CombatLoopService', () => {
 
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
+        ...INITIAL_GAME_STATE,
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 2, lives: 9, gold: 100, score: 0, isPaused: false,
-        isEndless: false, difficulty: 'normal',
+        isEndless: false, difficulty: DifficultyLevel.NORMAL,
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
-      } as any));
+      }));
 
       service.resolveTurn(scene);
 
@@ -585,14 +587,15 @@ describe('CombatLoopService', () => {
     it('should set defeatTriggered = true when phase becomes DEFEAT after leak', () => {
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
+        ...INITIAL_GAME_STATE,
         // call 0: waveAtTurnStart → COMBAT
         // call 1: currentPhase after leaks → DEFEAT
         phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
         wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
-        isEndless: false, difficulty: 'normal',
+        isEndless: false, difficulty: DifficultyLevel.NORMAL,
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
-      } as any));
+      }));
       enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
       enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy({ id: 'e1' })]]));
 
@@ -604,12 +607,13 @@ describe('CombatLoopService', () => {
     it('should record game end on DEFEAT', () => {
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
+        ...INITIAL_GAME_STATE,
         phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
         wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
-        isEndless: false, difficulty: 'normal',
+        isEndless: false, difficulty: DifficultyLevel.NORMAL,
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
-      } as any));
+      }));
       enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
       enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy({ id: 'e1' })]]));
 
@@ -622,12 +626,13 @@ describe('CombatLoopService', () => {
       gameEndSpy.isRecorded.and.returnValue(true);
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
+        ...INITIAL_GAME_STATE,
         phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
         wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
-        isEndless: false, difficulty: 'normal',
+        isEndless: false, difficulty: DifficultyLevel.NORMAL,
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
-      } as any));
+      }));
       enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
       enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy({ id: 'e1' })]]));
 
@@ -639,12 +644,13 @@ describe('CombatLoopService', () => {
     it('should set result.gameEnd with isVictory=false on defeat', () => {
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
+        ...INITIAL_GAME_STATE,
         phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
         wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
-        isEndless: false, difficulty: 'normal',
+        isEndless: false, difficulty: DifficultyLevel.NORMAL,
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
-      } as any));
+      }));
       enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
       enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy({ id: 'e1' })]]));
       gameEndSpy.recordEnd.and.returnValue({
@@ -680,13 +686,14 @@ describe('CombatLoopService', () => {
       gameStateSpy.awardInterest.and.returnValue(0);
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
+        ...INITIAL_GAME_STATE,
         phase: callCount++ < 2 ? GamePhase.COMBAT : resultPhase,
         wave,
         lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, difficulty: 'normal',
+        isEndless: false, difficulty: DifficultyLevel.NORMAL,
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
-      } as any));
+      }));
     }
 
     it('should call completeWave with the wave reward', () => {
@@ -813,12 +820,13 @@ describe('CombatLoopService', () => {
       //   call 2: postWavePhase after completeWave → INTERMISSION
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
+        ...INITIAL_GAME_STATE,
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 1, lives: 9, gold: 100, score: 0, isPaused: false,
-        isEndless: false, difficulty: 'normal',
+        isEndless: false, difficulty: DifficultyLevel.NORMAL,
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
-      } as any));
+      }));
 
       // Enemy leaks this turn AND wave clears (getLivingEnemyCount=0 after removing leaker)
       const enemy = makeEnemy({ id: 'e1' });
@@ -865,12 +873,13 @@ describe('CombatLoopService', () => {
       // Phase becomes DEFEAT after a catastrophic leak — wave completion should not fire
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
+        ...INITIAL_GAME_STATE,
         phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
         wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
-        isEndless: false, difficulty: 'normal',
+        isEndless: false, difficulty: DifficultyLevel.NORMAL,
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
-      } as any));
+      }));
       waveSpy.isSpawning.and.returnValue(false);
       enemySpy.getLivingEnemyCount.and.returnValue(0);
       const enemy = makeEnemy({ id: 'e1' });
@@ -1057,12 +1066,13 @@ describe('CombatLoopService', () => {
       gameStateSpy.awardInterest.and.returnValue(0);
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
+        ...INITIAL_GAME_STATE,
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, difficulty: 'normal',
+        isEndless: false, difficulty: DifficultyLevel.NORMAL,
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
-      } as any));
+      }));
 
       const result = service.resolveTurn(scene);
 
@@ -1105,12 +1115,13 @@ describe('CombatLoopService', () => {
       gameStateSpy.awardInterest.and.returnValue(0);
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
+        ...INITIAL_GAME_STATE,
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 3, lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, difficulty: 'normal',
+        isEndless: false, difficulty: DifficultyLevel.NORMAL,
         maxWaves: 10, elapsedTime: 3, consecutiveWavesWithoutLeak: 3,
         highestWave: 0, activeModifiers: new Set(),
-      } as any));
+      }));
 
       const result = service.resolveTurn(scene);
 
@@ -1130,12 +1141,13 @@ describe('CombatLoopService', () => {
       gameStateSpy.awardInterest.and.returnValue(0);
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
+        ...INITIAL_GAME_STATE,
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, difficulty: 'normal',
+        isEndless: false, difficulty: DifficultyLevel.NORMAL,
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
-      } as any));
+      }));
 
       service.resolveTurn(scene);
 
@@ -1148,12 +1160,13 @@ describe('CombatLoopService', () => {
       enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
+        ...INITIAL_GAME_STATE,
         phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
         wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
-        isEndless: false, difficulty: 'normal',
+        isEndless: false, difficulty: DifficultyLevel.NORMAL,
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
-      } as any));
+      }));
 
       const result = service.resolveTurn(scene);
 
@@ -1172,12 +1185,13 @@ describe('CombatLoopService', () => {
       gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [], completedChallenges: [] });
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
+        ...INITIAL_GAME_STATE,
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.VICTORY,
         wave: 10, lives: 10, gold: 100, score: 500, isPaused: false,
-        isEndless: false, difficulty: 'normal',
+        isEndless: false, difficulty: DifficultyLevel.NORMAL,
         maxWaves: 10, elapsedTime: 60, consecutiveWavesWithoutLeak: 5,
         highestWave: 0, activeModifiers: new Set(),
-      } as any));
+      }));
 
       const result = service.resolveTurn(scene);
 
@@ -1408,11 +1422,12 @@ describe('CombatLoopService', () => {
 
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
+        ...INITIAL_GAME_STATE,
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, difficulty: 'normal', maxWaves: 10, elapsedTime: 0,
+        isEndless: false, difficulty: DifficultyLevel.NORMAL, maxWaves: 10, elapsedTime: 0,
         consecutiveWavesWithoutLeak: 0, highestWave: 0, activeModifiers: new Set(),
-      } as any));
+      }));
     }
 
     it('awards surveyor gold via addGoldAndScore when consumeSurveyorGold returns > 0', () => {

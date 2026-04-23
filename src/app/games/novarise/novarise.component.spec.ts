@@ -7,8 +7,10 @@ import { MapStorageService } from '../../core/services/map-storage.service';
 import { CameraControlService, JoystickInput, MovementInput, RotationInput } from './core/camera-control.service';
 import { EditorStateService } from './core/editor-state.service';
 import { EditHistoryService } from './core/edit-history.service';
-import { PathValidationService } from './core/path-validation.service';
+import { PathValidationService, PathValidationResult } from './core/path-validation.service';
 import { MapTemplateService } from '../../core/services/map-template.service';
+import { TerrainGrid } from './features/terrain-editor/terrain-grid.class';
+import { TerrainGridState } from './features/terrain-editor/terrain-grid-state.interface';
 import { EditorSceneService } from './core/editor-scene.service';
 import { EditorNotificationService } from './core/editor-notification.service';
 import { TerrainEditService } from './core/terrain-edit.service';
@@ -22,10 +24,19 @@ import { JoystickEvent } from './features/mobile-controls';
 
 /**
  * Typed access to private members needed for test setup/assertion.
+ * Local to this spec only — do not export or share.
  */
 interface TestableNovarise {
   movementJoystick: JoystickInput;
   rotationJoystick: JoystickInput;
+  contextLost: boolean;
+  pathValidationResult: PathValidationResult;
+  saveGridState(): void;
+}
+
+/** Typed access to private EditorModalService members needed in tests. */
+interface TestableEditorModal {
+  modalCallback: ((result: string | boolean | number | null) => void) | null;
 }
 
 /**
@@ -420,13 +431,13 @@ describe('NovariseComponent', () => {
     });
 
     it('setting contextLost to true should be reflected on the component', () => {
-      (component as any).contextLost = true;
+      (component as unknown as TestableNovarise).contextLost = true;
       expect(component.contextLost).toBeTrue();
     });
 
     it('setting contextLost back to false should be reflected on the component', () => {
-      (component as any).contextLost = true;
-      (component as any).contextLost = false;
+      (component as unknown as TestableNovarise).contextLost = true;
+      (component as unknown as TestableNovarise).contextLost = false;
       expect(component.contextLost).toBeFalse();
     });
   });
@@ -576,7 +587,7 @@ describe('NovariseComponent', () => {
         component.editorModal.showConfirmModal('Test', () => {});
         component.closeModal();
         expect(component.showModal).toBeFalse();
-        expect((component.editorModal as any).modalCallback).toBeNull();
+        expect((component.editorModal as unknown as TestableEditorModal).modalCallback).toBeNull();
       });
     });
   });
@@ -599,7 +610,7 @@ describe('NovariseComponent', () => {
     it('saveDraft writes grid state to localStorage via MapFileService', () => {
       const mapFile: MapFileService = TestBed.inject(MapFileService);
       const fakeState = { gridSize: 25, tiles: [], heightMap: [], spawnPoints: [], exitPoints: [], version: '2' };
-      const mockGrid = { exportState: () => fakeState, dispose: () => {} } as any;
+      const mockGrid = { exportState: () => fakeState, dispose: () => {} } as unknown as TerrainGrid;
       mapFile.setTerrainGrid(mockGrid);
 
       mapFile.saveDraft();
@@ -618,7 +629,7 @@ describe('NovariseComponent', () => {
       const mapFile: MapFileService = TestBed.inject(MapFileService);
       const fakeState = { gridSize: 25, tiles: [], heightMap: [], spawnPoints: [], exitPoints: [], version: '2' };
       localStorage.setItem(DRAFT_KEY, JSON.stringify(fakeState));
-      expect(mapFile.loadDraft()).toEqual(fakeState as any);
+      expect(mapFile.loadDraft()).toEqual(fakeState as unknown as TerrainGridState);
     });
 
     it('loadDraft returns null when draft JSON is malformed', () => {
@@ -685,11 +696,12 @@ describe('NovariseComponent', () => {
 
     it('should not call mapStorage.saveMap when path is invalid, spawn+exit exist, and user cancels confirm modal', () => {
       // Arrange: path invalid, spawn and exit present
-      (component as any).pathValidationResult = { valid: false };
+      const cmp = component as unknown as TestableNovarise;
+      cmp.pathValidationResult = { valid: false };
       spyOnProperty(component, 'hasSpawnAndExit').and.returnValue(true);
 
       // Act: trigger saveGridState — it should open a confirm modal
-      (component as any).saveGridState();
+      cmp.saveGridState();
 
       // Confirm modal is open, then user cancels
       expect(component.showModal).toBeTrue();
@@ -702,10 +714,11 @@ describe('NovariseComponent', () => {
 
     it('should open input modal after user confirms the path-invalid warning', () => {
       // Arrange: path invalid, spawn and exit present
-      (component as any).pathValidationResult = { valid: false };
+      const cmp = component as unknown as TestableNovarise;
+      cmp.pathValidationResult = { valid: false };
       spyOnProperty(component, 'hasSpawnAndExit').and.returnValue(true);
 
-      (component as any).saveGridState();
+      cmp.saveGridState();
 
       // User confirms the "save anyway?" dialog
       expect(component.modalType).toBe('confirm');
@@ -718,14 +731,15 @@ describe('NovariseComponent', () => {
 
     it('should call mapFile.save when path is invalid and user confirms both dialogs', () => {
       // Arrange
-      (component as any).pathValidationResult = { valid: false };
+      const cmp = component as unknown as TestableNovarise;
+      cmp.pathValidationResult = { valid: false };
       spyOnProperty(component, 'hasSpawnAndExit').and.returnValue(true);
 
       const mapFile: MapFileService = TestBed.inject(MapFileService);
       const saveSpy = spyOn(mapFile, 'save').and.returnValue(true);
 
       // Act
-      (component as any).saveGridState();
+      cmp.saveGridState();
       component.confirmModal(); // confirm "save anyway?"
       component.modalInputValue = 'My Map';
       component.confirmModal(); // confirm map name
@@ -736,10 +750,11 @@ describe('NovariseComponent', () => {
 
     it('should open input modal directly (no confirm) when path is valid', () => {
       // Arrange: path valid — no guard dialog
-      (component as any).pathValidationResult = { valid: true };
+      const cmp = component as unknown as TestableNovarise;
+      cmp.pathValidationResult = { valid: true };
 
       // Act
-      (component as any).saveGridState();
+      cmp.saveGridState();
 
       // Input modal opens immediately — no confirm step
       expect(component.showModal).toBeTrue();
@@ -748,13 +763,14 @@ describe('NovariseComponent', () => {
 
     it('should call mapFile.save when path is valid and user enters a name', () => {
       // Arrange
-      (component as any).pathValidationResult = { valid: true };
+      const cmp = component as unknown as TestableNovarise;
+      cmp.pathValidationResult = { valid: true };
 
       const mapFile: MapFileService = TestBed.inject(MapFileService);
       const saveSpy = spyOn(mapFile, 'save').and.returnValue(true);
 
       // Act
-      (component as any).saveGridState();
+      cmp.saveGridState();
       component.modalInputValue = 'Valid Map';
       component.confirmModal();
 
