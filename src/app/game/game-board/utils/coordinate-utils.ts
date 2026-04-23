@@ -53,6 +53,25 @@ export function dist2d(ax: number, az: number, bx: number, bz: number): number {
   return Math.sqrt(dx * dx + dz * dz);
 }
 
+/**
+ * Returns true if (row, col) is inside the grid [0, height) × [0, width).
+ * Use for all grid-bounds guards; consolidates an 8-site pattern.
+ */
+export function isInBounds(row: number, col: number, height: number, width: number): boolean {
+  return row >= 0 && row < height && col >= 0 && col < width;
+}
+
+/**
+ * In-place Fisher-Yates shuffle using the provided RNG (for determinism).
+ * Mutates the array; does not return.
+ */
+export function shuffleInPlace<T>(arr: T[], rng: () => number): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
 /** Convert world x/z back to grid row/col (rounded to nearest tile). */
 export function worldToGrid(
   worldX: number,

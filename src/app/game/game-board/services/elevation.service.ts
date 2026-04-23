@@ -2,6 +2,7 @@ import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 
 import { GameBoardService } from '../game-board.service';
+import { isInBounds } from '../utils/coordinate-utils';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { BlockType } from '../models/game-board-tile';
 import { BOARD_CONFIG } from '../constants/board.constants';
@@ -353,7 +354,7 @@ export class ElevationService {
     const boardWidth = this.gameBoardService.getBoardWidth();
 
     // Bounds
-    if (row < 0 || row >= boardHeight || col < 0 || col >= boardWidth) {
+    if (!isInBounds(row, col, boardHeight, boardWidth)) {
       return 'out-of-bounds';
     }
 

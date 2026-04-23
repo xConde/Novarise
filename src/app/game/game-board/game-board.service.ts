@@ -4,6 +4,7 @@ import { BlockType, GameBoardTile, SpawnerType } from './models/game-board-tile'
 import { TowerType } from './models/tower.model';
 import { BOARD_CONFIG } from './constants/board.constants';
 import { assertNever } from './utils/assert-never';
+import { isInBounds } from './utils/coordinate-utils';
 import { MutationOp } from './services/path-mutation.types';
 import { TerraformMaterialPoolService } from './services/terraform-material-pool.service';
 
@@ -114,7 +115,7 @@ export class GameBoardService {
    * Returns the new tile for the caller to act on (e.g. mesh translate).
    */
   setTileElevation(row: number, col: number, newElevation: number): GameBoardTile | null {
-    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+    if (!isInBounds(row, col, this.gameBoardHeight, this.gameBoardWidth)) {
       return null;
     }
 
@@ -314,7 +315,7 @@ export class GameBoardService {
 
   // Tower placement
   canPlaceTower(row: number, col: number): boolean {
-    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+    if (!isInBounds(row, col, this.gameBoardHeight, this.gameBoardWidth)) {
       return false;
     }
 
@@ -465,7 +466,7 @@ export class GameBoardService {
    * towers are placed one-by-one before the full saved layout is reconstructed.
    */
   forceSetTower(row: number, col: number, towerType: TowerType): void {
-    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+    if (!isInBounds(row, col, this.gameBoardHeight, this.gameBoardWidth)) {
       return;
     }
     // Preserve elevation — same fix class as Phase 3 red-team Finding 1.
@@ -485,7 +486,7 @@ export class GameBoardService {
   }
 
   removeTower(row: number, col: number): boolean {
-    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+    if (!isInBounds(row, col, this.gameBoardHeight, this.gameBoardWidth)) {
       return false;
     }
 
@@ -520,7 +521,7 @@ export class GameBoardService {
     mutationOp: MutationOp,
     priorType?: BlockType,
   ): GameBoardTile | null {
-    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+    if (!isInBounds(row, col, this.gameBoardHeight, this.gameBoardWidth)) {
       return null;
     }
 

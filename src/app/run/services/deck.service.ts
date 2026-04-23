@@ -9,6 +9,7 @@ import {
   EnergyState,
 } from '../models/card.model';
 import { getCardDefinition, getEffectiveEnergyCost } from '../constants/card-definitions';
+import { shuffleInPlace } from '../../game/game-board/utils/coordinate-utils';
 import { SeededRng, createSeededRng } from '../constants/run.constants';
 import { SerializableDeckState } from '../../game/game-board/models/encounter-checkpoint.model';
 import { RelicService } from './relic.service';
@@ -448,10 +449,7 @@ export class DeckService {
   private shuffle(cards: CardInstance[]): CardInstance[] {
     const rng: () => number = this.rng ? () => this.rng!.next() : Math.random;
     const arr = [...cards];
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
+    shuffleInPlace(arr, rng);
     return arr;
   }
 

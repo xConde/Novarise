@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 
 import { GameBoardService } from '../game-board.service';
+import { isInBounds } from '../utils/coordinate-utils';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { PathfindingService } from './pathfinding.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
@@ -420,7 +421,7 @@ export class PathMutationService {
     const boardWidth = this.gameBoardService.getBoardWidth();
 
     // Bounds
-    if (row < 0 || row >= boardHeight || col < 0 || col >= boardWidth) {
+    if (!isInBounds(row, col, boardHeight, boardWidth)) {
       return 'out-of-bounds';
     }
 

@@ -3,7 +3,7 @@ import { Injectable } from '@angular/core';
 import { GameBoardService } from '../game-board.service';
 import { ElevationService } from './elevation.service';
 import { BOARD_CONFIG } from '../constants/board.constants';
-import { gridToWorld, worldToGrid } from '../utils/coordinate-utils';
+import { gridToWorld, worldToGrid, isInBounds } from '../utils/coordinate-utils';
 
 /**
  * Geometric line-of-sight service for the Highground archetype.
@@ -74,10 +74,7 @@ export class LineOfSightService {
 
     // Defensive: if enemy resolves exactly outside bounds (before clamping mattered),
     // the original coordinates were invalid — return true and let range check handle it.
-    if (
-      enemyGrid.row < 0 || enemyGrid.row >= boardHeight ||
-      enemyGrid.col < 0 || enemyGrid.col >= boardWidth
-    ) {
+    if (!isInBounds(enemyGrid.row, enemyGrid.col, boardHeight, boardWidth)) {
       return true;
     }
 

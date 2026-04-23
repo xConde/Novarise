@@ -90,6 +90,7 @@ import { LinkMeshService } from './services/link-mesh.service';
 import { ELEVATION_CONFIG } from './constants/elevation.constants';
 import { BlockType } from './models/game-board-tile';
 import { BOARD_CONFIG } from './constants/board.constants';
+import { shuffleInPlace } from './utils/coordinate-utils';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
 export interface EnemyBadge {
@@ -1799,10 +1800,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     let placed = 0;
     // Fisher-Yates shuffle using runService.nextRandom() for determinism.
-    for (let i = candidates.length - 1; i > 0; i--) {
-      const j = Math.floor(this.runService.nextRandom() * (i + 1));
-      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
-    }
+    shuffleInPlace(candidates, () => this.runService.nextRandom());
 
     for (const { row, col } of candidates) {
       if (placed >= ELEVATION_CONFIG.SURVEYOR_ROD_TILE_COUNT) break;
