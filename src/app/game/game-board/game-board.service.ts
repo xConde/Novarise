@@ -440,7 +440,8 @@ export class GameBoardService {
       return false;
     }
 
-    // Mark the tile as occupied with a tower and non-traversable
+    // Mark the tile as occupied with a tower and non-traversable.
+    // Preserve elevation — same fix class as Phase 3 red-team Finding 1.
     const oldTile = this.gameBoard[row][col];
     this.gameBoard[row][col] = new GameBoardTile(
       oldTile.x,
@@ -449,7 +450,10 @@ export class GameBoardService {
       false,
       false,
       oldTile.cost,
-      towerType
+      towerType,
+      undefined,
+      undefined,
+      oldTile.elevation,
     );
 
     return true;
@@ -464,6 +468,7 @@ export class GameBoardService {
     if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
       return;
     }
+    // Preserve elevation — same fix class as Phase 3 red-team Finding 1.
     const oldTile = this.gameBoard[row][col];
     this.gameBoard[row][col] = new GameBoardTile(
       oldTile.x,
@@ -472,7 +477,10 @@ export class GameBoardService {
       false,
       false,
       oldTile.cost,
-      towerType
+      towerType,
+      undefined,
+      undefined,
+      oldTile.elevation,
     );
   }
 
@@ -560,7 +568,9 @@ export class GameBoardService {
 
     const originalTile = this.gameBoard[row][col];
 
-    // Temporarily substitute the proposed tile type
+    // Temporarily substitute the proposed tile type.
+    // Elevation is intentionally omitted — this is a throwaway BFS probe tile;
+    // only isTraversable matters for pathfinding, and elevation does not affect it.
     const traversable = type === BlockType.BASE || type === BlockType.EXIT;
     this.gameBoard[row][col] = new GameBoardTile(
       originalTile.x,
