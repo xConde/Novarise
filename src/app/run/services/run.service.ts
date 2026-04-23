@@ -217,6 +217,10 @@ export class RunService {
     return this.runRng ? this.runRng.next() : Math.random();
   }
 
+  private getRng(): () => number {
+    return this.runRng ? () => this.runRng!.next() : Math.random;
+  }
+
   // ── Run Lifecycle ───────────────────────────────────────
 
   /** Start a new run with a fresh seed. */
@@ -433,7 +437,7 @@ export class RunService {
     // Use lastCompletedEncounter — consumePendingEncounterResult() nulls currentEncounter
     // before generateRewards() is called (per run.component.ts handleEncounterReturn ordering).
     const encounter = this.lastCompletedEncounter;
-    const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
+    const rng = this.getRng();
 
     const baseGold = encounter?.goldReward ?? 0;
 
@@ -641,14 +645,14 @@ export class RunService {
     this.updateState({
       ...state,
       lives: newLives,
-      completedNodeIds: [...state.completedNodeIds, state.currentNodeId!],
+      completedNodeIds: this.computeNodeCompletedArray(state),
     });
     this.persist();
   }
 
   /** Shop: generate shop items for the current node. */
   generateShopItems(): void {
-    const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
+    const rng = this.getRng();
     const state = this.runState;
     if (!state) return;
 
@@ -828,7 +832,7 @@ export class RunService {
     // Gamble: if the outcome has a gamble field, roll rng to determine gold delta.
     let resolvedGoldDelta: number;
     if (outcome.gamble) {
-      const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
+      const rng = this.getRng();
       const won = rng() < outcome.gamble.winChance;
       resolvedGoldDelta = won ? outcome.gamble.winGoldDelta : outcome.gamble.loseGoldDelta;
     } else {
@@ -880,7 +884,7 @@ export class RunService {
       gold: newGold,
       relicIds: newRelicIds,
       status: newStatus,
-      completedNodeIds: [...state.completedNodeIds, state.currentNodeId!],
+      completedNodeIds: this.computeNodeCompletedArray(state),
     });
 
     this.relicService.setActiveRelics(newRelicIds);
@@ -902,14 +906,14 @@ export class RunService {
     const pool = nonStarters.length > 0 ? nonStarters : allCards;
     if (pool.length === 0) return;
 
-    const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
+    const rng = this.getRng();
     const index = Math.floor(rng() * pool.length);
     this.deckService.removeCard(pool[index].instanceId);
   }
 
   /** Generate a random event for the current node. */
   generateEvent(): void {
-    const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
+    const rng = this.getRng();
 
     // Filter eligible events by run-state flag requirements and once-per-run consumption.
     const eligibleEvents = RUN_EVENTS.filter(e => {
@@ -936,7 +940,7 @@ export class RunService {
     const map = this.nodeMap;
     if (!map) return NodeType.COMBAT;
 
-    const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
+    const rng = this.getRng();
     const roll = rng();
 
     // Unknown nodes reveal as: combat (50%), event (25%), shop (15%), rest (10%)
@@ -1044,17 +1048,24 @@ export class RunService {
     return result;
   }
 
+  /**
+   * Returns a new completedNodeIds array with the current node appended, or the
+   * original array if the node is already present (idempotency guard). Safe to
+   * embed directly inside an updateState() spread to avoid a second emission.
+   */
+  private computeNodeCompletedArray(state: RunState): string[] {
+    const id = state.currentNodeId;
+    if (!id || state.completedNodeIds.includes(id)) return state.completedNodeIds;
+    return [...state.completedNodeIds, id];
+  }
+
   private markCurrentNodeCompleted(): void {
     const state = this.runState;
-    if (!state || !state.currentNodeId) return;
-
-    if (!state.completedNodeIds.includes(state.currentNodeId)) {
-      this.updateState({
-        ...state,
-        completedNodeIds: [...state.completedNodeIds, state.currentNodeId],
-      });
-      this.persist();
-    }
+    if (!state) return;
+    const updated = this.computeNodeCompletedArray(state);
+    if (updated === state.completedNodeIds) return; // already present — no-op
+    this.updateState({ ...state, completedNodeIds: updated });
+    this.persist();
   }
 
   /**
@@ -1067,7 +1078,7 @@ export class RunService {
     const downgrade = ascEffects.get(AscensionEffectType.STARTING_RELIC_DOWNGRADE) ?? 0;
     if (downgrade <= 0) return;
 
-    const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
+    const rng = this.getRng();
     const pool = this.relicService.getAvailableRelics(RelicRarity.COMMON);
     if (pool.length === 0) return;
 

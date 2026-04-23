@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, fromEvent, merge } from 'rxjs';
+import { BehaviorSubject, Observable, Subscription, fromEvent, merge } from 'rxjs';
 import { map, distinctUntilChanged, startWith } from 'rxjs/operators';
 import { JOYSTICK_BREAKPOINTS } from '../models/joystick.types';
 
@@ -20,11 +20,13 @@ export interface DeviceInfo {
 })
 export class TouchDetectionService {
   private deviceInfo$ = new BehaviorSubject<DeviceInfo>(this.detectDevice());
+  // Root-scoped — no ngOnDestroy needed. Field captured for discoverability and testability.
+  private readonly resizeSub: Subscription | null;
 
   constructor() {
     // Listen for resize and orientation changes
     if (typeof window !== 'undefined') {
-      merge(
+      this.resizeSub = merge(
         fromEvent(window, 'resize'),
         fromEvent(window, 'orientationchange')
       ).pipe(
@@ -32,6 +34,8 @@ export class TouchDetectionService {
         map(() => this.detectDevice()),
         distinctUntilChanged((a, b) => JSON.stringify(a) === JSON.stringify(b))
       ).subscribe(info => this.deviceInfo$.next(info));
+    } else {
+      this.resizeSub = null;
     }
   }
 
