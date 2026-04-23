@@ -1,4 +1,4 @@
-import { gridToWorld, worldToGrid } from './coordinate-utils';
+import { gridToWorld, worldToGrid, dist2d } from './coordinate-utils';
 
 describe('coordinate-utils', () => {
   const BOARD_WIDTH = 10;
@@ -62,6 +62,26 @@ describe('coordinate-utils', () => {
       const grid = worldToGrid(world.x, world.z, 12, 8, 1);
       expect(grid.row).toBe(2);
       expect(grid.col).toBe(6);
+    });
+  });
+
+  describe('dist2d', () => {
+    it('returns 0 for identical points', () => {
+      expect(dist2d(3, 7, 3, 7)).toBe(0);
+    });
+
+    it('returns √2 for (0,0) → (1,1)', () => {
+      expect(dist2d(0, 0, 1, 1)).toBeCloseTo(Math.sqrt(2), 10);
+    });
+
+    it('returns |dx| when dz is 0', () => {
+      expect(dist2d(0, 5, 4, 5)).toBe(4);
+    });
+
+    it('is symmetric: dist2d(a,b,c,d) === dist2d(c,d,a,b)', () => {
+      const forward = dist2d(1, 2, 5, 6);
+      const backward = dist2d(5, 6, 1, 2);
+      expect(forward).toBeCloseTo(backward, 10);
     });
   });
 });
