@@ -77,40 +77,6 @@
   }
 }
 
-// ── Danger variant ────────────────────────────────────────────────────────────
-
-.run-btn--danger {
-  background: var(--action-danger-bg);
-  border-color: var(--action-danger-border);
-  color: var(--action-danger);
-
-  &:hover:not(:disabled) {
-    background: var(--action-danger-bg);
-    filter: brightness(1.5);
-    border-color: var(--action-danger);
-  }
-}
-
-// ── Shared panel ──────────────────────────────────────────────────────────────
-
-.run-panel {
-  background: var(--glass-bg);
-  border: var(--border-width-thin) solid var(--theme-purple-a50);
-  border-radius: var(--border-radius-lg);
-  padding: var(--spacing-lg);
-}
-
-// ── Shared section label ──────────────────────────────────────────────────────
-
-.run-section-label {
-  font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-2xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1rem;
-  color: var(--text-dim);
-}
-
 // ── Reduced motion ────────────────────────────────────────────────────────────
 
 @media (prefers-reduced-motion: reduce) {

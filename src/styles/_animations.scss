@@ -115,7 +115,6 @@
 body.reduce-motion .tutorial-target-highlight,
 body.reduce-motion .tutorial-card,
 body.reduce-motion .toast,
-body.reduce-motion .board-container .overlay-content .overlay-star.filled,
 body.reduce-motion .board-container .mode-indicator,
 body.reduce-motion .board-container .wave-preview .wave-income,
 body.reduce-motion .board-container .pause-overlay,
@@ -124,7 +123,4 @@ body.reduce-motion .board-container .wave-preview,
 body.reduce-motion .board-container .wave-clear-banner,
 body.reduce-motion .wave-start-pulse {
   animation: none !important;
-}
-body.reduce-motion .board-container .overlay-content .overlay-star.filled {
-  opacity: 1;
 }

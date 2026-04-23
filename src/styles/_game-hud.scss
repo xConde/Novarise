@@ -364,27 +364,6 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
   animation: none;
 }
 
-/* ===== Campaign identity — HUD level name ===== */
-.hud-level-name {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 0.55rem;
-  font-weight: 600;
-  color: rgba(200, 184, 255, 0.65);
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  align-self: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 8rem;
-}
-
-@media (max-width: 480px) {
-  .hud-level-name {
-    display: none;
-  }
-}
-
 /* ===== Toast notification system ===== */
 .toast-stack {
   position: fixed;

@@ -48,13 +48,6 @@ app-profile, app-settings {
   }
 }
 
-/* Campaign scrolls — container handles its own overflow */
-app-campaign {
-  flex: 1;
-  overflow: hidden;
-  display: block;
-}
-
 /* Typography */
 h1, h2, h3, h4, h5, h6 {
   margin: 0;
@@ -66,13 +59,6 @@ p {
   margin: 0;
   line-height: 1.5;
 }
-
-/* Utility Classes */
-.text-hero { font-size: var(--font-size-hero); }
-.text-large { font-size: var(--font-size-large); }
-.text-title { font-size: var(--font-size-title); }
-.text-base { font-size: var(--font-size-base); }
-.text-small { font-size: var(--font-size-small); }
 
 /* Accessibility */
 .sr-only {
