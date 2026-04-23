@@ -312,4 +312,176 @@ describe('TerrainEditService', () => {
       expect(targets.length).toBe(9); // 3x3
     });
   });
+
+  // ── applySpawnExitPlacement() ──────────────────────────────────────────────
+  //
+  // Note: TerrainGrid (size 5) initialises with one default spawn at (0,2) and
+  // one default exit at (4,2). Tests must account for this baseline state.
+
+  describe('applySpawnExitPlacement()', () => {
+    /** Helper: build a callback-capture object to assert which callbacks fired. */
+    function makeCallbacks(): { accepted: boolean; rejected: boolean; completed: boolean } {
+      return { accepted: false, rejected: false, completed: false };
+    }
+
+    describe('spawn mode — successful placement', () => {
+      it('adds a new spawn point to the terrain grid on a valid walkable tile', () => {
+        // Default spawn is at (0,2) — add a second at (1,1)
+        service.applySpawnExitPlacement('spawn', 1, 1, () => {}, () => {}, () => {});
+        expect(terrainGrid.getSpawnPoints()).toContain(jasmine.objectContaining({ x: 1, z: 1 }));
+      });
+
+      it('calls onAccepted (not onRejected) on valid placement', () => {
+        const cbs = makeCallbacks();
+        service.applySpawnExitPlacement('spawn', 1, 1, () => { cbs.accepted = true; }, () => { cbs.rejected = true; }, () => {});
+        expect(cbs.accepted).toBeTrue();
+        expect(cbs.rejected).toBeFalse();
+      });
+
+      it('calls onComplete after successful spawn placement', () => {
+        const cbs = makeCallbacks();
+        service.applySpawnExitPlacement('spawn', 1, 1, () => {}, () => {}, () => { cbs.completed = true; });
+        expect(cbs.completed).toBeTrue();
+      });
+
+      it('records an undo command for spawn placement', () => {
+        service.applySpawnExitPlacement('spawn', 1, 1, () => {}, () => {}, () => {});
+        expect(editHistory.canUndo).toBeTrue();
+        expect(editHistory.nextUndoDescription).toBe('Set spawn point');
+      });
+
+      it('undo restores spawn points to previous snapshot', () => {
+        // Baseline: one default spawn at (0,2)
+        const spawnsBefore = terrainGrid.getSpawnPoints().map(p => ({ ...p }));
+        service.applySpawnExitPlacement('spawn', 1, 1, () => {}, () => {}, () => {});
+        expect(terrainGrid.getSpawnPoints().length).toBe(spawnsBefore.length + 1);
+        editHistory.undo();
+        // After undo, spawn array matches what we captured before the call
+        expect(terrainGrid.getSpawnPoints().length).toBe(spawnsBefore.length);
+        expect(terrainGrid.getSpawnPoints()).not.toContain(jasmine.objectContaining({ x: 1, z: 1 }));
+      });
+    });
+
+    describe('spawn mode — rejection cases', () => {
+      it('rejects placement on CRYSTAL terrain', () => {
+        // Use a tile that is NOT the default spawn/exit
+        terrainGrid.paintTile(2, 2, TerrainType.CRYSTAL);
+        const countBefore = terrainGrid.getSpawnPoints().length;
+        const cbs = makeCallbacks();
+        service.applySpawnExitPlacement('spawn', 2, 2, () => { cbs.accepted = true; }, () => { cbs.rejected = true; }, () => { cbs.completed = true; });
+        expect(cbs.rejected).toBeTrue();
+        expect(cbs.accepted).toBeFalse();
+        expect(cbs.completed).toBeFalse();
+        expect(terrainGrid.getSpawnPoints().length).toBe(countBefore);
+        expect(editHistory.canUndo).toBeFalse();
+      });
+
+      it('rejects placement on ABYSS terrain', () => {
+        terrainGrid.paintTile(2, 2, TerrainType.ABYSS);
+        const countBefore = terrainGrid.getSpawnPoints().length;
+        const cbs = makeCallbacks();
+        service.applySpawnExitPlacement('spawn', 2, 2, () => { cbs.accepted = true; }, () => { cbs.rejected = true; }, () => {});
+        expect(cbs.rejected).toBeTrue();
+        expect(terrainGrid.getSpawnPoints().length).toBe(countBefore);
+      });
+
+      it('rejects spawn placement on a tile already occupied by an exit', () => {
+        // Default exit lives at (4,2) — attempt to add spawn there
+        const countBefore = terrainGrid.getSpawnPoints().length;
+        const cbs = makeCallbacks();
+        service.applySpawnExitPlacement('spawn', 4, 2, () => { cbs.accepted = true; }, () => { cbs.rejected = true; }, () => {});
+        expect(cbs.rejected).toBeTrue();
+        expect(terrainGrid.getSpawnPoints().length).toBe(countBefore);
+        expect(editHistory.canUndo).toBeFalse();
+      });
+    });
+
+    describe('exit mode — successful placement', () => {
+      it('adds a new exit point to the terrain grid on a valid walkable tile', () => {
+        // Default exit is at (4,2) — add a second at (3,3)
+        service.applySpawnExitPlacement('exit', 3, 3, () => {}, () => {}, () => {});
+        expect(terrainGrid.getExitPoints()).toContain(jasmine.objectContaining({ x: 3, z: 3 }));
+      });
+
+      it('calls onAccepted (not onRejected) on valid exit placement', () => {
+        const cbs = makeCallbacks();
+        service.applySpawnExitPlacement('exit', 3, 3, () => { cbs.accepted = true; }, () => { cbs.rejected = true; }, () => {});
+        expect(cbs.accepted).toBeTrue();
+        expect(cbs.rejected).toBeFalse();
+      });
+
+      it('calls onComplete after successful exit placement', () => {
+        const cbs = makeCallbacks();
+        service.applySpawnExitPlacement('exit', 3, 3, () => {}, () => {}, () => { cbs.completed = true; });
+        expect(cbs.completed).toBeTrue();
+      });
+
+      it('records an undo command for exit placement', () => {
+        service.applySpawnExitPlacement('exit', 3, 3, () => {}, () => {}, () => {});
+        expect(editHistory.canUndo).toBeTrue();
+        expect(editHistory.nextUndoDescription).toBe('Set exit point');
+      });
+
+      it('undo restores exit points to previous snapshot', () => {
+        const exitsBefore = terrainGrid.getExitPoints().map(p => ({ ...p }));
+        service.applySpawnExitPlacement('exit', 3, 3, () => {}, () => {}, () => {});
+        expect(terrainGrid.getExitPoints().length).toBe(exitsBefore.length + 1);
+        editHistory.undo();
+        expect(terrainGrid.getExitPoints().length).toBe(exitsBefore.length);
+        expect(terrainGrid.getExitPoints()).not.toContain(jasmine.objectContaining({ x: 3, z: 3 }));
+      });
+    });
+
+    describe('exit mode — rejection cases', () => {
+      it('rejects placement on CRYSTAL terrain', () => {
+        terrainGrid.paintTile(2, 2, TerrainType.CRYSTAL);
+        const countBefore = terrainGrid.getExitPoints().length;
+        const cbs = makeCallbacks();
+        service.applySpawnExitPlacement('exit', 2, 2, () => { cbs.accepted = true; }, () => { cbs.rejected = true; }, () => {});
+        expect(cbs.rejected).toBeTrue();
+        expect(terrainGrid.getExitPoints().length).toBe(countBefore);
+        expect(editHistory.canUndo).toBeFalse();
+      });
+
+      it('rejects placement on ABYSS terrain', () => {
+        terrainGrid.paintTile(2, 2, TerrainType.ABYSS);
+        const countBefore = terrainGrid.getExitPoints().length;
+        const cbs = makeCallbacks();
+        service.applySpawnExitPlacement('exit', 2, 2, () => { cbs.accepted = true; }, () => { cbs.rejected = true; }, () => {});
+        expect(cbs.rejected).toBeTrue();
+        expect(terrainGrid.getExitPoints().length).toBe(countBefore);
+      });
+
+      it('rejects exit placement on a tile already occupied by a spawn', () => {
+        // Default spawn lives at (0,2) — attempt to add exit there
+        const countBefore = terrainGrid.getExitPoints().length;
+        const cbs = makeCallbacks();
+        service.applySpawnExitPlacement('exit', 0, 2, () => { cbs.accepted = true; }, () => { cbs.rejected = true; }, () => {});
+        expect(cbs.rejected).toBeTrue();
+        expect(terrainGrid.getExitPoints().length).toBe(countBefore);
+        expect(editHistory.canUndo).toBeFalse();
+      });
+    });
+
+    describe('overwrite / toggle semantics', () => {
+      it('adding two spawns on different walkable tiles accumulates both', () => {
+        // Grid starts with spawn at (0,2)
+        service.applySpawnExitPlacement('spawn', 1, 1, () => {}, () => {}, () => {});
+        service.applySpawnExitPlacement('spawn', 2, 0, () => {}, () => {}, () => {});
+        const spawns = terrainGrid.getSpawnPoints();
+        expect(spawns.some(p => p.x === 1 && p.z === 1)).toBeTrue();
+        expect(spawns.some(p => p.x === 2 && p.z === 0)).toBeTrue();
+      });
+
+      it('spawn and exit can coexist on adjacent tiles without conflict', () => {
+        const spawnsBefore = terrainGrid.getSpawnPoints().length;
+        const exitsBefore = terrainGrid.getExitPoints().length;
+        // Add a second spawn and a second exit on tiles that don't conflict
+        service.applySpawnExitPlacement('spawn', 1, 0, () => {}, () => {}, () => {});
+        service.applySpawnExitPlacement('exit', 2, 0, () => {}, () => {}, () => {});
+        expect(terrainGrid.getSpawnPoints().length).toBe(spawnsBefore + 1);
+        expect(terrainGrid.getExitPoints().length).toBe(exitsBefore + 1);
+      });
+    });
+  });
 });

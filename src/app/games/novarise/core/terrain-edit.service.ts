@@ -5,9 +5,12 @@ import {
   EditHistoryService,
   PaintCommand,
   HeightCommand,
+  SpawnPointCommand,
+  ExitPointCommand,
   TileState,
 } from './edit-history.service';
-import { EditorStateService } from './editor-state.service';
+import { EditorStateService, EditMode } from './editor-state.service';
+import { TerrainType } from '../models/terrain-types.enum';
 import {
   EDITOR_FLOOD_FILL_MAX_ITERATIONS,
   EDITOR_HEIGHT,
@@ -265,6 +268,103 @@ export class TerrainEditService {
     }
 
     return flashTargets;
+  }
+
+  // ── Spawn / exit placement ─────────────────────────────────────────────────
+
+  /**
+   * Handle spawn-point or exit-point placement for a single tile.
+   *
+   * Validates the target tile (rejects non-walkable terrain and
+   * same-tile-as-the-opposite-marker placements), mutates the TerrainGrid,
+   * records an undo command, and calls the provided callbacks so the component
+   * can sync visual markers and run path validation without this service
+   * knowing about Three.js meshes.
+   *
+   * @param mode       - 'spawn' or 'exit'
+   * @param x          - grid column of the target tile
+   * @param z          - grid row of the target tile
+   * @param onAccepted - called when placement succeeded; component flashes the tile
+   *                     and updates marker meshes
+   * @param onRejected - called when placement was rejected; component flashes the
+   *                     rejection indicator on the relevant marker mesh
+   * @param onComplete - called after a successful placement; component runs path
+   *                     validation
+   */
+  applySpawnExitPlacement(
+    mode: Extract<EditMode, 'spawn' | 'exit'>,
+    x: number,
+    z: number,
+    onAccepted: () => void,
+    onRejected: () => void,
+    onComplete: () => void,
+  ): void {
+    const tile = this.terrainGrid.getTileAt(x, z);
+
+    // Reject placement on non-walkable terrain (crystal or abyss)
+    if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
+      onRejected();
+      return;
+    }
+
+    if (mode === 'spawn') {
+      // Reject placement on the same tile as any existing exit
+      const exitPoints = this.terrainGrid.getExitPoints();
+      if (exitPoints.some(ep => ep.x === x && ep.z === z)) {
+        onRejected();
+        return;
+      }
+
+      // Snapshot full spawn array before toggle for undo
+      const previousSpawns = this.terrainGrid.getSpawnPoints().map(p => ({ ...p }));
+      this.terrainGrid.addSpawnPoint(x, z);
+      onAccepted();
+
+      // Record command immediately (not part of a brush stroke)
+      const command = new SpawnPointCommand(
+        previousSpawns,
+        { x, z },
+        (points) => {
+          this.terrainGrid.setSpawnPoints(points);
+          onAccepted();
+        },
+        (sx, sz) => {
+          this.terrainGrid.addSpawnPoint(sx, sz);
+          onAccepted();
+        }
+      );
+      this.editHistory.record(command);
+      onComplete();
+
+    } else {
+      // Reject placement on the same tile as any existing spawn
+      const spawnPoints = this.terrainGrid.getSpawnPoints();
+      if (spawnPoints.some(sp => sp.x === x && sp.z === z)) {
+        onRejected();
+        return;
+      }
+
+      // Snapshot full exit array before toggle for undo
+      const previousExits = this.terrainGrid.getExitPoints().map(p => ({ ...p }));
+      this.terrainGrid.addExitPoint(x, z);
+      onAccepted();
+
+      // Record command immediately (not part of a brush stroke)
+      const command = new ExitPointCommand(
+        previousExits,
+        { x, z },
+        (points) => {
+          this.terrainGrid.setExitPoints(points);
+          onAccepted();
+        },
+        (ex, ez) => {
+          this.terrainGrid.addExitPoint(ex, ez);
+          onAccepted();
+        }
+      );
+      this.editHistory.record(command);
+      onComplete();
+    }
   }
 
   // ── Undo tracking ──────────────────────────────────────────────────────────
