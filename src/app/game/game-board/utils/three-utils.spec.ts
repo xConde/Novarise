@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { disposeMaterial, disposeMesh } from './three-utils';
+import { disposeMaterial, disposeMesh, disposeGroup, getMaterials } from './three-utils';
 
 describe('disposeMaterial', () => {
   it('calls dispose on a single Material', () => {
@@ -70,5 +70,117 @@ describe('disposeMesh', () => {
     expect(m2.dispose).toHaveBeenCalledTimes(1);
     m1.dispose();
     m2.dispose();
+  });
+});
+
+describe('getMaterials', () => {
+  let geometry: THREE.BoxGeometry;
+
+  beforeEach(() => {
+    geometry = new THREE.BoxGeometry(1, 1, 1);
+  });
+
+  afterEach(() => {
+    try { geometry.dispose(); } catch { /* already disposed */ }
+  });
+
+  it('wraps a single Material in an array', () => {
+    const mat = new THREE.MeshBasicMaterial();
+    const mesh = new THREE.Mesh(geometry, mat);
+    const result = getMaterials(mesh);
+    expect(result).toEqual([mat]);
+    mat.dispose();
+  });
+
+  it('returns the array itself when mesh.material is Material[]', () => {
+    const m1 = new THREE.MeshBasicMaterial();
+    const m2 = new THREE.MeshBasicMaterial();
+    const arr = [m1, m2];
+    const mesh = new THREE.Mesh(geometry, arr);
+    const result = getMaterials(mesh);
+    expect(result).toBe(arr);
+    m1.dispose();
+    m2.dispose();
+  });
+});
+
+describe('disposeGroup', () => {
+  let geo1: THREE.BoxGeometry;
+  let mat1: THREE.MeshBasicMaterial;
+  let mesh1: THREE.Mesh;
+  let group: THREE.Group;
+
+  beforeEach(() => {
+    geo1 = new THREE.BoxGeometry(1, 1, 1);
+    mat1 = new THREE.MeshBasicMaterial();
+    mesh1 = new THREE.Mesh(geo1, mat1);
+    group = new THREE.Group();
+    group.add(mesh1);
+  });
+
+  afterEach(() => {
+    // Geometry/material may already be disposed by the function under test.
+    try { geo1.dispose(); } catch { /* already disposed */ }
+    try { mat1.dispose(); } catch { /* already disposed */ }
+  });
+
+  it('calls scene.remove(group) when a scene is provided', () => {
+    const scene = new THREE.Scene();
+    scene.add(group);
+    spyOn(scene, 'remove').and.callThrough();
+    disposeGroup(group, scene);
+    expect(scene.remove).toHaveBeenCalledWith(group);
+  });
+
+  it('does NOT call scene.remove when scene is undefined', () => {
+    const scene = new THREE.Scene();
+    scene.add(group);
+    spyOn(scene, 'remove');
+    disposeGroup(group);
+    expect(scene.remove).not.toHaveBeenCalled();
+  });
+
+  it('disposes geometry of every Mesh descendant', () => {
+    spyOn(geo1, 'dispose');
+    disposeGroup(group);
+    expect(geo1.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('disposes the single material of a Mesh descendant', () => {
+    spyOn(mat1, 'dispose');
+    disposeGroup(group);
+    expect(mat1.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('disposes each material when a Mesh has a Material[]', () => {
+    const m1 = new THREE.MeshBasicMaterial();
+    const m2 = new THREE.MeshBasicMaterial();
+    spyOn(m1, 'dispose');
+    spyOn(m2, 'dispose');
+    mesh1.material = [m1, m2];
+    disposeGroup(group);
+    expect(m1.dispose).toHaveBeenCalledTimes(1);
+    expect(m2.dispose).toHaveBeenCalledTimes(1);
+    m1.dispose();
+    m2.dispose();
+  });
+
+  it('handles deeply nested Groups (Group > Group > Mesh)', () => {
+    const innerGeo = new THREE.BoxGeometry(1, 1, 1);
+    const innerMat = new THREE.MeshBasicMaterial();
+    const innerMesh = new THREE.Mesh(innerGeo, innerMat);
+    const innerGroup = new THREE.Group();
+    innerGroup.add(innerMesh);
+    const outerGroup = new THREE.Group();
+    outerGroup.add(innerGroup);
+
+    spyOn(innerGeo, 'dispose');
+    spyOn(innerMat, 'dispose');
+    disposeGroup(outerGroup);
+    expect(innerGeo.dispose).toHaveBeenCalledTimes(1);
+    expect(innerMat.dispose).toHaveBeenCalledTimes(1);
+
+    try { innerGeo.dispose(); } catch { /* already disposed */ }
+    try { innerMat.dispose(); } catch { /* already disposed */ }
   });
 });

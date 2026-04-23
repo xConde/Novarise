@@ -43,6 +43,16 @@ export function gridToWorldInto(
   out.z = (row - boardHeight / 2) * tileSize;
 }
 
+/**
+ * Euclidean distance between two points on the XZ plane (ignores Y/height).
+ * Matches the world-space coordinate convention used throughout the game.
+ */
+export function dist2d(ax: number, az: number, bx: number, bz: number): number {
+  const dx = ax - bx;
+  const dz = az - bz;
+  return Math.sqrt(dx * dx + dz * dz);
+}
+
 /** Convert world x/z back to grid row/col (rounded to nearest tile). */
 export function worldToGrid(
   worldX: number,
