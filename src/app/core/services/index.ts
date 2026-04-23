@@ -1,6 +1,5 @@
 export * from './error-handler.service';
 export * from './map-bridge.service';
-export * from './map-share.service';
 export * from './map-storage.service';
 export * from './map-template.service';
 export * from './player-profile.service';

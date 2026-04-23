@@ -981,11 +981,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.upgradeTower(spec);
   }
 
-  /** @deprecated Use TowerUpgradeVisualService.applySpecializationVisual — kept for template compatibility. */
-  applySpecializationVisual(towerMesh: THREE.Group, spec: TowerSpecialization): void {
-    this.towerUpgradeVisualService.applySpecializationVisual(towerMesh, spec);
-  }
-
   sellTower(): void {
     if (!this.selectedTowerInfo) return;
 

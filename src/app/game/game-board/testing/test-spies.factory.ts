@@ -535,13 +535,13 @@ export function createPlayerProfileServiceSpy(): jasmine.SpyObj<PlayerProfileSer
  *   - addStreakBonus() / awardInterest() / getStreak() / getModifierScoreMultiplier() — 0
  *   - getModifierEffects() — empty object
  *   - All mutating methods — no-op void
+ * Note: setPhase() and addScore() are deleted — not included in this spy.
  */
 export function createGameStateServiceSpy(): jasmine.SpyObj<GameStateService> {
   const spy = jasmine.createSpyObj<GameStateService>('GameStateService', [
     'getState',
     'getState$',
     'getPhaseChanges',
-    'setPhase',
     'startWave',
     'completeWave',
     'setEndlessMode',
@@ -554,7 +554,6 @@ export function createGameStateServiceSpy(): jasmine.SpyObj<GameStateService> {
     'awardInterest',
     'spendGold',
     'canAfford',
-    'addScore',
     'togglePause',
 
     'setModifiers',

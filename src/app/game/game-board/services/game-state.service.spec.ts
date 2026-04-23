@@ -353,72 +353,6 @@ describe('GameStateService', () => {
     });
   });
 
-  // --- addScore ---
-
-  describe('addScore', () => {
-    it('should increase score without affecting gold', () => {
-      const goldBefore = service.getState().gold;
-      service.addScore(100);
-      expect(service.getState().score).toBe(100);
-      expect(service.getState().gold).toBe(goldBefore);
-    });
-  });
-
-  // --- setPhase ---
-
-  describe('setPhase', () => {
-    it('should set phase when the transition is valid (SETUP → COMBAT)', () => {
-      service.setPhase(GamePhase.COMBAT);
-      expect(service.getState().phase).toBe(GamePhase.COMBAT);
-    });
-
-    it('should be a no-op for invalid transitions and warn (SETUP → INTERMISSION)', () => {
-      const warnSpy = spyOn(console, 'warn');
-      service.setPhase(GamePhase.INTERMISSION);
-      expect(service.getState().phase).toBe(GamePhase.SETUP);
-      expect(warnSpy).toHaveBeenCalledWith(jasmine.stringContaining('Invalid phase transition'));
-    });
-
-    it('should be a no-op for invalid transitions and warn (SETUP → VICTORY)', () => {
-      const warnSpy = spyOn(console, 'warn');
-      service.setPhase(GamePhase.VICTORY);
-      expect(service.getState().phase).toBe(GamePhase.SETUP);
-      expect(warnSpy).toHaveBeenCalled();
-    });
-
-    it('should be a no-op for invalid transitions and warn (SETUP → DEFEAT)', () => {
-      const warnSpy = spyOn(console, 'warn');
-      service.setPhase(GamePhase.DEFEAT);
-      expect(service.getState().phase).toBe(GamePhase.SETUP);
-      expect(warnSpy).toHaveBeenCalled();
-    });
-
-    it('should be a no-op when called with the current phase (SETUP → SETUP)', () => {
-      const warnSpy = spyOn(console, 'warn');
-      service.setPhase(GamePhase.SETUP);
-      expect(service.getState().phase).toBe(GamePhase.SETUP);
-      expect(warnSpy).not.toHaveBeenCalled();
-    });
-
-    it('INTERMISSION → VICTORY is invalid and is rejected', () => {
-      const warnSpy = spyOn(console, 'warn');
-      service.startWave();
-      service.completeWave(0); // → INTERMISSION
-      service.setPhase(GamePhase.VICTORY);
-      expect(service.getState().phase).toBe(GamePhase.INTERMISSION);
-      expect(warnSpy).toHaveBeenCalled();
-    });
-
-    it('INTERMISSION → DEFEAT is invalid and is rejected', () => {
-      const warnSpy = spyOn(console, 'warn');
-      service.startWave();
-      service.completeWave(0); // → INTERMISSION
-      service.setPhase(GamePhase.DEFEAT);
-      expect(service.getState().phase).toBe(GamePhase.INTERMISSION);
-      expect(warnSpy).toHaveBeenCalled();
-    });
-  });
-
   // --- VALID_TRANSITIONS constant ---
 
   describe('VALID_TRANSITIONS', () => {
@@ -544,32 +478,6 @@ describe('GameStateService', () => {
       service.reset();
     });
 
-    it('setPhase() with valid transition emits { from, to }', (done) => {
-      service.getPhaseChanges().subscribe(event => {
-        expect(event.from).toBe(GamePhase.SETUP);
-        expect(event.to).toBe(GamePhase.COMBAT);
-        done();
-      });
-      service.setPhase(GamePhase.COMBAT);
-    });
-
-    it('setPhase() with invalid transition does NOT emit', () => {
-      spyOn(console, 'warn');
-      const events: Array<{ from: GamePhase; to: GamePhase }> = [];
-      const sub = service.getPhaseChanges().subscribe(e => events.push(e));
-      service.setPhase(GamePhase.VICTORY); // invalid from SETUP
-      expect(events.length).toBe(0);
-      sub.unsubscribe();
-    });
-
-    it('setPhase() with current phase (no-op) does NOT emit', () => {
-      const events: Array<{ from: GamePhase; to: GamePhase }> = [];
-      const sub = service.getPhaseChanges().subscribe(e => events.push(e));
-      service.setPhase(GamePhase.SETUP); // already in SETUP
-      expect(events.length).toBe(0);
-      sub.unsubscribe();
-    });
-
     it('loseLife() that does NOT reach 0 does NOT emit phaseChange', () => {
       service.startWave(); // → COMBAT (consumes one phaseChange emission)
       const events: Array<{ from: GamePhase; to: GamePhase }> = [];
@@ -655,7 +563,7 @@ describe('GameStateService', () => {
 
     it('should not affect wave or score', () => {
       service.startWave();
-      service.addScore(500);
+      service.addGoldAndScore(500);
       service.setDifficulty(DifficultyLevel.NIGHTMARE);
       expect(service.getState().wave).toBe(1);
       expect(service.getState().score).toBe(500);
@@ -761,7 +669,7 @@ describe('GameStateService', () => {
       service.startWave();
       service.addGold(500);
       service.loseLife(5);
-      service.addScore(1000);
+      service.addGoldAndScore(1000);
 
       service.reset();
 
@@ -1600,43 +1508,6 @@ describe('GameStateService', () => {
   // --- Illegal phase transitions (state machine contract) ---
 
   describe('illegal phase transitions', () => {
-    it('DEFEAT → COMBAT is rejected via setPhase', () => {
-      const warnSpy = spyOn(console, 'warn');
-      service.startWave();
-      service.loseLife(INITIAL_GAME_STATE.lives); // → DEFEAT
-      expect(service.getState().phase).toBe(GamePhase.DEFEAT);
-
-      service.setPhase(GamePhase.COMBAT);
-
-      expect(service.getState().phase).toBe(GamePhase.DEFEAT);
-      expect(warnSpy).toHaveBeenCalledWith(jasmine.stringContaining('Invalid phase transition'));
-    });
-
-    it('VICTORY → COMBAT is rejected via setPhase', () => {
-      const warnSpy = spyOn(console, 'warn');
-      const maxWaves = service.getState().maxWaves;
-      for (let i = 0; i < maxWaves; i++) {
-        service.startWave();
-        if (i < maxWaves - 1) service.completeWave(0);
-      }
-      service.completeWave(0); // → VICTORY
-
-      service.setPhase(GamePhase.COMBAT);
-
-      expect(service.getState().phase).toBe(GamePhase.VICTORY);
-      expect(warnSpy).toHaveBeenCalledWith(jasmine.stringContaining('Invalid phase transition'));
-    });
-
-    it('COMBAT → SETUP is rejected via setPhase', () => {
-      const warnSpy = spyOn(console, 'warn');
-      service.startWave(); // → COMBAT
-
-      service.setPhase(GamePhase.SETUP);
-
-      expect(service.getState().phase).toBe(GamePhase.COMBAT);
-      expect(warnSpy).toHaveBeenCalled();
-    });
-
     it('SETUP → COMBAT → INTERMISSION → COMBAT chain (valid) succeeds', () => {
       service.startWave();        // SETUP → COMBAT
       service.completeWave(0);    // COMBAT → INTERMISSION
@@ -1651,11 +1522,6 @@ describe('GameStateService', () => {
       service.spendGold(1);
       service.spendGold(100);
       expect(service.getState().gold).toBe(0);
-    });
-
-    it('score never goes negative from addScore with zero', () => {
-      service.addScore(0);
-      expect(service.getState().score).toBe(0);
     });
 
     it('addGoldAndScore with zero does not change state', () => {
