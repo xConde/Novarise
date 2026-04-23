@@ -20,11 +20,43 @@ import { RunStatus, DEFAULT_RUN_CONFIG, EncounterResult } from '../models/run-st
 import { NodeMap, MapNode, NodeType } from '../models/node-map.model';
 import { EncounterConfig } from '../models/encounter.model';
 import { RelicId, RelicDefinition, RelicRarity, RELIC_DEFINITIONS } from '../models/relic.model';
-import { CardId, CardRarity } from '../models/card.model';
+import { CardArchetype, CardDefinition, CardId, CardRarity } from '../models/card.model';
 import { CARD_DEFINITIONS } from '../constants/card-definitions';
-import { REWARD_CONFIG, REWARD_RARITY_WEIGHTS, createSeededRng } from '../constants/run.constants';
+import { REWARD_CONFIG, REWARD_RARITY_WEIGHTS, createSeededRng, SeededRng } from '../constants/run.constants';
 import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
 import { ChallengeDefinition, ChallengeType } from '../data/challenges';
+import {
+  SerializableGameState,
+  SerializableWaveState,
+  SerializableDeckState,
+  SerializableGameStats,
+  SerializableChallengeState,
+} from '../../game/game-board/models/encounter-checkpoint.model';
+import { CardReward } from '../models/encounter.model';
+
+// ── Testability interface ────────────────────────────────────────
+
+/**
+ * Exposes the private fields and methods of RunService that the spec needs
+ * to reach for white-box testing. Cast via `service as unknown as TestableRunService`
+ * so the compiler enforces the shape without requiring `any`.
+ */
+interface TestableRunService {
+  currentEvent: RunEvent | null;
+  runRng: SeededRng | null;
+  runState: import('../models/run-state.model').RunState | null;
+  pickCardRewards(count: number, rng: () => number): CardReward[];
+  pickWeightedRarity<R extends string>(
+    weights: Array<{ rarity: R; weight: number }>,
+    pool: Record<R, unknown[]>,
+    rng: () => number,
+  ): R | null;
+  pickArchetypeAwareCard<T extends { archetype?: CardArchetype }>(
+    pool: T[],
+    dominant: CardArchetype,
+    rng: () => number,
+  ): T;
+}
 
 // ── Test fixtures ───────────────────────────────────────────────
 
@@ -100,6 +132,8 @@ describe('RunService', () => {
   let relicService: jasmine.SpyObj<RelicService>;
   let persistence: jasmine.SpyObj<RunPersistenceService>;
   let eventBus: jasmine.SpyObj<RunEventBusService>;
+  // White-box alias — avoids scattered `(service as any)` casts.
+  let svc: TestableRunService;
 
   beforeEach(() => {
     const stubMap = makeNodeMap();
@@ -148,6 +182,7 @@ describe('RunService', () => {
     });
 
     service = TestBed.inject(RunService);
+    svc = service as unknown as TestableRunService;
   });
 
   // ── startNewRun ───────────────────────────────────────────────
@@ -629,7 +664,7 @@ describe('RunService', () => {
     const cardsBefore = deckService.getAllCards().length;
 
     // Inject the card_purifier event directly
-    (service as any).currentEvent = {
+    svc.currentEvent = {
       id: 'card_purifier',
       title: 'The Purifier',
       description: 'Test',
@@ -655,7 +690,7 @@ describe('RunService', () => {
     const deckService = TestBed.inject(DeckService);
     const cardsBefore = deckService.getAllCards().length;
 
-    (service as any).currentEvent = {
+    svc.currentEvent = {
       id: 'test_event',
       title: 'Test',
       description: 'Test',
@@ -700,12 +735,12 @@ describe('RunService', () => {
       service.selectNode('node_1_0');
 
       // Force rng to always return 0.1 (well below 0.5 winChance — guaranteed win)
-      (service as any).runRng = { next: () => 0.1, getState: () => 0, setState: () => {} };
-      (service as any).currentEvent = makeGambleEvent(0.5);
+      svc.runRng = { next: () => 0.1, getState: () => 0, setState: () => {} };
+      svc.currentEvent = makeGambleEvent(0.5);
 
-      const goldBefore = (service as any).runState.gold as number;
+      const goldBefore = service.runState!.gold as number;
       service.resolveEvent(0);
-      expect((service as any).runState.gold).toBe(goldBefore + 80);
+      expect(service.runState!.gold).toBe(goldBefore + 80);
     }));
 
     it('gambling_den loss path: gold unchanged when rng >= winChance', fakeAsync(() => {
@@ -713,12 +748,12 @@ describe('RunService', () => {
       service.selectNode('node_1_0');
 
       // Force rng to always return 0.9 (above 0.5 winChance — guaranteed loss)
-      (service as any).runRng = { next: () => 0.9, getState: () => 0, setState: () => {} };
-      (service as any).currentEvent = makeGambleEvent(0.5);
+      svc.runRng = { next: () => 0.9, getState: () => 0, setState: () => {} };
+      svc.currentEvent = makeGambleEvent(0.5);
 
-      const goldBefore = (service as any).runState.gold as number;
+      const goldBefore = service.runState!.gold as number;
       service.resolveEvent(0);
-      expect((service as any).runState.gold).toBe(goldBefore);
+      expect(service.runState!.gold).toBe(goldBefore);
     }));
 
     it('gambling_den deterministic: alternating rng values produce expected win/loss sequence', fakeAsync(() => {
@@ -727,28 +762,28 @@ describe('RunService', () => {
 
       // Provide a counter-based rng: 0.1, 0.9, 0.1, 0.9 ...
       let callCount = 0;
-      (service as any).runRng = {
+      svc.runRng = {
         next: () => (callCount++ % 2 === 0 ? 0.1 : 0.9),
         getState: () => 0,
         setState: () => {},
       };
 
-      const goldStart = (service as any).runState.gold as number;
+      const goldStart = service.runState!.gold as number;
 
       // Roll 1: 0.1 < 0.5 → win (+80)
-      (service as any).currentEvent = makeGambleEvent(0.5);
+      svc.currentEvent = makeGambleEvent(0.5);
       service.resolveEvent(0);
-      expect((service as any).runState.gold).toBe(goldStart + 80);
+      expect(service.runState!.gold).toBe(goldStart + 80);
 
       // Roll 2: 0.9 >= 0.5 → loss (+0)
-      (service as any).currentEvent = makeGambleEvent(0.5);
+      svc.currentEvent = makeGambleEvent(0.5);
       service.resolveEvent(0);
-      expect((service as any).runState.gold).toBe(goldStart + 80); // unchanged from previous
+      expect(service.runState!.gold).toBe(goldStart + 80); // unchanged from previous
 
       // Roll 3: 0.1 < 0.5 → win again
-      (service as any).currentEvent = makeGambleEvent(0.5);
+      svc.currentEvent = makeGambleEvent(0.5);
       service.resolveEvent(0);
-      expect((service as any).runState.gold).toBe(goldStart + 160);
+      expect(service.runState!.gold).toBe(goldStart + 160);
     }));
   });
 
@@ -1075,7 +1110,7 @@ describe('RunService', () => {
         nodeId: 'node_0_0',
         encounterConfig: makeEncounterConfig(),
         rngState: 0,
-        gameState: {} as any,
+        gameState: {} as unknown as SerializableGameState,
         turnNumber: 3,
         leakedThisWave: false,
         towers: [],
@@ -1083,12 +1118,12 @@ describe('RunService', () => {
         enemies: [],
         enemyCounter: 0,
         statusEffects: [],
-        waveState: {} as any,
-        deckState: {} as any,
+        waveState: {} as unknown as SerializableWaveState,
+        deckState: {} as unknown as SerializableDeckState,
         cardModifiers: [],
         relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false, orogenyTurnCounter: 0 },
-        gameStats: {} as any,
-        challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
+        gameStats: {} as unknown as SerializableGameStats,
+        challengeState: {} as unknown as SerializableChallengeState, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
         runStateFlags: { entries: [], consumedEventIds: [] },
@@ -1113,7 +1148,7 @@ describe('RunService', () => {
         nodeId: 'node_0_0',
         encounterConfig: makeEncounterConfig(),
         rngState: 0,
-        gameState: {} as any,
+        gameState: {} as unknown as SerializableGameState,
         turnNumber: 2,
         leakedThisWave: false,
         towers: [],
@@ -1121,12 +1156,12 @@ describe('RunService', () => {
         enemies: [],
         enemyCounter: 0,
         statusEffects: [],
-        waveState: {} as any,
-        deckState: {} as any,
+        waveState: {} as unknown as SerializableWaveState,
+        deckState: {} as unknown as SerializableDeckState,
         cardModifiers: [],
         relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false, orogenyTurnCounter: 0 },
-        gameStats: {} as any,
-        challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
+        gameStats: {} as unknown as SerializableGameStats,
+        challengeState: {} as unknown as SerializableChallengeState, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
         runStateFlags: { entries: [], consumedEventIds: [] },
@@ -1158,7 +1193,7 @@ describe('RunService', () => {
         nodeId: 'node_0_0',
         encounterConfig: makeEncounterConfig({ nodeId: 'node_0_0' }),
         rngState: 0,
-        gameState: {} as any,
+        gameState: {} as unknown as SerializableGameState,
         turnNumber: 1,
         leakedThisWave: false,
         towers: [],
@@ -1166,12 +1201,12 @@ describe('RunService', () => {
         enemies: [],
         enemyCounter: 0,
         statusEffects: [],
-        waveState: {} as any,
-        deckState: {} as any,
+        waveState: {} as unknown as SerializableWaveState,
+        deckState: {} as unknown as SerializableDeckState,
         cardModifiers: [],
         relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false, orogenyTurnCounter: 0 },
-        gameStats: {} as any,
-        challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
+        gameStats: {} as unknown as SerializableGameStats,
+        challengeState: {} as unknown as SerializableChallengeState, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
         runStateFlags: { entries: [], consumedEventIds: [] },
@@ -1199,7 +1234,7 @@ describe('RunService', () => {
         nodeId: 'node_0_0',
         encounterConfig: config,
         rngState: 0,
-        gameState: {} as any,
+        gameState: {} as unknown as SerializableGameState,
         turnNumber: 2,
         leakedThisWave: false,
         towers: [],
@@ -1207,12 +1242,12 @@ describe('RunService', () => {
         enemies: [],
         enemyCounter: 0,
         statusEffects: [],
-        waveState: {} as any,
-        deckState: {} as any,
+        waveState: {} as unknown as SerializableWaveState,
+        deckState: {} as unknown as SerializableDeckState,
         cardModifiers: [],
         relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false, orogenyTurnCounter: 0 },
-        gameStats: {} as any,
-        challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
+        gameStats: {} as unknown as SerializableGameStats,
+        challengeState: {} as unknown as SerializableChallengeState, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
         runStateFlags: { entries: [], consumedEventIds: [] },
@@ -1286,7 +1321,7 @@ describe('RunService', () => {
       const counts: Record<string, number> = { common: 0, uncommon: 0, rare: 0 };
       const draws = 1000;
       for (let i = 0; i < draws; i++) {
-        const rewards = (service as any).pickCardRewards(1, () => seededRng.next()) as Array<{ cardId: CardId }>;
+        const rewards = svc.pickCardRewards(1, () => seededRng.next());
         if (rewards.length === 0) continue;
         const def = CARD_DEFINITIONS[rewards[0].cardId];
         counts[def.rarity] = (counts[def.rarity] ?? 0) + 1;
@@ -1325,11 +1360,12 @@ describe('RunService', () => {
       // With RNG biased toward RARE range (high values) but RARE is empty,
       // picker must fall back to UNCOMMON or COMMON
       const rng = () => 0.99; // Would normally select RARE
-      const pickedRarity = (service as any).pickWeightedRarity(
+      // Non-null assertion safe: pool has COMMON and UNCOMMON entries so pickWeightedRarity never returns null.
+      const pickedRarity = svc.pickWeightedRarity(
         rarityWeights,
         stubbedPool,
         rng,
-      ) as string;
+      )!;
 
       expect(pickedRarity).not.toBe(CardRarity.RARE);
       expect([CardRarity.COMMON as string, CardRarity.UNCOMMON as string]).toContain(pickedRarity);
@@ -1352,11 +1388,12 @@ describe('RunService', () => {
       };
 
       const rng = () => 0.99;
-      const pickedRarity = (service as any).pickWeightedRarity(
+      // Non-null assertion safe: pool has COMMON entry so pickWeightedRarity never returns null.
+      const pickedRarity = svc.pickWeightedRarity(
         rarityWeights,
         stubbedPool,
         rng,
-      ) as string;
+      )!;
 
       expect(pickedRarity).toBe(CardRarity.COMMON as string);
     }));
@@ -1368,7 +1405,7 @@ describe('RunService', () => {
       const seededRng = createSeededRng(7);
       let mortarSeen = false;
       for (let i = 0; i < 500 && !mortarSeen; i++) {
-        const rewards = (service as any).pickCardRewards(3, () => seededRng.next()) as Array<{ cardId: CardId }>;
+        const rewards = svc.pickCardRewards(3, () => seededRng.next());
         if (rewards.some(r => r.cardId === CardId.TOWER_MORTAR)) {
           mortarSeen = true;
         }
@@ -1447,21 +1484,21 @@ describe('RunService', () => {
      *
      * Uses service['runRng'] = null to bypass SeededRng and use Math.random.
      */
-    function collectAllGeneratedEventIds(svc: RunService, poolSize: number): Set<string> {
-      const svcAny = svc as any;
-      const savedRng = svcAny.runRng;
-      svcAny.runRng = null;
+    function collectAllGeneratedEventIds(runSvc: RunService, poolSize: number): Set<string> {
+      const tSvc = runSvc as unknown as TestableRunService;
+      const savedRng = tSvc.runRng;
+      tSvc.runRng = null;
 
       const ids = new Set<string>();
       const spy = spyOn(Math, 'random');
       for (let i = 0; i < poolSize; i++) {
         spy.and.returnValue((i + 0.5) / poolSize);
-        svc.generateEvent();
-        const evt = svc.getCurrentEvent();
+        runSvc.generateEvent();
+        const evt = runSvc.getCurrentEvent();
         if (evt) ids.add(evt.id);
       }
       spy.and.callThrough();
-      svcAny.runRng = savedRng;
+      tSvc.runRng = savedRng;
       return ids;
     }
 
@@ -1550,7 +1587,7 @@ describe('RunService', () => {
 
     it('sets a flag when outcome.setsFlag is present', fakeAsync(() => {
       service.startNewRun();
-      (service as any).currentEvent = {
+      svc.currentEvent = {
         id: 'test_event',
         title: 'Test',
         description: '',
@@ -1575,7 +1612,7 @@ describe('RunService', () => {
     it('increments a flag when outcome.incrementsFlag is present', fakeAsync(() => {
       service.startNewRun();
       flagService.setFlag('visit_count', 2);
-      (service as any).currentEvent = {
+      svc.currentEvent = {
         id: 'test_event',
         title: 'Test',
         description: '',
@@ -1599,7 +1636,7 @@ describe('RunService', () => {
 
     it('does not set a flag when the non-flag outcome is chosen', fakeAsync(() => {
       service.startNewRun();
-      (service as any).currentEvent = {
+      svc.currentEvent = {
         id: 'test_event',
         title: 'Test',
         description: '',
@@ -1650,8 +1687,8 @@ describe('RunService', () => {
       const offer = RUN_EVENTS.find(e => e.id === 'cursed_idol_offer');
       expect(offer).toBeDefined();
 
-      // Simulate picking the bargain (choice index 0)
-      (service as any).currentEvent = offer;
+      // Simulate picking the bargain (choice index 0). Non-null: asserted defined above.
+      svc.currentEvent = offer ?? null;
       service.resolveEvent(0);
 
       expect(flagService.hasFlag(FLAG_KEYS.IDOL_BARGAIN_TAKEN)).toBeTrue();
@@ -1681,7 +1718,7 @@ describe('RunService', () => {
       const offer = RUN_EVENTS.find(e => e.id === 'cursed_idol_offer')!;
 
       // Step 1: player takes the bargain
-      (service as any).currentEvent = offer;
+      svc.currentEvent = offer;
       service.resolveEvent(0);
       expect(flagService.hasFlag(FLAG_KEYS.IDOL_BARGAIN_TAKEN)).toBeTrue();
 
@@ -2112,7 +2149,9 @@ describe('RunService', () => {
 
   // ── Phase 1 Sprint 8 — pickArchetypeAwareCard ──────────────────────────
   describe('pickArchetypeAwareCard()', () => {
-    function makePool(): Array<{ id: string; archetype?: string }> {
+    type PoolEntry = { id: string; archetype?: CardArchetype };
+
+    function makePool(): PoolEntry[] {
       return [
         { id: 'cart_a', archetype: 'cartographer' },
         { id: 'cart_b', archetype: 'cartographer' },
@@ -2124,7 +2163,7 @@ describe('RunService', () => {
     it('uniform pick when dominant is "neutral"', () => {
       const pool = makePool();
       const rng = () => 0.0; // forces first index every call
-      const picked = (service as any).pickArchetypeAwareCard(pool, 'neutral', rng);
+      const picked = svc.pickArchetypeAwareCard(pool, 'neutral', rng);
       expect(picked.id).toBe('cart_a');
     });
 
@@ -2135,7 +2174,7 @@ describe('RunService', () => {
       const calls = [0.5, 0.0];
       let i = 0;
       const rng = () => calls[i++];
-      const picked = (service as any).pickArchetypeAwareCard(pool, 'cartographer', rng);
+      const picked = svc.pickArchetypeAwareCard(pool, 'cartographer', rng);
       expect(['cart_a', 'cart_b']).toContain(picked.id);
     });
 
@@ -2146,12 +2185,12 @@ describe('RunService', () => {
       const calls = [0.7, 0.0];
       let i = 0;
       const rng = () => calls[i++];
-      const picked = (service as any).pickArchetypeAwareCard(pool, 'cartographer', rng);
+      const picked = svc.pickArchetypeAwareCard(pool, 'cartographer', rng);
       expect(['neut_a', 'neut_b']).toContain(picked.id);
     });
 
     it('falls back to neutral subset when archetype subset empty', () => {
-      const pool = [
+      const pool: PoolEntry[] = [
         { id: 'neut_a', archetype: 'neutral' },
         { id: 'neut_b' },
       ];
@@ -2159,12 +2198,12 @@ describe('RunService', () => {
       const calls = [0.5, 0.0];
       let i = 0;
       const rng = () => calls[i++];
-      const picked = (service as any).pickArchetypeAwareCard(pool, 'cartographer', rng);
+      const picked = svc.pickArchetypeAwareCard(pool, 'cartographer', rng);
       expect(['neut_a', 'neut_b']).toContain(picked.id);
     });
 
     it('falls back to archetype subset when neutral subset empty', () => {
-      const pool = [
+      const pool: PoolEntry[] = [
         { id: 'cart_a', archetype: 'cartographer' },
         { id: 'cart_b', archetype: 'cartographer' },
       ];
@@ -2172,7 +2211,7 @@ describe('RunService', () => {
       const calls = [0.7, 0.0];
       let i = 0;
       const rng = () => calls[i++];
-      const picked = (service as any).pickArchetypeAwareCard(pool, 'cartographer', rng);
+      const picked = svc.pickArchetypeAwareCard(pool, 'cartographer', rng);
       expect(['cart_a', 'cart_b']).toContain(picked.id);
     });
   });
