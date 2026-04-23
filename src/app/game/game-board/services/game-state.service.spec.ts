@@ -3,6 +3,7 @@ import { GameStateService } from './game-state.service';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE, VALID_TRANSITIONS } from '../models/game-state.model';
 import { GameModifier } from '../models/game-modifier.model';
 import { SerializableGameState } from '../models/encounter-checkpoint.model';
+import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
 
 describe('GameStateService', () => {
   let service: GameStateService;
@@ -1669,6 +1670,30 @@ describe('GameStateService', () => {
 
       expect(service.getState().activeModifiers.size).toBe(0);
       expect(Object.keys(service.getModifierEffects()).length).toBe(0);
+    });
+  });
+
+  // --- getEffectiveTowerCost ---
+
+  describe('getEffectiveTowerCost', () => {
+    it('returns the base cost when no modifier is active', () => {
+      // BASIC tower costs 50 with no modifiers
+      const cost = service.getEffectiveTowerCost(TowerType.BASIC);
+      expect(cost).toBe(TOWER_CONFIGS[TowerType.BASIC].cost);
+    });
+
+    it('applies towerCostMultiplier from active modifiers', () => {
+      service.setModifiers(new Set([GameModifier.EXPENSIVE_TOWERS]));
+      const multiplier = service.getModifierEffects().towerCostMultiplier ?? 1;
+      const expected = Math.round(TOWER_CONFIGS[TowerType.BASIC].cost * multiplier);
+      expect(service.getEffectiveTowerCost(TowerType.BASIC)).toBe(expected);
+    });
+
+    it('treats undefined towerCostMultiplier as 1 (no modifier active)', () => {
+      // With no modifiers, towerCostMultiplier is undefined — should default to 1
+      expect(service.getModifierEffects().towerCostMultiplier).toBeUndefined();
+      const cost = service.getEffectiveTowerCost(TowerType.SNIPER);
+      expect(cost).toBe(TOWER_CONFIGS[TowerType.SNIPER].cost);
     });
   });
 });

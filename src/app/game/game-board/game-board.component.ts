@@ -814,8 +814,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Base tower cost (shown in tower bar — no tile-specific pricing). */
   getEffectiveTowerCost(type: TowerType | null): number {
     if (!type) return 0;
-    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-    return Math.round(TOWER_CONFIGS[type].cost * costMult);
+    return this.gameStateService.getEffectiveTowerCost(type);
   }
 
   selectTowerType(type: TowerType): void {

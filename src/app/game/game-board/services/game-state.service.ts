@@ -3,6 +3,7 @@ import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE } from '../models/game-state.model';
 import { GameModifier, ModifierEffects, mergeModifierEffects, calculateModifierScoreMultiplier } from '../models/game-modifier.model';
 import { SerializableGameState } from '../models/encounter-checkpoint.model';
+import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
 
 @Injectable()
 export class GameStateService {
@@ -192,6 +193,17 @@ export class GameStateService {
 
   canAfford(amount: number): boolean {
     return this.state.gold >= amount;
+  }
+
+  /**
+   * Returns the base tower placement cost adjusted by the active modifier's
+   * towerCostMultiplier. Does NOT include relic cost multipliers — those are
+   * applied separately by TowerInteractionService at placement time.
+   */
+  public getEffectiveTowerCost(type: TowerType): number {
+    const baseCost = TOWER_CONFIGS[type].cost;
+    const multiplier = this.getModifierEffects().towerCostMultiplier ?? 1;
+    return Math.round(baseCost * multiplier);
   }
 
   /**

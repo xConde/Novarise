@@ -8,7 +8,7 @@ import { RangeVisualizationService } from './range-visualization.service';
 import { GameStateService } from './game-state.service';
 import { GameBoardService } from '../game-board.service';
 import { TILE_EMISSIVE } from '../constants/ui.constants';
-import { TOWER_CONFIGS, TowerType, PlacedTower } from '../models/tower.model';
+import { TowerType, PlacedTower } from '../models/tower.model';
 import { BlockType } from '../models/game-board-tile';
 import { GamePhase } from '../models/game-state.model';
 
@@ -92,8 +92,7 @@ export class BoardPointerService implements OnDestroy {
           const previewKey = `${row}-${col}-${placement.towerType}-${placement.gold}`;
           if (previewKey !== this.lastPreviewKey) {
             this.lastPreviewKey = previewKey;
-            const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-            const tileCost = Math.round(TOWER_CONFIGS[placement.towerType!].cost * costMult);
+            const tileCost = this.gameStateService.getEffectiveTowerCost(placement.towerType!);
             const canPlace = this.gameBoardService.canPlaceTower(row, col)
               && this.gameStateService.canAfford(tileCost);
             this.towerPreviewService.showPreview(placement.towerType!, row, col, canPlace, this.sceneService.getScene());

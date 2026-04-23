@@ -4,6 +4,22 @@ import { TowerType } from '../models/tower.model';
 import { BOARD_CONFIG } from '../constants/board.constants';
 import { gridToWorld } from '../utils/coordinate-utils';
 
+function makeTowerMaterial(
+  color: number,
+  emissive: number,
+  emissiveIntensity: number,
+  metalness: number,
+  roughness: number,
+): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    color,
+    emissive,
+    emissiveIntensity,
+    metalness,
+    roughness,
+  });
+}
+
 @Injectable()
 export class TowerMeshFactoryService {
   private readonly tileSize = BOARD_CONFIG.tileSize;
@@ -39,13 +55,7 @@ export class TowerMeshFactoryService {
         const crystal = new THREE.OctahedronGeometry(0.15, 0);
 
         color = 0xd47a3a; // Warm amber
-        const basicMat = new THREE.MeshStandardMaterial({
-          color: color,
-          emissive: 0xaa6a2a,
-          emissiveIntensity: 0.7,
-          metalness: 0.3,
-          roughness: 0.6
-        });
+        const basicMat = makeTowerMaterial(color, 0xaa6a2a, 0.7, 0.3, 0.6);
 
         const oBase = new THREE.Mesh(obeliskBase, basicMat);
         oBase.position.y = 0.125;
@@ -78,13 +88,7 @@ export class TowerMeshFactoryService {
         const spikePoint = new THREE.ConeGeometry(0.08, 0.3, 4);
 
         color = 0x7a5ac4; // Deep purple
-        const sniperMat = new THREE.MeshStandardMaterial({
-          color: color,
-          emissive: 0x6a4a9a,
-          emissiveIntensity: 0.8,
-          metalness: 0.4,
-          roughness: 0.4
-        });
+        const sniperMat = makeTowerMaterial(color, 0x6a4a9a, 0.8, 0.4, 0.4);
 
         const snBase = new THREE.Mesh(spikeBase, sniperMat);
         snBase.position.y = 0.2;
@@ -118,13 +122,7 @@ export class TowerMeshFactoryService {
         const spore3 = new THREE.SphereGeometry(0.07, 6, 6);
 
         color = 0x4ac47a; // Vibrant green
-        const splashMat = new THREE.MeshStandardMaterial({
-          color: color,
-          emissive: 0x4a9a6a,
-          emissiveIntensity: 0.7,
-          metalness: 0.25,
-          roughness: 0.7
-        });
+        const splashMat = makeTowerMaterial(color, 0x4a9a6a, 0.7, 0.25, 0.7);
 
         const spStemBase = new THREE.Mesh(stemBase, splashMat);
         spStemBase.position.y = 0.15;
@@ -200,13 +198,7 @@ export class TowerMeshFactoryService {
         const chainSpark2 = new THREE.SphereGeometry(0.05, 6, 6);
 
         color = 0xffdd00; // Yellow/electric
-        const chainMat = new THREE.MeshStandardMaterial({
-          color: color,
-          emissive: 0xddaa00,
-          emissiveIntensity: 1.0,
-          metalness: 0.6,
-          roughness: 0.2
-        });
+        const chainMat = makeTowerMaterial(color, 0xddaa00, 1.0, 0.6, 0.2);
 
         const chBase = new THREE.Mesh(chainBase, chainMat);
         chBase.position.y = 0.1;
@@ -237,13 +229,7 @@ export class TowerMeshFactoryService {
         const mortarMuzzle = new THREE.CylinderGeometry(0.12, 0.1, 0.12, 8);
 
         color = 0x664422; // Dark brown cannon
-        const mortarMat = new THREE.MeshStandardMaterial({
-          color: color,
-          emissive: 0x442200,
-          emissiveIntensity: 0.4,
-          metalness: 0.7,
-          roughness: 0.5
-        });
+        const mortarMat = makeTowerMaterial(color, 0x442200, 0.4, 0.7, 0.5);
 
         const moBase = new THREE.Mesh(mortarBase, mortarMat);
         moBase.position.y = 0.15;
@@ -266,13 +252,7 @@ export class TowerMeshFactoryService {
       default:
         const defaultGeom = new THREE.CylinderGeometry(0.3, 0.35, 0.6, 6);
         color = 0xd47a3a;
-        const defaultMat = new THREE.MeshStandardMaterial({
-          color: color,
-          emissive: 0x8a4a1a,
-          emissiveIntensity: 0.3,
-          metalness: 0.2,
-          roughness: 0.6
-        });
+        const defaultMat = makeTowerMaterial(color, 0x8a4a1a, 0.3, 0.2, 0.6);
         const defaultMesh = new THREE.Mesh(defaultGeom, defaultMat);
         defaultMesh.position.y = 0.3;
         towerGroup.add(defaultMesh);
