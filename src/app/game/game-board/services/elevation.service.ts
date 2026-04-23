@@ -15,6 +15,7 @@ import {
 } from './elevation.types';
 import { SceneService } from './scene.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
+import { gridToWorld } from '../utils/coordinate-utils';
 
 /**
  * Runtime tile elevation service for the Highground archetype.
@@ -487,12 +488,11 @@ export class ElevationService {
       // Position at tile world XZ center; Y centered at half the cliff height.
       const boardWidth = this.gameBoardService.getBoardWidth();
       const boardHeight = this.gameBoardService.getBoardHeight();
-      // gridToWorld convention: worldX = (col - boardWidth/2) * tileSize
-      //                         worldZ = (row - boardHeight/2) * tileSize
+      const { x: cliffWorldX, z: cliffWorldZ } = gridToWorld(row, col, boardWidth, boardHeight, tileSize);
       cliffMesh.position.set(
-        (col - boardWidth / 2) * tileSize,
+        cliffWorldX,
         cliffHeight / 2,
-        (row - boardHeight / 2) * tileSize,
+        cliffWorldZ,
       );
       cliffMesh.receiveShadow = true;
 

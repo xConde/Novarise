@@ -4,6 +4,7 @@ import { PlacedTower, TowerType } from '../models/tower.model';
 import { BlockType } from '../models/game-board-tile';
 import { ANIMATION_CONFIG } from '../constants/rendering.constants';
 import { MUZZLE_FLASH_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
+import { getMaterials } from '../utils/three-utils';
 
 @Injectable()
 export class TowerAnimationService {
@@ -84,9 +85,7 @@ export class TowerAnimationService {
         if (!(child instanceof THREE.Mesh)) return;
         if (child.name === 'tip') return;
 
-        const materials = Array.isArray(child.material)
-          ? child.material as THREE.MeshStandardMaterial[]
-          : [child.material as THREE.MeshStandardMaterial];
+        const materials = getMaterials(child) as THREE.MeshStandardMaterial[];
 
         for (const mat of materials) {
           if (mat.emissiveIntensity === undefined) continue;
@@ -104,9 +103,7 @@ export class TowerAnimationService {
         if (!(child instanceof THREE.Mesh)) return;
         if (child.name === 'tip') return;
 
-        const materials = Array.isArray(child.material)
-          ? child.material as THREE.MeshStandardMaterial[]
-          : [child.material as THREE.MeshStandardMaterial];
+        const materials = getMaterials(child) as THREE.MeshStandardMaterial[];
 
         for (const mat of materials) {
           const key = child.uuid + '_' + mat.uuid;
@@ -139,9 +136,7 @@ export class TowerAnimationService {
             if (!(child instanceof THREE.Mesh)) return;
             if (child.name === 'tip') return;
 
-            const materials = Array.isArray(child.material)
-              ? child.material as THREE.MeshStandardMaterial[]
-              : [child.material as THREE.MeshStandardMaterial];
+            const materials = getMaterials(child) as THREE.MeshStandardMaterial[];
 
             for (const mat of materials) {
               const key = child.uuid + '_' + mat.uuid;

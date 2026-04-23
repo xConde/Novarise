@@ -9,7 +9,8 @@ import { GameBoardService } from '../game-board.service';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { StatusEffectService } from './status-effect.service';
 import { SpatialGrid } from '../utils/spatial-grid';
-import { gridToWorld } from '../utils/coordinate-utils';
+import { dist2d, gridToWorld } from '../utils/coordinate-utils';
+import { disposeGroup } from '../utils/three-utils';
 import { CombatVFXService } from './combat-vfx.service';
 import { GameStateService } from './game-state.service';
 import { TowerAnimationService } from './tower-animation.service';
@@ -556,9 +557,9 @@ export class TowerCombatService {
       // M3 S4: mortar drops a turn-ticked DoT zone instead of one-shot.
       // Initial blast applies on placement turn; the zone then deals
       // dotDamage to enemies in radius for `dotDuration` turns.
-      const blastRadius = stats.blastRadius ?? 1.5;
+      const blastRadius = stats.blastRadius ?? TOWER_CONFIGS[TowerType.MORTAR].blastRadius!;
       const blastDamage = stats.dotDamage ?? stats.damage;
-      const dotDuration = Math.max(1, Math.round(stats.dotDuration ?? 3));
+      const dotDuration = Math.max(1, Math.round(stats.dotDuration ?? TOWER_CONFIGS[TowerType.MORTAR].dotDuration!));
 
       // Initial blast (same turn as placement)
       const candidates = this.spatialGrid.queryRadius(target.position.x, target.position.z, blastRadius);
@@ -566,9 +567,7 @@ export class TowerCombatService {
         if (enemy.health <= 0) continue;
         // S1: flying enemies bypass ground effects — mortar initial blast is ground-level
         if (enemy.isFlying) continue;
-        const dx = enemy.position.x - target.position.x;
-        const dz = enemy.position.z - target.position.z;
-        if (Math.sqrt(dx * dx + dz * dz) <= blastRadius) {
+        if (dist2d(enemy.position.x, enemy.position.z, target.position.x, target.position.z) <= blastRadius) {
           const result = this.enemyService.damageEnemy(enemy.id, blastDamage);
           hitCount++;
           damageDealt += blastDamage;
@@ -612,9 +611,7 @@ export class TowerCombatService {
         const candidates = this.spatialGrid.queryRadius(target.position.x, target.position.z, splashRadius);
         for (const enemy of candidates) {
           if (enemy.health <= 0) continue;
-          const dx = enemy.position.x - target.position.x;
-          const dz = enemy.position.z - target.position.z;
-          if (Math.sqrt(dx * dx + dz * dz) <= splashRadius) {
+          if (dist2d(enemy.position.x, enemy.position.z, target.position.x, target.position.z) <= splashRadius) {
             const result = this.enemyService.damageEnemy(enemy.id, stats.damage);
             hitCount++;
             damageDealt += stats.damage;
@@ -865,9 +862,7 @@ export class TowerCombatService {
         if (enemy.health <= 0) continue;
         // S1: flying enemies bypass ground effects — mortar zones are ground-level
         if (enemy.isFlying) continue;
-        const dx = enemy.position.x - zone.centerX;
-        const dz = enemy.position.z - zone.centerZ;
-        if (Math.sqrt(dx * dx + dz * dz) <= zone.blastRadius) {
+        if (dist2d(enemy.position.x, enemy.position.z, zone.centerX, zone.centerZ) <= zone.blastRadius) {
           const result = this.enemyService.damageEnemy(enemy.id, zone.dotDamage);
           damageDealt += zone.dotDamage;
           if (result.killed) {
@@ -972,9 +967,7 @@ export class TowerCombatService {
     for (const enemy of candidates) {
       if (enemy.health <= 0) continue;
 
-      const dx = enemy.position.x - towerWorldX;
-      const dz = enemy.position.z - towerWorldZ;
-      const dist = Math.sqrt(dx * dx + dz * dz);
+      const dist = dist2d(enemy.position.x, enemy.position.z, towerWorldX, towerWorldZ);
 
       // Narrow-phase range check in world units
       if (dist > stats.range) continue;
@@ -1033,9 +1026,7 @@ export class TowerCombatService {
     for (const enemy of candidates) {
       if (enemy.health <= 0) continue;
 
-      const dx = enemy.position.x - towerWorldX;
-      const dz = enemy.position.z - towerWorldZ;
-      const dist = Math.sqrt(dx * dx + dz * dz);
+      const dist = dist2d(enemy.position.x, enemy.position.z, towerWorldX, towerWorldZ);
 
       // Narrow-phase range check
       if (dist > stats.range) continue;
@@ -1169,17 +1160,7 @@ export class TowerCombatService {
     // Dispose and remove all tower meshes from scene
     this.placedTowers.forEach(tower => {
       if (tower.mesh) {
-        scene.remove(tower.mesh);
-        tower.mesh.traverse(child => {
-          if (child instanceof THREE.Mesh) {
-            child.geometry.dispose();
-            if (Array.isArray(child.material)) {
-              child.material.forEach(mat => mat.dispose());
-            } else {
-              child.material.dispose();
-            }
-          }
-        });
+        disposeGroup(tower.mesh, scene);
       }
     });
     this.placedTowers.clear();

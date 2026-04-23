@@ -3,7 +3,7 @@ import { Injectable } from '@angular/core';
 import { GameBoardService } from '../game-board.service';
 import { ElevationService } from './elevation.service';
 import { BOARD_CONFIG } from '../constants/board.constants';
-import { worldToGrid } from '../utils/coordinate-utils';
+import { gridToWorld, worldToGrid } from '../utils/coordinate-utils';
 
 /**
  * Geometric line-of-sight service for the Highground archetype.
@@ -62,8 +62,7 @@ export class LineOfSightService {
     const tileHeight = BOARD_CONFIG.tileHeight;
 
     // ── Tower world position and height ──────────────────────────────────────
-    const towerWorldX = (towerCol - boardWidth / 2) * tileSize;
-    const towerWorldZ = (towerRow - boardHeight / 2) * tileSize;
+    const { x: towerWorldX, z: towerWorldZ } = gridToWorld(towerRow, towerCol, boardWidth, boardHeight, tileSize);
     const towerElevation = this.elevationService.getElevation(towerRow, towerCol);
     // Shot-height: fire from the top surface of the tower's tile (barrel offset = 0 for MVP)
     const towerY = towerElevation + tileHeight;
@@ -103,8 +102,7 @@ export class LineOfSightService {
     // The tile center world position gives us the t parameter via inverse lerp.
     const towerCenterX = towerWorldX;
     const towerCenterZ = towerWorldZ;
-    const enemyWorldX = (enemyCol - boardWidth / 2) * tileSize;
-    const enemyWorldZ = (enemyRow - boardHeight / 2) * tileSize;
+    const { x: enemyWorldX, z: enemyWorldZ } = gridToWorld(enemyRow, enemyCol, boardWidth, boardHeight, tileSize);
     const rayDX = enemyWorldX - towerCenterX;
     const rayDZ = enemyWorldZ - towerCenterZ;
     const rayLenSq = rayDX * rayDX + rayDZ * rayDZ;
@@ -135,8 +133,7 @@ export class LineOfSightService {
       // Use the more accurate projection for non-degenerate rays.
       let tAtTile: number;
       if (rayLenSq > 0) {
-        const tileCenterX = (curCol - boardWidth / 2) * tileSize;
-        const tileCenterZ = (curRow - boardHeight / 2) * tileSize;
+        const { x: tileCenterX, z: tileCenterZ } = gridToWorld(curRow, curCol, boardWidth, boardHeight, tileSize);
         const toCenterX = tileCenterX - towerCenterX;
         const toCenterZ = tileCenterZ - towerCenterZ;
         // t = dot(toCenter, ray) / |ray|²

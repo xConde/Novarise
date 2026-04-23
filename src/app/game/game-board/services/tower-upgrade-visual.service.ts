@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { TOWER_UPGRADE_VISUAL_CONFIG, SPECIALIZATION_VISUAL_CONFIG } from '../constants/effects.constants';
 import { TowerSpecialization } from '../models/tower.model';
 import { TOWER_VISUAL_CONFIG } from '../constants/ui.constants';
+import { getMaterials } from '../utils/three-utils';
 
 interface FlashEffect {
   sprite: THREE.Sprite;
@@ -180,7 +181,7 @@ export class TowerUpgradeVisualService {
     const animatedNames = new Set(['tip', 'orb']);
     towerGroup.traverse(child => {
       if (child instanceof THREE.Mesh && !animatedNames.has(child.name)) {
-        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        const materials = getMaterials(child);
         for (const mat of materials) {
           if (mat instanceof THREE.MeshStandardMaterial) {
             mat.emissive.set(config.emissiveTint);

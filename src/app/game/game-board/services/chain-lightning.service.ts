@@ -8,6 +8,7 @@ import { SpatialGrid } from '../utils/spatial-grid';
 import { EnemyService } from './enemy.service';
 import { StatusEffectService } from './status-effect.service';
 import { CombatVFXService } from './combat-vfx.service';
+import { dist2d } from '../utils/coordinate-utils';
 
 /**
  * Handles chain lightning logic for the CHAIN tower type.
@@ -143,9 +144,7 @@ export class ChainLightningService {
     for (const enemy of candidates) {
       if (enemy.health <= 0 || excludeIds.has(enemy.id)) continue;
 
-      const dx = enemy.position.x - from.position.x;
-      const dz = enemy.position.z - from.position.z;
-      const dist = Math.sqrt(dx * dx + dz * dz);
+      const dist = dist2d(enemy.position.x, enemy.position.z, from.position.x, from.position.z);
 
       // Narrow-phase range check
       if (dist <= chainRange && dist < nearestDist) {
