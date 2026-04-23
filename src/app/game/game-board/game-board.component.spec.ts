@@ -1053,11 +1053,6 @@ describe('GameBoardComponent', () => {
       expect(() => (component as any).selectPlacedTower('r0-c1')).not.toThrow();
     });
 
-    it('getEffectiveTowerCost should return 0 for null type', () => {
-      const cost = component.getEffectiveTowerCost(null);
-
-      expect(cost).toBe(0);
-    });
   });
 
   describe('Mobile tower preview (handleTowerButtonTap)', () => {

@@ -8,7 +8,6 @@ import { MapBridgeService } from '@core/services/map-bridge.service';
 import { AudioService } from './audio.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { calculateScoreBreakdown, ScoreBreakdown } from '../models/score.model';
-import { DIFFICULTY_PRESETS } from '../models/game-state.model';
 import { ChallengeDefinition, evaluateChallenges, GameEndState } from '../../../run/data/challenges';
 
 /** Data returned from recordEnd() for use by the component (display/UI updates). */
@@ -82,7 +81,7 @@ export class GameEndService {
     const scoreBreakdown: ScoreBreakdown = calculateScoreBreakdown(
       state.score,
       state.lives,
-      DIFFICULTY_PRESETS[state.difficulty].lives,
+      state.initialLives,
       state.difficulty,
       state.wave,
       isVictory,
@@ -182,7 +181,7 @@ export class GameEndService {
       enemiesKilled: totalKills,
       goldEarned: stats.totalGoldEarned,
       wavesCompleted: endState.wave,
-      livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
+      livesLost: endState.initialLives - endState.lives,
       towerKills: stats.killsByTowerType,
       modifierCount: endState.activeModifiers.size,
       usedSpecialization: this.hasSpecializationBeenUsed,

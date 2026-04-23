@@ -2,7 +2,6 @@ import { Injectable } from '@angular/core';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { GameStateService } from './game-state.service';
 import { CombatLoopService } from './combat-loop.service';
-import { DIFFICULTY_PRESETS } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
 import { ChallengeDefinition, ChallengeType, getChallengesForLevel } from '../../../run/data/challenges';
 import { ChallengeIndicator } from '../components/game-hud/game-hud.component';
@@ -45,7 +44,7 @@ export class ChallengeDisplayService {
 
     const snapshot = this.challengeTrackingService.getSnapshot();
     const state = this.gameStateService.getState();
-    const initialLives = DIFFICULTY_PRESETS[state.difficulty].lives;
+    const initialLives = state.initialLives;
 
     this.indicators = challenges.map(c => this.buildIndicator(c, snapshot, initialLives));
     return this.indicators;

@@ -87,6 +87,18 @@ describe('ChallengeDisplayService', () => {
       expect(untouchable!.passing).toBeFalse();
       expect(untouchable!.value).toBe('✗');
     });
+
+    it('should use state.initialLives (not derive from DIFFICULTY_PRESETS) so relic-raised lives are honored', () => {
+      // IRON_HEART relic raises initialLives to 25 above the NORMAL default of 20.
+      // If the service derived initialLives from DIFFICULTY_PRESETS, it would treat
+      // 20 lives as already-damaged. With the fix, 20 lives is a state where the
+      // player took 5 damage — correctly failing UNTOUCHABLE.
+      gameStateSpy.getState.and.returnValue({ ...INITIAL_GAME_STATE, lives: 20, initialLives: 25 });
+      const result = service.updateIndicators('campaign_01');
+      const untouchable = result.find(i => i.label === 'No Damage');
+      expect(untouchable).toBeDefined();
+      expect(untouchable!.passing).toBeFalse();
+    });
   });
 
   describe('updateIndicators — TOWER_LIMIT challenge', () => {
