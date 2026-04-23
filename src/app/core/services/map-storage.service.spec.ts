@@ -197,6 +197,13 @@ describe('MapStorageService', () => {
     });
 
     it('should return maps sorted by updated date (most recent first)', () => {
+      // saveMap() stamps metadata.updatedAt via Date.now(); on fast CI three
+      // consecutive calls can land in the same millisecond, producing a tie
+      // that the unstable sort resolves by insertion order — wrong answer.
+      // Spy a monotonically-increasing clock so ordering is deterministic.
+      let nowMs = 1_000_000;
+      spyOn(Date, 'now').and.callFake(() => ++nowMs);
+
       const mapId1 = service.saveMap('Map 1', testMapData())!;
       service.saveMap('Map 2', testMapData());
 
