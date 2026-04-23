@@ -1,8 +1,9 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
-import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE, VALID_TRANSITIONS } from '../models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE } from '../models/game-state.model';
 import { GameModifier, ModifierEffects, mergeModifierEffects, calculateModifierScoreMultiplier } from '../models/game-modifier.model';
 import { SerializableGameState } from '../models/encounter-checkpoint.model';
+import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
 
 @Injectable()
 export class GameStateService {
@@ -51,32 +52,6 @@ export class GameStateService {
   /** Emits whenever the game phase changes. Each emission carries the previous and next phase. */
   getPhaseChanges(): Observable<{ from: GamePhase; to: GamePhase }> {
     return this.phaseChange$.asObservable();
-  }
-
-  /** Force-sets the game phase and emits. Prefer `startWave()` / `completeWave()` for normal phase transitions — use this only for external overrides (e.g., editor quick-play teardown). No-op on invalid transitions (warns to console). */
-  setPhase(phase: GamePhase): void {
-    if (!this.validateTransition(phase)) return;
-    const from = this.state.phase;
-    this.state.phase = phase;
-    if (from !== phase) {
-      this.phaseChange$.next({ from, to: phase });
-    }
-    this.emit();
-  }
-
-  /**
-   * Returns true if the transition from the current phase to `to` is legal (or is a no-op).
-   * Logs a warning and returns false for invalid transitions.
-   */
-  private validateTransition(to: GamePhase): boolean {
-    const from = this.state.phase;
-    if (from === to) return true; // no-op, not a transition
-    const allowed = VALID_TRANSITIONS[from];
-    if (!allowed.has(to)) {
-      console.warn(`Invalid phase transition: ${from} → ${to}`);
-      return false;
-    }
-    return true;
   }
 
   /** Increments wave counter and transitions to COMBAT phase. Guards against double-calls (COMBAT phase) and terminal states (VICTORY/DEFEAT). No-op if no waves remain and endless mode is off. */
@@ -221,6 +196,17 @@ export class GameStateService {
   }
 
   /**
+   * Returns the base tower placement cost adjusted by the active modifier's
+   * towerCostMultiplier. Does NOT include relic cost multipliers — those are
+   * applied separately by TowerInteractionService at placement time.
+   */
+  public getEffectiveTowerCost(type: TowerType): number {
+    const baseCost = TOWER_CONFIGS[type].cost;
+    const multiplier = this.getModifierEffects().towerCostMultiplier ?? 1;
+    return Math.round(baseCost * multiplier);
+  }
+
+  /**
    * Restore lives from a card effect (e.g. Repair Walls spell).
    * Caps at the encounter's maxLives ceiling so healing cannot exceed the run's
    * max (which accounts for relic bonuses and ascension modifiers).
@@ -229,12 +215,6 @@ export class GameStateService {
   addLives(amount: number): void {
     if (amount <= 0) return;
     this.state.lives = Math.min(this.state.lives + amount, this.state.maxLives);
-    this.emit();
-  }
-
-  /** Adds to score without awarding gold. Use for score-only bonuses (e.g., modifier multiplier adjustments). */
-  addScore(points: number): void {
-    this.state.score += points;
     this.emit();
   }
 

@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { TerrainGrid } from './features/terrain-editor/terrain-grid.class';
 import { TerrainType } from './models/terrain-types.enum';
 import { MapStorageService } from '../../core/services/map-storage.service';
-import { EditHistoryService, SpawnPointCommand, ExitPointCommand } from './core/edit-history.service';
+import { EditHistoryService } from './core/edit-history.service';
 import { CameraControlService, MovementInput, RotationInput, JoystickInput } from './core/camera-control.service';
 import { EditorStateService, EditMode, BrushTool } from './core/editor-state.service';
 import { MapBridgeService } from '../../core/services/map-bridge.service';
@@ -27,9 +27,6 @@ import { SpawnExitMarkerService } from './core/spawn-exit-marker.service';
 import { RectangleToolService } from './core/rectangle-tool.service';
 import { EditorModalService } from './core/editor-modal.service';
 import { EditorKeyboardService } from './core/editor-keyboard.service';
-
-// Re-export types for template compatibility
-export { EditMode, BrushTool } from './core/editor-state.service';
 
 @Component({
   selector: 'app-novarise',
@@ -391,81 +388,38 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    // Spawn/exit placement — stays in component (marker management)
+    // Spawn/exit placement — delegated to TerrainEditService for logic;
+    // visual callbacks (flash, marker sync) stay in the component.
     affectedTiles.forEach(tileMesh => {
       const x = tileMesh.userData['gridX'] as number;
       const z = tileMesh.userData['gridZ'] as number;
 
       if (editMode === 'spawn') {
-        // Reject placement on non-walkable terrain
-        const tile = this.terrainGrid.getTileAt(x, z);
-        if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
-          const spawnMs = this.spawnExitMarker.getSpawnMarkers();
-          if (spawnMs.length > 0) this.brushPreview.flashMarkerRejection(spawnMs[0]);
-          return;
-        }
-        // Reject placement on same tile as any exit
-        const exitPoints = this.terrainGrid.getExitPoints();
-        if (exitPoints.some(ep => ep.x === x && ep.z === z)) {
-          const spawnMs = this.spawnExitMarker.getSpawnMarkers();
-          if (spawnMs.length > 0) this.brushPreview.flashMarkerRejection(spawnMs[0]);
-          return;
-        }
-        // Snapshot full spawn array before toggle for undo
-        const previousSpawns = this.terrainGrid.getSpawnPoints().map(p => ({ ...p }));
-        this.terrainGrid.addSpawnPoint(x, z);
-        this.spawnExitMarker.updateSpawnMarkers();
-        this.brushPreview.flashTileEdit(tileMesh);
-        // Record command immediately (not part of stroke)
-        const command = new SpawnPointCommand(
-          previousSpawns,
-          { x, z },
-          (points) => {
-            this.terrainGrid.setSpawnPoints(points);
+        this.terrainEdit.applySpawnExitPlacement(
+          'spawn', x, z,
+          /* onAccepted */ () => {
             this.spawnExitMarker.updateSpawnMarkers();
+            this.brushPreview.flashTileEdit(tileMesh);
           },
-          (sx, sz) => {
-            this.terrainGrid.addSpawnPoint(sx, sz);
-            this.spawnExitMarker.updateSpawnMarkers();
-          }
+          /* onRejected */ () => {
+            const spawnMs = this.spawnExitMarker.getSpawnMarkers();
+            if (spawnMs.length > 0) this.brushPreview.flashMarkerRejection(spawnMs[0]);
+          },
+          /* onComplete */ () => this.runPathValidation(),
         );
-        this.editHistory.record(command);
-        this.runPathValidation();
       } else if (editMode === 'exit') {
-        // Reject placement on non-walkable terrain
-        const tile = this.terrainGrid.getTileAt(x, z);
-        if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
-          const exitMs = this.spawnExitMarker.getExitMarkers();
-          if (exitMs.length > 0) this.brushPreview.flashMarkerRejection(exitMs[0]);
-          return;
-        }
-        // Reject placement on same tile as any spawn
-        const spawnPoints = this.terrainGrid.getSpawnPoints();
-        if (spawnPoints.some(sp => sp.x === x && sp.z === z)) {
-          const exitMs = this.spawnExitMarker.getExitMarkers();
-          if (exitMs.length > 0) this.brushPreview.flashMarkerRejection(exitMs[0]);
-          return;
-        }
-        // Snapshot full exit array before toggle for undo
-        const previousExits = this.terrainGrid.getExitPoints().map(p => ({ ...p }));
-        this.terrainGrid.addExitPoint(x, z);
-        this.spawnExitMarker.updateExitMarkers();
-        this.brushPreview.flashTileEdit(tileMesh);
-        // Record command immediately (not part of stroke)
-        const command = new ExitPointCommand(
-          previousExits,
-          { x, z },
-          (points) => {
-            this.terrainGrid.setExitPoints(points);
+        this.terrainEdit.applySpawnExitPlacement(
+          'exit', x, z,
+          /* onAccepted */ () => {
             this.spawnExitMarker.updateExitMarkers();
+            this.brushPreview.flashTileEdit(tileMesh);
           },
-          (ex, ez) => {
-            this.terrainGrid.addExitPoint(ex, ez);
-            this.spawnExitMarker.updateExitMarkers();
-          }
+          /* onRejected */ () => {
+            const exitMs = this.spawnExitMarker.getExitMarkers();
+            if (exitMs.length > 0) this.brushPreview.flashMarkerRejection(exitMs[0]);
+          },
+          /* onComplete */ () => this.runPathValidation(),
         );
-        this.editHistory.record(command);
-        this.runPathValidation();
       }
     });
   }

@@ -9,6 +9,8 @@ import { TerrainGrid } from '../features/terrain-editor/terrain-grid.class';
 import { TerrainGridState } from '../features/terrain-editor/terrain-grid-state.interface';
 import { EDITOR_AUTOSAVE_DRAFT_KEY } from '../constants/editor-ui.constants';
 import { StorageService } from '../../../core/services/storage.service';
+import { MapMetadata } from '../../../core/services/map-storage.service';
+import { MapTemplate } from '../../../core/models/map-template.model';
 
 describe('MapFileService', () => {
   let service: MapFileService;
@@ -187,7 +189,7 @@ describe('MapFileService', () => {
       const mockMaps = [{ id: '1', name: 'A', createdAt: 0, updatedAt: 0, version: '2', gridSize: 25 }];
       mapStorage.getAllMaps.and.returnValue(mockMaps);
 
-      expect(service.getAllMaps()).toBe(mockMaps as any);
+      expect(service.getAllMaps()).toBe(mockMaps as MapMetadata[]);
     });
   });
 
@@ -196,7 +198,7 @@ describe('MapFileService', () => {
   describe('loadTemplate()', () => {
     it('returns state when template is found', () => {
       mapTemplateService.loadTemplate.and.returnValue(fakeState);
-      const template = { id: 'classic', name: 'Classic' } as any;
+      const template = { id: 'classic', name: 'Classic', description: '' } as MapTemplate;
 
       const result = service.loadTemplate(template);
 
@@ -206,7 +208,7 @@ describe('MapFileService', () => {
 
     it('returns null when template is not found', () => {
       mapTemplateService.loadTemplate.and.returnValue(null);
-      const template = { id: 'missing', name: 'Missing' } as any;
+      const template = { id: 'missing', name: 'Missing', description: '' } as MapTemplate;
 
       const result = service.loadTemplate(template);
 

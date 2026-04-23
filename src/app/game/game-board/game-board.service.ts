@@ -4,6 +4,7 @@ import { BlockType, GameBoardTile, SpawnerType } from './models/game-board-tile'
 import { TowerType } from './models/tower.model';
 import { BOARD_CONFIG } from './constants/board.constants';
 import { assertNever } from './utils/assert-never';
+import { isInBounds } from './utils/coordinate-utils';
 import { MutationOp } from './services/path-mutation.types';
 import { TerraformMaterialPoolService } from './services/terraform-material-pool.service';
 
@@ -114,7 +115,7 @@ export class GameBoardService {
    * Returns the new tile for the caller to act on (e.g. mesh translate).
    */
   setTileElevation(row: number, col: number, newElevation: number): GameBoardTile | null {
-    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+    if (!isInBounds(row, col, this.gameBoardHeight, this.gameBoardWidth)) {
       return null;
     }
 
@@ -314,7 +315,7 @@ export class GameBoardService {
 
   // Tower placement
   canPlaceTower(row: number, col: number): boolean {
-    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+    if (!isInBounds(row, col, this.gameBoardHeight, this.gameBoardWidth)) {
       return false;
     }
 
@@ -440,7 +441,8 @@ export class GameBoardService {
       return false;
     }
 
-    // Mark the tile as occupied with a tower and non-traversable
+    // Mark the tile as occupied with a tower and non-traversable.
+    // Preserve elevation — same fix class as Phase 3 red-team Finding 1.
     const oldTile = this.gameBoard[row][col];
     this.gameBoard[row][col] = new GameBoardTile(
       oldTile.x,
@@ -449,7 +451,10 @@ export class GameBoardService {
       false,
       false,
       oldTile.cost,
-      towerType
+      towerType,
+      undefined,
+      undefined,
+      oldTile.elevation,
     );
 
     return true;
@@ -461,9 +466,10 @@ export class GameBoardService {
    * towers are placed one-by-one before the full saved layout is reconstructed.
    */
   forceSetTower(row: number, col: number, towerType: TowerType): void {
-    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+    if (!isInBounds(row, col, this.gameBoardHeight, this.gameBoardWidth)) {
       return;
     }
+    // Preserve elevation — same fix class as Phase 3 red-team Finding 1.
     const oldTile = this.gameBoard[row][col];
     this.gameBoard[row][col] = new GameBoardTile(
       oldTile.x,
@@ -472,12 +478,15 @@ export class GameBoardService {
       false,
       false,
       oldTile.cost,
-      towerType
+      towerType,
+      undefined,
+      undefined,
+      oldTile.elevation,
     );
   }
 
   removeTower(row: number, col: number): boolean {
-    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+    if (!isInBounds(row, col, this.gameBoardHeight, this.gameBoardWidth)) {
       return false;
     }
 
@@ -512,7 +521,7 @@ export class GameBoardService {
     mutationOp: MutationOp,
     priorType?: BlockType,
   ): GameBoardTile | null {
-    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+    if (!isInBounds(row, col, this.gameBoardHeight, this.gameBoardWidth)) {
       return null;
     }
 
@@ -560,7 +569,9 @@ export class GameBoardService {
 
     const originalTile = this.gameBoard[row][col];
 
-    // Temporarily substitute the proposed tile type
+    // Temporarily substitute the proposed tile type.
+    // Elevation is intentionally omitted — this is a throwaway BFS probe tile;
+    // only isTraversable matters for pathfinding, and elevation does not affect it.
     const traversable = type === BlockType.BASE || type === BlockType.EXIT;
     this.gameBoard[row][col] = new GameBoardTile(
       originalTile.x,

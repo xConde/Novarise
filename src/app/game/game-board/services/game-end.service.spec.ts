@@ -198,6 +198,21 @@ describe('GameEndService', () => {
         jasmine.objectContaining({ slowEffectsApplied: 7 })
       );
     });
+
+    it('livesLost derives from state.initialLives so relic-raised lives are honored', () => {
+      // IRON_HEART relic raises initialLives to 25 above NORMAL's 20 default.
+      // At 20 lives remaining, the player actually took 5 damage. Deriving from
+      // DIFFICULTY_PRESETS would report livesLost = 0 (wrongly triggering "Flawless").
+      gameStateService.setInitialLives(20, 25);
+      // setInitialLives sets both current lives and initialLives; knock off 5.
+      for (let i = 0; i < 5; i++) gameStateService.loseLife();
+
+      service.recordEnd(false);
+
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ livesLost: 5 })
+      );
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -356,7 +371,7 @@ describe('GameEndService', () => {
     });
 
     it('victory with no mapId returns empty completedChallenges', () => {
-      mapBridgeSpy.getMapId.and.returnValue(undefined as any);
+      mapBridgeSpy.getMapId.and.returnValue(null);
 
       const result = service.recordEnd(true);
 

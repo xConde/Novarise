@@ -1,5 +1,9 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { TouchDetectionService, DeviceInfo } from './touch-detection.service';
+
+interface TestableTouchDetectionService {
+  getDefaultDeviceInfo(): DeviceInfo;
+}
 import { JOYSTICK_BREAKPOINTS } from '../models/joystick.types';
 
 describe('TouchDetectionService', () => {
@@ -26,14 +30,14 @@ describe('TouchDetectionService', () => {
   describe('hasTouchSupport', () => {
     it('should return true when ontouchstart is available', () => {
       // Mock touch support
-      (window as any).ontouchstart = {};
+      (window as unknown as { ontouchstart: object }).ontouchstart = {};
 
       const result = service.hasTouchSupport();
 
       expect(result).toBe(true);
 
       // Cleanup
-      delete (window as any).ontouchstart;
+      delete (window as unknown as { ontouchstart?: object }).ontouchstart;
     });
 
     it('should return true when maxTouchPoints > 0', () => {
@@ -193,42 +197,42 @@ describe('TouchDetectionService', () => {
       mockInnerHeight = 667;
 
       // Mock touch support
-      (window as any).ontouchstart = {};
+      (window as unknown as { ontouchstart: object }).ontouchstart = {};
 
       const newService = new TouchDetectionService();
       const info = newService.getDeviceInfoSnapshot();
 
       expect(info.showVirtualControls).toBe(true);
 
-      delete (window as any).ontouchstart;
+      delete (window as unknown as { ontouchstart?: object }).ontouchstart;
     });
 
     it('should show virtual controls on touch-enabled tablet', () => {
       mockInnerWidth = 800;
       mockInnerHeight = 1024;
 
-      (window as any).ontouchstart = {};
+      (window as unknown as { ontouchstart: object }).ontouchstart = {};
 
       const newService = new TouchDetectionService();
       const info = newService.getDeviceInfoSnapshot();
 
       expect(info.showVirtualControls).toBe(true);
 
-      delete (window as any).ontouchstart;
+      delete (window as unknown as { ontouchstart?: object }).ontouchstart;
     });
 
     it('should hide virtual controls on desktop', () => {
       mockInnerWidth = 1920;
       mockInnerHeight = 1080;
 
-      (window as any).ontouchstart = {};
+      (window as unknown as { ontouchstart: object }).ontouchstart = {};
 
       const newService = new TouchDetectionService();
       const info = newService.getDeviceInfoSnapshot();
 
       expect(info.showVirtualControls).toBe(false);
 
-      delete (window as any).ontouchstart;
+      delete (window as unknown as { ontouchstart?: object }).ontouchstart;
     });
 
     it('should hide virtual controls without touch support', () => {
@@ -236,7 +240,7 @@ describe('TouchDetectionService', () => {
       mockInnerHeight = 667;
 
       // Ensure no touch support
-      delete (window as any).ontouchstart;
+      delete (window as unknown as { ontouchstart?: object }).ontouchstart;
       Object.defineProperty(navigator, 'maxTouchPoints', {
         value: 0,
         configurable: true
@@ -337,7 +341,7 @@ describe('TouchDetectionService', () => {
   describe('Default Device Info', () => {
     it('should provide sensible defaults when window is undefined', () => {
       // Access private method through type casting
-      const defaultInfo = (service as any).getDefaultDeviceInfo();
+      const defaultInfo = (service as unknown as TestableTouchDetectionService).getDefaultDeviceInfo();
 
       expect(defaultInfo.hasTouchSupport).toBe(false);
       expect(defaultInfo.deviceType).toBe('desktop');

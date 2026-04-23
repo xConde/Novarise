@@ -1,5 +1,10 @@
 import { fakeAsync, tick } from '@angular/core/testing';
 import { WaveCombatFacadeService, WaveCombatCallbacks } from './wave-combat-facade.service';
+
+interface TestableWaveCombatFacadeService {
+  waveClearTimerId: ReturnType<typeof setTimeout> | null;
+  waveStartPulseTimerId: ReturnType<typeof setTimeout> | null;
+}
 import { GameStateService } from './game-state.service';
 import { WaveService } from './wave.service';
 import { CombatLoopService } from './combat-loop.service';
@@ -522,14 +527,14 @@ describe('WaveCombatFacadeService', () => {
       service.cleanup();
       tick(2000);
       // Banner stays in whatever state it was — key thing is no timer fires after cleanup
-      expect((service as any).waveClearTimerId).toBeNull();
+      expect((service as unknown as TestableWaveCombatFacadeService).waveClearTimerId).toBeNull();
     }));
 
     it('clears the wave-start-pulse timer', fakeAsync(() => {
       service.triggerWaveStartPulse();
       service.cleanup();
       tick(300);
-      expect((service as any).waveStartPulseTimerId).toBeNull();
+      expect((service as unknown as TestableWaveCombatFacadeService).waveStartPulseTimerId).toBeNull();
     }));
   });
 });

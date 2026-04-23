@@ -24,7 +24,6 @@ import { EnemyService } from './services/enemy.service';
 import { EnemyVisualService } from './services/enemy-visual.service';
 import { TutorialService, TutorialStep } from '../../core/services/tutorial.service';
 import { BehaviorSubject, of } from 'rxjs';
-import { CampaignLevel, CampaignTier } from '../../run/data/campaign-levels';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
 import { GameNotificationService, NotificationType } from './services/game-notification.service';
 import { ChallengeTrackingService } from './services/challenge-tracking.service';
@@ -73,6 +72,89 @@ import { CardPlayService } from './services/card-play.service';
 import { TowerInteractionService } from './services/tower-interaction.service';
 import { PathMutationService } from './services/path-mutation.service';
 import { ElevationService } from './services/elevation.service';
+import { TileHighlightService } from './services/tile-highlight.service';
+import { PathVisualizationService } from './services/path-visualization.service';
+import { RangeVisualizationService } from './services/range-visualization.service';
+import { AudioService } from './services/audio.service';
+import { AscensionModifierService } from './services/ascension-modifier.service';
+import { TowerMeshLifecycleService } from './services/tower-mesh-lifecycle.service';
+import { TowerPreviewService } from './services/tower-preview.service';
+import { EncounterConfig } from '../../run/models/encounter.model';
+import { NodeType } from '../../run/models/node-map.model';
+
+// ---------------------------------------------------------------------------
+// Test-only interfaces — allow typed access to private fields/methods without
+// using `as any`.  Cast once in each describe block that needs private access:
+//   const comp = component as unknown as TestableGameBoardComponent;
+// ---------------------------------------------------------------------------
+
+/** Exposes every private field/method of GameBoardComponent that the specs touch. */
+interface TestableGameBoardComponent {
+  // private fields
+  scene: THREE.Scene;
+  contextLost: boolean;
+  initializationFailed: boolean;
+  pathVisualizationService: PathVisualizationService;
+  enemyService: EnemyService;
+  sceneService: SceneService;
+  tileHighlightService: TileHighlightService;
+  rangeVisualizationService: RangeVisualizationService;
+  audioService: AudioService;
+  challengeTrackingService: ChallengeTrackingService;
+  towerInteractionService: TowerInteractionService;
+  selectedTowerInfo: PlacedTower | null;
+  ascensionModifier: AscensionModifierService;
+  towerUpgradeVisualService: TowerUpgradeVisualService;
+  towerMeshLifecycle: TowerMeshLifecycleService;
+  gameBoardService: GameBoardService;
+  towerCombatService: TowerCombatService;
+  boardPointer: BoardPointerService;
+  towerPreviewService: TowerPreviewService;
+  gameStatsService: GameStatsService;
+
+  // private methods
+  updateAchievementDetails(): void;
+  clearTileHighlights(): void;
+  selectPlacedTower(key: string): void;
+  refreshTowerInfoPanel(): void;
+  setupAutoPause(): void;
+  cleanupGameObjects(): void;
+  updateChallengeIndicators(): void;
+  tryPlaceTower(row: number, col: number): void;
+  showPathBlockedWarning(): void;
+  refreshPathOverlay(): void;
+  updateTileHighlights(): void;
+  deselectTower(): void;
+}
+
+/** Exposes the internal challengeTrackingService field of TowerInteractionService. */
+interface TestableTowerInteractionService {
+  challengeTrackingService: ChallengeTrackingService;
+}
+
+/** Exposes the private tutorialSub on TutorialFacadeService. */
+interface TestableTutorialFacade {
+  tutorialSub: import('rxjs').Subscription | null;
+  currentTutorialStep: import('../../core/services/tutorial.service').TutorialStep | null;
+}
+
+/** Exposes every private field/method of TouchInteractionService that the specs touch. */
+interface TestableTouchInteractionService {
+  sceneService: SceneService;
+  touchStartHandler: (event: TouchEvent) => void;
+  touchMoveHandler: (event: TouchEvent) => void;
+  touchEndHandler: (event: TouchEvent) => void;
+  touchIsDragging: boolean;
+  touchStartX: number;
+  touchStartY: number;
+  touchStartTime: number;
+  pinchStartDistance: number;
+}
+
+/** Exposes the private updateMinimap on GameRenderService. */
+interface TestableGameRenderService {
+  updateMinimap(timeMs: number): void;
+}
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -204,7 +286,7 @@ describe('GameBoardComponent', () => {
     it('isPaused getter should reflect gameState.isPaused', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
       // Put state into COMBAT so togglePause takes effect
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       gameStateService.togglePause();
 
       expect(component.isPaused).toBeTrue();
@@ -323,14 +405,14 @@ describe('GameBoardComponent', () => {
 
     it('pressing Escape in INSPECT mode deselects placed tower info', () => {
       component.selectedTowerType = null;
-      (component as any).selectedTowerInfo = { id: 'fake', type: TowerType.SNIPER, level: 1, row: 0, col: 0, kills: 0, totalInvested: 50, mesh: null, targetingMode: TargetingMode.NEAREST };
+      (component as unknown as TestableGameBoardComponent).selectedTowerInfo = { id: 'fake', type: TowerType.SNIPER, level: 1, row: 0, col: 0, kills: 0, totalInvested: 50, mesh: null, targetingMode: TargetingMode.NEAREST };
       fireKey('Escape');
       expect(component.selectedTowerInfo).toBeNull();
     });
 
     it('pressing p toggles pause', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       spyOn(component, 'togglePause').and.callThrough();
       fireKey('p');
       expect(component.togglePause).toHaveBeenCalled();
@@ -338,7 +420,7 @@ describe('GameBoardComponent', () => {
 
     it('pressing P (uppercase) also toggles pause', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       spyOn(component, 'togglePause').and.callThrough();
       fireKey('P');
       expect(component.togglePause).toHaveBeenCalled();
@@ -460,10 +542,11 @@ describe('GameBoardComponent', () => {
       touchService = fixture.debugElement.injector.get(TouchInteractionService);
 
       // Stub sceneService camera/controls for move handler
-      const mockCamera = { position: new THREE.Vector3(0, 10, 0) } as any;
-      const mockControls = { target: new THREE.Vector3(0, 0, 0), dispose: () => {} } as any;
-      spyOn((touchService as any).sceneService, 'getCamera').and.returnValue(mockCamera);
-      spyOn((touchService as any).sceneService, 'getControls').and.returnValue(mockControls);
+      const mockCamera = { position: new THREE.Vector3(0, 10, 0) } as unknown as THREE.PerspectiveCamera;
+      const mockControls = { target: new THREE.Vector3(0, 0, 0), dispose: () => {} } as unknown as ReturnType<SceneService['getControls']>;
+      const tsi = touchService as unknown as TestableTouchInteractionService;
+      spyOn(tsi.sceneService, 'getCamera').and.returnValue(mockCamera);
+      spyOn(tsi.sceneService, 'getControls').and.returnValue(mockControls);
     });
 
     afterEach(() => {
@@ -482,9 +565,10 @@ describe('GameBoardComponent', () => {
     it('touch handlers are registered as named references, not anonymous functions', () => {
       touchService.init(mockCanvas, () => {});
 
-      const startRef = (touchService as any).touchStartHandler;
-      const moveRef = (touchService as any).touchMoveHandler;
-      const endRef = (touchService as any).touchEndHandler;
+      const tsiRef = touchService as unknown as TestableTouchInteractionService;
+      const startRef = tsiRef.touchStartHandler;
+      const moveRef = tsiRef.touchMoveHandler;
+      const endRef = tsiRef.touchEndHandler;
 
       expect(typeof startRef).toBe('function');
       expect(typeof moveRef).toBe('function');
@@ -512,16 +596,16 @@ describe('GameBoardComponent', () => {
 
     it('touchStartHandler records start position and resets drag flag', () => {
       touchService.init(mockCanvas, () => {});
-      (touchService as any).touchIsDragging = true;
+      (touchService as unknown as TestableTouchInteractionService).touchIsDragging = true;
 
       const touch = { clientX: 150, clientY: 200 } as Touch;
       const event = { preventDefault: () => {}, touches: [touch] } as unknown as TouchEvent;
 
-      (touchService as any).touchStartHandler(event);
+      (touchService as unknown as TestableTouchInteractionService).touchStartHandler(event);
 
-      expect((touchService as any).touchStartX).toBe(150);
-      expect((touchService as any).touchStartY).toBe(200);
-      expect((touchService as any).touchIsDragging).toBeFalse();
+      expect((touchService as unknown as TestableTouchInteractionService).touchStartX).toBe(150);
+      expect((touchService as unknown as TestableTouchInteractionService).touchStartY).toBe(200);
+      expect((touchService as unknown as TestableTouchInteractionService).touchIsDragging).toBeFalse();
     });
 
     it('touchStartHandler records pinch start distance for two-finger touch', () => {
@@ -531,38 +615,38 @@ describe('GameBoardComponent', () => {
       const t1 = { clientX: 30, clientY: 40 } as Touch;
       const event = { preventDefault: () => {}, touches: [t0, t1] } as unknown as TouchEvent;
 
-      (touchService as any).touchStartHandler(event);
+      (touchService as unknown as TestableTouchInteractionService).touchStartHandler(event);
 
       // distance = sqrt(30^2 + 40^2) = sqrt(900+1600) = 50
-      expect((touchService as any).pinchStartDistance).toBe(50);
+      expect((touchService as unknown as TestableTouchInteractionService).pinchStartDistance).toBe(50);
     });
 
     it('touchMoveHandler sets touchIsDragging to true when movement exceeds threshold', () => {
       touchService.init(mockCanvas, () => {});
-      (touchService as any).touchStartX = 0;
-      (touchService as any).touchStartY = 0;
+      (touchService as unknown as TestableTouchInteractionService).touchStartX = 0;
+      (touchService as unknown as TestableTouchInteractionService).touchStartY = 0;
 
       const touch = { clientX: 20, clientY: 20 } as Touch;
       const event = { preventDefault: () => {}, touches: [touch] } as unknown as TouchEvent;
 
-      (touchService as any).touchMoveHandler(event);
+      (touchService as unknown as TestableTouchInteractionService).touchMoveHandler(event);
 
-      expect((touchService as any).touchIsDragging).toBeTrue();
+      expect((touchService as unknown as TestableTouchInteractionService).touchIsDragging).toBeTrue();
     });
 
     it('touchMoveHandler does not set touchIsDragging when movement is within threshold', () => {
       touchService.init(mockCanvas, () => {});
-      (touchService as any).touchStartX = 0;
-      (touchService as any).touchStartY = 0;
-      (touchService as any).touchIsDragging = false;
+      (touchService as unknown as TestableTouchInteractionService).touchStartX = 0;
+      (touchService as unknown as TestableTouchInteractionService).touchStartY = 0;
+      (touchService as unknown as TestableTouchInteractionService).touchIsDragging = false;
 
       // Move only 5px total — below 10px threshold
       const touch = { clientX: 3, clientY: 4 } as Touch;
       const event = { preventDefault: () => {}, touches: [touch] } as unknown as TouchEvent;
 
-      (touchService as any).touchMoveHandler(event);
+      (touchService as unknown as TestableTouchInteractionService).touchMoveHandler(event);
 
-      expect((touchService as any).touchIsDragging).toBeFalse();
+      expect((touchService as unknown as TestableTouchInteractionService).touchIsDragging).toBeFalse();
     });
 
     it('touchEndHandler calls onTap for a short tap with no drag', () => {
@@ -570,15 +654,15 @@ describe('GameBoardComponent', () => {
       let tapY = 0;
       let tapCalled = false;
       touchService.init(mockCanvas, (x, y) => { tapCalled = true; tapX = x; tapY = y; });
-      (touchService as any).touchStartX = 100;
-      (touchService as any).touchStartY = 200;
-      (touchService as any).touchStartTime = performance.now() - 50; // 50ms ago — within 300ms threshold
-      (touchService as any).touchIsDragging = false;
+      (touchService as unknown as TestableTouchInteractionService).touchStartX = 100;
+      (touchService as unknown as TestableTouchInteractionService).touchStartY = 200;
+      (touchService as unknown as TestableTouchInteractionService).touchStartTime = performance.now() - 50; // 50ms ago — within 300ms threshold
+      (touchService as unknown as TestableTouchInteractionService).touchIsDragging = false;
 
       const touch = { clientX: 100, clientY: 200 } as Touch;
       const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
 
-      (touchService as any).touchEndHandler(event);
+      (touchService as unknown as TestableTouchInteractionService).touchEndHandler(event);
 
       expect(tapCalled).toBeTrue();
       expect(tapX).toBe(100);
@@ -588,13 +672,13 @@ describe('GameBoardComponent', () => {
     it('touchEndHandler does not call onTap when drag occurred', () => {
       let tapCalled = false;
       touchService.init(mockCanvas, () => { tapCalled = true; });
-      (touchService as any).touchStartTime = performance.now() - 50;
-      (touchService as any).touchIsDragging = true;
+      (touchService as unknown as TestableTouchInteractionService).touchStartTime = performance.now() - 50;
+      (touchService as unknown as TestableTouchInteractionService).touchIsDragging = true;
 
       const touch = { clientX: 100, clientY: 200 } as Touch;
       const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
 
-      (touchService as any).touchEndHandler(event);
+      (touchService as unknown as TestableTouchInteractionService).touchEndHandler(event);
 
       expect(tapCalled).toBeFalse();
     });
@@ -602,32 +686,32 @@ describe('GameBoardComponent', () => {
     it('touchEndHandler does not call onTap when tap duration exceeds threshold', () => {
       let tapCalled = false;
       touchService.init(mockCanvas, () => { tapCalled = true; });
-      (touchService as any).touchStartTime = performance.now() - 500; // 500ms — exceeds 300ms threshold
-      (touchService as any).touchIsDragging = false;
+      (touchService as unknown as TestableTouchInteractionService).touchStartTime = performance.now() - 500; // 500ms — exceeds 300ms threshold
+      (touchService as unknown as TestableTouchInteractionService).touchIsDragging = false;
 
       const touch = { clientX: 100, clientY: 200 } as Touch;
       const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
 
-      (touchService as any).touchEndHandler(event);
+      (touchService as unknown as TestableTouchInteractionService).touchEndHandler(event);
 
       expect(tapCalled).toBeFalse();
     });
 
     it('touchEndHandler resets touchIsDragging and pinchStartDistance', () => {
       touchService.init(mockCanvas, () => {});
-      (touchService as any).touchIsDragging = true;
-      (touchService as any).pinchStartDistance = 50;
+      (touchService as unknown as TestableTouchInteractionService).touchIsDragging = true;
+      (touchService as unknown as TestableTouchInteractionService).pinchStartDistance = 50;
 
       // Long press — no tap
-      (touchService as any).touchStartTime = performance.now() - 500;
+      (touchService as unknown as TestableTouchInteractionService).touchStartTime = performance.now() - 500;
 
       const touch = { clientX: 0, clientY: 0 } as Touch;
       const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
 
-      (touchService as any).touchEndHandler(event);
+      (touchService as unknown as TestableTouchInteractionService).touchEndHandler(event);
 
-      expect((touchService as any).touchIsDragging).toBeFalse();
-      expect((touchService as any).pinchStartDistance).toBe(0);
+      expect((touchService as unknown as TestableTouchInteractionService).touchIsDragging).toBeFalse();
+      expect((touchService as unknown as TestableTouchInteractionService).pinchStartDistance).toBe(0);
     });
   });
 
@@ -641,7 +725,7 @@ describe('GameBoardComponent', () => {
       // Use real achievement IDs from the ACHIEVEMENTS constant
       const realIds = ACHIEVEMENTS.slice(0, 2).map(a => a.id);
       component.newlyUnlockedAchievements = realIds;
-      (component as any).updateAchievementDetails();
+      (component as unknown as TestableGameBoardComponent).updateAchievementDetails();
 
       const details = component.achievementDetails;
 
@@ -655,7 +739,7 @@ describe('GameBoardComponent', () => {
     it('should filter out unknown achievement IDs', () => {
       const realId = ACHIEVEMENTS[0].id;
       component.newlyUnlockedAchievements = [realId, 'nonexistent_achievement', 'also_fake'];
-      (component as any).updateAchievementDetails();
+      (component as unknown as TestableGameBoardComponent).updateAchievementDetails();
 
       const details = component.achievementDetails;
 
@@ -710,7 +794,7 @@ describe('GameBoardComponent', () => {
       expect(component.isPaused).toBeFalse();
 
       // Enter COMBAT and pause
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       gameStateService.togglePause();
       // Update component's gameState reference
       component.gameState = gameStateService.getState();
@@ -730,7 +814,7 @@ describe('GameBoardComponent', () => {
     let gamePauseService: GamePauseService;
 
     function enterCombatAndPause(): void {
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       gameStateService.togglePause();
       component.gameState = gameStateService.getState();
     }
@@ -764,9 +848,9 @@ describe('GameBoardComponent', () => {
     });
 
     it('toggleAudio calls audioService.toggleMute', () => {
-      spyOn((component as any).audioService, 'toggleMute');
+      spyOn((component as unknown as TestableGameBoardComponent).audioService, 'toggleMute');
       component.toggleAudio();
-      expect((component as any).audioService.toggleMute).toHaveBeenCalled();
+      expect((component as unknown as TestableGameBoardComponent).audioService.toggleMute).toHaveBeenCalled();
     });
 
     it('requestQuit sets showQuitConfirm to true', () => {
@@ -849,7 +933,7 @@ describe('GameBoardComponent', () => {
 
     it('ESC resumes when paused', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       gameStateService.togglePause();
       component.gameState = gameStateService.getState();
 
@@ -864,7 +948,7 @@ describe('GameBoardComponent', () => {
       // Do not enter COMBAT phase here to avoid auto-pause side effects
       component.selectedTowerType = null;
       spyOnProperty(component, 'selectedTowerInfo', 'get').and.returnValue(
-        { id: 'fake', type: TowerType.SNIPER, level: 1, row: 0, col: 0, kills: 0, totalInvested: 50, mesh: null, targetingMode: TargetingMode.NEAREST } as any,
+        { id: 'fake', type: TowerType.SNIPER, level: 1, row: 0, col: 0, kills: 0, totalInvested: 50, mesh: null, targetingMode: TargetingMode.NEAREST } as PlacedTower,
       );
 
       spyOn(component, 'deselectTower');
@@ -886,12 +970,12 @@ describe('GameBoardComponent', () => {
 
     it('togglePathOverlay flips showPathOverlay from false to true', () => {
       // Stub scene + pathVisualizationService to avoid Three.js calls
-      (component as any).scene = new THREE.Scene();
-      const pvs = (component as any).pathVisualizationService;
+      (component as unknown as TestableGameBoardComponent).scene = new THREE.Scene();
+      const pvs = (component as unknown as TestableGameBoardComponent).pathVisualizationService;
       spyOn(pvs, 'showPath');
       spyOn(pvs, 'hidePath');
       // Stub enemyService.getPathToExit to return empty (no path found)
-      spyOn((component as any).enemyService, 'getPathToExit').and.returnValue([]);
+      spyOn((component as unknown as TestableGameBoardComponent).enemyService, 'getPathToExit').and.returnValue([]);
 
       component.togglePathOverlay();
 
@@ -899,11 +983,11 @@ describe('GameBoardComponent', () => {
     });
 
     it('togglePathOverlay flips showPathOverlay from true to false', () => {
-      (component as any).scene = new THREE.Scene();
-      const pvs = (component as any).pathVisualizationService;
+      (component as unknown as TestableGameBoardComponent).scene = new THREE.Scene();
+      const pvs = (component as unknown as TestableGameBoardComponent).pathVisualizationService;
       spyOn(pvs, 'showPath');
       spyOn(pvs, 'hidePath');
-      spyOn((component as any).enemyService, 'getPathToExit').and.returnValue([]);
+      spyOn((component as unknown as TestableGameBoardComponent).enemyService, 'getPathToExit').and.returnValue([]);
 
       component.showPathOverlay = true;
       component.togglePathOverlay();
@@ -914,12 +998,12 @@ describe('GameBoardComponent', () => {
 
     it('togglePathOverlay calls showPath when path exists', () => {
       const mockScene = new THREE.Scene();
-      spyOn((component as any).sceneService, 'getScene').and.returnValue(mockScene);
-      const pvs = (component as any).pathVisualizationService;
+      spyOn((component as unknown as TestableGameBoardComponent).sceneService, 'getScene').and.returnValue(mockScene);
+      const pvs = (component as unknown as TestableGameBoardComponent).pathVisualizationService;
       spyOn(pvs, 'showPath');
       spyOn(pvs, 'hidePath');
       const fakePath = [{ x: 0, z: 0 }, { x: 1, z: 0 }];
-      spyOn((component as any).enemyService, 'getPathToExit').and.returnValue(fakePath);
+      spyOn((component as unknown as TestableGameBoardComponent).enemyService, 'getPathToExit').and.returnValue(fakePath);
 
       component.togglePathOverlay();
 
@@ -927,11 +1011,11 @@ describe('GameBoardComponent', () => {
     });
 
     it('togglePathOverlay does not call showPath when path is empty', () => {
-      (component as any).scene = new THREE.Scene();
-      const pvs = (component as any).pathVisualizationService;
+      (component as unknown as TestableGameBoardComponent).scene = new THREE.Scene();
+      const pvs = (component as unknown as TestableGameBoardComponent).pathVisualizationService;
       spyOn(pvs, 'showPath');
       spyOn(pvs, 'hidePath');
-      spyOn((component as any).enemyService, 'getPathToExit').and.returnValue([]);
+      spyOn((component as unknown as TestableGameBoardComponent).enemyService, 'getPathToExit').and.returnValue([]);
 
       component.togglePathOverlay();
 
@@ -939,11 +1023,11 @@ describe('GameBoardComponent', () => {
     });
 
     it('pressing V toggles path overlay', () => {
-      (component as any).scene = new THREE.Scene();
-      const pvs = (component as any).pathVisualizationService;
+      (component as unknown as TestableGameBoardComponent).scene = new THREE.Scene();
+      const pvs = (component as unknown as TestableGameBoardComponent).pathVisualizationService;
       spyOn(pvs, 'showPath');
       spyOn(pvs, 'hidePath');
-      spyOn((component as any).enemyService, 'getPathToExit').and.returnValue([]);
+      spyOn((component as unknown as TestableGameBoardComponent).enemyService, 'getPathToExit').and.returnValue([]);
 
       const gameInputSvc = fixture.debugElement.injector.get(GameInputService);
       const gameStateSvc = fixture.debugElement.injector.get(GameStateService);
@@ -967,13 +1051,13 @@ describe('GameBoardComponent', () => {
     });
 
     it('setting contextLost to true should be reflected on the component', () => {
-      (component as any).contextLost = true;
+      (component as unknown as TestableGameBoardComponent).contextLost = true;
       expect(component.contextLost).toBeTrue();
     });
 
     it('setting contextLost back to false should be reflected on the component', () => {
-      (component as any).contextLost = true;
-      (component as any).contextLost = false;
+      (component as unknown as TestableGameBoardComponent).contextLost = true;
+      (component as unknown as TestableGameBoardComponent).contextLost = false;
       expect(component.contextLost).toBeFalse();
     });
 
@@ -996,7 +1080,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('setting initializationFailed to true is reflected on the component', () => {
-      (component as any).initializationFailed = true;
+      (component as unknown as TestableGameBoardComponent).initializationFailed = true;
       expect(component.initializationFailed).toBeTrue();
     });
   });
@@ -1051,14 +1135,9 @@ describe('GameBoardComponent', () => {
 
       // selectPlacedTower is private — call it; it will delegate to TowerSelectionService.
       // That service will call getTower (not found → undefined), so nothing changes.
-      expect(() => (component as any).selectPlacedTower('r0-c1')).not.toThrow();
+      expect(() => (component as unknown as TestableGameBoardComponent).selectPlacedTower('r0-c1')).not.toThrow();
     });
 
-    it('getEffectiveTowerCost should return 0 for null type', () => {
-      const cost = component.getEffectiveTowerCost(null);
-
-      expect(cost).toBe(0);
-    });
   });
 
   describe('Mobile tower preview (handleTowerButtonTap)', () => {
@@ -1148,14 +1227,14 @@ describe('GameBoardComponent', () => {
     it('updateTileHighlights should do nothing in INSPECT mode', () => {
       component.selectedTowerType = null;
       component.updateTileHighlights();
-      const ths = (component as any).tileHighlightService;
+      const ths = (component as unknown as TestableGameBoardComponent).tileHighlightService;
       expect(ths.getHighlightedTiles().size).toBe(0);
     });
 
     it('clearTileHighlights should clear the highlighted set', () => {
       // clearTileHighlights is private and delegates to TileHighlightService — verify no throw
-      expect(() => (component as any).clearTileHighlights()).not.toThrow();
-      const ths = (component as any).tileHighlightService;
+      expect(() => (component as unknown as TestableGameBoardComponent).clearTileHighlights()).not.toThrow();
+      const ths = (component as unknown as TestableGameBoardComponent).tileHighlightService;
       expect(ths.getHighlightedTiles().size).toBe(0);
     });
 
@@ -1169,7 +1248,7 @@ describe('GameBoardComponent', () => {
     it('cancelPlacement should clear highlights', () => {
       // cancelPlacement delegates to TileHighlightService — verify state is empty
       expect(() => component.cancelPlacement()).not.toThrow();
-      const ths = (component as any).tileHighlightService;
+      const ths = (component as unknown as TestableGameBoardComponent).tileHighlightService;
       expect(ths.getHighlightedTiles().size).toBe(0);
     });
   });
@@ -1209,10 +1288,10 @@ describe('GameBoardComponent', () => {
         kills: 3, totalInvested: 50, mesh: null,
         targetingMode: TargetingMode.NEAREST
       };
-      (component as any).selectedTowerInfo = fakeTower;
+      (component as unknown as TestableGameBoardComponent).selectedTowerInfo = fakeTower;
       // Stub showRangePreview to avoid Three.js canvas crash
-      spyOn((component as any).rangeVisualizationService, 'showForTower');
-      (component as any).refreshTowerInfoPanel();
+      spyOn((component as unknown as TestableGameBoardComponent).rangeVisualizationService, 'showForTower');
+      (component as unknown as TestableGameBoardComponent).refreshTowerInfoPanel();
 
       expect(component.upgradePreview).toBeTruthy();
       expect(component.upgradePreview!.damage).toBeGreaterThan(component.selectedTowerStats!.damage);
@@ -1224,9 +1303,9 @@ describe('GameBoardComponent', () => {
         kills: 0, totalInvested: 100, mesh: null,
         targetingMode: TargetingMode.NEAREST
       };
-      (component as any).selectedTowerInfo = fakeTower;
-      spyOn((component as any).rangeVisualizationService, 'showForTower');
-      (component as any).refreshTowerInfoPanel();
+      (component as unknown as TestableGameBoardComponent).selectedTowerInfo = fakeTower;
+      spyOn((component as unknown as TestableGameBoardComponent).rangeVisualizationService, 'showForTower');
+      (component as unknown as TestableGameBoardComponent).refreshTowerInfoPanel();
 
       // L2→L3 requires specialization choice, no generic preview
       expect(component.upgradePreview).toBeNull();
@@ -1236,11 +1315,11 @@ describe('GameBoardComponent', () => {
       const fakeTower: PlacedTower = {
         id: '5-5', type: TowerType.BASIC, level: 3, row: 5, col: 5,
         kills: 0, totalInvested: 150, mesh: null,
-        targetingMode: TargetingMode.NEAREST, specialization: 'alpha' as any
+        targetingMode: TargetingMode.NEAREST, specialization: TowerSpecialization.ALPHA
       };
-      (component as any).selectedTowerInfo = fakeTower;
-      spyOn((component as any).rangeVisualizationService, 'showForTower');
-      (component as any).refreshTowerInfoPanel();
+      (component as unknown as TestableGameBoardComponent).selectedTowerInfo = fakeTower;
+      spyOn((component as unknown as TestableGameBoardComponent).rangeVisualizationService, 'showForTower');
+      (component as unknown as TestableGameBoardComponent).refreshTowerInfoPanel();
 
       expect(component.upgradePreview).toBeNull();
     });
@@ -1252,7 +1331,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('rangeVisualizationService should be injected', () => {
-      expect((component as any).rangeVisualizationService).toBeTruthy();
+      expect((component as unknown as TestableGameBoardComponent).rangeVisualizationService).toBeTruthy();
     });
   });
 
@@ -1262,14 +1341,15 @@ describe('GameBoardComponent', () => {
     beforeEach(() => {
       // ngOnInit does not run in this suite (no detectChanges), so manually wire
       // the tutorialFacade subscription as it would be wired during ngOnInit.
-      (component as any).tutorialFacade['tutorialSub'] = tutorialSpy.getCurrentStep().subscribe((step: TutorialStep | null) => {
+      (component.tutorialFacade as unknown as TestableTutorialFacade).tutorialSub = tutorialSpy.getCurrentStep().subscribe((step: TutorialStep | null) => {
         component.tutorialFacade.currentTutorialStep = step;
       });
     });
 
     afterEach(() => {
-      if ((component as any).tutorialFacade['tutorialSub']) {
-        (component as any).tutorialFacade['tutorialSub'].unsubscribe();
+      const tf = component.tutorialFacade as unknown as TestableTutorialFacade;
+      if (tf.tutorialSub) {
+        tf.tutorialSub.unsubscribe();
       }
     });
 
@@ -1672,7 +1752,7 @@ describe('GameBoardComponent', () => {
     beforeEach(() => {
       gameStateService = fixture.debugElement.injector.get(GameStateService);
       // Manually wire auto-pause listeners (ngAfterViewInit is not called in these tests)
-      (component as any).setupAutoPause();
+      (component as unknown as TestableGameBoardComponent).setupAutoPause();
     });
 
     afterEach(() => {
@@ -1681,7 +1761,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('visibility change to hidden during COMBAT triggers pause', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       spyOnProperty(document, 'hidden').and.returnValue(true);
       spyOn(gameStateService, 'togglePause').and.callThrough();
 
@@ -1702,7 +1782,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('visibility change to hidden when already paused does NOT double-toggle', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       gameStateService.togglePause(); // already paused
       spyOnProperty(document, 'hidden').and.returnValue(true);
       spyOn(gameStateService, 'togglePause').and.callThrough();
@@ -1714,7 +1794,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('window blur during COMBAT triggers pause', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       spyOn(gameStateService, 'togglePause').and.callThrough();
 
       window.dispatchEvent(new Event('blur'));
@@ -1724,7 +1804,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('autoPaused flag is set to true on auto-pause via visibilitychange', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       spyOnProperty(document, 'hidden').and.returnValue(true);
 
       document.dispatchEvent(new Event('visibilitychange'));
@@ -1733,7 +1813,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('autoPaused flag is set to true on auto-pause via window blur', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
 
       window.dispatchEvent(new Event('blur'));
 
@@ -1742,7 +1822,7 @@ describe('GameBoardComponent', () => {
 
     it('autoPaused flag is reset to false on manual togglePause (resume)', () => {
       const gamePauseService = fixture.debugElement.injector.get(GamePauseService);
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       // Simulate that the service flagged an auto-pause
       gamePauseService.autoPaused = true;
 
@@ -1766,9 +1846,8 @@ describe('GameBoardComponent', () => {
         'blur', jasmine.any(Function)
       );
 
-      // Prevent afterEach from removing already-nulled handlers
-      (component as any).visibilityChangeHandler = null;
-      (component as any).windowBlurPauseHandler = null;
+      // afterEach calls gamePauseService.cleanup() which already null-checks handlers
+      // before removeEventListener, so no manual nulling is needed here.
     });
 
     it('visibility change to hidden during INTERMISSION triggers pause', () => {
@@ -1872,7 +1951,7 @@ describe('GameBoardComponent', () => {
       gameStateService.startWave();
       gameStateService.completeWave(0); // → INTERMISSION
       spyOn(gamePauseService, 'setupAutoPause');
-      (component as any).setupAutoPause();
+      (component as unknown as TestableGameBoardComponent).setupAutoPause();
 
       // setupAutoPause is now delegated to GamePauseService
       expect(gamePauseService.setupAutoPause).toHaveBeenCalled();
@@ -1893,14 +1972,14 @@ describe('GameBoardComponent', () => {
       ]);
       challengeTrackingSpy.getTowerTypesUsed.and.returnValue(new Set<TowerType>());
       // Override on both the component (for direct calls) and the service (for delegated calls)
-      (component as any).challengeTrackingService = challengeTrackingSpy;
-      (component as any).towerInteractionService.challengeTrackingService = challengeTrackingSpy;
+      (component as unknown as TestableGameBoardComponent).challengeTrackingService = challengeTrackingSpy;
+      (fixture.debugElement.injector.get(TowerInteractionService) as unknown as TestableTowerInteractionService).challengeTrackingService = challengeTrackingSpy;
     });
 
     it('upgradeTower delegates recordTowerUpgraded to ChallengeTrackingService', () => {
       // Set up a real selected tower in the INSPECT state
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       gameStateService.addGold(500);
 
       const mockTower: PlacedTower = {
@@ -1911,7 +1990,7 @@ describe('GameBoardComponent', () => {
         col: 0,
         kills: 0,
         totalInvested: 100,
-        mesh: null as any,
+        mesh: null,
         targetingMode: TargetingMode.NEAREST,
       };
 
@@ -1919,10 +1998,10 @@ describe('GameBoardComponent', () => {
       spyOn(towerCombatService, 'getTower').and.returnValue(mockTower);
       spyOn(towerCombatService, 'upgradeTower').and.returnValue(true);
 
-      (component as any).selectedTowerInfo = mockTower;
+      (component as unknown as TestableGameBoardComponent).selectedTowerInfo = mockTower;
       component.selectedTowerType = null; // INSPECT mode
-      spyOn(component as any, 'refreshTowerInfoPanel');
-      spyOn((component as any).rangeVisualizationService, 'showForTower');
+      spyOn(component as unknown as TestableGameBoardComponent, 'refreshTowerInfoPanel');
+      spyOn((component as unknown as TestableGameBoardComponent).rangeVisualizationService, 'showForTower');
 
       component.upgradeTower();
 
@@ -1931,7 +2010,7 @@ describe('GameBoardComponent', () => {
 
     it('sellTower delegates recordTowerSold to ChallengeTrackingService', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
 
       const towerCombatService = fixture.debugElement.injector.get(TowerCombatService);
       const mockSoldTower: PlacedTower = {
@@ -1942,7 +2021,7 @@ describe('GameBoardComponent', () => {
         col: 1,
         kills: 0,
         totalInvested: 100,
-        mesh: null as any,
+        mesh: null,
         targetingMode: TargetingMode.NEAREST,
       };
       spyOn(towerCombatService, 'unregisterTower').and.returnValue(mockSoldTower);
@@ -1952,11 +2031,11 @@ describe('GameBoardComponent', () => {
       spyOn(gameBoardSvc, 'removeTower');
       const enemyService = fixture.debugElement.injector.get(EnemyService);
       spyOn(enemyService, 'repathAffectedEnemies');
-      spyOn(component as any, 'deselectTower');
-      spyOn(component as any, 'updateTileHighlights');
-      spyOn(component as any, 'refreshPathOverlay');
+      spyOn(component as unknown as TestableGameBoardComponent, 'deselectTower');
+      spyOn(component as unknown as TestableGameBoardComponent, 'updateTileHighlights');
+      spyOn(component as unknown as TestableGameBoardComponent, 'refreshPathOverlay');
 
-      (component as any).selectedTowerInfo = mockSoldTower;
+      (component as unknown as TestableGameBoardComponent).selectedTowerInfo = mockSoldTower;
       component.sellConfirmPending = true; // skip first click confirm
 
       component.sellTower();
@@ -1992,7 +2071,7 @@ describe('GameBoardComponent', () => {
 
     it('component activeModifiers is corrected when a state emission follows a no-op toggleModifier', () => {
       // Advance to COMBAT so setModifiers' phase guard rejects the call without emitting.
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
 
       // Wire the sync subscription (mirrors what ngOnInit does for activeModifiers).
       const sub = gameStateService.getState$().subscribe(state => {
@@ -2016,7 +2095,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('modifierScoreMultiplier is corrected after next state emission following no-op toggle', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
 
       // Wire the sync subscription that mirrors the ngOnInit fix.
       const sub = gameStateService.getState$().subscribe(state => {
@@ -2099,125 +2178,10 @@ describe('GameBoardComponent', () => {
         meshRegistry.towerMeshes.clear();
       });
 
-      (component as any).cleanupGameObjects();
+      (component as unknown as TestableGameBoardComponent).cleanupGameObjects();
 
       expect(meshRegistry.getTileMeshArray().length).toBe(0);
       expect(meshRegistry.getTowerChildrenArray().length).toBe(0);
-    });
-  });
-
-  describe('applySpecializationVisual', () => {
-    function makeMeshGroup(...names: string[]): THREE.Group {
-      const group = new THREE.Group();
-      for (const name of names) {
-        const geom = new THREE.BoxGeometry(1, 1, 1);
-        const mat = new THREE.MeshStandardMaterial({ color: 0xffffff });
-        const mesh = new THREE.Mesh(geom, mat);
-        mesh.name = name;
-        group.add(mesh);
-      }
-      return group;
-    }
-
-    afterEach(() => {
-      // Dispose geometries/materials created in helpers
-    });
-
-    it('should apply warm orange emissive tint for ALPHA specialization', () => {
-      const group = makeMeshGroup('base', 'top');
-      component.applySpecializationVisual(group, TowerSpecialization.ALPHA);
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
-          expect(child.material.emissive.getHex()).toBe(0xff6633);
-          expect(child.material.emissiveIntensity).toBe(0.4);
-        }
-      });
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          (child.material as THREE.MeshStandardMaterial).dispose();
-        }
-      });
-    });
-
-    it('should apply cool blue emissive tint for BETA specialization', () => {
-      const group = makeMeshGroup('base', 'top');
-      component.applySpecializationVisual(group, TowerSpecialization.BETA);
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
-          expect(child.material.emissive.getHex()).toBe(0x3366ff);
-          expect(child.material.emissiveIntensity).toBe(0.4);
-        }
-      });
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          (child.material as THREE.MeshStandardMaterial).dispose();
-        }
-      });
-    });
-
-    it('should not modify tip or orb meshes (animated by TowerAnimationService)', () => {
-      const group = makeMeshGroup('base', 'tip', 'orb');
-      const tipMesh = group.children.find(c => c.name === 'tip') as THREE.Mesh;
-      const orbMesh = group.children.find(c => c.name === 'orb') as THREE.Mesh;
-      const tipMat = tipMesh.material as THREE.MeshStandardMaterial;
-      const orbMat = orbMesh.material as THREE.MeshStandardMaterial;
-      const tipOriginalHex = tipMat.emissive.getHex();
-      const orbOriginalHex = orbMat.emissive.getHex();
-
-      component.applySpecializationVisual(group, TowerSpecialization.ALPHA);
-
-      expect(tipMat.emissive.getHex()).toBe(tipOriginalHex);
-      expect(orbMat.emissive.getHex()).toBe(orbOriginalHex);
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          (child.material as THREE.MeshStandardMaterial).dispose();
-        }
-      });
-    });
-
-    it('should apply tint to all non-animated mesh children in the group', () => {
-      const group = makeMeshGroup('base', 'mid', 'top', 'crystal');
-      const tinted: string[] = [];
-      component.applySpecializationVisual(group, TowerSpecialization.BETA);
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
-          if (child.material.emissive.getHex() === 0x3366ff) {
-            tinted.push(child.name);
-          }
-        }
-      });
-      expect(tinted).toContain('base');
-      expect(tinted).toContain('mid');
-      expect(tinted).toContain('top');
-      expect(tinted).toContain('crystal');
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          (child.material as THREE.MeshStandardMaterial).dispose();
-        }
-      });
-    });
-
-    it('should handle Material[] arrays on a mesh', () => {
-      const group = new THREE.Group();
-      const geom = new THREE.BoxGeometry(1, 1, 1);
-      const mat1 = new THREE.MeshStandardMaterial({ color: 0xffffff });
-      const mat2 = new THREE.MeshStandardMaterial({ color: 0x888888 });
-      const mesh = new THREE.Mesh(geom, [mat1, mat2]);
-      mesh.name = 'multi';
-      group.add(mesh);
-
-      component.applySpecializationVisual(group, TowerSpecialization.ALPHA);
-
-      expect(mat1.emissive.getHex()).toBe(0xff6633);
-      expect(mat2.emissive.getHex()).toBe(0xff6633);
-
-      geom.dispose();
-      mat1.dispose();
-      mat2.dispose();
     });
   });
 
@@ -2344,10 +2308,10 @@ describe('GameBoardComponent', () => {
     it('updateChallengeIndicators passes campaignMapId from current encounter to updateIndicators', () => {
       const updateSpy = spyOn(challengeSvc, 'updateIndicators');
       runSpy.getCurrentEncounter.and.returnValue({
-        nodeId: 'node-1', nodeType: 'combat' as any,
+        nodeId: 'node-1', nodeType: NodeType.COMBAT,
         campaignMapId: 'campaign_01',
         waves: [], goldReward: 0, isElite: false, isBoss: false,
-      } as any);
+      } as EncounterConfig);
 
       component.updateChallengeIndicators();
 
@@ -2356,7 +2320,7 @@ describe('GameBoardComponent', () => {
 
     it('updateChallengeIndicators passes null when there is no active encounter', () => {
       const updateSpy = spyOn(challengeSvc, 'updateIndicators');
-      runSpy.getCurrentEncounter.and.returnValue(null as any);
+      runSpy.getCurrentEncounter.and.returnValue(null);
 
       component.updateChallengeIndicators();
 
@@ -2370,12 +2334,12 @@ describe('GameBoardComponent', () => {
       // Re-run via direct wrapper call with a proper campaignMapId to verify wiring.
       const updateSpy = spyOn(challengeSvc, 'updateIndicators');
       runSpy.getCurrentEncounter.and.returnValue({
-        nodeId: 'node-1', nodeType: 'combat' as any,
+        nodeId: 'node-1', nodeType: NodeType.COMBAT,
         campaignMapId: 'campaign_03',
         waves: [], goldReward: 0, isElite: false, isBoss: false,
-      } as any);
+      } as EncounterConfig);
 
-      (component as any).updateChallengeIndicators();
+      (component as unknown as TestableGameBoardComponent).updateChallengeIndicators();
 
       expect(updateSpy).toHaveBeenCalledWith('campaign_03');
     });
@@ -2388,7 +2352,9 @@ describe('GameBoardComponent', () => {
       const livingCountSpy = spyOn(enemyService, 'getLivingEnemyCount').and.returnValue(2);
       // Simulate 3 enemies in map but only 2 living (1 is dying)
       spyOn(enemyService, 'getEnemies').and.returnValue(new Map([
-        ['e1', {} as any], ['e2', {} as any], ['e3', {} as any],
+        ['e1', {} as unknown as import('./models/enemy.model').Enemy],
+        ['e2', {} as unknown as import('./models/enemy.model').Enemy],
+        ['e3', {} as unknown as import('./models/enemy.model').Enemy],
       ]));
 
       const result = component.enemiesAlive;
@@ -2404,8 +2370,8 @@ describe('GameBoardComponent', () => {
       const gameRenderService = fixture.debugElement.injector.get(GameRenderService);
       const mockScene = new THREE.Scene();
       const mockCamera = new THREE.PerspectiveCamera();
-      spyOn((component as any).sceneService, 'getScene').and.returnValue(mockScene);
-      spyOn((component as any).sceneService, 'getCamera').and.returnValue(mockCamera);
+      spyOn((component as unknown as TestableGameBoardComponent).sceneService, 'getScene').and.returnValue(mockScene);
+      spyOn((component as unknown as TestableGameBoardComponent).sceneService, 'getCamera').and.returnValue(mockCamera);
       spyOn(statusEffectService, 'getAllActiveEffects').and.returnValue(new Map());
 
       const dyingSpy = spyOn(enemyService, 'updateDyingAnimations');
@@ -2415,7 +2381,7 @@ describe('GameBoardComponent', () => {
       const particleSpy = spyOn(enemyService, 'updateStatusEffectParticles');
       spyOn(enemyService, 'updateStatusVisuals');
       spyOn(enemyService, 'updateEnemyAnimations');
-      spyOn(gameRenderService as any, 'updateMinimap');
+      spyOn(gameRenderService as unknown as TestableGameRenderService, 'updateMinimap');
 
       gameRenderService.runPausedVisuals(0.016, 1000);
 
@@ -2429,7 +2395,7 @@ describe('GameBoardComponent', () => {
     it('runPausedVisuals is NOT invoked when game is unpaused in COMBAT', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
       const gameRenderService = fixture.debugElement.injector.get(GameRenderService);
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       expect(gameStateService.getState().isPaused).toBeFalse();
 
       const pausedVisualsSpy = spyOn(gameRenderService, 'runPausedVisuals');
@@ -2446,7 +2412,7 @@ describe('GameBoardComponent', () => {
     it('runPausedVisuals IS invoked when game is paused in COMBAT', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
       const gameRenderService = fixture.debugElement.injector.get(GameRenderService);
-      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.startWave();
       gameStateService.togglePause();
       expect(gameStateService.getState().isPaused).toBeTrue();
 
@@ -2546,7 +2512,7 @@ describe('GameBoardComponent', () => {
   describe('endTurn re-entrant guard', () => {
     it('second call while first is in-flight is a no-op', () => {
       const gameStateSvc = fixture.debugElement.injector.get(GameStateService);
-      gameStateSvc.setPhase(GamePhase.COMBAT);
+      gameStateSvc.startWave();
       component.gameState = gameStateSvc.getState();
 
       const waveCombatSpy = spyOn(component.waveCombat, 'endTurn').and.callFake(() => {
@@ -2565,8 +2531,8 @@ describe('GameBoardComponent', () => {
   describe('red team gate 2: animation calls not duplicated', () => {
     beforeEach(() => {
       const mockCamera = new THREE.PerspectiveCamera();
-      spyOn((component as any).sceneService, 'getCamera').and.returnValue(mockCamera);
-      spyOn((component as any).sceneService, 'getScene').and.returnValue(new THREE.Scene());
+      spyOn((component as unknown as TestableGameBoardComponent).sceneService, 'getCamera').and.returnValue(mockCamera);
+      spyOn((component as unknown as TestableGameBoardComponent).sceneService, 'getScene').and.returnValue(new THREE.Scene());
       const statusEffectService = fixture.debugElement.injector.get(StatusEffectService);
       spyOn(statusEffectService, 'getAllActiveEffects').and.returnValue(new Map());
     });
@@ -2627,7 +2593,7 @@ describe('GameBoardComponent', () => {
     });
 
     function callApply(level: number, isElite: boolean, isBoss: boolean): void {
-      (component as any).ascensionModifier.apply(level, isElite, isBoss);
+      (component as unknown as TestableGameBoardComponent).ascensionModifier.apply(level, isElite, isBoss);
     }
 
     it('ascension 0: no call made (early-return guard)', () => {
@@ -2709,36 +2675,36 @@ describe('GameBoardComponent', () => {
 
     beforeEach(() => {
       // TowerUpgradeVisualService is component-scoped — access via component private field
-      upgradeVisualSvc = (component as any).towerUpgradeVisualService as TowerUpgradeVisualService;
+      upgradeVisualSvc = (component as unknown as TestableGameBoardComponent).towerUpgradeVisualService as TowerUpgradeVisualService;
       applyUpgradeVisualsSpy = spyOn(upgradeVisualSvc, 'applyUpgradeVisuals');
       spawnUpgradeFlashSpy = spyOn(upgradeVisualSvc, 'spawnUpgradeFlash');
       mockMesh = new THREE.Group();
       mockMesh.position.set(1, 0, 2);
 
       // Stub towerMeshLifecycle.placeMesh to avoid Three.js scene setup
-      spyOn((component as any).towerMeshLifecycle, 'placeMesh').and.returnValue(mockMesh);
+      spyOn((component as unknown as TestableGameBoardComponent).towerMeshLifecycle, 'placeMesh').and.returnValue(mockMesh);
 
       // Stub towerInteractionService.placeTower to report success
-      spyOn((component as any).towerInteractionService, 'placeTower').and.returnValue({
+      spyOn((component as unknown as TestableGameBoardComponent).towerInteractionService, 'placeTower').and.returnValue({
         success: true,
         cost: 0,
         towerKey: '0-0',
       });
 
       // Stub gameBoardService.canPlaceTower to pass the guard
-      spyOn((component as any).gameBoardService, 'canPlaceTower').and.returnValue(true);
+      spyOn((component as unknown as TestableGameBoardComponent).gameBoardService, 'canPlaceTower').and.returnValue(true);
 
       // Stub downstream methods that require a real game scene
-      spyOn((component as any).towerCombatService, 'registerTower');
-      spyOn((component as any).towerCombatService, 'upgradeTower');
-      spyOn((component as any).audioService, 'playTowerPlace');
-      spyOn((component as any).gameStatsService, 'recordTowerBuilt');
-      spyOn((component as any).boardPointer, 'clearSelectedTile');
-      spyOn((component as any).towerPreviewService, 'hidePreview');
-      spyOn(component as any, 'refreshPathOverlay');
-      spyOn(component as any, 'updateTileHighlights');
-      spyOn(component as any, 'updateChallengeIndicators');
-      spyOn((component as any).sceneService, 'getScene').and.returnValue(new THREE.Scene());
+      spyOn((component as unknown as TestableGameBoardComponent).towerCombatService, 'registerTower');
+      spyOn((component as unknown as TestableGameBoardComponent).towerCombatService, 'upgradeTower');
+      spyOn((component as unknown as TestableGameBoardComponent).audioService, 'playTowerPlace');
+      spyOn((component as unknown as TestableGameBoardComponent).gameStatsService, 'recordTowerBuilt');
+      spyOn((component as unknown as TestableGameBoardComponent).boardPointer, 'clearSelectedTile');
+      spyOn((component as unknown as TestableGameBoardComponent).towerPreviewService, 'hidePreview');
+      spyOn(component as unknown as TestableGameBoardComponent, 'refreshPathOverlay');
+      spyOn(component as unknown as TestableGameBoardComponent, 'updateTileHighlights');
+      spyOn(component as unknown as TestableGameBoardComponent, 'updateChallengeIndicators');
+      spyOn((component as unknown as TestableGameBoardComponent).sceneService, 'getScene').and.returnValue(new THREE.Scene());
     });
 
     afterEach(() => {
@@ -2759,7 +2725,7 @@ describe('GameBoardComponent', () => {
       setPendingUpgradedCard(CardId.TOWER_BASIC);
       component.selectedTowerType = TowerType.BASIC;
 
-      (component as any).tryPlaceTower(0, 0);
+      (component as unknown as TestableGameBoardComponent).tryPlaceTower(0, 0);
 
       expect(applyUpgradeVisualsSpy).toHaveBeenCalledWith(mockMesh, 2, undefined);
     });
@@ -2768,7 +2734,7 @@ describe('GameBoardComponent', () => {
       setPendingUpgradedCard(CardId.TOWER_BASIC);
       component.selectedTowerType = TowerType.BASIC;
 
-      (component as any).tryPlaceTower(0, 0);
+      (component as unknown as TestableGameBoardComponent).tryPlaceTower(0, 0);
 
       expect(spawnUpgradeFlashSpy).toHaveBeenCalledWith(mockMesh.position, jasmine.any(THREE.Scene));
     });
@@ -2779,7 +2745,7 @@ describe('GameBoardComponent', () => {
       cardPlaySvc['pendingTowerCard'] = normalCard;
       component.selectedTowerType = TowerType.BASIC;
 
-      (component as any).tryPlaceTower(0, 0);
+      (component as unknown as TestableGameBoardComponent).tryPlaceTower(0, 0);
 
       expect(applyUpgradeVisualsSpy).not.toHaveBeenCalled();
     });
@@ -2790,32 +2756,32 @@ describe('GameBoardComponent', () => {
   describe('tryPlaceTower — path-blocked banner uses BFS check', () => {
     it('shows path-blocked warning only when BFS confirms blocking', () => {
       const towerInteractionSvc = fixture.debugElement.injector.get(TowerInteractionService) as TowerInteractionService;
-      spyOn(component as any, 'showPathBlockedWarning');
-      spyOn((component as any).gameBoardService, 'canPlaceTower').and.returnValue(false);
+      spyOn(component as unknown as TestableGameBoardComponent, 'showPathBlockedWarning');
+      spyOn((component as unknown as TestableGameBoardComponent).gameBoardService, 'canPlaceTower').and.returnValue(false);
       spyOn(towerInteractionSvc, 'wouldBlockPath').and.returnValue(true);
 
       const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
       cardPlaySvc['pendingTowerCard'] = { instanceId: 'inst_basic', cardId: CardId.TOWER_BASIC, upgraded: false } as CardInstance;
       component.selectedTowerType = TowerType.BASIC;
 
-      (component as any).tryPlaceTower(0, 0);
+      (component as unknown as TestableGameBoardComponent).tryPlaceTower(0, 0);
 
-      expect((component as any).showPathBlockedWarning).toHaveBeenCalled();
+      expect((component as unknown as TestableGameBoardComponent).showPathBlockedWarning).toHaveBeenCalled();
     });
 
     it('does NOT show path-blocked warning when BFS says placement is safe', () => {
       const towerInteractionSvc = fixture.debugElement.injector.get(TowerInteractionService) as TowerInteractionService;
-      spyOn(component as any, 'showPathBlockedWarning');
-      spyOn((component as any).gameBoardService, 'canPlaceTower').and.returnValue(false);
+      spyOn(component as unknown as TestableGameBoardComponent, 'showPathBlockedWarning');
+      spyOn((component as unknown as TestableGameBoardComponent).gameBoardService, 'canPlaceTower').and.returnValue(false);
       spyOn(towerInteractionSvc, 'wouldBlockPath').and.returnValue(false);
 
       const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
       cardPlaySvc['pendingTowerCard'] = { instanceId: 'inst_basic', cardId: CardId.TOWER_BASIC, upgraded: false } as CardInstance;
       component.selectedTowerType = TowerType.BASIC;
 
-      (component as any).tryPlaceTower(0, 0);
+      (component as unknown as TestableGameBoardComponent).tryPlaceTower(0, 0);
 
-      expect((component as any).showPathBlockedWarning).not.toHaveBeenCalled();
+      expect((component as unknown as TestableGameBoardComponent).showPathBlockedWarning).not.toHaveBeenCalled();
     });
   });
 

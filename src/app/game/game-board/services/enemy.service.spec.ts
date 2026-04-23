@@ -1,6 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { EnemyService } from './enemy.service';
+import { Enemy } from '../models/enemy.model';
+
+interface TestableEnemyService {
+  executeRepath(enemy: Enemy): void;
+}
 import { PathfindingService } from './pathfinding.service';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
@@ -1040,7 +1045,7 @@ describe('EnemyService', () => {
 
     it('should not throw when enemy has no mesh', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
-      enemy.mesh = undefined as any;
+      enemy.mesh = undefined;
 
       expect(() => service.updateHealthBars()).not.toThrow();
     });
@@ -1887,7 +1892,7 @@ describe('EnemyService', () => {
       // Short-circuit the actual repath so we don't depend on the real A*
       // returning a specific shape here — we're asserting ordering, not
       // pathfinding correctness (covered separately).
-      spyOn<any>(service, 'executeRepath').and.callFake((e: any) => {
+      spyOn(service as unknown as TestableEnemyService, 'executeRepath').and.callFake((e: Enemy) => {
         pathIndexWhenRepathFired = e.pathIndex;
         e.needsRepath = false;
       });

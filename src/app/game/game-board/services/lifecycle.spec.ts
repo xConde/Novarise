@@ -280,7 +280,7 @@ describe('GameStateService lifecycle', () => {
   });
 
   it('reset() should restore state to INITIAL_GAME_STATE after phase change', () => {
-    service.setPhase(GamePhase.COMBAT);
+    service.startWave();
     service.reset();
     expect(service.getState().phase).toBe(INITIAL_GAME_STATE.phase);
   });
@@ -306,17 +306,16 @@ describe('GameStateService lifecycle', () => {
   });
 
   it('reset() should restore score to 0', () => {
-    service.addScore(500);
+    service.addGoldAndScore(500);
     service.reset();
     expect(service.getState().score).toBe(INITIAL_GAME_STATE.score);
   });
 
   it('reset() should match INITIAL_GAME_STATE exactly', () => {
     // Mutate every field
-    service.setPhase(GamePhase.COMBAT);
     service.startWave();
     service.addGold(100);
-    service.addScore(200);
+    service.addGoldAndScore(200);
     service.loseLife(3);
 
     service.reset();
@@ -336,7 +335,7 @@ describe('GameStateService lifecycle', () => {
   });
 
   it('reset() should emit updated state via observable', (done) => {
-    service.setPhase(GamePhase.COMBAT);
+    service.startWave();
     service.reset();
 
     service.getState$().subscribe(state => {
@@ -523,7 +522,7 @@ describe('MinimapService lifecycle', () => {
     };
 
     // First update at t=1000
-    (service as any).update(1000, terrain, []);
+    service.update(1000, terrain, []);
 
     service.cleanup();
 
@@ -531,7 +530,7 @@ describe('MinimapService lifecycle', () => {
     service.init(container);
     // If lastUpdateTime was not reset, this would be throttled because
     // 0 - 1000 < updateIntervalMs. We verify it runs by checking no throw.
-    expect(() => (service as any).update(0, terrain, [])).not.toThrow();
+    expect(() => service.update(0, terrain, [])).not.toThrow();
   });
 
   it('cleanup() should be idempotent (safe to call without init)', () => {

@@ -11,6 +11,7 @@ import {
   EnergyState,
 } from '../../../../run/models/card.model';
 import { getCardDefinition } from '../../../../run/constants/card-definitions';
+import { CardDefinition } from '../../../../run/models/card.model';
 
 // Minimal deck state helpers ────────────────────────────────────────────────
 
@@ -253,7 +254,7 @@ describe('CardHandComponent', () => {
     it('returns empty string when no keywords are set', () => {
       const card: HandCard = {
         instance: { cardId: CardId.TOWER_BASIC, instanceId: 'x', upgraded: false },
-        definition: { ...getCardDefinition(CardId.TOWER_BASIC), innate: undefined, retain: undefined, ethereal: undefined, exhaust: undefined } as any,
+        definition: { ...getCardDefinition(CardId.TOWER_BASIC), innate: undefined, retain: undefined, ethereal: undefined, exhaust: undefined } as CardDefinition,
         canPlay: true,
         effectiveEnergyCost: 1,
         goldCost: 50,
@@ -264,7 +265,7 @@ describe('CardHandComponent', () => {
     it('lists active keywords in stable order', () => {
       const card: HandCard = {
         instance: { cardId: CardId.TOWER_BASIC, instanceId: 'x', upgraded: false },
-        definition: { ...getCardDefinition(CardId.TOWER_BASIC), innate: true, retain: true, ethereal: false, exhaust: true } as any,
+        definition: { ...getCardDefinition(CardId.TOWER_BASIC), innate: true, retain: true, ethereal: false, exhaust: true } as CardDefinition,
         canPlay: true,
         effectiveEnergyCost: 1,
         goldCost: 50,

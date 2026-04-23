@@ -27,8 +27,8 @@ Fallback `**` → `/`.
 src/
 ├── app/
 │   ├── core/                          # App-wide singletons (root-scoped via providedIn: 'root')
-│   │   ├── services/                  # map-bridge, map-share, map-storage, map-template,
-│   │   │                              #   player-profile, settings, storage, tutorial
+│   │   ├── services/                  # map-bridge, map-storage, map-template, player-profile,
+│   │   │                              #   seen-cards, settings, storage, tutorial, error-handler
 │   │   ├── guards/                    # dev-library.guard
 │   │   └── models/                    # map-schema, map-template
 │   ├── game/                          # /play combat encounter
@@ -39,8 +39,12 @@ src/
 │   │   │   ├── models/                # tower, enemy, wave, game-state, score, modifier,
 │   │   │   │                          #   encounter-checkpoint (v10), game-board-tile, …
 │   │   │   ├── services/              # 55+ component-scoped services
-│   │   │   ├── testing/               # Shared factories: test-board, test-enemy, test-spies
-│   │   │   └── utils/                 # coordinate-utils, min-heap, object-pool, spatial-grid, ...
+│   │   │   ├── testing/               # Shared factories: test-board, test-enemy, test-spies barrel;
+│   │   │   │                          #   spies/ split — tower, enemy-combat, run-card, session-state,
+│   │   │   │                          #   platform (5 concern files)
+│   │   │   └── utils/                 # coordinate-utils (dist2d, isInBounds, shuffleInPlace, gridToWorld,
+│   │   │                              #   worldToGrid), three-utils (disposeMesh/Group, getMaterials),
+│   │   │                              #   min-heap, object-pool, spatial-grid, ...
 │   │   ├── guards/                    # game-leave.guard
 │   │   ├── game-board.component.ts    # Encounter coordinator (~1900 LOC)
 │   │   └── game-board.service.ts      # Board generation, tile mutation API
@@ -95,8 +99,8 @@ so they survive `/run` ↔ `/play` transitions. See Run Subsystem.
 
 **Root-scoped services (survive all route transitions):**
 - `core/services/*` — `MapBridgeService`, `SettingsService`, `PlayerProfileService`,
-  `MapStorageService`, `MapShareService`, `MapTemplateService`, `StorageService`,
-  `TutorialService`, `SeenCardsService`
+  `MapStorageService`, `MapTemplateService`, `StorageService`, `TutorialService`,
+  `SeenCardsService`
 - `run/services/*` — all 14 run services (see below)
 - `EncounterCheckpointService` (root, used by run + game)
 
@@ -359,7 +363,14 @@ Files over 500 LOC — dense, edit carefully:
 
 | File | LOC |
 |------|-----|
-| `game-board/game-board.component.ts` | ~1900 |
-| `game-board/services/tower-combat.service.ts` | ~1190 |
+| `run/constants/card-definitions.ts` | ~2110 |
+| `game-board/game-board.component.ts` | ~1880 |
+| `game-board/services/tower-combat.service.ts` | ~1170 |
+| `run/services/run.service.ts` | ~1180 |
 | `game-board/services/enemy.service.ts` | ~1120 |
 | `games/novarise/novarise.component.ts` | ~780 |
+
+**Decomposition plan** for `game-board.component.ts` saved at
+`docs/refactors/game-board-decomposition-plan.md` — deferred to a future
+UI-aware session (all 6 proposed clusters touch template bindings or the
+18-step restore coordinator).

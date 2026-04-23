@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { TerrainGrid } from './terrain-grid.class';
 import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
 import { MAX_SPAWN_POINTS, MAX_EXIT_POINTS } from '../../constants/editor-ui.constants';
+import { TerrainGridState, TerrainGridStateLegacy } from './terrain-grid-state.interface';
 
 describe('TerrainGrid', () => {
   let scene: THREE.Scene;
@@ -547,16 +548,16 @@ describe('TerrainGrid', () => {
     });
 
     it('should import spawn point from v1 format (backward compat)', () => {
-      const v1State = {
+      const v1State: TerrainGridStateLegacy = {
         gridSize: defaultGridSize,
         tiles: terrainGrid.exportState().tiles,
         heightMap: terrainGrid.exportState().heightMap,
         spawnPoint: { x: 3, z: 3 },
         exitPoint: { x: 7, z: 7 },
-        version: '1.0.0'
-      } as any;
+        version: '1.0.0',
+      };
 
-      terrainGrid.importState(v1State);
+      terrainGrid.importState(v1State as unknown as TerrainGridState);
 
       expect(terrainGrid.getSpawnPoint()).toEqual({ x: 3, z: 3 });
       expect(terrainGrid.getExitPoint()).toEqual({ x: 7, z: 7 });
@@ -592,7 +593,7 @@ describe('TerrainGrid', () => {
     it('should handle partial state data', () => {
       const partialState = terrainGrid.exportState();
       // Remove some tiles
-      partialState.tiles[5] = undefined as any;
+      partialState.tiles[5] = undefined as unknown as TerrainType[];
 
       expect(() => terrainGrid.importState(partialState)).not.toThrow();
     });

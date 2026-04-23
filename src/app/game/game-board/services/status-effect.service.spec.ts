@@ -7,6 +7,15 @@ import { createTestEnemy, createEnemyServiceSpy, createRelicServiceSpy } from '.
 import { RelicService } from '../../../run/services/relic.service';
 import { SerializableStatusEffect } from '../models/encounter-checkpoint.model';
 
+/** Local mirror of the unexported ActiveEffect subset used in FROST_NOVA duration specs. */
+interface ActiveEffectSnapshot {
+  expiresAt: number;
+}
+
+interface TestableStatusEffectService {
+  effects: Map<string, Map<StatusEffectType, ActiveEffectSnapshot>>;
+}
+
 describe('StatusEffectService', () => {
   let service: StatusEffectService;
   let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
@@ -776,7 +785,7 @@ describe('StatusEffectService', () => {
       service.apply('e1', StatusEffectType.SLOW, 0);
 
       // Effect should expire at turnNumber = slowBaseDuration (expiresAt = 0 + 2 = 2)
-      const effects = (service as any).effects as Map<string, Map<StatusEffectType, { expiresAt: number }>>;
+      const effects = (service as unknown as TestableStatusEffectService).effects;
       const slowEffect = effects.get('e1')?.get(StatusEffectType.SLOW);
       expect(slowEffect?.expiresAt).toBe(slowBaseDuration);
     });
@@ -788,7 +797,7 @@ describe('StatusEffectService', () => {
 
       service.apply('e1', StatusEffectType.SLOW, 0);
 
-      const effects = (service as any).effects as Map<string, Map<StatusEffectType, { expiresAt: number }>>;
+      const effects = (service as unknown as TestableStatusEffectService).effects;
       const slowEffect = effects.get('e1')?.get(StatusEffectType.SLOW);
       expect(slowEffect?.expiresAt).toBe(slowBaseDuration + 1);
     });
@@ -801,7 +810,7 @@ describe('StatusEffectService', () => {
       const burnBaseDuration = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN].duration; // 3
       service.apply('e1', StatusEffectType.BURN, 0);
 
-      const effects = (service as any).effects as Map<string, Map<StatusEffectType, { expiresAt: number }>>;
+      const effects = (service as unknown as TestableStatusEffectService).effects;
       const burnEffect = effects.get('e1')?.get(StatusEffectType.BURN);
       expect(burnEffect?.expiresAt).toBe(burnBaseDuration); // no bonus
     });
@@ -814,7 +823,7 @@ describe('StatusEffectService', () => {
       const poisonBaseDuration = STATUS_EFFECT_CONFIGS[StatusEffectType.POISON].duration; // 4
       service.apply('e1', StatusEffectType.POISON, 0);
 
-      const effects = (service as any).effects as Map<string, Map<StatusEffectType, { expiresAt: number }>>;
+      const effects = (service as unknown as TestableStatusEffectService).effects;
       const poisonEffect = effects.get('e1')?.get(StatusEffectType.POISON);
       expect(poisonEffect?.expiresAt).toBe(poisonBaseDuration); // no bonus
     });
@@ -829,7 +838,7 @@ describe('StatusEffectService', () => {
       // Refresh at turn 2
       service.apply('e1', StatusEffectType.SLOW, 2);
 
-      const effects = (service as any).effects as Map<string, Map<StatusEffectType, { expiresAt: number }>>;
+      const effects = (service as unknown as TestableStatusEffectService).effects;
       const slowEffect = effects.get('e1')?.get(StatusEffectType.SLOW);
       // expiresAt = 2 + slowBaseDuration + 1 bonus
       expect(slowEffect?.expiresAt).toBe(2 + slowBaseDuration + 1);

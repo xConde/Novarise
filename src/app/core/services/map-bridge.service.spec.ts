@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { MapBridgeService } from './map-bridge.service';
-import { TerrainGridState } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
+import { TerrainGridState, TerrainGridStateLegacy } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 import { BlockType } from '../../game/game-board/models/game-board-tile';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
 
@@ -132,7 +132,7 @@ describe('MapBridgeService', () => {
 
   it('should default unknown terrain types to BASE', () => {
     const state = createMinimalState(3);
-    state.tiles[1][1] = 'unknown_type' as any;
+    state.tiles[1][1] = 'unknown_type' as unknown as TerrainType;
     const { board } = service.convertToGameBoard(state);
     expect(board[1][1].type).toBe(BlockType.BASE);
   });
@@ -264,18 +264,19 @@ describe('MapBridgeService', () => {
   // --- Backward Compatibility (v1 format) ---
 
   it('should handle v1 format with single spawnPoint/exitPoint', () => {
-    const v1State = {
-      ...createMinimalState(5),
+    const v1State: TerrainGridStateLegacy & { spawnPoints?: unknown; exitPoints?: unknown } = {
+      gridSize: 5,
+      tiles: createMinimalState(5).tiles,
+      heightMap: createMinimalState(5).heightMap,
       spawnPoint: { x: 0, z: 2 },
       exitPoint: { x: 4, z: 2 },
-      spawnPoints: [] as any[],
-      exitPoints: [] as any[],
-    } as any;
+      version: '1.0.0',
+    };
     // Clear arrays to simulate v1
     delete v1State.spawnPoints;
     delete v1State.exitPoints;
 
-    const { board } = service.convertToGameBoard(v1State);
+    const { board } = service.convertToGameBoard(v1State as unknown as TerrainGridState);
     expect(board[2][0].type).toBe(BlockType.SPAWNER);
     expect(board[2][4].type).toBe(BlockType.EXIT);
   });
@@ -350,25 +351,32 @@ describe('MapBridgeService', () => {
     });
 
     it('returns true for v1 format with legacy spawnPoint and exitPoint', () => {
-      const v1State = {
-        ...createMinimalState(5),
+      const v1State: TerrainGridStateLegacy & { spawnPoints?: unknown; exitPoints?: unknown } = {
+        gridSize: 5,
+        tiles: createMinimalState(5).tiles,
+        heightMap: createMinimalState(5).heightMap,
         spawnPoint: { x: 0, z: 2 },
         exitPoint: { x: 4, z: 2 },
-      } as any;
+        version: '1.0.0',
+      };
       delete v1State.spawnPoints;
       delete v1State.exitPoints;
-      service.setEditorMapState(v1State);
+      service.setEditorMapState(v1State as unknown as TerrainGridState);
       expect(service.hasValidSpawnAndExit()).toBeTrue();
     });
 
     it('returns false for v1 format missing exitPoint', () => {
-      const v1State = {
-        ...createMinimalState(5),
+      const v1State: TerrainGridStateLegacy & { spawnPoints?: unknown; exitPoints?: unknown } = {
+        gridSize: 5,
+        tiles: createMinimalState(5).tiles,
+        heightMap: createMinimalState(5).heightMap,
         spawnPoint: { x: 0, z: 2 },
-      } as any;
+        exitPoint: null,
+        version: '1.0.0',
+      };
       delete v1State.spawnPoints;
       delete v1State.exitPoints;
-      service.setEditorMapState(v1State);
+      service.setEditorMapState(v1State as unknown as TerrainGridState);
       expect(service.hasValidSpawnAndExit()).toBeFalse();
     });
 

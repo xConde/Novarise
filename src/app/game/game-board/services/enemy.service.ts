@@ -17,6 +17,7 @@ import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { BlockType } from '../models/game-board-tile';
+import { shuffleInPlace } from '../utils/coordinate-utils';
 
 export { DamageResult } from '../models/enemy.model';
 
@@ -109,10 +110,7 @@ export class EnemyService {
     // directly, so we use Math.random() here — the order can't affect
     // save/resume correctness because spawner selection is not checkpointed.
     const candidates = [...spawnerTiles];
-    for (let i = candidates.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
-    }
+    shuffleInPlace(candidates, Math.random);
 
     // Occupancy check: only applies when called from a spawn batch (i.e.,
     // externalOccupied is provided by WaveService). Direct calls (mini-swarm,

@@ -2,6 +2,7 @@ import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 
 import { GameBoardService } from '../game-board.service';
+import { isInBounds } from '../utils/coordinate-utils';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { BlockType } from '../models/game-board-tile';
 import { BOARD_CONFIG } from '../constants/board.constants';
@@ -15,6 +16,7 @@ import {
 } from './elevation.types';
 import { SceneService } from './scene.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
+import { gridToWorld } from '../utils/coordinate-utils';
 
 /**
  * Runtime tile elevation service for the Highground archetype.
@@ -352,7 +354,7 @@ export class ElevationService {
     const boardWidth = this.gameBoardService.getBoardWidth();
 
     // Bounds
-    if (row < 0 || row >= boardHeight || col < 0 || col >= boardWidth) {
+    if (!isInBounds(row, col, boardHeight, boardWidth)) {
       return 'out-of-bounds';
     }
 
@@ -487,12 +489,11 @@ export class ElevationService {
       // Position at tile world XZ center; Y centered at half the cliff height.
       const boardWidth = this.gameBoardService.getBoardWidth();
       const boardHeight = this.gameBoardService.getBoardHeight();
-      // gridToWorld convention: worldX = (col - boardWidth/2) * tileSize
-      //                         worldZ = (row - boardHeight/2) * tileSize
+      const { x: cliffWorldX, z: cliffWorldZ } = gridToWorld(row, col, boardWidth, boardHeight, tileSize);
       cliffMesh.position.set(
-        (col - boardWidth / 2) * tileSize,
+        cliffWorldX,
         cliffHeight / 2,
-        (row - boardHeight / 2) * tileSize,
+        cliffWorldZ,
       );
       cliffMesh.receiveShadow = true;
 

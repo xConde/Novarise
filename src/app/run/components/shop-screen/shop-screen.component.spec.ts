@@ -346,7 +346,7 @@ describe('ShopScreenComponent', () => {
       component.shopItems = [UNCOMMON_ITEM];
       component.ngOnChanges({
         shopItems: { currentValue: component.shopItems, previousValue: [], firstChange: false, isFirstChange: () => false },
-      } as any);
+      } as SimpleChanges);
       expect(component.cardRemoveUsed).toBeFalse();
       expect(component.activeAction).toBe('none');
     });
@@ -359,7 +359,7 @@ describe('ShopScreenComponent', () => {
       component.deckCards = [makeInstance(CardId.GOLD_RUSH, 'newcard')];
       component.ngOnChanges({
         deckCards: { currentValue: component.deckCards, previousValue: [], firstChange: false, isFirstChange: () => false },
-      } as any);
+      } as SimpleChanges);
       expect(component.cardRemoveUsed).toBeTrue();
       expect(component.activeAction).toBe('remove');
     });
@@ -369,7 +369,7 @@ describe('ShopScreenComponent', () => {
       component.currentGold = 999;
       component.ngOnChanges({
         currentGold: { currentValue: 999, previousValue: 100, firstChange: false, isFirstChange: () => false },
-      } as any);
+      } as SimpleChanges);
       expect(component.cardRemoveUsed).toBeTrue();
     });
   });

@@ -3,7 +3,6 @@
   /* Foundation - Maximum Contrast (Dark Mode) */
   --bg-color: #000000;
   --text-color: #FFFFFF;
-  --text-area-color: #0a0a0a;
 
   /* Borders - Glowing Structure */
   --border-color: rgba(255, 255, 255, 0.2);
@@ -57,10 +56,7 @@
 
   /* Game-specific colors */
   --game-primary: #444444;
-  --game-secondary: #666666;
   --game-accent-orange: #FF9A66;
-  --game-success: #00AA00;
-  --game-error: #AA0000;
 
   /* Game state colors */
   --game-health: #ff4444;
@@ -112,17 +108,9 @@
   --tower-glow-mortar: rgba(255, 100, 34, 0.4);
 
   /* Misc UI colors */
-  --score-multiplier: #88aaff;
   --text-disabled: #8a8a9a;
   --theme-cyan: #00ffff;
   --theme-orange: #dd6600;
-
-  /* Rainbow effect colors */
-  --rainbow-red: #FF0000;
-  --rainbow-orange: #FFA500;
-  --rainbow-yellow: #FFFF00;
-  --rainbow-green: #008000;
-  --rainbow-gold: gold;
 
   /* Panel backgrounds (glass panels with colored tints) */
   --panel-blue-bg: rgba(20, 60, 120, 0.3);

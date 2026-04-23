@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output, OnInit, OnDestroy } from '@angular/core';
-import { EditMode, BrushTool } from '../../novarise.component';
+import { EditMode, BrushTool } from '../../core/editor-state.service';
 import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
 import { MapTemplate } from '@core/models/map-template.model';
 

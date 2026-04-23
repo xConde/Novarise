@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
+import { TowerType } from '../models/tower.model';
 import { DRAG_CONFIG } from '../constants/touch.constants';
 import { SceneService } from './scene.service';
 import { GameBoardService } from '../game-board.service';
@@ -157,8 +157,7 @@ export class TowerPlacementService {
       const mesh = intersects[0].object as THREE.Mesh;
       const row = mesh.userData['row'] as number;
       const col = mesh.userData['col'] as number;
-      const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-      const tileCost = Math.round(TOWER_CONFIGS[this.dragTowerType!].cost * costMult);
+      const tileCost = this.gameStateService.getEffectiveTowerCost(this.dragTowerType!);
       const canPlace = this.gameBoardService.canPlaceTower(row, col)
         && this.gameStateService.canAfford(tileCost);
       this.towerPreviewService.showPreview(this.dragTowerType!, row, col, canPlace, this.sceneService.getScene());
