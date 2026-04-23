@@ -11,7 +11,13 @@ import { RangeVisualizationService } from './range-visualization.service';
 import { PathfindingService } from './pathfinding.service';
 import { GamePhase } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
-import { BlockType } from '../models/game-board-tile';
+import { BlockType, GameBoardTile } from '../models/game-board-tile';
+
+interface TestableBoardPointerService {
+  raycaster: THREE.Raycaster;
+  selectedTile: { row: number; col: number } | null;
+  lastPreviewKey: string;
+}
 
 /** Minimal stub for GameStateService. */
 class StubGameStateService {
@@ -149,7 +155,7 @@ describe('BoardPointerService', () => {
       service.init(canvas, cb);
 
       // Mock raycaster to return empty intersections
-      spyOn((service as any).raycaster, 'intersectObjects').and.returnValue([]);
+      spyOn((service as unknown as TestableBoardPointerService).raycaster, 'intersectObjects').and.returnValue([]);
 
       service.handleInteraction(50, 50);
 
@@ -169,13 +175,14 @@ describe('BoardPointerService', () => {
       fakeMesh.userData['tile'] = { type: BlockType.BASE };
       fakeMesh.material = new THREE.MeshStandardMaterial();
 
-      const raycaster = (service as any).raycaster as THREE.Raycaster;
+      const raycaster = (service as unknown as TestableBoardPointerService).raycaster;
       let callCount = 0;
-      spyOn(raycaster, 'intersectObjects').and.callFake(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      spyOn(raycaster, 'intersectObjects').and.callFake((): any => {
         callCount++;
         // First call: tower children (empty), second call: tiles (hit)
         if (callCount === 1) return [];
-        return [{ object: fakeMesh, distance: 1, point: new THREE.Vector3(), face: null, uv: undefined, uv2: undefined, normal: undefined, instanceId: undefined } as any];
+        return [{ object: fakeMesh, distance: 1, point: new THREE.Vector3(), face: null, uv: undefined, uv2: undefined, normal: undefined, instanceId: undefined }];
       });
 
       service.handleInteraction(50, 50);
@@ -201,12 +208,13 @@ describe('BoardPointerService', () => {
       fakeMesh.userData['tile'] = { type: BlockType.BASE };
       fakeMesh.material = new THREE.MeshStandardMaterial();
 
-      const raycaster = (service as any).raycaster as THREE.Raycaster;
+      const raycaster = (service as unknown as TestableBoardPointerService).raycaster;
       let callCount = 0;
-      spyOn(raycaster, 'intersectObjects').and.callFake(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      spyOn(raycaster, 'intersectObjects').and.callFake((): any => {
         callCount++;
         if (callCount === 1) return [];
-        return [{ object: fakeMesh } as any];
+        return [{ object: fakeMesh }];
       });
 
       service.handleInteraction(50, 50);
@@ -225,12 +233,12 @@ describe('BoardPointerService', () => {
     });
 
     it('clearSelectedTile resets selected tile and preview key', () => {
-      (service as any).selectedTile = { row: 1, col: 2 };
-      (service as any).lastPreviewKey = 'key';
+      (service as unknown as TestableBoardPointerService).selectedTile = { row: 1, col: 2 };
+      (service as unknown as TestableBoardPointerService).lastPreviewKey = 'key';
       service.clearSelectedTile();
 
       expect(service.getSelectedTile()).toBeNull();
-      expect((service as any).lastPreviewKey).toBe('');
+      expect((service as unknown as TestableBoardPointerService).lastPreviewKey).toBe('');
     });
   });
 

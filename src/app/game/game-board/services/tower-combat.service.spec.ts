@@ -6,7 +6,7 @@ import { CombatVFXService } from './combat-vfx.service';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
-import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_SPECIALIZATIONS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
+import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_SPECIALIZATIONS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES, PlacedTower } from '../models/tower.model';
 import { Enemy, EnemyType } from '../models/enemy.model';
 import { StatusEffectService } from './status-effect.service';
 import { StatusEffectType } from '../constants/status-effect.constants';
@@ -4168,6 +4168,20 @@ describe('TowerCombatService WYRM_ASCENDANT elevation damage immunity (sprint 39
 // for a representative input set. If any assertion breaks after this commit
 // lands, the extracted chain diverged from the inline version — revert.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** Local mirror of the unexported DamageStackResult interface (spec-only). */
+interface SpecDamageStackResult {
+  readonly damage: number;
+  readonly range: number;
+  readonly towerVantagePointDmgMult: number;
+  readonly towerKothMult: number;
+}
+
+/** Exposes private composeDamageStack for white-box regression testing. */
+interface TestableTowerCombatService {
+  composeDamageStack(tower: PlacedTower, baseStats: TowerStats, ctx: DamageStackContext): SpecDamageStackResult;
+}
+
 describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
   let service: TowerCombatService;
   let relicSpy: jasmine.SpyObj<RelicService>;
@@ -4222,8 +4236,8 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
     service = TestBed.inject(TowerCombatService);
   });
 
-  function buildTower(type: TowerType = TowerType.BASIC, row = 5, col = 5, overrides?: { damageMultiplier?: number; rangeMultiplier?: number }) {
-    const tower: any = {
+  function buildTower(type: TowerType = TowerType.BASIC, row = 5, col = 5, overrides?: { damageMultiplier?: number; rangeMultiplier?: number }): PlacedTower {
+    const tower: PlacedTower = {
       id: `t-${row}-${col}`,
       type,
       row,
@@ -4238,9 +4252,9 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
     return tower;
   }
 
-  function callStack(tower: any, ctx: DamageStackContext = neutralCtx) {
+  function callStack(tower: PlacedTower, ctx: DamageStackContext = neutralCtx): SpecDamageStackResult {
     const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
-    return (service as any).composeDamageStack(tower, baseStats, ctx);
+    return (service as unknown as TestableTowerCombatService).composeDamageStack(tower, baseStats, ctx);
   }
 
   it('neutral inputs → damage = base, range = base, hoisted mults = 1', () => {
@@ -4454,7 +4468,7 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
   describe('HANDSHAKE multiplier (stage 9 — graph-reactive)', () => {
     // Re-wire the real TowerGraphService so composeDamageStack can query neighbors.
     let graph: TowerGraphService;
-    let placedTowers: Map<string, any>;
+    let placedTowers: Map<string, PlacedTower>;
     let serviceWithGraph: TowerCombatService;
 
     beforeEach(() => {
@@ -4492,8 +4506,8 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
       graph.setPlacedTowersGetter(() => placedTowers);
     });
 
-    function registerTower(row: number, col: number, type: TowerType = TowerType.BASIC): any {
-      const tower = {
+    function registerTower(row: number, col: number, type: TowerType = TowerType.BASIC): PlacedTower {
+      const tower: PlacedTower = {
         id: `${row}-${col}`,
         type,
         level: 1,
@@ -4509,10 +4523,10 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
       return tower;
     }
 
-    function callStackWithGraph(tower: any, ctx: Partial<DamageStackContext>) {
+    function callStackWithGraph(tower: PlacedTower, ctx: Partial<DamageStackContext>): SpecDamageStackResult {
       const fullCtx: DamageStackContext = { ...neutralCtx, ...ctx };
       const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
-      return (serviceWithGraph as any).composeDamageStack(tower, baseStats, fullCtx);
+      return (serviceWithGraph as unknown as TestableTowerCombatService).composeDamageStack(tower, baseStats, fullCtx);
     }
 
     it('HANDSHAKE active + ≥ 1 neighbor → applies (1 + handshakeBonus) multiplier', () => {

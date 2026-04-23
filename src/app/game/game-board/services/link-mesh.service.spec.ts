@@ -3,9 +3,18 @@ import * as THREE from 'three';
 
 import { LinkMeshService } from './link-mesh.service';
 import { TowerGraphService } from './tower-graph.service';
+import { TowerGraphEdge } from './tower-graph.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { GameBoardService } from '../game-board.service';
 import { PlacedTower, TowerType, DEFAULT_TARGETING_MODE } from '../models/tower.model';
+
+interface TestableLinkMeshService {
+  lines: Map<string, THREE.Line>;
+}
+
+interface TestableTowerGraphService {
+  edgesAddedSubject: { next(edge: TowerGraphEdge): void };
+}
 
 describe('LinkMeshService (Conduit visualization)', () => {
   let service: LinkMeshService;
@@ -129,12 +138,12 @@ describe('LinkMeshService (Conduit visualization)', () => {
   it('idempotent edge-added events do not create duplicate lines', () => {
     place(5, 5);
     place(5, 6);
-    const line = (service as any).lines.get('5-5__5-6') as THREE.Line;
+    const line = (service as unknown as TestableLinkMeshService).lines.get('5-5__5-6');
     expect(line).toBeTruthy();
 
     // Simulate a spurious re-emit of the same edge.
-    (graph as any).edgesAddedSubject.next({ a: '5-5', b: '5-6', kind: 'spatial' });
-    const lineAfter = (service as any).lines.get('5-5__5-6') as THREE.Line;
+    (graph as unknown as TestableTowerGraphService).edgesAddedSubject.next({ a: '5-5', b: '5-6', kind: 'spatial' });
+    const lineAfter = (service as unknown as TestableLinkMeshService).lines.get('5-5__5-6');
     expect(lineAfter).toBe(line); // same instance — no duplicate
     expect(service.getLineCount()).toBe(1);
   });
@@ -145,9 +154,9 @@ describe('LinkMeshService (Conduit visualization)', () => {
     place(10, 10);
     graph.addVirtualEdge(5, 5, 10, 10, 100, 'src'); // virtual edge
 
-    const spatialLine = (service as any).lines.get('5-5__5-6') as THREE.Line;
+    const spatialLine = (service as unknown as TestableLinkMeshService).lines.get('5-5__5-6')!;
     // Canonical key lex-orders the endpoints: "10-10" < "5-5" (first char '1' < '5').
-    const virtualLine = (service as any).lines.get('10-10__5-5') as THREE.Line;
+    const virtualLine = (service as unknown as TestableLinkMeshService).lines.get('10-10__5-5')!;
 
     expect(spatialLine.material).not.toBe(virtualLine.material);
   });
@@ -156,8 +165,8 @@ describe('LinkMeshService (Conduit visualization)', () => {
     place(5, 5);
     place(5, 6);
     place(6, 5);
-    const a = (service as any).lines.get('5-5__5-6') as THREE.Line;
-    const b = (service as any).lines.get('5-5__6-5') as THREE.Line;
+    const a = (service as unknown as TestableLinkMeshService).lines.get('5-5__5-6')!;
+    const b = (service as unknown as TestableLinkMeshService).lines.get('5-5__6-5')!;
     expect(a.material).toBe(b.material);
   });
 

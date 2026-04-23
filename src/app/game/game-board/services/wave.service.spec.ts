@@ -2,8 +2,9 @@ import { TestBed } from '@angular/core/testing';
 import { WaveService } from './wave.service';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
-import { EnemyType } from '../models/enemy.model';
+import { Enemy, EnemyType } from '../models/enemy.model';
 import { WAVE_DEFINITIONS } from '../models/wave.model';
+import { WaveDefinition } from '@core/models/wave-definition.model';
 import { generateEndlessWave, ENDLESS_BOSS_INTERVAL, ENDLESS_MIN_SPAWN_INTERVAL_S } from '../models/endless-wave.model';
 import { createRelicServiceSpy } from '../testing';
 import { RelicService } from '../../../run/services/relic.service';
@@ -20,7 +21,7 @@ describe('WaveService', () => {
   beforeEach(() => {
     enemyServiceSpy = jasmine.createSpyObj('EnemyService', ['spawnEnemy', 'buildOccupiedSpawnerSet']);
     // Default: spawnEnemy succeeds
-    enemyServiceSpy.spawnEnemy.and.returnValue({ id: 'enemy-0' } as any);
+    enemyServiceSpy.spawnEnemy.and.returnValue({ id: 'enemy-0' } as unknown as Enemy);
     // Default: no pre-occupied spawners
     enemyServiceSpy.buildOccupiedSpawnerSet.and.returnValue(new Set<string>());
 
@@ -833,7 +834,7 @@ describe('WaveService', () => {
 
   describe('startWave: neither entries nor spawnTurns throws', () => {
     it('throws a runtime error when wave has no format', () => {
-      const emptyWave = { reward: 10 } as any; // intentionally malformed
+      const emptyWave = { reward: 10 } as WaveDefinition; // intentionally malformed — no entries/spawnTurns
       service.setCustomWaves([emptyWave]);
       expect(() => service.startWave(1, mockScene))
         .toThrowError(/neither entries\[\] nor spawnTurns\[\]\[\]/);
@@ -1124,7 +1125,7 @@ describe('WaveService', () => {
       let callCount = 0;
       enemyServiceSpy.spawnEnemy.and.callFake(() => {
         callCount++;
-        return callCount % 2 === 1 ? ({ id: `enemy-${callCount}` } as any) : null;
+        return callCount % 2 === 1 ? ({ id: `enemy-${callCount}` } as unknown as Enemy) : null;
       });
       service.startWave(3, mockScene);
       const indexBefore = service.serializeState().turnScheduleIndex;
@@ -1139,9 +1140,9 @@ describe('WaveService', () => {
       let callCount = 0;
       enemyServiceSpy.spawnEnemy.and.callFake(() => {
         callCount++;
-        if (callCount === 1) return { id: 'enemy-basic' } as any; // BASIC succeeds
+        if (callCount === 1) return { id: 'enemy-basic' } as unknown as Enemy; // BASIC succeeds
         if (callCount === 2) return null;                         // FAST fails
-        return { id: 'enemy-fast' } as any;                       // retry succeeds
+        return { id: 'enemy-fast' } as unknown as Enemy;           // retry succeeds
       });
       service.startWave(3, mockScene);
 
@@ -1162,7 +1163,7 @@ describe('WaveService', () => {
       service.spawnForTurn(mockScene); // accumulate 2 retries
 
       // Re-start the wave — retries should reset
-      enemyServiceSpy.spawnEnemy.and.returnValue({ id: 'enemy-0' } as any);
+      enemyServiceSpy.spawnEnemy.and.returnValue({ id: 'enemy-0' } as unknown as Enemy);
       service.startWave(1, mockScene);
 
       const spawned = service.spawnForTurn(mockScene);

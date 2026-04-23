@@ -522,7 +522,7 @@ describe('MinimapService lifecycle', () => {
     };
 
     // First update at t=1000
-    (service as any).update(1000, terrain, []);
+    service.update(1000, terrain, []);
 
     service.cleanup();
 
@@ -530,7 +530,7 @@ describe('MinimapService lifecycle', () => {
     service.init(container);
     // If lastUpdateTime was not reset, this would be throttled because
     // 0 - 1000 < updateIntervalMs. We verify it runs by checking no throw.
-    expect(() => (service as any).update(0, terrain, [])).not.toThrow();
+    expect(() => service.update(0, terrain, [])).not.toThrow();
   });
 
   it('cleanup() should be idempotent (safe to call without init)', () => {

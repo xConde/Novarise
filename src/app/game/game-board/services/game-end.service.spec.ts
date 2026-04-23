@@ -371,7 +371,7 @@ describe('GameEndService', () => {
     });
 
     it('victory with no mapId returns empty completedChallenges', () => {
-      mapBridgeSpy.getMapId.and.returnValue(undefined as any);
+      mapBridgeSpy.getMapId.and.returnValue(null);
 
       const result = service.recordEnd(true);
 

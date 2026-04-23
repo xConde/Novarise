@@ -66,7 +66,7 @@ describe('ProfileComponent', () => {
 
   it('should render stats grid with correct values', () => {
     const statValues = fixture.nativeElement.querySelectorAll('.stat-value');
-    const texts = Array.from(statValues).map((el: any) => el.textContent.trim());
+    const texts = Array.from(statValues).map((el) => (el as Element).textContent!.trim());
     expect(texts).toContain('15');  // totalGamesPlayed
     expect(texts).toContain('10');  // totalVictories
     expect(texts).toContain('5');   // totalDefeats
@@ -79,7 +79,7 @@ describe('ProfileComponent', () => {
   it('should show win rate as percentage', () => {
     expect(component.winRate).toBe('67');
     const statValues = fixture.nativeElement.querySelectorAll('.stat-value');
-    const texts = Array.from(statValues).map((el: any) => el.textContent.trim());
+    const texts = Array.from(statValues).map((el) => (el as Element).textContent!.trim());
     expect(texts).toContain('67%');
   });
 
@@ -354,7 +354,7 @@ describe('ProfileComponent', () => {
 
     it('should render category name elements', () => {
       const names = fixture.nativeElement.querySelectorAll('.category-name');
-      const texts = Array.from(names).map((el: any) => el.textContent.trim());
+      const texts = Array.from(names).map((el) => (el as Element).textContent!.trim());
       expect(texts).toContain('Campaign');
       expect(texts).toContain('Combat');
       expect(texts).toContain('Endless');

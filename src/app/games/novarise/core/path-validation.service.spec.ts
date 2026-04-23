@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { PathValidationService } from './path-validation.service';
-import { TerrainGridState } from '../features/terrain-editor/terrain-grid-state.interface';
+import { TerrainGridState, TerrainGridStateLegacy } from '../features/terrain-editor/terrain-grid-state.interface';
 import { TerrainType } from '../models/terrain-types.enum';
 
 /** Build a TerrainGridState for testing — all tiles default to BEDROCK unless overridden. */
@@ -293,15 +293,15 @@ describe('PathValidationService', () => {
     });
 
     it('should handle backward compat: v1 format with single spawnPoint/exitPoint', () => {
-      const v1State = {
+      const v1State: TerrainGridStateLegacy = {
         gridSize: 5,
         tiles: Array.from({ length: 5 }, () => Array(5).fill(TerrainType.BEDROCK)),
         heightMap: Array.from({ length: 5 }, () => Array(5).fill(0)),
         spawnPoint: { x: 0, z: 0 },
         exitPoint: { x: 4, z: 4 },
         version: '1.0.0',
-      } as any;
-      const result = service.validate(v1State);
+      };
+      const result = service.validate(v1State as unknown as TerrainGridState);
       expect(result.valid).toBe(true);
     });
   });

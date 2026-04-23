@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { TowerInfoPanelComponent } from './tower-info-panel.component';
 import { PlacedTower, TowerType, TowerSpecialization, MAX_TOWER_LEVEL } from '../../models/tower.model';
 import { TargetingMode } from '../../models/tower.model';
+import { StatusEffectType } from '../../constants/status-effect.constants';
 
 function makeTower(overrides: Partial<PlacedTower> = {}): PlacedTower {
   return {
@@ -94,7 +95,7 @@ describe('TowerInfoPanelComponent', () => {
     });
 
     it('should show status effect row when statusEffect is present', () => {
-      component.towerStats = { damage: 25, range: 3, statusEffect: 'BURN' as any };
+      component.towerStats = { damage: 25, range: 3, statusEffect: StatusEffectType.BURN };
       fixture.detectChanges();
       const effectRow = fixture.nativeElement.querySelectorAll('.stat-row')[3];
       expect(effectRow.querySelector('.stat-label').textContent.trim()).toBe('Effect');

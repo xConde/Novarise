@@ -1,6 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import { GameStateService } from './game-state.service';
-import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE, VALID_TRANSITIONS } from '../models/game-state.model';
+
+interface TestableGameStateService {
+  state: { gold: number };
+  emit(): void;
+}
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE, VALID_TRANSITIONS } from '../models/game-state.model';
 import { GameModifier } from '../models/game-modifier.model';
 import { SerializableGameState } from '../models/encounter-checkpoint.model';
 import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
@@ -828,7 +833,7 @@ describe('GameStateService', () => {
 
   describe('observable contract', () => {
     it('should emit a new object on each state change (immutable copies)', () => {
-      const refs: any[] = [];
+      const refs: GameState[] = [];
       const sub = service.getState$().subscribe(state => refs.push(state));
 
       service.startWave();
@@ -1003,15 +1008,15 @@ describe('GameStateService', () => {
       enterIntermission();
       // Set gold high enough that rate * gold > maxPayout
       const highGold = Math.ceil(INTEREST_CONFIG.maxPayout / INTEREST_CONFIG.rate) + 1000;
-      (service as any).state.gold = highGold;
+      (service as unknown as TestableGameStateService).state.gold = highGold;
       const result = service.awardInterest();
       expect(result).toBe(INTEREST_CONFIG.maxPayout);
     });
 
     it('should return 0 and not emit when gold is 0', () => {
       enterIntermission();
-      (service as any).state.gold = 0;
-      const emitSpy = spyOn(service as any, 'emit');
+      (service as unknown as TestableGameStateService).state.gold = 0;
+      const emitSpy = spyOn(service as unknown as TestableGameStateService, 'emit');
       const result = service.awardInterest();
       expect(result).toBe(0);
       expect(emitSpy).not.toHaveBeenCalled();

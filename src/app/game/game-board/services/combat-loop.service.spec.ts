@@ -22,7 +22,7 @@ import { ElevationService } from './elevation.service';
 
 import { GamePhase, INITIAL_GAME_STATE, DifficultyLevel } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
-import { EnemyType } from '../models/enemy.model';
+import { Enemy, EnemyType } from '../models/enemy.model';
 import { WaveDefinition } from '../models/wave.model';
 
 // Physics accumulator tests removed in turn-based pivot — no deltaTime semantics.
@@ -31,7 +31,7 @@ import { WaveDefinition } from '../models/wave.model';
 function makeEnemy(overrides: Partial<{
   id: string; type: EnemyType; value: number; leakDamage: number; dying: boolean;
   position: { x: number; y: number; z: number };
-}> = {}): any {
+}> = {}): Enemy {
   return {
     id: overrides.id ?? 'e1',
     type: overrides.type ?? EnemyType.BASIC,
@@ -39,7 +39,7 @@ function makeEnemy(overrides: Partial<{
     leakDamage: overrides.leakDamage ?? 1,
     dying: overrides.dying ?? false,
     position: overrides.position ?? { x: 0, y: 0, z: 0 },
-  };
+  } as unknown as Enemy;
 }
 
 describe('CombatLoopService', () => {

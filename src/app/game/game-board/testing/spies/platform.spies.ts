@@ -2,6 +2,7 @@ import { of } from 'rxjs';
 
 import { SceneService } from '../../services/scene.service';
 import { AudioService } from '../../services/audio.service';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { SettingsService, GameSettings } from '@core/services/settings.service';
 import { MinimapService } from '../../services/minimap.service';
 import { GameNotificationService, GameNotification } from '../../services/game-notification.service';
@@ -47,7 +48,7 @@ export function createSceneServiceSpy(): jasmine.SpyObj<SceneService> {
     'disposeSkybox',
     'dispose',
   ]);
-  spy.getControls.and.returnValue({ enabled: true } as any);
+  spy.getControls.and.returnValue({ enabled: true } as unknown as OrbitControls);
   spy.getParticles.and.returnValue(null);
   spy.getSkybox.and.returnValue(undefined);
   return spy;

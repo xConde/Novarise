@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
+import { of } from 'rxjs';
 
 import { GameSessionService } from './game-session.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
@@ -29,6 +30,9 @@ import { GamePauseService } from './game-pause.service';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
+import { GameState, DifficultyLevel, GamePhase } from '../models/game-state.model';
+import { GameStats } from './game-stats.service';
+import { ChallengeSnapshot } from './challenge-tracking.service';
 
 describe('GameSessionService', () => {
   let service: GameSessionService;
@@ -63,10 +67,10 @@ describe('GameSessionService', () => {
 
     gameStateSpy = jasmine.createSpyObj('GameStateService', ['reset', 'setMaxWaves', 'getState$', 'getState']);
     gameStateSpy.getState.and.returnValue({
-      wave: 0, lives: 7, gold: 150, score: 0, phase: 'SETUP',
+      wave: 0, lives: 7, gold: 150, score: 0, phase: GamePhase.SETUP,
       isPaused: false, isEndless: false,
-      difficulty: 'normal', streak: 0, maxWaves: 10, elapsedTime: 0,
-    } as any);
+      difficulty: DifficultyLevel.NORMAL, maxWaves: 10, elapsedTime: 0,
+    } as unknown as GameState);
 
     waveSpy = jasmine.createSpyObj('WaveService', ['reset', 'setCustomWaves', 'hasCustomWaves', 'getWaveDefinitions', 'setEndlessMode']);
     waveSpy.hasCustomWaves.and.returnValue(false);
@@ -77,15 +81,15 @@ describe('GameSessionService', () => {
     enemySpy.getPathToExit.and.returnValue([]);
 
     gameStatsSpy = jasmine.createSpyObj('GameStatsService', ['reset', 'getStats']);
-    gameStatsSpy.getStats.and.returnValue({} as any);
+    gameStatsSpy.getStats.and.returnValue({} as unknown as GameStats);
 
     notificationSpy = jasmine.createSpyObj('GameNotificationService', ['clear', 'getNotifications', 'show', 'dismiss']);
-    notificationSpy.getNotifications.and.returnValue({ subscribe: () => ({ unsubscribe: () => {} }) } as any);
+    notificationSpy.getNotifications.and.returnValue(of([]));
 
     challengeSpy = jasmine.createSpyObj('ChallengeTrackingService', [
       'reset', 'recordTowerPlaced', 'recordTowerUpgraded', 'recordTowerSold', 'getSnapshot',
     ]);
-    challengeSpy.getSnapshot.and.returnValue({} as any);
+    challengeSpy.getSnapshot.and.returnValue({} as unknown as ChallengeSnapshot);
 
     gameEndSpy = jasmine.createSpyObj('GameEndService', ['reset', 'recordEnd', 'recordSpecialization']);
     gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [], completedChallenges: [] });
@@ -103,7 +107,7 @@ describe('GameSessionService', () => {
 
     tutorialSpy = jasmine.createSpyObj('TutorialService', ['resetCurrentStep', 'isTutorialComplete', 'getCurrentStep']);
     tutorialSpy.isTutorialComplete.and.returnValue(false);
-    tutorialSpy.getCurrentStep.and.returnValue({ subscribe: () => ({ unsubscribe: () => {} }) } as any);
+    tutorialSpy.getCurrentStep.and.returnValue(of(null));
 
     towerCombatSpy = jasmine.createSpyObj('TowerCombatService', ['cleanup', 'getPlacedTowers']);
     towerCombatSpy.getPlacedTowers.and.returnValue(new Map());

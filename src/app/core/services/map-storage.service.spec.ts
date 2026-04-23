@@ -663,8 +663,8 @@ describe('MapStorageService', () => {
       mockInput = {
         type: '',
         accept: '',
-        onchange: null as any,
-        oncancel: null as any,
+        onchange: null,
+        oncancel: null,
         click: mockClick
       } as unknown as HTMLInputElement;
 
@@ -748,7 +748,7 @@ describe('MapStorageService', () => {
       // Simulate file selection
       Object.defineProperty(mockInput, 'files', { value: [mockFile] });
       if (mockInput.onchange) {
-        await mockInput.onchange({ target: mockInput } as any);
+        await mockInput.onchange({ target: mockInput } as unknown as Event);
       }
 
       const result = await promise;
@@ -764,7 +764,7 @@ describe('MapStorageService', () => {
 
       Object.defineProperty(mockInput, 'files', { value: [mockFile] });
       if (mockInput.onchange) {
-        await mockInput.onchange({ target: mockInput } as any);
+        await mockInput.onchange({ target: mockInput } as unknown as Event);
       }
 
       const result = await promise;
@@ -784,7 +784,7 @@ describe('MapStorageService', () => {
 
       Object.defineProperty(mockInput, 'files', { value: [mockFile] });
       if (mockInput.onchange) {
-        await mockInput.onchange({ target: mockInput } as any);
+        await mockInput.onchange({ target: mockInput } as unknown as Event);
       }
 
       const result = await promise;
@@ -801,7 +801,7 @@ describe('MapStorageService', () => {
 
       Object.defineProperty(mockInput, 'files', { value: [mockFile] });
       if (mockInput.onchange) {
-        await mockInput.onchange({ target: mockInput } as any);
+        await mockInput.onchange({ target: mockInput } as unknown as Event);
       }
 
       const result = await promise;

@@ -15,8 +15,9 @@ import {
   MAX_TOWER_LEVEL,
   TargetingMode,
 } from '../models/tower.model';
-import { GamePhase } from '../models/game-state.model';
-import { BlockType } from '../models/game-board-tile';
+import { GamePhase, GameState } from '../models/game-state.model';
+import { ModifierEffects } from '../models/game-modifier.model';
+import { BlockType, GameBoardTile } from '../models/game-board-tile';
 import { RelicService } from '../../../run/services/relic.service';
 import { createRelicServiceSpy } from '../testing';
 import { RunEventBusService, RunEventType } from '../../../run/services/run-event-bus.service';
@@ -30,7 +31,7 @@ function makeMockTower(overrides: Partial<PlacedTower> = {}): PlacedTower {
     col: 3,
     kills: 0,
     totalInvested: 100,
-    mesh: null as any,
+    mesh: null,
     targetingMode: TargetingMode.NEAREST,
     ...overrides,
   };
@@ -64,9 +65,9 @@ describe('TowerInteractionService', () => {
     eventBusSpy = jasmine.createSpyObj<RunEventBusService>('RunEventBusService', ['emit']);
 
     // Default safe stubs
-    gameStateSpy.getState.and.returnValue({ phase: GamePhase.SETUP, gold: 1000 } as any);
+    gameStateSpy.getState.and.returnValue({ phase: GamePhase.SETUP, gold: 1000 } as unknown as GameState);
     gameStateSpy.canAfford.and.returnValue(true);
-    gameStateSpy.getModifierEffects.and.returnValue({ towerCostMultiplier: 1 } as any);
+    gameStateSpy.getModifierEffects.and.returnValue({ towerCostMultiplier: 1 } as ModifierEffects);
 
     TestBed.configureTestingModule({
       providers: [
@@ -93,13 +94,13 @@ describe('TowerInteractionService', () => {
 
   describe('placeTower', () => {
     it('fails when phase is VICTORY', () => {
-      gameStateSpy.getState.and.returnValue({ phase: GamePhase.VICTORY, gold: 1000 } as any);
+      gameStateSpy.getState.and.returnValue({ phase: GamePhase.VICTORY, gold: 1000 } as unknown as GameState);
       const result = service.placeTower(0, 0, TowerType.BASIC);
       expect(result.success).toBeFalse();
     });
 
     it('fails when phase is DEFEAT', () => {
-      gameStateSpy.getState.and.returnValue({ phase: GamePhase.DEFEAT, gold: 1000 } as any);
+      gameStateSpy.getState.and.returnValue({ phase: GamePhase.DEFEAT, gold: 1000 } as unknown as GameState);
       const result = service.placeTower(0, 0, TowerType.BASIC);
       expect(result.success).toBeFalse();
     });
@@ -205,19 +206,19 @@ describe('TowerInteractionService', () => {
 
   describe('isPlaceableTile', () => {
     it('returns true when tile is an unoccupied purchasable BASE tile', () => {
-      const tile = { type: BlockType.BASE, isPurchasable: true, towerType: null } as any;
+      const tile = { type: BlockType.BASE, isPurchasable: true, towerType: null } as unknown as GameBoardTile;
       gameBoardSpy.getGameBoard.and.returnValue([[tile]]);
       expect(service.isPlaceableTile(0, 0)).toBeTrue();
     });
 
     it('returns false when tile already has a tower', () => {
-      const tile = { type: BlockType.BASE, isPurchasable: true, towerType: TowerType.BASIC } as any;
+      const tile = { type: BlockType.BASE, isPurchasable: true, towerType: TowerType.BASIC } as unknown as GameBoardTile;
       gameBoardSpy.getGameBoard.and.returnValue([[tile]]);
       expect(service.isPlaceableTile(0, 0)).toBeFalse();
     });
 
     it('returns false when tile is not BASE type', () => {
-      const tile = { type: BlockType.WALL, isPurchasable: false, towerType: null } as any;
+      const tile = { type: BlockType.WALL, isPurchasable: false, towerType: null } as unknown as GameBoardTile;
       gameBoardSpy.getGameBoard.and.returnValue([[tile]]);
       expect(service.isPlaceableTile(0, 0)).toBeFalse();
     });
@@ -232,13 +233,13 @@ describe('TowerInteractionService', () => {
 
   describe('sellTower', () => {
     it('fails when phase is VICTORY', () => {
-      gameStateSpy.getState.and.returnValue({ phase: GamePhase.VICTORY } as any);
+      gameStateSpy.getState.and.returnValue({ phase: GamePhase.VICTORY } as unknown as GameState);
       const result = service.sellTower('1-1');
       expect(result.success).toBeFalse();
     });
 
     it('fails when phase is DEFEAT', () => {
-      gameStateSpy.getState.and.returnValue({ phase: GamePhase.DEFEAT } as any);
+      gameStateSpy.getState.and.returnValue({ phase: GamePhase.DEFEAT } as unknown as GameState);
       const result = service.sellTower('1-1');
       expect(result.success).toBeFalse();
     });
@@ -323,7 +324,7 @@ describe('TowerInteractionService', () => {
 
   describe('upgradeTower', () => {
     it('fails when phase is VICTORY', () => {
-      gameStateSpy.getState.and.returnValue({ phase: GamePhase.VICTORY } as any);
+      gameStateSpy.getState.and.returnValue({ phase: GamePhase.VICTORY } as unknown as GameState);
       towerCombatSpy.getTower.and.returnValue(makeMockTower());
       const result = service.upgradeTower('2-3');
       expect(result.success).toBeFalse();

@@ -5,6 +5,9 @@ import { DeckService } from '../../../../run/services/deck.service';
 import { CardEffectService } from '../../../../run/services/card-effect.service';
 import { RelicService } from '../../../../run/services/relic.service';
 import { DECK_CONFIG, DeckState, EnergyState } from '../../../../run/models/card.model';
+import { EncounterConfig } from '../../../../run/models/encounter.model';
+import { NodeType } from '../../../../run/models/node-map.model';
+import { RunState, RunStatus } from '../../../../run/models/run-state.model';
 
 export function createRunServiceSpy(): jasmine.SpyObj<RunService> {
   const spy = jasmine.createSpyObj('RunService', [
@@ -21,12 +24,12 @@ export function createRunServiceSpy(): jasmine.SpyObj<RunService> {
   spy.hasActiveRun.and.returnValue(true);
   spy.getCurrentEncounter.and.returnValue({
     nodeId: 'test-node',
-    nodeType: 'combat',
+    nodeType: NodeType.COMBAT,
     waves: [],
     enemyHealthMultiplier: 1,
     enemySpeedMultiplier: 1,
     goldMultiplier: 1,
-  } as any);
+  } as unknown as EncounterConfig);
   (Object.getOwnPropertyDescriptor(spy, 'runState')!.get as jasmine.Spy).and.returnValue({
     id: 'test-run',
     seed: 0,
@@ -37,9 +40,9 @@ export function createRunServiceSpy(): jasmine.SpyObj<RunService> {
     relicIds: [],
     deckCardIds: [],
     encounterResults: [],
-    status: 'in_progress',
+    status: RunStatus.IN_PROGRESS,
     score: 0,
-  } as any);
+  } as unknown as RunState);
 
   return spy;
 }

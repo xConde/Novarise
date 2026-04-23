@@ -5,6 +5,7 @@ import { ElevationService } from './elevation.service';
 import { GameBoardService } from '../game-board.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { BlockType, GameBoardTile } from '../models/game-board-tile';
+import { TowerType } from '../models/tower.model';
 import { SerializableTileElevationState } from './elevation.types';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { BOARD_CONFIG } from '../constants/board.constants';
@@ -129,7 +130,7 @@ describe('ElevationService', () => {
     it('calls translateTowerMesh when a tower sits on the tile', () => {
       // Place a tower on (2,2) by marking the tile
       const board = gameBoardService.getGameBoard();
-      board[2][2] = new GameBoardTile(2, 2, BlockType.TOWER, false, false, null, 'BASIC' as any);
+      board[2][2] = new GameBoardTile(2, 2, BlockType.TOWER, false, false, null, TowerType.BASIC);
 
       service.raise(2, 2, 1, null, 'test-card', CURRENT_TURN);
 
@@ -352,14 +353,14 @@ describe('ElevationService', () => {
   describe('TOWER tile allowed (raise platform mechanic)', () => {
     it('allows raise on a TOWER tile', () => {
       const board = gameBoardService.getGameBoard();
-      board[2][2] = new GameBoardTile(2, 2, BlockType.TOWER, false, false, null, 'BASIC' as any);
+      board[2][2] = new GameBoardTile(2, 2, BlockType.TOWER, false, false, null, TowerType.BASIC);
       const result = service.raise(2, 2, 1, null, 'raise-platform', CURRENT_TURN);
       expect(result.ok).toBeTrue();
     });
 
     it('translates both tile mesh and tower mesh when raising a TOWER tile', () => {
       const board = gameBoardService.getGameBoard();
-      board[2][2] = new GameBoardTile(2, 2, BlockType.TOWER, false, false, null, 'BASIC' as any);
+      board[2][2] = new GameBoardTile(2, 2, BlockType.TOWER, false, false, null, TowerType.BASIC);
       service.raise(2, 2, 2, null, 'raise-platform', CURRENT_TURN);
       expect(registrySpy.translateTileMesh).toHaveBeenCalledWith(2, 2, jasmine.any(Number));
       expect(registrySpy.translateTowerMesh).toHaveBeenCalledWith(2, 2, jasmine.any(Number));
@@ -367,7 +368,7 @@ describe('ElevationService', () => {
 
     it('tower mesh translated to elevation + tileHeight', () => {
       const board = gameBoardService.getGameBoard();
-      board[2][2] = new GameBoardTile(2, 2, BlockType.TOWER, false, false, null, 'BASIC' as any);
+      board[2][2] = new GameBoardTile(2, 2, BlockType.TOWER, false, false, null, TowerType.BASIC);
       service.raise(2, 2, 2, null, 'raise-platform', CURRENT_TURN);
       const expectedTowerY = 2 + BOARD_CONFIG.tileHeight;
       expect(registrySpy.translateTowerMesh).toHaveBeenCalledWith(2, 2, expectedTowerY);
