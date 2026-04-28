@@ -1,5 +1,5 @@
 import { EnemyType, ENEMY_STATS } from './enemy.model';
-import { EnemyInfo, ENEMY_INFO } from './enemy-info.model';
+import { ENEMY_INFO } from './enemy-info.model';
 
 describe('ENEMY_INFO', () => {
   const allTypes = Object.values(EnemyType);

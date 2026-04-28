@@ -10,7 +10,7 @@ describe('MinimapService', () => {
   const terrain: MinimapTerrainData = {
     gridWidth: 25,
     gridHeight: 20,
-    isPath: (row: number, col: number) => row === 12,
+    isPath: (row: number, _col: number) => row === 12,
     spawnPoints: [{ x: 0, z: 12 }],
     exitPoints: [{ x: 24, z: 12 }],
   };
@@ -242,7 +242,7 @@ describe('MinimapService', () => {
       boardHeight: 20,
       spawnerTiles: [[12, 0]],
       exitTiles: [[12, 24]],
-      getTileType: (row: number, col: number) => (row === 12 ? BlockType.BASE : BlockType.WALL),
+      getTileType: (row: number, _col: number) => (row === 12 ? BlockType.BASE : BlockType.WALL),
     };
 
     it('should return a MinimapTerrainData with correct dimensions', () => {

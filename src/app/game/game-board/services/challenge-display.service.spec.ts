@@ -3,9 +3,8 @@ import { ChallengeDisplayService } from './challenge-display.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { CombatLoopService } from './combat-loop.service';
 import { GameStateService } from './game-state.service';
-import { DifficultyLevel, INITIAL_GAME_STATE } from '../models/game-state.model';
+import { INITIAL_GAME_STATE } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
-import { ChallengeType } from '../../../run/data/challenges';
 
 describe('ChallengeDisplayService', () => {
   let service: ChallengeDisplayService;

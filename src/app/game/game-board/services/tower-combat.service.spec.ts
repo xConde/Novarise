@@ -1,12 +1,12 @@
 import { TestBed } from '@angular/core/testing';
-import { TowerCombatService, KillInfo, CombatAudioEvent, RegisterTowerOptions, DamageStackContext } from './tower-combat.service';
+import { TowerCombatService, KillInfo, CombatAudioEvent, DamageStackContext } from './tower-combat.service';
 import { ChainLightningService } from './chain-lightning.service';
 // M2 S5: ProjectileService import removed (file deleted)
 import { CombatVFXService } from './combat-vfx.service';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
-import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_SPECIALIZATIONS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES, PlacedTower } from '../models/tower.model';
+import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_SPECIALIZATIONS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TargetingMode, DEFAULT_TARGETING_MODE, PlacedTower } from '../models/tower.model';
 import { Enemy, EnemyType } from '../models/enemy.model';
 import { StatusEffectService } from './status-effect.service';
 import { StatusEffectType } from '../constants/status-effect.constants';

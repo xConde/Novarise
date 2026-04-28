@@ -1,6 +1,6 @@
 import { EnemyType } from './enemy.model';
 import { WAVE_DEFINITIONS } from './wave.model';
-import { WavePreviewEntry, getWavePreview, getWavePreviewFull } from './wave-preview.model';
+import { getWavePreview, getWavePreviewFull } from './wave-preview.model';
 import { ENDLESS_BOSS_INTERVAL } from './endless-wave.model';
 
 describe('getWavePreview', () => {

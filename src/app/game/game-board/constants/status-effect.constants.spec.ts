@@ -1,4 +1,4 @@
-import { StatusEffectType, StatusEffectConfig, STATUS_EFFECT_CONFIGS } from './status-effect.constants';
+import { StatusEffectType, STATUS_EFFECT_CONFIGS } from './status-effect.constants';
 
 describe('STATUS_EFFECT_CONFIGS', () => {
   const allTypes = Object.values(StatusEffectType);

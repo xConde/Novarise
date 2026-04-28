@@ -11,7 +11,7 @@ import { RangeVisualizationService } from './range-visualization.service';
 import { PathfindingService } from './pathfinding.service';
 import { GamePhase } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
-import { BlockType, GameBoardTile } from '../models/game-board-tile';
+import { BlockType } from '../models/game-board-tile';
 
 interface TestableBoardPointerService {
   raycaster: THREE.Raycaster;
