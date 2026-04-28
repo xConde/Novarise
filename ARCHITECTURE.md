@@ -46,7 +46,7 @@ src/
 │   │   │                              #   worldToGrid), three-utils (disposeMesh/Group, getMaterials),
 │   │   │                              #   min-heap, object-pool, spatial-grid, ...
 │   │   ├── guards/                    # game-leave.guard
-│   │   ├── game-board.component.ts    # Encounter coordinator (~1900 LOC)
+│   │   ├── game-board.component.ts    # Encounter coordinator (~1500 LOC after 6-cluster decomp)
 │   │   └── game-board.service.ts      # Board generation, tile mutation API
 │   ├── games/novarise/                # /edit map editor
 │   │   ├── constants/                 # editor-camera, editor-scene, editor-ui
@@ -84,12 +84,16 @@ so they survive `/run` ↔ `/play` transitions. See Run Subsystem.
 `GameBoardService`, `PathMutationService`, `ElevationService`, `LineOfSightService`,
 `TerraformMaterialPoolService`.
 
-**`GameBoardComponent`** component-scoped providers (~40): `SceneService`,
+**`GameBoardComponent`** component-scoped providers (~55): `SceneService`,
 `EnemyService`, `TowerCombatService`, `CombatLoopService`, `WaveService`,
 `CardPlayService`, `TowerGraphService`, `LinkMeshService`, `StatusEffectService`,
 `BoardMeshRegistryService`, `TowerMeshLifecycleService`, `TowerPlacementService`,
 `TowerSelectionService`, `TurnHistoryService`, `WaveCombatFacadeService`,
-`TutorialFacadeService`, and the mesh / visual / audio / particle services.
+`TutorialFacadeService`, plus the 6 services landed by the post-pivot
+decomposition pass: `TurnBannerService`, `PathBlockedWarningService`,
+`ItemCallbacksWiringService`, `SpawnPreviewViewService`,
+`EncounterBootstrapService`, `CheckpointRestoreCoordinatorService` —
+and the mesh / visual / audio / particle services.
 
 **`EditorModule` (`/edit`)** provides the editor-scoped service graph under
 `games/novarise/core/`.
@@ -137,10 +141,13 @@ or new-run start (see red-team lessons below).
 **Manual save:** Pause menu "Save & Exit" → `CanDeactivate` observable → user
 confirmation → `EncounterCheckpointService.saveCheckpoint()`.
 
-**Restore flow** (in `GameBoardComponent.restoreFromCheckpoint`, ~20 steps):
-towers BEFORE enemies (pathfinding grid) → turn number BEFORE mortar zones
-(expiry) → graph overlay AFTER `towerGraphService.rebuild()` → GameState LAST
-(triggers UI subscribers).
+**Restore flow** (in `CheckpointRestoreCoordinatorService.restore`, 18 steps):
+path mutations BEFORE elevations BEFORE towers BEFORE enemies
+(pathfinding grid + tower-Y derivation) → turn number BEFORE mortar zones
+(expiry) → tower graph rebuild() BEFORE graph overlay restore() → setMaxWaves
+BEFORE GameState restore (phase guard) → GameState LAST (triggers UI
+subscribers). Component delegates via `restoreFromCheckpoint()` thin
+wrapper; fallback path goes back through `initFreshEncounter()`.
 
 **Serializing services** (13): GameState, DeckService, CardEffectService,
 WaveService, TowerCombatService, EnemyService, StatusEffectService,
