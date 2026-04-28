@@ -65,11 +65,8 @@ import { RunService } from '../../run/services/run.service';
 import { RelicService } from '../../run/services/relic.service';
 import { RELIC_DEFINITIONS } from '../../run/models/relic.model';
 import { ItemService } from '../../run/services/item.service';
-import { RunStateFlagService } from '../../run/services/run-state-flag.service';
 import { ItemType, ITEM_DEFINITIONS } from '../../run/models/item.model';
 import { DeckService } from '../../run/services/deck.service';
-import { CardEffectService } from '../../run/services/card-effect.service';
-import { EncounterCheckpointService } from '../../run/services/encounter-checkpoint.service';
 import { EncounterResult } from '../../run/models/run-state.model';
 import { CardInstance, DeckState, EnergyState } from '../../run/models/card.model';
 import { getActiveTowerEffect } from '../../run/constants/card-definitions';
@@ -356,10 +353,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private settingsService: SettingsService,
     private towerPreviewService: TowerPreviewService,
     private pathVisualizationService: PathVisualizationService,
-    private statusEffectService: StatusEffectService,
     private tutorialService: TutorialService,
     private notificationService: GameNotificationService,
-    private challengeTrackingService: ChallengeTrackingService,
     private gameEndService: GameEndService,
     private gameSessionService: GameSessionService,
     private towerInteractionService: TowerInteractionService,
@@ -378,7 +373,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private runService: RunService,
     private relicService: RelicService,
     private deckService: DeckService,
-    private cardEffectService: CardEffectService,
     private gameRenderService: GameRenderService,
     private meshRegistry: BoardMeshRegistryService,
     private touchInteraction: TouchInteractionService,
@@ -388,9 +382,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     public waveCombat: WaveCombatFacadeService,
     public tutorialFacade: TutorialFacadeService,
     private ascensionModifier: AscensionModifierService,
-    private towerMeshFactory: TowerMeshFactoryService,
-    private enemyMeshFactory: EnemyMeshFactoryService,
-    private encounterCheckpointService: EncounterCheckpointService,
     private turnHistoryService: TurnHistoryService,
     private turnBannerService: TurnBannerService,
     private pathBlockedWarningService: PathBlockedWarningService,
@@ -400,9 +391,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private checkpointRestoreCoordinator: CheckpointRestoreCoordinatorService,
     private wavePreviewService: WavePreviewService,
     private itemService: ItemService,
-    private runStateFlagService: RunStateFlagService,
     private pathMutationService: PathMutationService,
-    private elevationService: ElevationService,
     private towerGraphService: TowerGraphService,
     private linkMeshService: LinkMeshService,
   ) {
