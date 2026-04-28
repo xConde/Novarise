@@ -23,6 +23,30 @@ export {
 
 const PROFILE_STORAGE_KEY = 'novarise-profile';
 
+/**
+ * Headroom appended to ACHIEVEMENTS.length when slicing a parsed profile's
+ * achievement list. Allows the parser to tolerate a profile saved by a
+ * future build that briefly added a few new achievements without rejecting
+ * the user's data on rollback.
+ */
+const ACHIEVEMENT_PARSE_BUFFER = 10;
+
+/**
+ * Read a numeric profile field with a legacy-key fallback. Returns 0 when
+ * neither the new key nor the legacy key contains a number — matches the
+ * pre-pivot ascent* → run* migration contract.
+ */
+function readNumberWithLegacy(
+  parsed: Partial<PlayerProfile>,
+  key: keyof PlayerProfile,
+  legacyKey: string,
+): number {
+  const current = parsed[key];
+  if (typeof current === 'number') return current;
+  const legacy = (parsed as Record<string, unknown>)[legacyKey];
+  return typeof legacy === 'number' ? legacy : 0;
+}
+
 const DEFAULT_PROFILE: PlayerProfile = {
   totalGamesPlayed: 0,
   totalVictories: 0,
@@ -270,7 +294,7 @@ export class PlayerProfileService {
       ...DEFAULT_PROFILE,
       ...parsed,
       achievements: Array.isArray(parsed.achievements)
-        ? [...parsed.achievements].slice(0, ACHIEVEMENTS.length + 10)
+        ? [...parsed.achievements].slice(0, ACHIEVEMENTS.length + ACHIEVEMENT_PARSE_BUFFER)
         : [],
       mapScores: (parsed.mapScores && typeof parsed.mapScores === 'object' && !Array.isArray(parsed.mapScores))
         ? { ...parsed.mapScores as Record<string, MapScoreRecord> }
@@ -285,15 +309,11 @@ export class PlayerProfileService {
       maxModifiersUsedInVictory: typeof parsed.maxModifiersUsedInVictory === 'number' ? parsed.maxModifiersUsedInVictory : 0,
       completedChallengeCount: typeof parsed.completedChallengeCount === 'number' ? parsed.completedChallengeCount : 0,
       // Migration: run stats — prefer new field names, fall back to pre-pivot ascent* names
-      runsAttempted: typeof parsed.runsAttempted === 'number' ? parsed.runsAttempted
-        : typeof (parsed as Record<string, unknown>)['ascentRunsAttempted'] === 'number' ? (parsed as Record<string, unknown>)['ascentRunsAttempted'] as number : 0,
-      runsCompleted: typeof parsed.runsCompleted === 'number' ? parsed.runsCompleted
-        : typeof (parsed as Record<string, unknown>)['ascentRunsCompleted'] === 'number' ? (parsed as Record<string, unknown>)['ascentRunsCompleted'] as number : 0,
+      runsAttempted: readNumberWithLegacy(parsed, 'runsAttempted', 'ascentRunsAttempted'),
+      runsCompleted: readNumberWithLegacy(parsed, 'runsCompleted', 'ascentRunsCompleted'),
       highestAscensionBeaten: typeof parsed.highestAscensionBeaten === 'number' ? parsed.highestAscensionBeaten : 0,
-      runTotalKills: typeof parsed.runTotalKills === 'number' ? parsed.runTotalKills
-        : typeof (parsed as Record<string, unknown>)['ascentTotalKills'] === 'number' ? (parsed as Record<string, unknown>)['ascentTotalKills'] as number : 0,
-      runBestScore: typeof parsed.runBestScore === 'number' ? parsed.runBestScore
-        : typeof (parsed as Record<string, unknown>)['ascentBestScore'] === 'number' ? (parsed as Record<string, unknown>)['ascentBestScore'] as number : 0,
+      runTotalKills: readNumberWithLegacy(parsed, 'runTotalKills', 'ascentTotalKills'),
+      runBestScore: readNumberWithLegacy(parsed, 'runBestScore', 'ascentBestScore'),
     };
   }
 
