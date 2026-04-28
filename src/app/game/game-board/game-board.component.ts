@@ -82,6 +82,7 @@ import { PathBlockedWarningService } from './services/path-blocked-warning.servi
 import { ItemCallbacksWiringService } from './services/item-callbacks-wiring.service';
 import { SpawnPreviewViewService } from './services/spawn-preview-view.service';
 import { EncounterBootstrapService } from './services/encounter-bootstrap.service';
+import { CheckpointRestoreCoordinatorService } from './services/checkpoint-restore-coordinator.service';
 import { WavePreviewService, FutureWaveSummary } from './services/wave-preview.service';
 import { HandCard } from './components/card-hand/card-hand.component';
 import { PathMutationService } from './services/path-mutation.service';
@@ -90,8 +91,6 @@ import { LineOfSightService } from './services/line-of-sight.service';
 import { TerraformMaterialPoolService } from './services/terraform-material-pool.service';
 import { TowerGraphService } from './services/tower-graph.service';
 import { LinkMeshService } from './services/link-mesh.service';
-import { BlockType } from './models/game-board-tile';
-import { BOARD_CONFIG } from './constants/board.constants';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
 export interface EnemyBadge {
@@ -156,7 +155,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, PathBlockedWarningService, ItemCallbacksWiringService, SpawnPreviewViewService, EncounterBootstrapService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, TowerGraphService, LinkMeshService]
+  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, PathBlockedWarningService, ItemCallbacksWiringService, SpawnPreviewViewService, EncounterBootstrapService, CheckpointRestoreCoordinatorService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, TowerGraphService, LinkMeshService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -398,6 +397,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private itemCallbacksWiring: ItemCallbacksWiringService,
     private spawnPreview: SpawnPreviewViewService,
     private encounterBootstrap: EncounterBootstrapService,
+    private checkpointRestoreCoordinator: CheckpointRestoreCoordinatorService,
     private wavePreviewService: WavePreviewService,
     private itemService: ItemService,
     private runStateFlagService: RunStateFlagService,
@@ -1085,240 +1085,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * 15-step encounter restore from checkpoint.
-   * Called in ngOnInit when isRestoringCheckpoint is true, after scene + board are set up.
-   * Order is critical — see restore plan for dependency rationale.
+   * Encounter restore — delegated to CheckpointRestoreCoordinatorService.
+   * The 18-step ordering and every per-step rationale comment lives there.
+   * Component retains lifecycle control via the onFallback callback.
    */
   private restoreFromCheckpoint(): void {
-    const checkpoint = this.encounterCheckpointService.loadCheckpoint();
-    if (!checkpoint) {
-      // Checkpoint not found — fall back to fresh encounter initialization
-      this.runService.isRestoringCheckpoint = false;
-      this.initFreshEncounter();
-      return;
-    }
-
-    try {
-      const scene = this.sceneService.getScene();
-      const encounter = checkpoint.encounterConfig;
-
-      // Step 1: Board tiles already rendered (importBoard + renderGameBoard ran before this call)
-
-      // Step 2: Apply ascension modifiers
-      const runState = this.runService.runState;
-      if (runState) {
-        this.ascensionModifier.apply(runState.ascensionLevel, encounter.isElite, encounter.isBoss);
-      }
-
-      // Step 2a: Restore run-level RNG (safety net — RunService.restoreEncounter() already
-      // calls setState when runRng is non-null, but after a page reload runRng may be null
-      // until this call re-creates the instance from the saved state).
-      this.runService.restoreRngState(checkpoint.rngState);
-
-      // Step 3: Restore CombatLoopService turn number (before mortar zone expiry checks)
-      this.combatLoopService.setTurnNumber(checkpoint.turnNumber);
-
-      // Step 3.5: Restore path mutations BEFORE towers (towers can be placed on player-built
-      // BASE tiles) and BEFORE enemies (their serialized paths assume the mutated board state).
-      //
-      // Restore ordering:
-      //   a) restore() reloads the mutation journal + nextId counter (no tile/mesh side effects)
-      //   b) Re-apply each mutation's tile data change to the freshly-imported board
-      //   c) Swap the tile mesh to match the restored tile type
-      //
-      // The board was imported fresh from map data (Step 1), so tiles are at their
-      // original pre-mutation state. We must re-apply each mutation in journal order
-      // to get back to the mid-encounter board state.
-      this.pathMutationService.restore(checkpoint.pathMutations);
-      for (const mutation of checkpoint.pathMutations.mutations) {
-        // Determine what type the tile should be AFTER this mutation.
-        // op → target type mapping (mirrors PathMutationService.applyMutation):
-        //   build → BASE, block → WALL, destroy → WALL, bridgehead → WALL
-        const targetType =
-          mutation.op === 'build' ? BlockType.BASE : BlockType.WALL;
-
-        // Re-apply tile data (board starts fresh from importBoard)
-        this.gameBoardService.setTileType(
-          mutation.row,
-          mutation.col,
-          targetType,
-          mutation.op,
-          mutation.priorType,
-        );
-
-        // Swap the Three.js mesh to match restored tile type
-        this.pathMutationService.swapMesh(mutation.row, mutation.col, targetType, scene);
-      }
-      // Invalidate path cache once after all mutations are replayed
-      if (checkpoint.pathMutations.mutations.length > 0) {
-        this.enemyService.repathAffectedEnemies(-1, -1);
-      }
-
-      // Step 3.6: Restore tile elevations AFTER path mutations (mutations may have
-      // changed BlockType; elevations compose on top of the current BlockType) and
-      // BEFORE towers (tower Y is derived from tile elevation at placement time).
-      //
-      // Restore ordering:
-      //   a) restore() reloads the elevation journal + nextId (no tile/mesh side effects)
-      //   b) Re-apply each non-zero tile elevation to the board data
-      //   c) Translate tile mesh Y to the restored elevation
-      //
-      // Does NOT invalidate pathfinding cache — elevation does not affect isTraversable.
-      this.elevationService.restore(checkpoint.tileElevations);
-      for (const entry of checkpoint.tileElevations.elevations) {
-        this.gameBoardService.setTileElevation(entry.row, entry.col, entry.value);
-        const newTileY = entry.value + BOARD_CONFIG.tileHeight / 2;
-        this.meshRegistry.translateTileMesh(entry.row, entry.col, newTileY);
-      }
-      // Sprint 39: recreate cliff meshes for all restored elevated tiles.
-      // elevationService.restore() only reloads the journal; cliff meshes (visual-only)
-      // must be recreated separately since they are not serialized (derived from elevation).
-      this.elevationService.restoreCliffMeshes(checkpoint.tileElevations.elevations);
-
-      // Step 4: Restore towers — create meshes, register in TowerCombatService
-      const towerMeshes = new Map<string, THREE.Group>();
-      for (const tower of checkpoint.towers) {
-        const mesh = this.towerMeshFactory.createTowerMesh(
-          tower.row, tower.col, tower.type,
-          this.gameBoardService.getBoardWidth(), this.gameBoardService.getBoardHeight()
-        );
-        // Tower factory always places the group at fixed tileHeight. If Step 3.6
-        // restored the underlying tile to a non-zero elevation, translate the
-        // tower group up so it sits on top of the raised tile instead of
-        // clipping into the ground. Disposal-neutral — identity-stable mesh.
-        const boardSnapshot = this.gameBoardService.getGameBoard();
-        const tileElevation = boardSnapshot?.[tower.row]?.[tower.col]?.elevation ?? 0;
-        if (tileElevation !== 0) {
-          mesh.position.y = tileElevation + BOARD_CONFIG.tileHeight;
-        }
-        scene.add(mesh);
-        this.meshRegistry.towerMeshes.set(tower.id, mesh);
-        towerMeshes.set(tower.id, mesh);
-        // Mark board tile as occupied — use forceSetTower to bypass BFS validation.
-        // Placing towers one-by-one from a checkpoint would cause wouldBlockPath() to
-        // reject valid positions before the full saved layout is restored.
-        this.gameBoardService.forceSetTower(tower.row, tower.col, tower.type);
-      }
-      this.towerCombatService.restoreTowers(checkpoint.towers, towerMeshes);
-      this.meshRegistry.rebuildTowerChildrenArray();
-
-      // Step 4.5: Rebuild the tower adjacency graph from the restored placedTowers.
-      // Graph is DERIVED state (not persisted) — restoreTowers repopulates the
-      // source-of-truth map directly, bypassing the register/unregister hooks that
-      // would normally keep the graph in sync. This single rebuild() consumes the
-      // current `placedTowersGetter()` result and re-derives all 4-dir edges +
-      // cluster membership. O(N × 4) lookups — well under 0.1ms for realistic
-      // tower counts. See conduit-adjacency-graph.md §9 for the "graph state is
-      // derived, not checkpointed" rationale.
-      this.towerGraphService.rebuild();
-
-      // Step 4.6: Restore graph overlay state (virtual edges + disruption entries).
-      // v10 added — v9 checkpoints migrated to empty state by EncounterCheckpointService.
-      // MUST run after rebuild() so keyToId is populated — restore() maps virtual-edge
-      // coordinates to tower ids via that lookup.
-      this.towerGraphService.restore(checkpoint.towerGraph);
-
-      // Step 5: Restore mortar zones
-      this.towerCombatService.restoreMortarZones(checkpoint.mortarZones);
-
-      // Step 6: Restore enemies — create meshes, register in EnemyService
-      const enemyMeshes = new Map<string, THREE.Mesh>();
-      for (const enemy of checkpoint.enemies) {
-        const tempEnemy = {
-          ...enemy,
-          path: enemy.path.map(n => ({ ...n, parent: undefined })),
-          mesh: undefined,
-          statusParticles: [],
-          statusParticleEffectType: undefined,
-        };
-        const mesh = this.enemyMeshFactory.createEnemyMesh(tempEnemy as unknown as Parameters<typeof this.enemyMeshFactory.createEnemyMesh>[0]);
-        scene.add(mesh);
-        enemyMeshes.set(enemy.id, mesh);
-      }
-      this.enemyService.restoreEnemies(checkpoint.enemies, enemyMeshes, checkpoint.enemyCounter);
-
-      // Step 7: Restore status effects
-      this.statusEffectService.restoreEffects(checkpoint.statusEffects);
-
-      // Step 8: Update health bars for restored enemies
-      const camera = this.sceneService.getCamera();
-      if (camera) {
-        this.enemyService.updateHealthBars(camera.quaternion);
-      }
-
-      // Step 9: Restore deck state (piles, energy — NO reshuffle)
-      this.deckService.restoreState(checkpoint.deckState);
-      // Step 9a: Restore deck-level RNG so in-encounter reshuffles are deterministic.
-      // Field is absent on pre-v4 checkpoints (migration sets it to undefined) — skip in that case.
-      if (checkpoint.deckRngState !== undefined) {
-        this.deckService.setRngState(checkpoint.deckRngState);
-      }
-
-      // Step 10: Restore card effect modifiers
-      this.cardEffectService.restoreModifiers(checkpoint.cardModifiers);
-
-      // Step 11: Restore game stats
-      this.gameStatsService.restoreFromCheckpoint(checkpoint.gameStats);
-
-      // Step 12: Restore challenge tracking
-      this.challengeTrackingService.restoreFromCheckpoint(checkpoint.challengeState);
-
-      // Step 13: Restore relic encounter flags
-      this.relicService.restoreEncounterFlags(checkpoint.relicFlags);
-
-      // Step 13c: Restore item (consumable) inventory. v4 checkpoints are
-      // migrated to an empty inventory by EncounterCheckpointService.
-      this.itemService.restore(checkpoint.itemInventory);
-
-      // Step 13d: Restore run-state flags (cross-event memory). v5 checkpoints
-      // are migrated to empty entries by EncounterCheckpointService.
-      this.runStateFlagService.restore(checkpoint.runStateFlags);
-
-      // Step 13a: Restore wave-preview one-shot bonus so mid-encounter scout
-      // plays survive a save/resume. Pre-v2 checkpoints are migrated to a
-      // zero-bonus default by EncounterCheckpointService before we get here.
-      this.wavePreviewService.restore(checkpoint.wavePreview);
-
-      // Step 13b: Restore RECAP buffer so the player sees their pre-quit
-      // turn history. v2 checkpoints migrate to an empty array — silent, not
-      // fatal.
-      this.turnHistoryService.restore(checkpoint.turnHistory);
-
-      // Step 14: Restore wave state (turnSchedule, index, seenTypes)
-      this.waveService.restoreState(checkpoint.waveState);
-
-      // Step 15: Set custom wave definitions and max-wave count BEFORE restoreFromCheckpoint.
-      // GameStateService.setMaxWaves() has a phase guard (phase===SETUP && wave===0) — it must
-      // run while phase is still SETUP (i.e., before the checkpoint's COMBAT/INTERMISSION
-      // phase is applied). WaveService.setCustomWaves() must precede this for parity with the
-      // fresh-encounter path, and also before phaseChange$ fires so subscribers see wave defs.
-      this.waveService.setCustomWaves(encounter.waves);
-      this.gameStateService.setMaxWaves(encounter.waves.length);
-
-      // Step 16: Restore combat loop leaked flag
-      this.combatLoopService.setLeakedThisWave(checkpoint.leakedThisWave);
-
-      // Step 17: Restore game state LAST (sets phase → triggers UI subscription updates)
-      this.gameStateService.restoreFromCheckpoint(checkpoint.gameState);
-
-      // Step 18: Seed wave preview for the current restored state
-      const state = this.gameStateService.getState();
-      if (state.phase === GamePhase.INTERMISSION || state.phase === GamePhase.COMBAT) {
-        this.spawnPreview.refreshFor(state);
-      }
-
-      // Clear restore flag and checkpoint storage
-      this.runService.isRestoringCheckpoint = false;
-      this.encounterCheckpointService.clearCheckpoint();
-      this.updateChallengeIndicators();
-    } catch (error) {
-      console.error('Failed to restore checkpoint, falling back to fresh encounter:', error);
-      this.runService.isRestoringCheckpoint = false;
-      this.encounterCheckpointService.clearCheckpoint();
-      // Clean up any partial restore state before starting fresh
-      this.gameSessionService.resetAllServices(this.sceneService.getScene());
-      this.initFreshEncounter();
-    }
+    this.checkpointRestoreCoordinator.restore({
+      onFallback: () => this.initFreshEncounter(),
+    });
   }
 
   /**
