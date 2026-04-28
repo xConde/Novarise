@@ -16,8 +16,7 @@ import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase } from './models/game-st
 import { TowerType, TowerSpecialization, PlacedTower, TargetingMode } from './models/tower.model';
 import { EnemyType } from './models/enemy.model';
 import { TowerCombatService } from './services/tower-combat.service';
-import { ScoreBreakdown, calculateScoreBreakdown } from './models/score.model';
-import { ACHIEVEMENTS, Achievement } from '../../core/services/player-profile.service';
+import { ACHIEVEMENTS } from '../../core/services/player-profile.service';
 import { WaveService } from './services/wave.service';
 import { StatusEffectService } from './services/status-effect.service';
 import { EnemyService } from './services/enemy.service';
@@ -27,7 +26,6 @@ import { BehaviorSubject, of } from 'rxjs';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
 import { GameNotificationService, NotificationType } from './services/game-notification.service';
 import { ChallengeTrackingService } from './services/challenge-tracking.service';
-import { ChallengeType, ChallengeDefinition } from '../../run/data/challenges';
 import { GameEndService } from './services/game-end.service';
 import { GameSessionService } from './services/game-session.service';
 import { SceneService } from './services/scene.service';
@@ -43,8 +41,6 @@ import {
   createSettingsServiceSpy,
   createTowerAnimationServiceSpy,
   createGamePauseServiceSpy,
-  createTowerPlacementServiceSpy,
-  createTowerSelectionServiceSpy,
   createTowerUpgradeVisualServiceSpy,
   createRelicServiceSpy,
   createRunServiceSpy,
@@ -59,13 +55,11 @@ import { GamePauseService } from './services/game-pause.service';
 import { ChallengeDisplayService } from './services/challenge-display.service';
 import { EnemyHealthService } from './services/enemy-health.service';
 import { ChainLightningService } from './services/chain-lightning.service';
-import { TowerPlacementService } from './services/tower-placement.service';
-import { TowerSelectionService } from './services/tower-selection.service';
 import { TowerUpgradeVisualService } from './services/tower-upgrade-visual.service';
 import { getAscensionEffects, AscensionEffectType } from '../../run/models/ascension.model';
 import { GameRenderService } from './services/game-render.service';
 import { BoardMeshRegistryService } from './services/board-mesh-registry.service';
-import { GameInputService, TOWER_HOTKEYS } from './services/game-input.service';
+import { GameInputService } from './services/game-input.service';
 import { TouchInteractionService } from './services/touch-interaction.service';
 import { BoardPointerService } from './services/board-pointer.service';
 import { CardPlayService } from './services/card-play.service';
@@ -156,14 +150,6 @@ interface TestableGameRenderService {
   updateMinimap(timeMs: number): void;
 }
 
-const MOCK_MAP_STATE_SPEC = {
-  gridSize: 10,
-  tiles: Array.from({ length: 10 }, () => new Array<TerrainType>(10).fill(TerrainType.BEDROCK)),
-  heightMap: Array.from({ length: 10 }, () => new Array<number>(10).fill(0)),
-  spawnPoints: [{ x: 0, z: 4 }],
-  exitPoints: [{ x: 9, z: 4 }],
-  version: '2.0.0',
-};
 
 describe('GameBoardComponent', () => {
   let component: GameBoardComponent;
@@ -2267,11 +2253,11 @@ describe('GameBoardComponent', () => {
   });
 
   describe('updateChallengeIndicators', () => {
-    let challengeTrackingService: ChallengeTrackingService;
+    let _challengeTrackingService: ChallengeTrackingService;
     let mapBridge: MapBridgeService;
 
     beforeEach(() => {
-      challengeTrackingService = fixture.debugElement.injector.get(ChallengeTrackingService);
+      _challengeTrackingService = fixture.debugElement.injector.get(ChallengeTrackingService);
       mapBridge = fixture.debugElement.injector.get(MapBridgeService);
     });
 

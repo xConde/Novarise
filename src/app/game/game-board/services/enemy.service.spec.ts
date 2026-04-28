@@ -11,7 +11,7 @@ import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
 import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS, MINER_STATS, MINER_DIG_INTERVAL_TURNS, UNSHAKEABLE_STATS, VEINSEEKER_STATS, VEINSEEKER_SPEED_BOOST_WINDOW, VEINSEEKER_BOOSTED_TILES_PER_TURN } from '../models/enemy.model';
 import { GameBoardTile } from '../models/game-board-tile';
-import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
+import { GameModifier } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { HIT_FLASH_CONFIG, STATUS_EFFECT_VISUAL_CONFIG } from '../constants/effects.constants';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
@@ -22,7 +22,6 @@ import { EnemyHealthService } from './enemy-health.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { SerializableEnemy } from '../models/encounter-checkpoint.model';
-import { createTestEnemy } from '../testing/test-enemy.factory';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
@@ -2671,7 +2670,7 @@ describe('EnemyService', () => {
     });
 
     it('should not affect enemies with no active shield break animation', () => {
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const _enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
 
       expect(() => service.updateShieldBreakAnimations(0.1)).not.toThrow();
     });
@@ -3383,7 +3382,7 @@ describe('EnemyService', () => {
       }
       gameBoardService.getGameBoard.and.returnValue(board);
 
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      const _enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
       // spawnEnemy itself returns null when no exit — but we can check applyDetour
       // directly even when no enemy is present.
       const count = service.applyDetour();
@@ -3626,8 +3625,8 @@ describe('EnemyService', () => {
   describe('applyDetour with UNSHAKEABLE', () => {
     it('does not override path on UNSHAKEABLE enemy', () => {
       const unshakeable = service.spawnEnemy(EnemyType.UNSHAKEABLE, mockScene)!;
-      const originalPath = [...unshakeable.path];
-      const originalIndex = unshakeable.pathIndex;
+      const _originalPath = [...unshakeable.path];
+      const _originalIndex = unshakeable.pathIndex;
 
       // Give it a short path so applyDetour would normally override it.
       unshakeable.path = [

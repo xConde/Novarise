@@ -1191,7 +1191,7 @@ describe('PlayerProfileService', () => {
 
   describe('recordGameEnd idempotency guard', () => {
     it('second call within the same session is a no-op and returns []', () => {
-      const first = service.recordGameEnd(makeStats({ isVictory: true, score: 100 }));
+      const _first = service.recordGameEnd(makeStats({ isVictory: true, score: 100 }));
       const second = service.recordGameEnd(makeStats({ isVictory: true, score: 200 }));
 
       expect(second).toEqual([]);

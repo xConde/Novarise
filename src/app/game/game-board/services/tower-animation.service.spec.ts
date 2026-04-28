@@ -282,7 +282,7 @@ describe('TowerAnimationService', () => {
   describe('updateTilePulse', () => {
     it('pulses emissiveIntensity on SPAWNER tiles', () => {
       const mesh = makeTileMesh(BlockType.SPAWNER);
-      const initialIntensity = (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity;
+      const _initialIntensity = (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity;
       const tileMeshes = new Map<string, THREE.Mesh>([['0-0', mesh]]);
 
       service.updateTilePulse(tileMeshes, 1000);

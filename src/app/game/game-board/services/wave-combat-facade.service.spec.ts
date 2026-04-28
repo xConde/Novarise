@@ -435,9 +435,7 @@ describe('WaveCombatFacadeService', () => {
 
     it('draws a new hand when combat continues after turn', () => {
       // First call returns COMBAT, second (post-turn check) also COMBAT
-      let callCount = 0;
       gameStateService.getState.and.callFake(() => {
-        callCount++;
         return { ...defaultState, phase: GamePhase.COMBAT };
       });
       service.init(makeCallbacks());

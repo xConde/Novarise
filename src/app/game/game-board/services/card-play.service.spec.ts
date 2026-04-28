@@ -1,8 +1,7 @@
 import { TestBed } from '@angular/core/testing';
-import { BehaviorSubject } from 'rxjs';
 import * as THREE from 'three';
 
-import { CardPlayService, CardPlayCallbacks } from './card-play.service';
+import { CardPlayService } from './card-play.service';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
 import { TowerGraphService } from './tower-graph.service';
@@ -21,7 +20,7 @@ import { SceneService } from './scene.service';
 import { StatusEffectService } from './status-effect.service';
 import { CombatLoopService } from './combat-loop.service';
 import { WavePreviewService } from './wave-preview.service';
-import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
+import { TowerType } from '../models/tower.model';
 import { GamePhase, INITIAL_GAME_STATE } from '../models/game-state.model';
 import {
   CardId,
@@ -31,7 +30,7 @@ import {
   TerraformTargetCardEffect,
   isTerraformTargetEffect,
 } from '../../../run/models/card.model';
-import { MutationOp, MutationResult, MutationRejectionReason } from './path-mutation.types';
+import { MutationOp, MutationResult } from './path-mutation.types';
 import { CARD_DEFINITIONS } from '../../../run/constants/card-definitions';
 import {
   createGameStateServiceSpy,

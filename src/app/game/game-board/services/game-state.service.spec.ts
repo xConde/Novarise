@@ -1155,12 +1155,6 @@ describe('GameStateService', () => {
     });
 
     describe('awardInterest with NO_INTEREST modifier', () => {
-      function enterIntermission(): void {
-        service.startWave();
-        service.completeWave(0);
-        expect(service.getState().phase).toBe(GamePhase.INTERMISSION);
-      }
-
       it('should skip interest when NO_INTEREST modifier is active', () => {
         service.setModifiers(new Set([GameModifier.NO_INTEREST]));
         // Manually transition through phases since setModifiers only works in SETUP
@@ -1462,7 +1456,7 @@ describe('GameStateService', () => {
 
     it('setModifiers is a no-op during COMBAT phase', () => {
       service.startWave(); // → COMBAT
-      const modsBefore = service.getState().activeModifiers;
+      const _modsBefore = service.getState().activeModifiers;
 
       const newMods = new Set([GameModifier.ARMORED_ENEMIES]);
       service.setModifiers(newMods);

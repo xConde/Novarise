@@ -18,7 +18,7 @@ describe('LineOfSightService', () => {
   const BOARD_W = 10;
   const BOARD_H = 10;
   const TILE_SIZE = 1;
-  const TILE_HEIGHT = BOARD_CONFIG.tileHeight; // 0.2
+  const _TILE_HEIGHT = BOARD_CONFIG.tileHeight; // 0.2 — documented for test harness reference
 
   // Convert grid (row, col) to world (x, z) for this test harness
   function toWorld(row: number, col: number): { x: number; z: number } {
