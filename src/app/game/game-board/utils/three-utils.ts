@@ -24,19 +24,24 @@ export function getMaterials(mesh: THREE.Mesh): THREE.Material[] {
 }
 
 /**
- * Traverse a Group (or any Object3D), dispose every Mesh descendant's
+ * Traverse a Group (or any Object3D), dispose every Mesh AND Line descendant's
  * geometry and material(s), and optionally remove the root from the scene.
  *
- * Centralises the "traverse + disposeMesh" pattern used inline across
- * enemy.service, tower-combat.service, and enemy-health.service.
+ * Mesh and Line share the same `geometry` + `material: Material | Material[]`
+ * shape, so the disposal is identical. Including Line lets callers like the
+ * grid-lines cleanup path drop their inline traversal.
+ *
+ * Centralises the "traverse + dispose geometry/material" pattern used inline
+ * across enemy.service, tower-combat.service, and enemy-health.service.
  */
 export function disposeGroup(group: THREE.Object3D, scene?: THREE.Scene): void {
   if (scene) {
     scene.remove(group);
   }
   group.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
-      disposeMesh(child);
+    if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+      child.geometry.dispose();
+      disposeMaterial(child.material);
     }
   });
 }

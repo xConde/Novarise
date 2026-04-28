@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { Observable, Subscription } from 'rxjs';
 import * as THREE from 'three';
 import { GameBoardService } from './game-board.service';
+import { disposeGroup } from './utils/three-utils';
 import { SceneService } from './services/scene.service';
 import { EnemyService } from './services/enemy.service';
 import { MapBridgeService } from '../../core/services/map-bridge.service';
@@ -1142,15 +1143,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private addGridLines(): void {
     if (this.meshRegistry.gridLines) {
-      this.sceneService.getScene().remove(this.meshRegistry.gridLines);
-      this.meshRegistry.gridLines.traverse(child => {
-        if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
-          child.geometry.dispose();
-          if (child.material instanceof THREE.Material) {
-            child.material.dispose();
-          }
-        }
-      });
+      disposeGroup(this.meshRegistry.gridLines, this.sceneService.getScene());
     }
     this.meshRegistry.gridLines = this.gameBoardService.createGridLines();
     this.sceneService.getScene().add(this.meshRegistry.gridLines);

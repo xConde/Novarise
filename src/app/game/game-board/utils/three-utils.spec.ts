@@ -183,4 +183,41 @@ describe('disposeGroup', () => {
     try { innerGeo.dispose(); } catch { /* already disposed */ }
     try { innerMat.dispose(); } catch { /* already disposed */ }
   });
+
+  it('disposes Line descendants (geometry + material)', () => {
+    const lineGeo = new THREE.BufferGeometry();
+    const lineMat = new THREE.LineBasicMaterial();
+    const line = new THREE.Line(lineGeo, lineMat);
+    const lineGroup = new THREE.Group();
+    lineGroup.add(line);
+
+    spyOn(lineGeo, 'dispose');
+    spyOn(lineMat, 'dispose');
+    disposeGroup(lineGroup);
+    expect(lineGeo.dispose).toHaveBeenCalledTimes(1);
+    expect(lineMat.dispose).toHaveBeenCalledTimes(1);
+
+    try { lineGeo.dispose(); } catch { /* already disposed */ }
+    try { lineMat.dispose(); } catch { /* already disposed */ }
+  });
+
+  it('disposes mixed Mesh and Line descendants in a single traversal', () => {
+    const lineGeo = new THREE.BufferGeometry();
+    const lineMat = new THREE.LineBasicMaterial();
+    const line = new THREE.Line(lineGeo, lineMat);
+    group.add(line); // group already contains mesh1 from beforeEach
+
+    spyOn(geo1, 'dispose');
+    spyOn(mat1, 'dispose');
+    spyOn(lineGeo, 'dispose');
+    spyOn(lineMat, 'dispose');
+    disposeGroup(group);
+    expect(geo1.dispose).toHaveBeenCalledTimes(1);
+    expect(mat1.dispose).toHaveBeenCalledTimes(1);
+    expect(lineGeo.dispose).toHaveBeenCalledTimes(1);
+    expect(lineMat.dispose).toHaveBeenCalledTimes(1);
+
+    try { lineGeo.dispose(); } catch { /* already disposed */ }
+    try { lineMat.dispose(); } catch { /* already disposed */ }
+  });
 });
