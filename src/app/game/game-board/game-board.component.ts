@@ -79,6 +79,7 @@ import { WaveCombatFacadeService } from './services/wave-combat-facade.service';
 import { TutorialFacadeService } from './services/tutorial-facade.service';
 import { AscensionModifierService } from './services/ascension-modifier.service';
 import { TurnHistoryService, TurnEventRecord } from './services/turn-history.service';
+import { TurnBannerService } from './services/turn-banner.service';
 import { WavePreviewService, FutureWaveSummary } from './services/wave-preview.service';
 import { HandCard } from './components/card-hand/card-hand.component';
 import { PathMutationService } from './services/path-mutation.service';
@@ -155,7 +156,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, TowerGraphService, LinkMeshService]
+  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, TowerGraphService, LinkMeshService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -270,9 +271,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   inspectedCard: HandCard | null = null;
 
-  // Turn-start banner — briefly shown after each endTurn()
-  showTurnBanner = false;
-  private turnBannerTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Turn-start banner visibility — briefly shown after each endTurn().
+   * Owned by TurnBannerService; this getter exists so the template can keep
+   * its existing `*ngIf="showTurnBanner"` binding.
+   */
+  get showTurnBanner(): boolean {
+    return this.turnBannerService.showBanner;
+  }
   private isEndingTurn = false;
 
   /**
@@ -380,6 +386,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private enemyMeshFactory: EnemyMeshFactoryService,
     private encounterCheckpointService: EncounterCheckpointService,
     private turnHistoryService: TurnHistoryService,
+    private turnBannerService: TurnBannerService,
     private wavePreviewService: WavePreviewService,
     private itemService: ItemService,
     private runStateFlagService: RunStateFlagService,
@@ -1115,14 +1122,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    * Only flashes when phase remains COMBAT (not VICTORY/DEFEAT/INTERMISSION).
    */
   private flashTurnBanner(): void {
-    if (this.turnBannerTimer) {
-      clearTimeout(this.turnBannerTimer);
-    }
-    this.showTurnBanner = true;
-    this.turnBannerTimer = setTimeout(() => {
-      this.showTurnBanner = false;
-      this.turnBannerTimer = null;
-    }, 1200);
+    this.turnBannerService.flash();
   }
 
 
@@ -1816,10 +1816,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.pathBlockedTimerId = null;
     }
 
-    if (this.turnBannerTimer !== null) {
-      clearTimeout(this.turnBannerTimer);
-      this.turnBannerTimer = null;
-    }
+    this.turnBannerService.cleanup();
 
     this.waveCombat.cleanup();
     this.tutorialFacade.cleanup();
