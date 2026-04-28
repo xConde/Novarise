@@ -37,7 +37,7 @@ import { MutationOp } from './path-mutation.types';
 import { ElevationOp } from './elevation.types';
 import { getCardDefinition, getEffectiveEnergyCost } from '../../../run/constants/card-definitions';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
-import { disposeMaterial } from '../utils/three-utils';
+import { disposeGroup } from '../utils/three-utils';
 
 /**
  * Upgraded CARTOGRAPHER_SEAL refunds this many energy on the first terraform
@@ -835,13 +835,7 @@ export class CardPlayService {
     // Dispose and remove mesh
     const towerMesh = this.meshRegistry.towerMeshes.get(key);
     if (towerMesh) {
-      this.sceneService.getScene().remove(towerMesh);
-      towerMesh.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          disposeMaterial(child.material);
-        }
-      });
+      disposeGroup(towerMesh, this.sceneService.getScene());
       this.meshRegistry.towerMeshes.delete(key);
       this.meshRegistry.rebuildTowerChildrenArray();
     }
