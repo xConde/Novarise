@@ -25,7 +25,7 @@ import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState } from './mod
 import { GameModifier, GAME_MODIFIER_CONFIGS, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import { EnemyType, ENEMY_STATS } from './models/enemy.model';
 import { ENEMY_INFO } from './models/enemy-info.model';
-import { WavePreviewEntry, getWavePreviewFull } from './models/wave-preview.model';
+import { WavePreviewEntry } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
 import { StatusEffectService } from './services/status-effect.service';
 import { StatusEffectType } from './constants/status-effect.constants';
@@ -80,6 +80,7 @@ import { TurnHistoryService, TurnEventRecord } from './services/turn-history.ser
 import { TurnBannerService } from './services/turn-banner.service';
 import { PathBlockedWarningService } from './services/path-blocked-warning.service';
 import { ItemCallbacksWiringService } from './services/item-callbacks-wiring.service';
+import { SpawnPreviewViewService } from './services/spawn-preview-view.service';
 import { WavePreviewService, FutureWaveSummary } from './services/wave-preview.service';
 import { HandCard } from './components/card-hand/card-hand.component';
 import { PathMutationService } from './services/path-mutation.service';
@@ -156,7 +157,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, PathBlockedWarningService, ItemCallbacksWiringService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, TowerGraphService, LinkMeshService]
+  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, PathBlockedWarningService, ItemCallbacksWiringService, SpawnPreviewViewService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, TowerGraphService, LinkMeshService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -226,10 +227,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Live challenge progress badges shown in HUD during campaign games. Delegated to ChallengeDisplayService. */
   get challengeIndicators(): ChallengeIndicator[] { return this.challengeDisplayService.indicators; }
 
-  // Wave preview — shown during SETUP and INTERMISSION
-  wavePreview: WavePreviewEntry[] = [];
-  /** Template description for the upcoming endless wave (null for scripted waves). */
-  waveTemplateDescription: string | null = null;
+  // Wave preview — shown during SETUP and INTERMISSION. Owned by
+  // SpawnPreviewViewService; exposed via getters so the template's
+  // `wavePreview` / `waveTemplateDescription` bindings stay unchanged.
+  get wavePreview(): WavePreviewEntry[] { return this.spawnPreview.entries; }
+  get waveTemplateDescription(): string | null { return this.spawnPreview.templateDescription; }
   showAllRanges = false;
   showPathOverlay = false;
   get sellConfirmPending(): boolean { return this.towerSelectionService.sellConfirmPending; }
@@ -395,6 +397,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private turnBannerService: TurnBannerService,
     private pathBlockedWarningService: PathBlockedWarningService,
     private itemCallbacksWiring: ItemCallbacksWiringService,
+    private spawnPreview: SpawnPreviewViewService,
     private wavePreviewService: WavePreviewService,
     private itemService: ItemService,
     private runStateFlagService: RunStateFlagService,
@@ -476,13 +479,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       const phaseChanged = state.phase !== prevPhase;
       if (isPreviewPhase && (waveChanged || phaseChanged)) {
         // Preview shows the NEXT wave that is about to start (wave + 1)
-        const nextWave = state.wave + 1;
-        const customDefs = this.waveService.hasCustomWaves()
-          ? this.waveService.getWaveDefinitions()
-          : undefined;
-        const previewFull = getWavePreviewFull(nextWave, state.isEndless, customDefs);
-        this.wavePreview = previewFull.entries;
-        this.waveTemplateDescription = previewFull.templateDescription;
+        this.spawnPreview.refreshFor(state);
       }
 
       // Update UNTOUCHABLE indicator whenever lives decrease (enemy leak)
@@ -622,11 +619,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.deckService.drawForWave();
 
     // Seed initial wave preview (after setCustomWaves applies waves)
-    const state = this.gameStateService.getState();
-    const customDefs = this.waveService.hasCustomWaves() ? this.waveService.getWaveDefinitions() : undefined;
-    const preview = getWavePreviewFull(state.wave + 1, state.isEndless, customDefs);
-    this.wavePreview = preview.entries;
-    this.waveTemplateDescription = preview.templateDescription;
+    this.spawnPreview.refreshFor(this.gameStateService.getState());
 
     if (this.runService.isInRun()) {
       this.startWave();
@@ -1359,12 +1352,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // Step 18: Seed wave preview for the current restored state
       const state = this.gameStateService.getState();
       if (state.phase === GamePhase.INTERMISSION || state.phase === GamePhase.COMBAT) {
-        const customDefs = this.waveService.hasCustomWaves()
-          ? this.waveService.getWaveDefinitions()
-          : undefined;
-        const preview = getWavePreviewFull(state.wave + 1, state.isEndless, customDefs);
-        this.wavePreview = preview.entries;
-        this.waveTemplateDescription = preview.templateDescription;
+        this.spawnPreview.refreshFor(state);
       }
 
       // Clear restore flag and checkpoint storage
