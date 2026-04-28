@@ -37,14 +37,11 @@ import { StatusEffectService } from '../../game/game-board/services/status-effec
 import { CombatLoopService } from '../../game/game-board/services/combat-loop.service';
 import { WavePreviewService } from '../../game/game-board/services/wave-preview.service';
 import { EnemyService } from '../../game/game-board/services/enemy.service';
-import { EnemyHealthService } from '../../game/game-board/services/enemy-health.service';
-import { EnemyMeshFactoryService } from '../../game/game-board/services/enemy-mesh-factory.service';
-import { EnemyVisualService } from '../../game/game-board/services/enemy-visual.service';
 import { EncounterCheckpointService } from '../services/encounter-checkpoint.service';
 
 // ── Game-board models ──────────────────────────────────────────────────────
 import { BlockType, GameBoardTile } from '../../game/game-board/models/game-board-tile';
-import { EnemyType, ENEMY_STATS, GLIDER_STATS, TITAN_STATS, WYRM_ASCENDANT_STATS } from '../../game/game-board/models/enemy.model';
+import { EnemyType, ENEMY_STATS } from '../../game/game-board/models/enemy.model';
 import { GamePhase, INITIAL_GAME_STATE } from '../../game/game-board/models/game-state.model';
 import { WAVE_DEFINITIONS, getWaveEnemyTypes } from '../../game/game-board/models/wave.model';
 import { ELEVATION_CONFIG } from '../../game/game-board/constants/elevation.constants';
@@ -83,11 +80,6 @@ const BASE_COL = 3;
 
 /** Another BASE tile in row 1 (allows testing without losing connectivity). */
 const BASE_ROW_1 = 1;
-const BASE_COL_1 = 3;
-
-/** WALL tile in row 2 (used for build/bridgehead in cross-archetype tests). */
-const WALL_ROW = 2;
-const WALL_COL = 3;
 
 /** Seed for DeckService initializations. */
 const DECK_SEED = 99999;
@@ -291,7 +283,7 @@ describe('Highground integration — Group A: RAISE_PLATFORM + DEPRESS_TILE', ()
   let pathMutationService: PathMutationService;
   let cardPlayService: CardPlayService;
   let deckService: DeckService;
-  let enemySpy: jasmine.SpyObj<EnemyService>;
+  let _enemySpy: jasmine.SpyObj<EnemyService>;
   let scene: THREE.Scene;
 
   beforeEach(() => {
@@ -305,7 +297,7 @@ describe('Highground integration — Group A: RAISE_PLATFORM + DEPRESS_TILE', ()
     pathMutationService = deps.pathMutationService;
     cardPlayService = deps.cardPlayService;
     deckService = deps.deckService;
-    enemySpy = deps.enemySpy;
+    _enemySpy = deps.enemySpy;
 
     deckService.initializeDeck(
       [CardId.RAISE_PLATFORM, CardId.DEPRESS_TILE],
@@ -552,7 +544,7 @@ describe('Highground integration — Group C: CLIFFSIDE', () => {
 describe('Highground integration — Group D: VANTAGE_POINT / AVALANCHE_ORDER / KOTH / GRAVITY_WELL', () => {
   let gameBoardService: GameBoardService;
   let elevationService: ElevationService;
-  let pathfindingSpy: jasmine.SpyObj<PathfindingService>;
+  let _pathfindingSpy: jasmine.SpyObj<PathfindingService>;
   let poolService: TerraformMaterialPoolService;
   let pathMutationService: PathMutationService;
   let cardPlayService: CardPlayService;
@@ -567,7 +559,7 @@ describe('Highground integration — Group D: VANTAGE_POINT / AVALANCHE_ORDER / 
     stubCreateTileMesh(gameBoardService);
     const deps = buildFullTestBed(gameBoardService);
     elevationService = deps.elevationService;
-    pathfindingSpy = deps.pathfindingSpy;
+    _pathfindingSpy = deps.pathfindingSpy;
     poolService = deps.poolService;
     pathMutationService = deps.pathMutationService;
     cardPlayService = deps.cardPlayService;
@@ -1014,7 +1006,7 @@ describe('Highground integration — Group G: Cross-archetype interactions', () 
 describe('Highground integration — Group H: Save / Restore', () => {
   let gameBoardService: GameBoardService;
   let elevationService: ElevationService;
-  let pathfindingSpy: jasmine.SpyObj<PathfindingService>;
+  let _pathfindingSpy: jasmine.SpyObj<PathfindingService>;
   let poolService: TerraformMaterialPoolService;
   let pathMutationService: PathMutationService;
   let scene: THREE.Scene;
@@ -1025,7 +1017,7 @@ describe('Highground integration — Group H: Save / Restore', () => {
     stubCreateTileMesh(gameBoardService);
     const deps = buildFullTestBed(gameBoardService);
     elevationService = deps.elevationService;
-    pathfindingSpy = deps.pathfindingSpy;
+    _pathfindingSpy = deps.pathfindingSpy;
     poolService = deps.poolService;
     pathMutationService = deps.pathMutationService;
   });

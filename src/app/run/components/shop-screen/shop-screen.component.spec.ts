@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { ShopScreenComponent } from './shop-screen.component';
 import { ShopItem } from '../../models/encounter.model';
-import { RelicId, RelicRarity, RELIC_DEFINITIONS } from '../../models/relic.model';
+import { RelicId, RelicRarity } from '../../models/relic.model';
 import { SHOP_CONFIG } from '../../constants/run.constants';
 import { CardId, CardInstance } from '../../models/card.model';
 import { IconComponent } from '@shared/components/icon/icon.component';

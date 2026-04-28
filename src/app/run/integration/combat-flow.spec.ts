@@ -403,7 +403,7 @@ describe('combat-flow integration smoke', () => {
 
       // Simulate wave 1 hand cycle.
       deckService.drawForWave();
-      const handWave1 = deckService.getDeckState().hand.map(c => c.instanceId);
+      const _handWave1 = deckService.getDeckState().hand.map(c => c.instanceId);
 
       deckService.discardHand();
       deckService.drawForWave();

@@ -23,7 +23,6 @@ import { EnemyService } from './services/enemy.service';
 import { EnemyVisualService } from './services/enemy-visual.service';
 import { TutorialService, TutorialStep } from '../../core/services/tutorial.service';
 import { BehaviorSubject, of } from 'rxjs';
-import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
 import { GameNotificationService, NotificationType } from './services/game-notification.service';
 import { ChallengeTrackingService } from './services/challenge-tracking.service';
 import { GameEndService } from './services/game-end.service';

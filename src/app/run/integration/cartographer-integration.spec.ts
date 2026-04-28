@@ -55,7 +55,7 @@ import { RunService } from '../services/run.service';
 import { EncounterCheckpointService } from '../services/encounter-checkpoint.service';
 
 // ── Run-side models / constants ────────────────────────────────────────────
-import { CardId, CardInstance } from '../models/card.model';
+import { CardId } from '../models/card.model';
 import { CARD_DEFINITIONS } from '../constants/card-definitions';
 import { MODIFIER_STAT } from '../constants/modifier-stat.constants';
 import { RelicId } from '../models/relic.model';
@@ -670,7 +670,7 @@ describe('Cartographer integration — Group D: Relics', () => {
 
 describe('Cartographer integration — Group E: Enemies', () => {
   let gameBoardService: GameBoardService;
-  let pathfindingService: PathfindingService;
+  let _pathfindingService: PathfindingService;
   let pathMutationService: PathMutationService;
   let registrySpy: jasmine.SpyObj<BoardMeshRegistryService>;
   let poolService: TerraformMaterialPoolService;
@@ -704,7 +704,7 @@ describe('Cartographer integration — Group E: Enemies', () => {
       ],
     });
 
-    pathfindingService = TestBed.inject(PathfindingService);
+    _pathfindingService = TestBed.inject(PathfindingService);
     pathMutationService = TestBed.inject(PathMutationService);
     poolService = TestBed.inject(TerraformMaterialPoolService);
     enemyService = TestBed.inject(EnemyService);
@@ -823,7 +823,7 @@ describe('Cartographer integration — Group E: Enemies', () => {
 
 describe('Cartographer integration — Group F: VEINSEEKER speed boost', () => {
   let gameBoardService: GameBoardService;
-  let pathfindingService: PathfindingService;
+  let _pathfindingService: PathfindingService;
   let pathMutationService: PathMutationService;
   let registrySpy: jasmine.SpyObj<BoardMeshRegistryService>;
   let poolService: TerraformMaterialPoolService;
@@ -857,7 +857,7 @@ describe('Cartographer integration — Group F: VEINSEEKER speed boost', () => {
       ],
     });
 
-    pathfindingService = TestBed.inject(PathfindingService);
+    _pathfindingService = TestBed.inject(PathfindingService);
     pathMutationService = TestBed.inject(PathMutationService);
     poolService = TestBed.inject(TerraformMaterialPoolService);
     enemyService = TestBed.inject(EnemyService);

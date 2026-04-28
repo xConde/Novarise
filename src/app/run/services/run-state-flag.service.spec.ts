@@ -248,7 +248,7 @@ describe('RunStateFlagService', () => {
       service.incrementFlag('visit_count', 3);
 
       const serialized = service.serialize();
-      const fresh = TestBed.inject(RunStateFlagService);
+      const _fresh = TestBed.inject(RunStateFlagService);
       // Use a second instance-like approach via resetForRun then restore
       const freshService = new RunStateFlagService();
       freshService.restore(serialized);

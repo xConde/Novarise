@@ -5,10 +5,6 @@ import { GamePhase } from '../../game/game-board/models/game-state.model';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function wireNoCombat(svc: ItemService): void {
-  // No callbacks registered — simulates outside-of-encounter state
-}
-
 function wireCombat(
   svc: ItemService,
   opts: {
@@ -47,7 +43,7 @@ function wireCombat(
 
   svc.registerCombatCallbacks(
     () => phase,
-    (damage: number) => {
+    (_damage: number) => {
       if (enemyCount === 0) return false;
       // simulate damaging 'enemyCount' enemies
       return true;

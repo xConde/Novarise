@@ -21,22 +21,15 @@ import {
   DEFAULT_RUN_CONFIG,
 } from '../models/run-state.model';
 import {
-  ENCOUNTER_CONFIG,
   REWARD_CONFIG,
   SHOP_CONFIG,
   REST_CONFIG,
-  NODE_MAP_CONFIG,
-  createSeededRng,
 } from '../constants/run.constants';
 import { ACT1_BOSS_PRESETS, ACT2_BOSS_PRESETS } from '../constants/boss-presets';
 import { EnemyType } from '../../game/game-board/models/enemy.model';
 import { NodeType } from '../models/node-map.model';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function totalEnemiesPerEncounter(waves: ReturnType<WaveGeneratorService['generateCombatWaves']>): number {
-  return waves.reduce((sum, w) => sum + w.entries!.reduce((s, e) => s + e.count, 0), 0);
-}
 
 function totalGoldPerEncounter(waves: ReturnType<WaveGeneratorService['generateCombatWaves']>): number {
   return waves.reduce((sum, w) => sum + w.reward, 0);
