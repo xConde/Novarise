@@ -46,7 +46,7 @@ export class TowerMeshFactoryService {
 
     // Different organic tower designs
     switch (towerType) {
-      case TowerType.BASIC:
+      case TowerType.BASIC: {
         // Ancient crystal obelisk - jagged and organic
         const obeliskBase = new THREE.CylinderGeometry(0.35, 0.42, 0.25, 6);
         const obeliskMid1 = new THREE.CylinderGeometry(0.32, 0.35, 0.35, 6);
@@ -78,8 +78,9 @@ export class TowerMeshFactoryService {
 
         towerGroup.add(oBase, oMid1, oMid2, oTop, oCrystal);
         break;
+      }
 
-      case TowerType.SNIPER:
+      case TowerType.SNIPER: {
         // Tall crystalline spike - elegant and sharp
         const spikeBase = new THREE.DodecahedronGeometry(0.3, 0);
         const spikeShaft1 = new THREE.CylinderGeometry(0.22, 0.26, 0.5, 8);
@@ -110,8 +111,9 @@ export class TowerMeshFactoryService {
 
         towerGroup.add(snBase, snShaft1, snShaft2, snTip, snPoint);
         break;
+      }
 
-      case TowerType.SPLASH:
+      case TowerType.SPLASH: {
         // Mushroom-like spore launcher - organic and bulbous
         const stemBase = new THREE.CylinderGeometry(0.28, 0.35, 0.3, 8);
         const stemMid = new THREE.CylinderGeometry(0.24, 0.28, 0.35, 8);
@@ -150,8 +152,9 @@ export class TowerMeshFactoryService {
 
         towerGroup.add(spStemBase, spStemMid, spCapBase, spCapTop, spSpore1, spSpore2, spSpore3);
         break;
+      }
 
-      case TowerType.SLOW:
+      case TowerType.SLOW: {
         // Ice/freeze pad — flat wide cylinder base with a raised ring on top
         const iceBase = new THREE.CylinderGeometry(0.4, 0.45, 0.15, 12);
         const icePillar = new THREE.CylinderGeometry(0.18, 0.22, 0.45, 8);
@@ -188,8 +191,9 @@ export class TowerMeshFactoryService {
 
         towerGroup.add(slBase, slPillar, slRingOuter, slRingInner, slCrystal);
         break;
+      }
 
-      case TowerType.CHAIN:
+      case TowerType.CHAIN: {
         // Electric antenna — thin tall cylinder with sphere on top
         const chainBase = new THREE.CylinderGeometry(0.3, 0.38, 0.2, 8);
         const chainShaft = new THREE.CylinderGeometry(0.1, 0.14, 0.8, 6);
@@ -220,8 +224,9 @@ export class TowerMeshFactoryService {
 
         towerGroup.add(chBase, chShaft, chOrb, chSpark1, chSpark2);
         break;
+      }
 
-      case TowerType.MORTAR:
+      case TowerType.MORTAR: {
         // Dark cannon — wide squat cylinder base with angled barrel
         const mortarBase = new THREE.CylinderGeometry(0.42, 0.48, 0.3, 10);
         const mortarRing = new THREE.CylinderGeometry(0.36, 0.4, 0.15, 10);
@@ -248,14 +253,16 @@ export class TowerMeshFactoryService {
 
         towerGroup.add(moBase, moRing, moBarrel, moMuzzle);
         break;
+      }
 
-      default:
+      default: {
         const defaultGeom = new THREE.CylinderGeometry(0.3, 0.35, 0.6, 6);
         color = 0xd47a3a;
         const defaultMat = makeTowerMaterial(color, 0x8a4a1a, 0.3, 0.2, 0.6);
         const defaultMesh = new THREE.Mesh(defaultGeom, defaultMat);
         defaultMesh.position.y = 0.3;
         towerGroup.add(defaultMesh);
+      }
     }
 
     // Position tower on the tile - sitting on top at tileHeight (0.2)
