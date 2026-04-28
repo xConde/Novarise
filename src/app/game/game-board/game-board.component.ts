@@ -81,6 +81,7 @@ import { TurnBannerService } from './services/turn-banner.service';
 import { PathBlockedWarningService } from './services/path-blocked-warning.service';
 import { ItemCallbacksWiringService } from './services/item-callbacks-wiring.service';
 import { SpawnPreviewViewService } from './services/spawn-preview-view.service';
+import { EncounterBootstrapService } from './services/encounter-bootstrap.service';
 import { WavePreviewService, FutureWaveSummary } from './services/wave-preview.service';
 import { HandCard } from './components/card-hand/card-hand.component';
 import { PathMutationService } from './services/path-mutation.service';
@@ -89,10 +90,8 @@ import { LineOfSightService } from './services/line-of-sight.service';
 import { TerraformMaterialPoolService } from './services/terraform-material-pool.service';
 import { TowerGraphService } from './services/tower-graph.service';
 import { LinkMeshService } from './services/link-mesh.service';
-import { ELEVATION_CONFIG } from './constants/elevation.constants';
 import { BlockType } from './models/game-board-tile';
 import { BOARD_CONFIG } from './constants/board.constants';
-import { shuffleInPlace } from './utils/coordinate-utils';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
 export interface EnemyBadge {
@@ -157,7 +156,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, PathBlockedWarningService, ItemCallbacksWiringService, SpawnPreviewViewService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, TowerGraphService, LinkMeshService]
+  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, PathBlockedWarningService, ItemCallbacksWiringService, SpawnPreviewViewService, EncounterBootstrapService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, TowerGraphService, LinkMeshService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -398,6 +397,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private pathBlockedWarningService: PathBlockedWarningService,
     private itemCallbacksWiring: ItemCallbacksWiringService,
     private spawnPreview: SpawnPreviewViewService,
+    private encounterBootstrap: EncounterBootstrapService,
     private wavePreviewService: WavePreviewService,
     private itemService: ItemService,
     private runStateFlagService: RunStateFlagService,
@@ -575,55 +575,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    * loading fails or the checkpoint is missing.
    */
   private initFreshEncounter(): void {
-    const encounter = this.runService.getCurrentEncounter();
-    const runState = this.runService.runState;
-    if (!encounter || !runState) return;
-
-    this.gameStateService.setInitialLives(runState.lives, runState.maxLives + this.relicService.getMaxLivesBonus());
-    this.gameStateService.addGold(this.relicService.getStartingGoldBonus());
-    this.gameStateService.snapshotInitialGold();
-    this.waveService.setCustomWaves(encounter.waves);
-    this.gameStateService.setMaxWaves(encounter.waves.length);
-    this.ascensionModifier.apply(runState.ascensionLevel, encounter.isElite, encounter.isBoss);
-    this.updateChallengeIndicators();
-
-    // Reset card modifier state from any previous encounter (root-scoped service
-    // survives route transitions — must be explicitly cleared between encounters).
-    this.cardEffectService.reset();
-
-    // Reset turn counter + leak flag + frame buffers. Without this the
-    // turnNumber persists from the prior encounter (the audit that caught
-    // this noted: SPEED_RUN challenges would instantly fail from encounter 2
-    // onward because turnsUsed was cumulative).
-    this.combatLoopService.reset();
-
-    // Sprint 36 SURVEYOR_ROD — pre-place elevated tiles at encounter start.
-    // Board is already imported and rendered before initFreshEncounter() fires,
-    // so tiles are valid. ElevationService.reset() ran in resetAllServices()
-    // before this point — the board is clean. Uses runService.nextRandom().
-    if (this.relicService.hasSurveyorRod()) {
-      this.applySurveyorRodEffect();
-    }
-
-    // Reset one-shot scout bonuses so a previous encounter's SCOUT_AHEAD does
-    // not leak preview depth into this one. (Permanent SCOUTING_LENS bonus
-    // stays because it reads live from RelicService.)
-    this.wavePreviewService.resetForEncounter();
-
-    // Reset pause-state flags so a prior encounter's autoPaused /
-    // showQuitConfirm doesn't bleed through into this encounter's pause UI.
-    this.gamePauseService.reset();
-
-    // Initialize deck for this encounter and draw the opening hand
-    this.deckService.resetForEncounter();
-    this.deckService.drawForWave();
-
-    // Seed initial wave preview (after setCustomWaves applies waves)
-    this.spawnPreview.refreshFor(this.gameStateService.getState());
-
-    if (this.runService.isInRun()) {
-      this.startWave();
-    }
+    this.encounterBootstrap.bootstrapFresh();
   }
 
   ngAfterViewInit(): void {
@@ -1720,43 +1672,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.pathVisualizationService.showPath(worldPath, this.sceneService.getScene());
     } else {
       this.pathVisualizationService.hidePath(this.sceneService.getScene());
-    }
-  }
-
-  /**
-   * Sprint 36 SURVEYOR_ROD — pre-place SURVEYOR_ROD_TILE_COUNT (5) tiles at
-   * elevation +1 at encounter start. Uses runService.nextRandom() — no Math.random().
-   *
-   * Candidate tiles: any tile that is not SPAWNER or EXIT, currently at elevation 0,
-   * and not already occupied by something that would reject elevation (guard is in
-   * ElevationService.setAbsolute → validate). Iterates until 5 placements succeed
-   * or all candidates are exhausted — never crashes on pathological boards.
-   */
-  private applySurveyorRodEffect(): void {
-    const board = this.gameBoardService.getGameBoard();
-    // Build candidate list: non-spawner, non-exit, elevation-0 tiles.
-    const candidates: Array<{ row: number; col: number }> = [];
-    for (let row = 0; row < board.length; row++) {
-      for (let col = 0; col < board[row].length; col++) {
-        const tile = board[row][col];
-        if (tile.type === BlockType.SPAWNER || tile.type === BlockType.EXIT) continue;
-        const elevation = tile.elevation ?? 0;
-        if (elevation !== 0) continue; // skip already-elevated tiles
-        candidates.push({ row, col });
-      }
-    }
-
-    let placed = 0;
-    // Fisher-Yates shuffle using runService.nextRandom() for determinism.
-    shuffleInPlace(candidates, () => this.runService.nextRandom());
-
-    for (const { row, col } of candidates) {
-      if (placed >= ELEVATION_CONFIG.SURVEYOR_ROD_TILE_COUNT) break;
-      const result = this.elevationService.setAbsolute(
-        row, col, ELEVATION_CONFIG.SURVEYOR_ROD_ELEVATION_AMOUNT,
-        'surveyor-rod', 0, 'relic',
-      );
-      if (result.ok) placed++;
     }
   }
 
