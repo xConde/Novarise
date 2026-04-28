@@ -71,7 +71,6 @@ import { DeckService } from '../../run/services/deck.service';
 import { CardEffectService } from '../../run/services/card-effect.service';
 import { EncounterCheckpointService } from '../../run/services/encounter-checkpoint.service';
 import { EncounterResult } from '../../run/models/run-state.model';
-import { NodeType, getNodeById } from '../../run/models/node-map.model';
 import { CardInstance, DeckState, EnergyState } from '../../run/models/card.model';
 import { getActiveTowerEffect } from '../../run/constants/card-definitions';
 import { WaveCombatFacadeService } from './services/wave-combat-facade.service';
@@ -80,6 +79,7 @@ import { AscensionModifierService } from './services/ascension-modifier.service'
 import { TurnHistoryService, TurnEventRecord } from './services/turn-history.service';
 import { TurnBannerService } from './services/turn-banner.service';
 import { PathBlockedWarningService } from './services/path-blocked-warning.service';
+import { ItemCallbacksWiringService } from './services/item-callbacks-wiring.service';
 import { WavePreviewService, FutureWaveSummary } from './services/wave-preview.service';
 import { HandCard } from './components/card-hand/card-hand.component';
 import { PathMutationService } from './services/path-mutation.service';
@@ -156,7 +156,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, PathBlockedWarningService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, TowerGraphService, LinkMeshService]
+  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, PathBlockedWarningService, ItemCallbacksWiringService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, TowerGraphService, LinkMeshService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -394,6 +394,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private turnHistoryService: TurnHistoryService,
     private turnBannerService: TurnBannerService,
     private pathBlockedWarningService: PathBlockedWarningService,
+    private itemCallbacksWiring: ItemCallbacksWiringService,
     private wavePreviewService: WavePreviewService,
     private itemService: ItemService,
     private runStateFlagService: RunStateFlagService,
@@ -556,45 +557,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       error: (error: unknown) => console.error('Notification subscription error:', error)
     });
 
-    // Wire ItemService callbacks — combat and run-level collaborators
-    this.itemService.registerCombatCallbacks(
-      () => this.gameStateService.getState().phase,
-      (damage: number) => {
-        const enemies = [...this.enemyService.getEnemies().values()];
-        const living = enemies.filter(e => !e.dying && e.health > 0);
-        if (living.length === 0) return false;
-        const scene = this.sceneService.getScene();
-        for (const enemy of living) {
-          this.enemyService.damageEnemy(enemy.id, damage);
-        }
-        // Remove dead enemies from scene
-        for (const enemy of [...this.enemyService.getEnemies().values()]) {
-          if (enemy.dying && enemy.mesh && scene) {
-            // Let the normal render loop handle dying animation; no explicit scene removal needed
-          }
-        }
-        return true;
-      },
-      (delta: number) => { this.gameStateService.addLives(delta); },
-      () => {
-        const state = this.gameStateService.getState();
-        return { current: state.lives, max: state.maxLives };
-      },
-      (amount: number) => { this.deckService.addEnergy(amount); },
-      () => { this.waveService.insertEmptyTurn(); },
-      (multiplier: number) => { this.waveService.setNextWaveEnemySpeedMultiplier(multiplier); },
-    );
-    this.itemService.registerRunCallbacks(
-      (amount: number) => { this.gameStateService.addGold(amount); },
-      () => {
-        const runState = this.runService.runState;
-        const nodeMap = this.runService.nodeMap;
-        if (!runState?.currentNodeId || !nodeMap) return false;
-        const currentNode = getNodeById(nodeMap, runState.currentNodeId);
-        return currentNode?.type === NodeType.SHOP;
-      },
-      () => { this.runService.generateShopItems(); },
-    );
+    // Wire ItemService combat + run callbacks against the live encounter
+    // services. Component-scoped wiring service captures the same DI peers
+    // we use here. See item-callbacks-wiring.service.ts for the Sprint 41
+    // hierarchy rationale.
+    this.itemCallbacksWiring.wire();
 
     if (this.runService.isRestoringCheckpoint) {
       // Restore path: run the 18-step restore coordinator
@@ -1845,7 +1812,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.energySub = null;
     }
 
-    this.itemService.unregisterCallbacks();
+    this.itemCallbacksWiring.unwire();
     this.gameInput.cleanup();
     this.gamePauseService.cleanup();
     window.removeEventListener('resize', this.resizeHandler);
