@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG, GROUND_EFFECT_Y } from '../constants/combat.constants';
-import { disposeMesh } from '../utils/three-utils';
+import { disposeMesh, disposeMaterial } from '../utils/three-utils';
 
 /** A chain arc line that persists for a short visual duration before removal. */
 export interface ChainArcEntry {
@@ -116,7 +116,7 @@ export class CombatVFXService {
       if (now >= arc.expiresAt) {
         scene.remove(arc.line);
         arc.line.geometry.dispose();
-        (arc.line.material as THREE.Material).dispose();
+        disposeMaterial(arc.line.material);
       } else {
         survivingArcs.push(arc);
       }
@@ -164,7 +164,7 @@ export class CombatVFXService {
     for (const arc of this.chainArcs) {
       scene.remove(arc.line);
       arc.line.geometry.dispose();
-      (arc.line.material as THREE.Material).dispose();
+      disposeMaterial(arc.line.material);
     }
     this.chainArcs = [];
 
