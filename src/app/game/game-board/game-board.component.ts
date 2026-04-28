@@ -23,7 +23,6 @@ import { TowerPreviewService } from './services/tower-preview.service';
 import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, PlacedTower, MAX_TOWER_LEVEL, TARGETING_MODE_LABELS } from './models/tower.model';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState } from './models/game-state.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, calculateModifierScoreMultiplier } from './models/game-modifier.model';
-import { UI_CONFIG } from './constants/ui.constants';
 import { EnemyType, ENEMY_STATS } from './models/enemy.model';
 import { ENEMY_INFO } from './models/enemy-info.model';
 import { WavePreviewEntry, getWavePreviewFull } from './models/wave-preview.model';
@@ -80,6 +79,7 @@ import { TutorialFacadeService } from './services/tutorial-facade.service';
 import { AscensionModifierService } from './services/ascension-modifier.service';
 import { TurnHistoryService, TurnEventRecord } from './services/turn-history.service';
 import { TurnBannerService } from './services/turn-banner.service';
+import { PathBlockedWarningService } from './services/path-blocked-warning.service';
 import { WavePreviewService, FutureWaveSummary } from './services/wave-preview.service';
 import { HandCard } from './components/card-hand/card-hand.component';
 import { PathMutationService } from './services/path-mutation.service';
@@ -156,7 +156,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, TowerGraphService, LinkMeshService]
+  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, PathBlockedWarningService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, TowerGraphService, LinkMeshService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -242,8 +242,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    * Enemy stats and immunities are static, so there is no need to recompute per render cycle.
    */
   readonly enemyBadgeMap: ReadonlyMap<EnemyType, EnemyBadge[]> = buildEnemyBadgeMap();
-  pathBlocked = false;
-  private pathBlockedTimerId: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Path-blocked warning visibility. Owned by PathBlockedWarningService;
+   * this getter exists so the template can keep its `*ngIf="pathBlocked"`
+   * binding unchanged.
+   */
+  get pathBlocked(): boolean {
+    return this.pathBlockedWarningService.blocked;
+  }
 
   // Animation
   private resizeHandler: () => void = () => {};
@@ -387,6 +393,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private encounterCheckpointService: EncounterCheckpointService,
     private turnHistoryService: TurnHistoryService,
     private turnBannerService: TurnBannerService,
+    private pathBlockedWarningService: PathBlockedWarningService,
     private wavePreviewService: WavePreviewService,
     private itemService: ItemService,
     private runStateFlagService: RunStateFlagService,
@@ -1480,14 +1487,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private showPathBlockedWarning(): void {
-    this.pathBlocked = true;
-    if (this.pathBlockedTimerId !== null) {
-      clearTimeout(this.pathBlockedTimerId);
-    }
-    this.pathBlockedTimerId = setTimeout(() => {
-      this.pathBlocked = false;
-      this.pathBlockedTimerId = null;
-    }, UI_CONFIG.pathBlockedDismissMs);
+    this.pathBlockedWarningService.show();
   }
 
   /**
@@ -1811,11 +1811,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.pauseFocusTrap.deactivate();
     this.gameRenderService.stopLoop();
 
-    if (this.pathBlockedTimerId !== null) {
-      clearTimeout(this.pathBlockedTimerId);
-      this.pathBlockedTimerId = null;
-    }
-
+    this.pathBlockedWarningService.cleanup();
     this.turnBannerService.cleanup();
 
     this.waveCombat.cleanup();
