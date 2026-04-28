@@ -30,7 +30,7 @@ import { ElevationService } from './elevation.service';
 import { TowerGraphService } from './tower-graph.service';
 import { LinkMeshService } from './link-mesh.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
-import { disposeMaterial } from '../utils/three-utils';
+import { disposeMaterial, disposeGroup } from '../utils/three-utils';
 
 /**
  * Orchestrates game-level lifecycle: service resets on restart and Three.js scene cleanup.
@@ -161,15 +161,7 @@ export class GameSessionService {
     this.towerUpgradeVisualService.cleanup(scene);
 
     // Dispose tower meshes
-    this.meshRegistry.towerMeshes.forEach(group => {
-      scene.remove(group);
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          disposeMaterial(child.material);
-        }
-      });
-    });
+    this.meshRegistry.towerMeshes.forEach(group => disposeGroup(group, scene));
     this.meshRegistry.towerMeshes.clear();
 
     // Dispose tile meshes.
