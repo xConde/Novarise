@@ -65,41 +65,6 @@ describe('MapTemplateService', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Common validation helper
-  // ---------------------------------------------------------------------------
-
-  function validateGrid(state: TerrainGridState | null, label: string): void {
-    expect(state).not.toBeNull();
-    if (!state) { return; }
-
-    it(`${label}: grid is 25x25`, () => {
-      expect(state.gridSize).toBe(25);
-      expect(state.tiles.length).toBe(25);
-      state.tiles.forEach(col => expect(col.length).toBe(25));
-      expect(state.heightMap.length).toBe(25);
-      state.heightMap.forEach(col => expect(col.length).toBe(25));
-    });
-
-    it(`${label}: version is set`, () => {
-      expect(state.version).toBeTruthy();
-    });
-
-    it(`${label}: has exactly one spawn point`, () => {
-      expect(state.spawnPoints.length).toBeGreaterThan(0);
-    });
-
-    it(`${label}: has exactly one exit point`, () => {
-      expect(state.exitPoints.length).toBeGreaterThan(0);
-    });
-
-    it(`${label}: spawn and exit are different coordinates`, () => {
-      expect(state.spawnPoints[0]).toBeDefined();
-      expect(state.exitPoints[0]).toBeDefined();
-      expect(state.spawnPoints[0]).not.toEqual(state.exitPoints[0]);
-    });
-  }
-
-  // ---------------------------------------------------------------------------
   // Classic
   // ---------------------------------------------------------------------------
 

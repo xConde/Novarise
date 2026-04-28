@@ -1,4 +1,4 @@
-import { TowerInfo, TowerSpecInfo, TOWER_INFO } from './tower-info.model';
+import { TOWER_INFO } from './tower-info.model';
 import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, TowerSpecialization } from './tower.model';
 
 describe('TOWER_INFO', () => {

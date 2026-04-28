@@ -1,7 +1,7 @@
 import { CAMPAIGN_WAVE_DEFINITIONS } from './campaign-waves';
 import { CAMPAIGN_LEVELS } from '../campaign-levels';
 import { EnemyType } from '../../../game/game-board/models/enemy.model';
-import { WaveDefinition, getWaveEnemyCount, getWaveEnemyTypes } from '../../../game/game-board/models/wave.model';
+import { getWaveEnemyCount, getWaveEnemyTypes } from '../../../game/game-board/models/wave.model';
 
 /** Enemy types considered "intro-safe": only Basic, Fast, Heavy. */
 const INTRO_SAFE_TYPES = new Set<EnemyType>([

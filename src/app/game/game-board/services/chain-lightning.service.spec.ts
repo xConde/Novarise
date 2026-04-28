@@ -15,7 +15,7 @@ describe('ChainLightningService', () => {
   let service: ChainLightningService;
   let combatVFXService: CombatVFXService;
   let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
-  let statusEffectService: StatusEffectService;
+  let _statusEffectService: StatusEffectService;
   let mockScene: THREE.Scene;
   let enemyMap: Map<string, Enemy>;
   let spatialGrid: SpatialGrid;
@@ -64,7 +64,7 @@ describe('ChainLightningService', () => {
 
     service = TestBed.inject(ChainLightningService);
     combatVFXService = TestBed.inject(CombatVFXService);
-    statusEffectService = TestBed.inject(StatusEffectService);
+    _statusEffectService = TestBed.inject(StatusEffectService);
     mockScene = new THREE.Scene();
     spatialGrid = new SpatialGrid();
   });

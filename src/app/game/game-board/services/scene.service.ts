@@ -9,6 +9,7 @@ import { disposeMaterial, disposeMesh } from '../utils/three-utils';
 import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG, ANIMATION_CONFIG } from '../constants/rendering.constants';
 import { KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from '../constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from '../constants/camera.constants';
+import { BOARD_CONFIG } from '../constants/board.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from '../constants/particle.constants';
 
 // ---------------------------------------------------------------------------
@@ -115,8 +116,11 @@ export class SceneService {
   private skybox?: THREE.Mesh;
   private particles: THREE.Points | null = null;
 
-  // Board size — used to clamp orbit target and prevent wandering off the map
-  private boardSize = 10;
+  // Board size — used to clamp orbit target and prevent wandering off the map.
+  // Initialised from BOARD_CONFIG so the pre-init default tracks the active
+  // board dimensions; overridden by setBoardSize() once the component knows
+  // the actual size (which can differ for editor-imported maps).
+  private boardSize = Math.max(BOARD_CONFIG.width, BOARD_CONFIG.height);
 
   // Renderer event handlers — stored for removal on dispose
   private contextLostHandler: ((event: Event) => void) | null = null;

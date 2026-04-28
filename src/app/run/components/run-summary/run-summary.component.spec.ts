@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { RunSummaryComponent } from './run-summary.component';
 import { RunState, RunStatus, DEFAULT_RUN_CONFIG } from '../../models/run-state.model';
-import { RelicId, RelicRarity } from '../../models/relic.model';
+import { RelicId } from '../../models/relic.model';
 
 function makeRunState(overrides: Partial<RunState> = {}): RunState {
   return {

@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
-import { EnemyService, DamageResult } from './enemy.service';
+import { EnemyService } from './enemy.service';
 import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { PathfindingService } from './pathfinding.service';
 import { GameStateService } from './game-state.service';
@@ -228,8 +228,8 @@ describe('Flying Enemy', () => {
     // Slow immunity test requires TowerCombatService
     describe('Slow immunity (TowerCombatService integration)', () => {
       let combatService: TowerCombatService;
-      let combatVFXService: CombatVFXService;
-      let enemyServiceForCombat: EnemyService;
+      let _combatVFXService: CombatVFXService;
+      let _enemyServiceForCombat: EnemyService;
       let gameBoardServiceForCombat: jasmine.SpyObj<GameBoardService>;
       let audioServiceSpy: jasmine.SpyObj<AudioService>;
       let combatScene: THREE.Scene;
@@ -263,8 +263,8 @@ describe('Flying Enemy', () => {
         });
 
         combatService = TestBed.inject(TowerCombatService);
-        combatVFXService = TestBed.inject(CombatVFXService);
-        enemyServiceForCombat = TestBed.inject(EnemyService) as unknown as EnemyService;
+        _combatVFXService = TestBed.inject(CombatVFXService);
+        _enemyServiceForCombat = TestBed.inject(EnemyService) as unknown as EnemyService;
         combatScene = new THREE.Scene();
       });
 

@@ -6,7 +6,7 @@ import {
   OnDestroy,
   Output,
 } from '@angular/core';
-import { CardArchetype, CardRarity, CardType } from '../../run/models/card.model';
+import { CardArchetype, CardRarity, CardType, DECK_CONFIG } from '../../run/models/card.model';
 
 export type KeywordFilter = 'link' | 'terraform' | 'innate' | 'retain' | 'ethereal' | 'exhaust';
 export type SortMode =
@@ -197,6 +197,6 @@ export class LibraryFiltersComponent implements OnDestroy {
 function clampEnergy(n: number): number {
   if (!Number.isFinite(n)) return 0;
   if (n < 0) return 0;
-  if (n > 10) return 10;
+  if (n > DECK_CONFIG.maxEnergy) return DECK_CONFIG.maxEnergy;
   return Math.round(n);
 }

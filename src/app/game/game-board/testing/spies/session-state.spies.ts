@@ -9,7 +9,7 @@ import { ChallengeTrackingService } from '../../services/challenge-tracking.serv
 import { ChallengeDisplayService } from '../../services/challenge-display.service';
 import { ChallengeIndicator } from '../../components/game-hud/game-hud.component';
 import { TowerType } from '../../models/tower.model';
-import { DifficultyLevel, INITIAL_GAME_STATE, GameState } from '../../models/game-state.model';
+import { INITIAL_GAME_STATE, GameState } from '../../models/game-state.model';
 
 /**
  * Create a pre-configured GameStateService spy.

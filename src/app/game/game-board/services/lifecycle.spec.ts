@@ -14,10 +14,9 @@ import { WaveService } from './wave.service';
 import { ParticleService } from './particle.service';
 import { MinimapService } from './minimap.service';
 import { GameBoardService } from '../game-board.service';
-import { EnemyType, ENEMY_STATS, Enemy } from '../models/enemy.model';
-import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
+import { EnemyType, Enemy } from '../models/enemy.model';
+import { TowerType } from '../models/tower.model';
 import { GamePhase, INITIAL_GAME_STATE } from '../models/game-state.model';
-import { WAVE_DEFINITIONS } from '../models/wave.model';
 import { createTestEnemy, createTestBoard, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy } from '../testing';
 import { TowerAnimationService } from './tower-animation.service';
 import { EnemyVisualService } from './enemy-visual.service';
@@ -31,7 +30,7 @@ import { RunEventBusService } from '../../../run/services/run-event-bus.service'
 
 describe('EnemyService lifecycle', () => {
   let service: EnemyService;
-  let gameBoardService: jasmine.SpyObj<GameBoardService>;
+  let _gameBoardService: jasmine.SpyObj<GameBoardService>;
   let scene: THREE.Scene;
 
   beforeEach(() => {
@@ -50,7 +49,7 @@ describe('EnemyService lifecycle', () => {
     });
 
     service = TestBed.inject(EnemyService);
-    gameBoardService = TestBed.inject(GameBoardService) as jasmine.SpyObj<GameBoardService>;
+    _gameBoardService = TestBed.inject(GameBoardService) as jasmine.SpyObj<GameBoardService>;
     scene = new THREE.Scene();
   });
 
@@ -109,7 +108,7 @@ describe('EnemyService lifecycle', () => {
 
 describe('TowerCombatService lifecycle', () => {
   let service: TowerCombatService;
-  let combatVFXService: CombatVFXService;
+  let _combatVFXService: CombatVFXService;
   let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
   let gameBoardServiceSpy: jasmine.SpyObj<GameBoardService>;
   let audioServiceSpy: jasmine.SpyObj<AudioService>;
@@ -142,7 +141,7 @@ describe('TowerCombatService lifecycle', () => {
     });
 
     service = TestBed.inject(TowerCombatService);
-    combatVFXService = TestBed.inject(CombatVFXService);
+    _combatVFXService = TestBed.inject(CombatVFXService);
     scene = new THREE.Scene();
   });
 

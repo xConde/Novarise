@@ -4,9 +4,6 @@ import {
   ENCOUNTER_CONFIG,
   getMapTierForNode,
   NODE_MAP_CONFIG,
-  REWARD_CONFIG,
-  REST_CONFIG,
-  SHOP_CONFIG,
 } from './run.constants';
 
 describe('Ascent Constants', () => {

@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { TowerInteractionService, PlaceTowerResult, SellTowerResult, UpgradeTowerResult } from './tower-interaction.service';
+import { TowerInteractionService, UpgradeTowerResult } from './tower-interaction.service';
 import { GameStateService } from './game-state.service';
 import { GameBoardService } from '../game-board.service';
 import { TowerCombatService } from './tower-combat.service';

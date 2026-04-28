@@ -8,6 +8,18 @@ import {
 import { StorageService } from './storage.service';
 import { MapBridgeService } from './map-bridge.service';
 
+/**
+ * Maximum length of a sanitized map filename — keeps storage keys
+ * short and avoids OS-level filename limits if maps are ever exported.
+ */
+const MAX_MAP_NAME_LENGTH = 50;
+
+/**
+ * Length of the random base-36 suffix appended to map ids. Math.random()
+ * .toString(36).substring(2, 11) yields a 9-char alphanumeric tail.
+ */
+const MAP_ID_RANDOM_TAIL_LENGTH = 9;
+
 export interface MapMetadata {
   id: string;
   name: string;
@@ -401,7 +413,7 @@ export class MapStorageService {
     return name
       .replace(/[<>:"/\\|?*]/g, '') // Remove invalid characters
       .replace(/\s+/g, '_')          // Replace spaces with underscores
-      .substring(0, 50);             // Limit length
+      .substring(0, MAX_MAP_NAME_LENGTH);
   }
 
   /**
@@ -419,7 +431,8 @@ export class MapStorageService {
   // Private helper methods
 
   private generateMapId(): string {
-    return 'map_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
+    // base-36 random tail: substring(2) drops the leading "0." from toString(36).
+    return 'map_' + Date.now() + '_' + Math.random().toString(36).substring(2, 2 + MAP_ID_RANDOM_TAIL_LENGTH);
   }
 
   private setCurrentMapId(id: string): void {

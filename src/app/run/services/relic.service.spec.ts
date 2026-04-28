@@ -3,7 +3,6 @@ import { RelicService } from './relic.service';
 import { RelicId, RelicRarity, RELIC_DEFINITIONS } from '../models/relic.model';
 import { TowerType } from '../../game/game-board/models/tower.model';
 import { SerializableRelicFlags } from '../../game/game-board/models/encounter-checkpoint.model';
-import { CardDefinition, CardRarity, CardType } from '../models/card.model';
 import { CardId } from '../models/card.model';
 import { getCardDefinition } from '../constants/card-definitions';
 

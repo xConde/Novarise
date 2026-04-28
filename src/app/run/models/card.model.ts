@@ -510,6 +510,8 @@ export const DECK_CONFIG = {
   handSize: 5,
   /** Base energy per wave. */
   baseEnergy: 3,
+  /** Hard ceiling on energy (clamps any modifier-induced overflow). */
+  maxEnergy: 10,
   /** Maximum hand size (excess cards are discarded). */
   maxHandSize: 10,
 } as const;

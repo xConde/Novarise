@@ -68,7 +68,7 @@ describe('ScreenShakeService', () => {
     // Capture origin by running one frame
     service.update(0.016, camera);
 
-    const posAfterStrong = { x: camera.position.x, y: camera.position.y };
+    const _posAfterStrong = { x: camera.position.x, y: camera.position.y };
 
     service.trigger(0.1, 0.2);  // weak — should be ignored
     // Still shaking at original intensity

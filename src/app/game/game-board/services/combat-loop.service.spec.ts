@@ -440,7 +440,7 @@ describe('CombatLoopService', () => {
     it('should process mortar kills in addition to tower fire kills', () => {
       const e1 = makeEnemy({ id: 'e1', value: 10 });
       const e2 = makeEnemy({ id: 'e2', value: 15 });
-      enemySpy.getEnemies.and.callFake((id?: string) => {
+      enemySpy.getEnemies.and.callFake((_id?: string) => {
         const map = new Map([['e1', e1], ['e2', e2]]);
         return map;
       });

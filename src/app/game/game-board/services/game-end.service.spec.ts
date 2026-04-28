@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { GameEndService, GameEndResult } from './game-end.service';
+import { GameEndService } from './game-end.service';
 import { GameStateService } from './game-state.service';
 import { GameStatsService } from './game-stats.service';
 import { PlayerProfileService, ACHIEVEMENTS } from '@core/services/player-profile.service';

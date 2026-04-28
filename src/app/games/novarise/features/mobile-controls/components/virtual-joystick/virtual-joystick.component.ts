@@ -5,6 +5,7 @@ import {
   EventEmitter,
   ElementRef,
   ViewChild,
+  AfterViewInit,
   OnInit,
   OnDestroy,
   ChangeDetectionStrategy,
@@ -26,7 +27,7 @@ import { TouchDetectionService, DeviceInfo } from '../../services/touch-detectio
   styleUrls: ['./virtual-joystick.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class VirtualJoystickComponent implements OnInit, OnDestroy {
+export class VirtualJoystickComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('joystickBase') joystickBase!: ElementRef<HTMLDivElement>;
   @ViewChild('joystickStick') joystickStick!: ElementRef<HTMLDivElement>;
 

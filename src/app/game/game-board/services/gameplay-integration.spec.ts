@@ -19,7 +19,7 @@ import { EnemyVisualService } from './enemy-visual.service';
 import { EnemyHealthService } from './enemy-health.service';
 import { createTowerAnimationServiceSpy } from '../testing';
 
-import { GamePhase, DifficultyLevel, DIFFICULTY_PRESETS, INITIAL_GAME_STATE } from '../models/game-state.model';
+import { GamePhase, DifficultyLevel, DIFFICULTY_PRESETS } from '../models/game-state.model';
 import { TOWER_CONFIGS, TowerType } from '../models/tower.model';
 import { WAVE_DEFINITIONS } from '../models/wave.model';
 import { GameBoardTile } from '../models/game-board-tile';
@@ -58,10 +58,10 @@ describe('Gameplay Integration', () => {
   let waveService: WaveService;
   let enemyService: EnemyService;
   let towerCombatService: TowerCombatService;
-  let combatVFXService: CombatVFXService;
+  let _combatVFXService: CombatVFXService;
   let gameStatsService: GameStatsService;
   let gameBoardService: GameBoardService;
-  let audioService: AudioService;
+  let _audioService: AudioService;
   let scene: THREE.Scene;
 
   beforeEach(() => {
@@ -90,10 +90,10 @@ describe('Gameplay Integration', () => {
     waveService = TestBed.inject(WaveService);
     enemyService = TestBed.inject(EnemyService);
     towerCombatService = TestBed.inject(TowerCombatService);
-    combatVFXService = TestBed.inject(CombatVFXService);
+    _combatVFXService = TestBed.inject(CombatVFXService);
     gameStatsService = TestBed.inject(GameStatsService);
     gameBoardService = TestBed.inject(GameBoardService);
-    audioService = TestBed.inject(AudioService);
+    _audioService = TestBed.inject(AudioService);
 
     scene = new THREE.Scene();
 
@@ -447,7 +447,7 @@ describe('Gameplay Integration', () => {
     it('should integrate score accumulation through a simulated game', () => {
       // Simulate: set difficulty, play waves, track gold/score
       gameStateService.setDifficulty(DifficultyLevel.HARD);
-      const initialGold = gameStateService.getState().gold;
+      const _initialGold = gameStateService.getState().gold;
 
       // Spend gold on a tower
       const towerCost = TOWER_CONFIGS[TowerType.BASIC].cost;

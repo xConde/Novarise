@@ -1,8 +1,37 @@
 # GameBoardComponent Decomposition Plan
 
-**Source:** `src/app/game/game-board/game-board.component.ts` (1894 lines)
-**Status:** PLAN ONLY — not executed. Pick one cluster at a time.
+**Source:** `src/app/game/game-board/game-board.component.ts` (1894 → 1506 lines)
+**Status:** ALL 6 CLUSTERS SHIPPED on `refactor/post-pivot-cleanup-2` (2026-04-27).
 **Authored:** 2026-04-23 by Opus Plan agent during `refactor/post-pivot-cleanup` session.
+
+## Outcome (2026-04-27)
+
+| Cluster | Service | LOC | Specs | Risk that materialised |
+|---------|---------|-----|-------|------------------------|
+| 1 | `TurnBannerService` | 44 | 6 | None |
+| 2 | `PathBlockedWarningService` | 43 | 6 | None |
+| 4 | `ItemCallbacksWiringService` | 71 | 15 | None |
+| 3 | `SpawnPreviewViewService` | 51 | 6 | None |
+| 5 | `EncounterBootstrapService` | 144 | 13 | None |
+| 6 | `CheckpointRestoreCoordinatorService` | 314 | 9 | None |
+
+Component went from **1880 → 1506 LOC (−374 / −19.9%)** including the
+follow-up cleanup commit that dropped 8 now-unused constructor params
+(StatusEffectService, ChallengeTrackingService, TowerMeshFactoryService,
+EnemyMeshFactoryService, EncounterCheckpointService, ElevationService,
+RunStateFlagService, CardEffectService) and 3 unused imports.
+
+Test count: **6747 → 6802 (+55 specs)**, all green, zero regressions.
+
+The 18-step restore ordering and every step comment was copied verbatim
+into `CheckpointRestoreCoordinatorService` per the plan's directive.
+
+Cluster 7 (LifecycleWiringAggregator) intentionally skipped per the
+plan's recommendation — low ROI, mostly moves code without reducing risk.
+
+The plan body below is preserved for archival reference.
+
+---
 
 ## Context and hard constraints
 

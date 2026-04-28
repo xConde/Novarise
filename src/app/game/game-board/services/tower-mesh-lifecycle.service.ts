@@ -7,7 +7,7 @@ import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { SceneService } from './scene.service';
 import { GameBoardService } from '../game-board.service';
 import { BOARD_CONFIG } from '../constants/board.constants';
-import { disposeMaterial } from '../utils/three-utils';
+import { disposeGroup } from '../utils/three-utils';
 
 /**
  * Consolidates the repeated mesh creation+registration and mesh disposal patterns
@@ -58,14 +58,7 @@ export class TowerMeshLifecycleService {
   removeMesh(key: string): void {
     const group = this.meshRegistry.towerMeshes.get(key);
     if (!group) return;
-    const scene = this.sceneService.getScene();
-    scene.remove(group);
-    group.traverse(child => {
-      if (child instanceof THREE.Mesh) {
-        child.geometry.dispose();
-        disposeMaterial(child.material);
-      }
-    });
+    disposeGroup(group, this.sceneService.getScene());
     this.meshRegistry.towerMeshes.delete(key);
     this.meshRegistry.rebuildTowerChildrenArray();
   }

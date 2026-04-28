@@ -27,7 +27,7 @@ import { RunStatus, DEFAULT_RUN_CONFIG, EncounterResult } from '../models/run-st
 import { getWaveEnemyCount } from '../../game/game-board/models/wave.model';
 import { NodeType } from '../models/node-map.model';
 import { RelicId, RELIC_DEFINITIONS, RelicRarity } from '../models/relic.model';
-import { REWARD_CONFIG, REST_CONFIG, NODE_MAP_CONFIG, SHOP_CONFIG } from '../constants/run.constants';
+import { REWARD_CONFIG, SHOP_CONFIG } from '../constants/run.constants';
 import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
 import { CardId } from '../models/card.model';
 import { RUN_EVENTS } from '../constants/run-events';

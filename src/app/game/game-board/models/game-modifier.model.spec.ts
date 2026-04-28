@@ -1,7 +1,6 @@
 import {
   GameModifier,
   GAME_MODIFIER_CONFIGS,
-  GameModifierConfig,
   calculateModifierScoreMultiplier,
   mergeModifierEffects,
 } from './game-modifier.model';

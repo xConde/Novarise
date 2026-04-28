@@ -703,7 +703,7 @@ describe('PathMutationService', () => {
       service.block(0, 3, 3, 'card', 1, scene);
 
       const key = '0-3';
-      const stored = (registrySpy as unknown as { tileMeshes: Map<string, THREE.Mesh> })
+      const _stored = (registrySpy as unknown as { tileMeshes: Map<string, THREE.Mesh> })
         .tileMeshes.get(key);
       // replaceTileMesh stores the new mesh
       const callArgs = registrySpy.replaceTileMesh.calls.mostRecent().args;

@@ -11,3 +11,34 @@ export const BOARD_CONFIG: BoardConfig = {
   tileSize: 1,
   tileHeight: 0.2
 };
+
+/**
+ * Visual configuration shared across tile mesh creation. Lives next to
+ * BOARD_CONFIG because every value here is a render-side detail of how
+ * a single tile is presented (geometry, materials, ambient). Values were
+ * tuned by eye — group changes here, not in game-board.service.
+ */
+export const TILE_VISUAL_CONFIG = {
+  /** Fraction of a tile's footprint that the box geometry occupies, leaving a thin grid gap. */
+  geometryGapFactor: 0.95,
+  base: {
+    emissiveIntensity: 0.35,
+    metalness: 0.1,
+    roughness: 0.7,
+  },
+  wall: {
+    emissive: 0x0a0810,
+    emissiveIntensity: 0.05,
+    metalness: 0.5,
+    roughness: 0.95,
+  },
+  /** Spawner / Exit / unmarked tile material settings. */
+  other: {
+    emissiveIntensity: 0.45,
+    metalness: 0.1,
+    roughness: 0.7,
+  },
+  /** Emissive color for buildable BASE tiles (dim hint they accept towers). */
+  baseEmissive: 0x303848,
+  envMapIntensity: 0.3,
+} as const;

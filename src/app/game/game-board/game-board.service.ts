@@ -2,7 +2,7 @@ import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { BlockType, GameBoardTile, SpawnerType } from './models/game-board-tile';
 import { TowerType } from './models/tower.model';
-import { BOARD_CONFIG } from './constants/board.constants';
+import { BOARD_CONFIG, TILE_VISUAL_CONFIG } from './constants/board.constants';
 import { assertNever } from './utils/assert-never';
 import { isInBounds } from './utils/coordinate-utils';
 import { MutationOp } from './services/path-mutation.types';
@@ -20,10 +20,14 @@ export class GameBoardService {
   private readonly tileSize = BOARD_CONFIG.tileSize;
   private readonly tileHeight = BOARD_CONFIG.tileHeight;
 
-  // Exit tile coordinates (center of board)
-  private readonly exitTileCoordinates: number[][] = [
-    [9, 11], [9, 12], [10, 11], [10, 12]
-  ];
+  // Exit tile coordinates — derived from board dimensions so a future
+  // BOARD_CONFIG resize keeps exits centred without manual tweaking.
+  // Forms a 2×2 cluster anchored at the floor(height/2) × floor(width/2) tile.
+  private readonly exitTileCoordinates: number[][] = (() => {
+    const r = Math.floor(BOARD_CONFIG.height / 2);
+    const c = Math.floor(BOARD_CONFIG.width / 2);
+    return [[r - 1, c - 1], [r - 1, c], [r, c - 1], [r, c]];
+  })();
 
   // Colors for different tile types — base must be visually distinct from wall
   private readonly colorBase = 0x404858;    // Lighter blue-gray — reads as "buildable ground"
@@ -139,7 +143,8 @@ export class GameBoardService {
   // Y = elevation + tileHeight / 2 instead of the default tileHeight / 2.
   // Default elevation = 0 preserves all existing call sites unchanged.
   createTileMesh(row: number, col: number, type: BlockType, mutationOp?: MutationOp, elevation = 0): THREE.Mesh {
-    const geometry = new THREE.BoxGeometry(this.tileSize * 0.95, this.tileHeight, this.tileSize * 0.95);
+    const tileFootprint = this.tileSize * TILE_VISUAL_CONFIG.geometryGapFactor;
+    const geometry = new THREE.BoxGeometry(tileFootprint, this.tileHeight, tileFootprint);
 
     let material: THREE.MeshStandardMaterial;
 
@@ -152,13 +157,14 @@ export class GameBoardService {
       // Material — base tiles glow subtly to signal "buildable", walls are dark and inert
       const isBase = type === BlockType.BASE;
       const isWall = type === BlockType.WALL;
+      const v = TILE_VISUAL_CONFIG;
       material = new THREE.MeshStandardMaterial({
         color: color,
-        emissive: isWall ? 0x0a0810 : isBase ? 0x303848 : color,
-        emissiveIntensity: isBase ? 0.35 : isWall ? 0.05 : 0.45,
-        metalness: isWall ? 0.5 : 0.1,
-        roughness: isBase ? 0.7 : isWall ? 0.95 : 0.7,
-        envMapIntensity: 0.3,
+        emissive: isWall ? v.wall.emissive : isBase ? v.baseEmissive : color,
+        emissiveIntensity: isBase ? v.base.emissiveIntensity : isWall ? v.wall.emissiveIntensity : v.other.emissiveIntensity,
+        metalness: isWall ? v.wall.metalness : v.base.metalness,
+        roughness: isBase ? v.base.roughness : isWall ? v.wall.roughness : v.other.roughness,
+        envMapIntensity: v.envMapIntensity,
       });
     }
 

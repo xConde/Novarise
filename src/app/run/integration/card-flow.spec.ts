@@ -22,7 +22,6 @@ import { MODIFIER_STAT } from '../constants/modifier-stat.constants';
 import { GameStateService } from '../../game/game-board/services/game-state.service';
 import { EnemyService } from '../../game/game-board/services/enemy.service';
 import { StatusEffectService } from '../../game/game-board/services/status-effect.service';
-import { StatusEffectType } from '../../game/game-board/constants/status-effect.constants';
 import {
   createGameStateServiceSpy,
   createEnemyServiceSpy,

@@ -172,7 +172,7 @@ describe('RewardScreenComponent', () => {
     component.pickRelic(component.relicCards[1]);
     fixture.detectChanges();
 
-    const cards = (fixture.nativeElement as HTMLElement).querySelectorAll('.reward-card');
+    const _cards = (fixture.nativeElement as HTMLElement).querySelectorAll('.reward-card');
     // After pick, choice section is hidden — verify component state instead
     expect(component.selectedRelic).toBe(RelicId.CHAIN_REACTION);
   });

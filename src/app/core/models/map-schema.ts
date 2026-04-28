@@ -4,6 +4,10 @@ export const CURRENT_SCHEMA_VERSION = 2;
 /** Minimum schema version we can migrate from. */
 export const MIN_SUPPORTED_VERSION = 1;
 
+/** Inclusive bounds on a map's grid size during validation. */
+export const GRID_SIZE_MIN = 5;
+export const GRID_SIZE_MAX = 50;
+
 /**
  * Migration function: takes data of version N and returns data of version N+1.
  * Returns null if migration fails.
@@ -122,8 +126,8 @@ export function validateMapData(data: unknown): MapValidationResult {
   const d = data as Record<string, unknown>;
 
   // Required fields
-  if (typeof d['gridSize'] !== 'number' || d['gridSize'] < 5 || d['gridSize'] > 50) {
-    errors.push(`Invalid gridSize: ${d['gridSize']} (must be 5-50)`);
+  if (typeof d['gridSize'] !== 'number' || d['gridSize'] < GRID_SIZE_MIN || d['gridSize'] > GRID_SIZE_MAX) {
+    errors.push(`Invalid gridSize: ${d['gridSize']} (must be ${GRID_SIZE_MIN}-${GRID_SIZE_MAX})`);
   }
 
   if (!Array.isArray(d['tiles'])) {
