@@ -66,6 +66,13 @@ export function applyRendererPolicy(
   renderer.outputColorSpace = policy.outputColorSpace;
 }
 
+export interface DisposeProtect {
+  /** Geometries owned by a registry — must NOT be disposed by traversal. */
+  isGeometry?: (g: THREE.BufferGeometry) => boolean;
+  /** Materials owned by a pool — must NOT be disposed by traversal. */
+  isMaterial?: (m: THREE.Material) => boolean;
+}
+
 /**
  * Traverse a Group (or any Object3D), dispose every Mesh and Line descendant's
  * geometry and material(s), and optionally remove the root from the scene.
@@ -80,8 +87,16 @@ export function applyRendererPolicy(
  * MeshStandardMaterial across 4-7 child Meshes). Three.js silently no-ops
  * repeat dispose() today, but it's UB and may break under stricter
  * refcounting in future versions.
+ *
+ * Optional `protect` predicate(s) skip resources owned by a registry/pool
+ * so single-mesh disposal does not break a shared cache. Used by tile
+ * disposal once GeometryRegistry + MaterialRegistry land.
  */
-export function disposeGroup(group: THREE.Object3D, scene?: THREE.Scene): void {
+export function disposeGroup(
+  group: THREE.Object3D,
+  scene?: THREE.Scene,
+  protect?: DisposeProtect,
+): void {
   if (scene) {
     scene.remove(group);
   }
@@ -91,13 +106,17 @@ export function disposeGroup(group: THREE.Object3D, scene?: THREE.Scene): void {
     if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
       if (!seenGeometries.has(child.geometry)) {
         seenGeometries.add(child.geometry);
-        child.geometry.dispose();
+        if (!protect?.isGeometry?.(child.geometry)) {
+          child.geometry.dispose();
+        }
       }
       const mats = Array.isArray(child.material) ? child.material : [child.material];
       for (const m of mats) {
         if (!seenMaterials.has(m)) {
           seenMaterials.add(m);
-          m.dispose();
+          if (!protect?.isMaterial?.(m)) {
+            m.dispose();
+          }
         }
       }
     }

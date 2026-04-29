@@ -30,6 +30,7 @@ import { ElevationService } from './elevation.service';
 import { TowerGraphService } from './tower-graph.service';
 import { LinkMeshService } from './link-mesh.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
+import { GeometryRegistryService } from './geometry-registry.service';
 import { disposeGroup } from '../utils/three-utils';
 
 /**
@@ -66,6 +67,9 @@ export class GameSessionService {
     private pathMutationService: PathMutationService,
     private elevationService: ElevationService,
     @Optional() private terraformPool?: TerraformMaterialPoolService,
+    // @Optional() so flat test beds without GameBoardComponent.providers
+    // don't need to register the registry.
+    @Optional() private geometryRegistry?: GeometryRegistryService,
     // @Optional() so pre-Conduit test beds don't need to register this.
     // Production wires it via GameBoardComponent.providers.
     @Optional() private towerGraphService?: TowerGraphService,
@@ -165,17 +169,20 @@ export class GameSessionService {
     this.meshRegistry.towerMeshes.clear();
 
     // Dispose tile meshes.
-    // Pool materials (terraformed tiles) are NOT disposed here — they are
-    // disposed in batch by terraformPool.dispose() below, after all meshes
-    // have been removed from the scene. Per-tile materials are disposed
-    // individually as before.
+    //  - Pool materials (terraformed tiles) skipped here — disposed in batch
+    //    by terraformPool.dispose() below.
+    //  - Geometry skipped if it's the registry-shared box (disposed once by
+    //    geometryRegistry.dispose() below). Old per-tile geometries (pre-Phase B)
+    //    or geometries from flat test beds without the registry still dispose
+    //    individually.
     this.meshRegistry.tileMeshes.forEach(mesh => {
       scene.remove(mesh);
-      mesh.geometry.dispose();
+      if (!this.geometryRegistry?.isRegisteredGeometry(mesh.geometry)) {
+        mesh.geometry.dispose();
+      }
       const mat = mesh.material as THREE.Material | THREE.Material[];
       const mats = Array.isArray(mat) ? mat : [mat];
       mats.forEach(m => {
-        // Skip pool materials — they are disposed in batch by terraformPool.dispose() below.
         if (!this.terraformPool?.isPoolMaterial(m)) {
           m.dispose();
         }
@@ -184,19 +191,21 @@ export class GameSessionService {
     this.meshRegistry.tileMeshes.clear();
 
     // Dispose cliff column meshes (sprint 39 Highground polish).
-    // Cliff geometry is disposed here; material is pool-owned and disposed below.
+    // Geometry skipped if registry-shared (sprint 12), material is pool-owned.
     this.meshRegistry.cliffMeshes.forEach(cliffMesh => {
       scene.remove(cliffMesh);
-      cliffMesh.geometry.dispose();
-      // Material is pool-owned — disposed in the terraformPool.dispose() call below.
+      if (!this.geometryRegistry?.isRegisteredGeometry(cliffMesh.geometry)) {
+        cliffMesh.geometry.dispose();
+      }
     });
     this.meshRegistry.cliffMeshes.clear();
 
     // Dispose all pooled terraform materials in one batch.
-    // Must run AFTER tileMeshes.clear() and cliffMeshes.clear() so no mesh still
-    // references a pool material. terraformPool is optional (not present in test contexts
-    // without full GameModule).
     this.terraformPool?.dispose();
+
+    // Dispose all registry-shared geometries in one batch. Must run AFTER all
+    // tile + tower + cliff disposals (sprint 14 will widen registry use).
+    this.geometryRegistry?.dispose();
 
     // Dispose grid lines (Mesh + Line children, both handled by disposeGroup)
     if (this.meshRegistry.gridLines) {

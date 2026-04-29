@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 
 import { GameBoardService } from '../game-board.service';
@@ -6,6 +6,7 @@ import { isInBounds } from '../utils/coordinate-utils';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { PathfindingService } from './pathfinding.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
+import { GeometryRegistryService } from './geometry-registry.service';
 import { BlockType } from '../models/game-board-tile';
 import {
   MutationOp,
@@ -53,6 +54,11 @@ export class PathMutationService {
     private readonly registry: BoardMeshRegistryService,
     private readonly pathfindingService: PathfindingService,
     private readonly terraformPool: TerraformMaterialPoolService,
+    /**
+     * @Optional() — only present when GameBoardComponent provides it (sprint 12).
+     * Used to skip dispose on registry-shared tile geometry.
+     */
+    @Optional() private readonly geometryRegistry?: GeometryRegistryService,
   ) {}
 
   // ────────────────────────────────────────────────────────────────────────
@@ -326,8 +332,10 @@ export class PathMutationService {
     const oldMesh = this.registry.tileMeshes.get(key);
     if (oldMesh) {
       scene.remove(oldMesh);
-      // Always dispose per-tile geometry — it is never shared.
-      oldMesh.geometry.dispose();
+      // Skip dispose if geometry is registry-owned (sprint 12) — tiles share it.
+      if (!this.geometryRegistry?.isRegisteredGeometry(oldMesh.geometry)) {
+        oldMesh.geometry.dispose();
+      }
       // Only dispose the material if it is NOT a pooled material.
       // Pool materials must survive until pool.dispose() at teardown.
       const oldMat = oldMesh.material as THREE.Material;

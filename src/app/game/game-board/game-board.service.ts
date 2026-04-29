@@ -7,11 +7,13 @@ import { assertNever } from './utils/assert-never';
 import { isInBounds } from './utils/coordinate-utils';
 import { MutationOp } from './services/path-mutation.types';
 import { TerraformMaterialPoolService } from './services/terraform-material-pool.service';
+import { GeometryRegistryService } from './services/geometry-registry.service';
 
 @Injectable()
 export class GameBoardService {
   constructor(
     @Optional() private readonly terraformPool?: TerraformMaterialPoolService,
+    @Optional() private readonly geometryRegistry?: GeometryRegistryService,
   ) {}
 
   // Board configuration
@@ -144,7 +146,12 @@ export class GameBoardService {
   // Default elevation = 0 preserves all existing call sites unchanged.
   createTileMesh(row: number, col: number, type: BlockType, mutationOp?: MutationOp, elevation = 0): THREE.Mesh {
     const tileFootprint = this.tileSize * TILE_VISUAL_CONFIG.geometryGapFactor;
-    const geometry = new THREE.BoxGeometry(tileFootprint, this.tileHeight, tileFootprint);
+    // GeometryRegistry is optional so flat TestBeds without it still work;
+    // shipping path always has it (registered alongside TerraformMaterialPool
+    // in GameBoardComponent.providers).
+    const geometry = this.geometryRegistry
+      ? this.geometryRegistry.getBox(tileFootprint, this.tileHeight, tileFootprint)
+      : new THREE.BoxGeometry(tileFootprint, this.tileHeight, tileFootprint);
 
     let material: THREE.MeshStandardMaterial;
 
