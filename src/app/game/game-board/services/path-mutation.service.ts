@@ -7,6 +7,7 @@ import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { PathfindingService } from './pathfinding.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
 import { GeometryRegistryService } from './geometry-registry.service';
+import { MaterialRegistryService } from './material-registry.service';
 import { BlockType } from '../models/game-board-tile';
 import {
   MutationOp,
@@ -59,6 +60,11 @@ export class PathMutationService {
      * Used to skip dispose on registry-shared tile geometry.
      */
     @Optional() private readonly geometryRegistry?: GeometryRegistryService,
+    /**
+     * @Optional() — only present when GameBoardComponent provides it (sprint 14).
+     * Used to skip dispose on registry-shared per-BlockType tile material.
+     */
+    @Optional() private readonly materialRegistry?: MaterialRegistryService,
   ) {}
 
   // ────────────────────────────────────────────────────────────────────────
@@ -336,10 +342,10 @@ export class PathMutationService {
       if (!this.geometryRegistry?.isRegisteredGeometry(oldMesh.geometry)) {
         oldMesh.geometry.dispose();
       }
-      // Only dispose the material if it is NOT a pooled material.
-      // Pool materials must survive until pool.dispose() at teardown.
+      // Only dispose if material is owned per-mesh (not pool, not registry).
       const oldMat = oldMesh.material as THREE.Material;
-      if (!this.terraformPool.isPoolMaterial(oldMat)) {
+      if (!this.terraformPool.isPoolMaterial(oldMat)
+          && !this.materialRegistry?.isRegisteredMaterial(oldMat)) {
         oldMat.dispose();
       }
     }

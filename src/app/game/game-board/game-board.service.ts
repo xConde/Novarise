@@ -8,12 +8,14 @@ import { isInBounds } from './utils/coordinate-utils';
 import { MutationOp } from './services/path-mutation.types';
 import { TerraformMaterialPoolService } from './services/terraform-material-pool.service';
 import { GeometryRegistryService } from './services/geometry-registry.service';
+import { MaterialRegistryService } from './services/material-registry.service';
 
 @Injectable()
 export class GameBoardService {
   constructor(
     @Optional() private readonly terraformPool?: TerraformMaterialPoolService,
     @Optional() private readonly geometryRegistry?: GeometryRegistryService,
+    @Optional() private readonly materialRegistry?: MaterialRegistryService,
   ) {}
 
   // Board configuration
@@ -158,21 +160,15 @@ export class GameBoardService {
     if (mutationOp !== undefined && this.terraformPool) {
       // Shared pool material — do NOT dispose this on individual mesh swap.
       material = this.terraformPool.getMaterial(mutationOp);
+    } else if (this.materialRegistry) {
+      // Shared per-BlockType tile material via MaterialRegistry (sprint 14).
+      material = this.materialRegistry.getOrCreate(
+        `tile:${type}`,
+        () => this.makeTileMaterial(type),
+      );
     } else {
-      const color = this.getTileColor(type);
-
-      // Material — base tiles glow subtly to signal "buildable", walls are dark and inert
-      const isBase = type === BlockType.BASE;
-      const isWall = type === BlockType.WALL;
-      const v = TILE_VISUAL_CONFIG;
-      material = new THREE.MeshStandardMaterial({
-        color: color,
-        emissive: isWall ? v.wall.emissive : isBase ? v.baseEmissive : color,
-        emissiveIntensity: isBase ? v.base.emissiveIntensity : isWall ? v.wall.emissiveIntensity : v.other.emissiveIntensity,
-        metalness: isWall ? v.wall.metalness : v.base.metalness,
-        roughness: isBase ? v.base.roughness : isWall ? v.wall.roughness : v.other.roughness,
-        envMapIntensity: v.envMapIntensity,
-      });
+      // Fallback for flat test beds without MaterialRegistry registered.
+      material = this.makeTileMaterial(type);
     }
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -186,6 +182,21 @@ export class GameBoardService {
     mesh.castShadow = true;
 
     return mesh;
+  }
+
+  private makeTileMaterial(type: BlockType): THREE.MeshStandardMaterial {
+    const color = this.getTileColor(type);
+    const isBase = type === BlockType.BASE;
+    const isWall = type === BlockType.WALL;
+    const v = TILE_VISUAL_CONFIG;
+    return new THREE.MeshStandardMaterial({
+      color: color,
+      emissive: isWall ? v.wall.emissive : isBase ? v.baseEmissive : color,
+      emissiveIntensity: isBase ? v.base.emissiveIntensity : isWall ? v.wall.emissiveIntensity : v.other.emissiveIntensity,
+      metalness: isWall ? v.wall.metalness : v.base.metalness,
+      roughness: isBase ? v.base.roughness : isWall ? v.wall.roughness : v.other.roughness,
+      envMapIntensity: v.envMapIntensity,
+    });
   }
 
   // Create grid lines - interior lines positioned BETWEEN tiles (24x19)

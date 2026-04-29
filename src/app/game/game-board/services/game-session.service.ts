@@ -31,7 +31,8 @@ import { TowerGraphService } from './tower-graph.service';
 import { LinkMeshService } from './link-mesh.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
 import { GeometryRegistryService } from './geometry-registry.service';
-import { disposeGroup } from '../utils/three-utils';
+import { MaterialRegistryService } from './material-registry.service';
+import { buildDisposeProtect, disposeGroup, DisposeProtect } from '../utils/three-utils';
 
 /**
  * Orchestrates game-level lifecycle: service resets on restart and Three.js scene cleanup.
@@ -68,8 +69,9 @@ export class GameSessionService {
     private elevationService: ElevationService,
     @Optional() private terraformPool?: TerraformMaterialPoolService,
     // @Optional() so flat test beds without GameBoardComponent.providers
-    // don't need to register the registry.
+    // don't need to register the registries.
     @Optional() private geometryRegistry?: GeometryRegistryService,
+    @Optional() private materialRegistry?: MaterialRegistryService,
     // @Optional() so pre-Conduit test beds don't need to register this.
     // Production wires it via GameBoardComponent.providers.
     @Optional() private towerGraphService?: TowerGraphService,
@@ -164,17 +166,20 @@ export class GameSessionService {
     // Clean up upgrade flash/glow ring effects
     this.towerUpgradeVisualService.cleanup(scene);
 
-    // Dispose tower meshes
-    this.meshRegistry.towerMeshes.forEach(group => disposeGroup(group, scene));
+
+    // Dispose tower meshes — protect registry-owned geometry/material so
+    // single-mesh disposal doesn't break the cache. Registries themselves
+    // are disposed below.
+    const protect = buildDisposeProtect(this.geometryRegistry, this.materialRegistry, this.terraformPool);
+    this.meshRegistry.towerMeshes.forEach(group => disposeGroup(group, scene, protect));
     this.meshRegistry.towerMeshes.clear();
 
     // Dispose tile meshes.
     //  - Pool materials (terraformed tiles) skipped here — disposed in batch
     //    by terraformPool.dispose() below.
-    //  - Geometry skipped if it's the registry-shared box (disposed once by
-    //    geometryRegistry.dispose() below). Old per-tile geometries (pre-Phase B)
-    //    or geometries from flat test beds without the registry still dispose
-    //    individually.
+    //  - Registry materials (per-BlockType, sprint 14) skipped — disposed
+    //    in batch by materialRegistry.dispose() below.
+    //  - Geometry skipped if it's the registry-shared box (sprint 12).
     this.meshRegistry.tileMeshes.forEach(mesh => {
       scene.remove(mesh);
       if (!this.geometryRegistry?.isRegisteredGeometry(mesh.geometry)) {
@@ -183,9 +188,9 @@ export class GameSessionService {
       const mat = mesh.material as THREE.Material | THREE.Material[];
       const mats = Array.isArray(mat) ? mat : [mat];
       mats.forEach(m => {
-        if (!this.terraformPool?.isPoolMaterial(m)) {
-          m.dispose();
-        }
+        if (this.terraformPool?.isPoolMaterial(m)) return;
+        if (this.materialRegistry?.isRegisteredMaterial(m)) return;
+        m.dispose();
       });
     });
     this.meshRegistry.tileMeshes.clear();
@@ -203,11 +208,16 @@ export class GameSessionService {
     // Dispose all pooled terraform materials in one batch.
     this.terraformPool?.dispose();
 
-    // Dispose all registry-shared geometries in one batch. Must run AFTER all
-    // tile + tower + cliff disposals (sprint 14 will widen registry use).
+    // Dispose all registry-shared materials in one batch (sprint 14).
+    this.materialRegistry?.dispose();
+
+    // Dispose all registry-shared geometries in one batch.
     this.geometryRegistry?.dispose();
 
-    // Dispose grid lines (Mesh + Line children, both handled by disposeGroup)
+    // Dispose grid lines (Mesh + Line children, both handled by disposeGroup).
+    // Grid material is currently per-instance; once Phase B sprint 28 (or
+    // earlier) collapses grid lines into LineSegments, consider routing it
+    // through MaterialRegistry as well.
     if (this.meshRegistry.gridLines) {
       disposeGroup(this.meshRegistry.gridLines, scene);
     }

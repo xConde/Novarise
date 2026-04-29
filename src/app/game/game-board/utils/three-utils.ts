@@ -73,6 +73,37 @@ export interface DisposeProtect {
   isMaterial?: (m: THREE.Material) => boolean;
 }
 
+export interface ResourceGuard {
+  isRegisteredGeometry?(g: THREE.BufferGeometry): boolean;
+}
+export interface MaterialGuard {
+  isRegisteredMaterial?(m: THREE.Material): boolean;
+}
+export interface PoolGuard {
+  isPoolMaterial?(m: THREE.Material): boolean;
+}
+
+/**
+ * Build a DisposeProtect predicate set from the optional registries / pools
+ * a service may inject. Each guard is queried only when present, and the
+ * resulting predicate composes them so a registry-owned resource skips
+ * disposal regardless of which owner registered it.
+ */
+export function buildDisposeProtect(
+  geometry?: ResourceGuard,
+  material?: MaterialGuard,
+  pool?: PoolGuard,
+): DisposeProtect | undefined {
+  if (!geometry && !material && !pool) return undefined;
+  return {
+    isGeometry: geometry?.isRegisteredGeometry
+      ? (g) => geometry.isRegisteredGeometry!(g)
+      : undefined,
+    isMaterial: (m: THREE.Material) =>
+      !!material?.isRegisteredMaterial?.(m) || !!pool?.isPoolMaterial?.(m),
+  };
+}
+
 /**
  * Traverse a Group (or any Object3D), dispose every Mesh and Line descendant's
  * geometry and material(s), and optionally remove the root from the scene.

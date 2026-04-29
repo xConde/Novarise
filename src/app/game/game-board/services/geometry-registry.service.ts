@@ -122,6 +122,15 @@ export class GeometryRegistryService {
   }
 
   /**
+   * Generic escape hatch for geometries the typed methods don't cover
+   * (custom BufferGeometry, CapsuleGeometry, hand-built attribute geometries).
+   * Caller is responsible for picking a stable key.
+   */
+  getOrCreateCustom<T extends THREE.BufferGeometry>(key: string, factory: () => T): T {
+    return this.getOrCreate(`custom:${key}`, factory) as T;
+  }
+
+  /**
    * Returns true if `geom` is owned by this registry.
    * Disposal paths (disposeGroup, swapMesh) should skip these to avoid
    * breaking the cache.
