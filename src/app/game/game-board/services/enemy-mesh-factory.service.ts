@@ -35,7 +35,10 @@ export class EnemyMeshFactoryService {
       geometry = this.createEnemyGeometry(enemy.type, stats.size);
     }
 
-    const material = this.getOrCreateEnemyMaterial(enemy.type, stats.color, materialSide);
+    // Enemy body material is per-instance — death fade mutates `transparent`
+    // and `opacity`, hit flash + status tinting mutate `emissive`. Caching
+    // would alias every enemy of the same type.
+    const material = this.makeEnemyBodyMaterial(stats.color, materialSide);
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(enemy.position.x, enemy.position.y, enemy.position.z);
@@ -56,10 +59,8 @@ export class EnemyMeshFactoryService {
     healthBarBg.position.set(0, barY, 0);
 
     const fgGeometry = this.plane(barWidth, barHeight);
-    const fgMaterial = this.getOrCreateEffectMaterial(
-      `enemy:hpFg`,
-      () => new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide }),
-    );
+    // Per-instance — color shifts per HP threshold (green/yellow/red).
+    const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
     const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
     healthBarFg.position.set(0, barY + 0.001, 0);
 
@@ -176,16 +177,15 @@ export class EnemyMeshFactoryService {
           BOSS_CROWN_CONFIG.radialSegments,
           BOSS_CROWN_CONFIG.tubularSegments,
         );
-    const crownMaterial = this.getOrCreateEffectMaterial(
-      `enemy:bossCrown:${color}`,
-      () => new THREE.MeshStandardMaterial({
-        color,
-        emissive: color,
-        emissiveIntensity: BOSS_CROWN_CONFIG.emissiveIntensity,
-        roughness: BOSS_CROWN_CONFIG.roughness,
-        metalness: BOSS_CROWN_CONFIG.metalness,
-      }),
-    );
+    // Boss crown material is per-instance — hit flash + status tinting
+    // mutate `emissive` (see enemy-visual.service tintChildMeshes).
+    const crownMaterial = new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: BOSS_CROWN_CONFIG.emissiveIntensity,
+      roughness: BOSS_CROWN_CONFIG.roughness,
+      metalness: BOSS_CROWN_CONFIG.metalness,
+    });
     const crown = new THREE.Mesh(crownGeometry, crownMaterial);
     crown.rotation.x = Math.PI / 2;
     crown.position.y = size * BOSS_CROWN_CONFIG.yOffsetMultiplier;
@@ -208,16 +208,15 @@ export class EnemyMeshFactoryService {
           WYRM_ASCENDANT_VISUAL_CONFIG.eyeRadialSegments,
           WYRM_ASCENDANT_VISUAL_CONFIG.eyeTubularSegments,
         );
-    const eyeMaterial = this.getOrCreateEffectMaterial(
-      `enemy:wyrmEye`,
-      () => new THREE.MeshStandardMaterial({
-        color: WYRM_ASCENDANT_VISUAL_CONFIG.eyeColor,
-        emissive: WYRM_ASCENDANT_VISUAL_CONFIG.eyeColor,
-        emissiveIntensity: WYRM_ASCENDANT_VISUAL_CONFIG.eyeEmissiveIntensity,
-        roughness: WYRM_ASCENDANT_VISUAL_CONFIG.eyeRoughness,
-        metalness: WYRM_ASCENDANT_VISUAL_CONFIG.eyeMetalness,
-      }),
-    );
+    // Wyrm eye material is per-instance — same status-tint mutation surface
+    // as boss crown.
+    const eyeMaterial = new THREE.MeshStandardMaterial({
+      color: WYRM_ASCENDANT_VISUAL_CONFIG.eyeColor,
+      emissive: WYRM_ASCENDANT_VISUAL_CONFIG.eyeColor,
+      emissiveIntensity: WYRM_ASCENDANT_VISUAL_CONFIG.eyeEmissiveIntensity,
+      roughness: WYRM_ASCENDANT_VISUAL_CONFIG.eyeRoughness,
+      metalness: WYRM_ASCENDANT_VISUAL_CONFIG.eyeMetalness,
+    });
     const eyeRing = new THREE.Mesh(eyeGeometry, eyeMaterial);
     eyeRing.position.y = size * WYRM_ASCENDANT_VISUAL_CONFIG.eyeYOffsetMultiplier;
     eyeRing.castShadow = true;
@@ -227,22 +226,22 @@ export class EnemyMeshFactoryService {
 
   createShieldMesh(enemySize: number): THREE.Mesh {
     const shieldRadius = enemySize * SHIELD_VISUAL_CONFIG.radiusMultiplier;
-    const shieldGeometry = this.sphere(
+    // Shield dome geometry + material are per-instance — both are explicitly
+    // disposed by EnemyHealthService.updateShieldBreakAnimations() when the
+    // shield-break fade completes. Sharing them would invalidate the cache.
+    const shieldGeometry = new THREE.SphereGeometry(
       shieldRadius,
       SHIELD_VISUAL_CONFIG.segments,
       SHIELD_VISUAL_CONFIG.segments,
     );
-    const shieldMaterial = this.getOrCreateEffectMaterial(
-      `enemy:shieldDome`,
-      () => new THREE.MeshStandardMaterial({
-        color: SHIELD_VISUAL_CONFIG.color,
-        emissive: SHIELD_VISUAL_CONFIG.color,
-        emissiveIntensity: SHIELD_VISUAL_CONFIG.emissiveIntensity,
-        transparent: true,
-        opacity: SHIELD_VISUAL_CONFIG.opacity,
-        side: THREE.DoubleSide,
-      }),
-    );
+    const shieldMaterial = new THREE.MeshStandardMaterial({
+      color: SHIELD_VISUAL_CONFIG.color,
+      emissive: SHIELD_VISUAL_CONFIG.color,
+      emissiveIntensity: SHIELD_VISUAL_CONFIG.emissiveIntensity,
+      transparent: true,
+      opacity: SHIELD_VISUAL_CONFIG.opacity,
+      side: THREE.DoubleSide,
+    });
     return new THREE.Mesh(shieldGeometry, shieldMaterial);
   }
 
@@ -257,16 +256,15 @@ export class EnemyMeshFactoryService {
 
   createMiniSwarmMesh(mini: Enemy): THREE.Mesh {
     const geometry = this.oct(MINI_SWARM_STATS.size, 0);
-    const material = this.getOrCreateEffectMaterial(
-      `enemy:miniSwarm`,
-      () => new THREE.MeshStandardMaterial({
-        color: MINI_SWARM_STATS.color,
-        emissive: MINI_SWARM_STATS.color,
-        emissiveIntensity: ENEMY_VISUAL_CONFIG.miniSwarmEmissive,
-        roughness: ENEMY_VISUAL_CONFIG.roughness,
-        metalness: ENEMY_VISUAL_CONFIG.metalness,
-      }),
-    );
+    // Mini-swarm body material is per-instance — same mutation surface as
+    // regular enemy body (status tint, hit flash, death fade).
+    const material = new THREE.MeshStandardMaterial({
+      color: MINI_SWARM_STATS.color,
+      emissive: MINI_SWARM_STATS.color,
+      emissiveIntensity: ENEMY_VISUAL_CONFIG.miniSwarmEmissive,
+      roughness: ENEMY_VISUAL_CONFIG.roughness,
+      metalness: ENEMY_VISUAL_CONFIG.metalness,
+    });
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(mini.position.x, mini.position.y, mini.position.z);
@@ -285,10 +283,8 @@ export class EnemyMeshFactoryService {
     healthBarBg.position.set(0, barY, 0);
 
     const fgGeometry = this.plane(barWidth, barHeight);
-    const fgMaterial = this.getOrCreateEffectMaterial(
-      `enemy:hpFg`,
-      () => new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide }),
-    );
+    // Per-instance — color shifts per HP threshold (green/yellow/red).
+    const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
     const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
     healthBarFg.position.set(0, barY + 0.001, 0);
 
@@ -371,33 +367,24 @@ export class EnemyMeshFactoryService {
    * materialSide differs between FLYING (DoubleSide) and grounded (FrontSide).
    * Cached separately per side because that flag baked into the shader.
    */
-  private getOrCreateEnemyMaterial(
-    type: EnemyType,
-    color: number,
-    side: THREE.Side,
-  ): THREE.MeshStandardMaterial {
-    if (!this.materialRegistry) {
-      return new THREE.MeshStandardMaterial({
-        color,
-        emissive: color,
-        emissiveIntensity: ENEMY_VISUAL_CONFIG.baseEmissive,
-        roughness: ENEMY_VISUAL_CONFIG.roughness,
-        metalness: ENEMY_VISUAL_CONFIG.metalness,
-        side,
-      });
-    }
-    const sideTag = side === THREE.DoubleSide ? 'D' : 'F';
-    return this.materialRegistry.getOrCreate(
-      `enemy:${type}:${sideTag}`,
-      () => new THREE.MeshStandardMaterial({
-        color,
-        emissive: color,
-        emissiveIntensity: ENEMY_VISUAL_CONFIG.baseEmissive,
-        roughness: ENEMY_VISUAL_CONFIG.roughness,
-        metalness: ENEMY_VISUAL_CONFIG.metalness,
-        side,
-      }),
-    );
+  /**
+   * Per-instance enemy body material.
+   *
+   * NOT cached via MaterialRegistry: status-effect tinting (EnemyVisualService),
+   * hit flash (EnemyHealthService.startHitFlash), and death fade
+   * (EnemyHealthService.setMeshTransparent + opacity ramp) all mutate this
+   * material's `emissive` / `transparent` / `opacity`. A shared cached
+   * instance would alias every living enemy of the same type.
+   */
+  private makeEnemyBodyMaterial(color: number, side: THREE.Side): THREE.MeshStandardMaterial {
+    return new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: ENEMY_VISUAL_CONFIG.baseEmissive,
+      roughness: ENEMY_VISUAL_CONFIG.roughness,
+      metalness: ENEMY_VISUAL_CONFIG.metalness,
+      side,
+    });
   }
 
   private getOrCreateEffectMaterial<T extends THREE.Material>(
