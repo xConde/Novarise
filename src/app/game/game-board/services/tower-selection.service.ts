@@ -11,9 +11,11 @@ import { StatusEffectType } from '../constants/status-effect.constants';
 import { TowerCombatService } from './tower-combat.service';
 import { GameStateService } from './game-state.service';
 import { RangeVisualizationService } from './range-visualization.service';
+import { TileHighlightService } from './tile-highlight.service';
 import { GameBoardService } from '../game-board.service';
 import { SceneService } from './scene.service';
 import { RelicService } from '../../../run/services/relic.service';
+import { Optional } from '@angular/core';
 
 /**
  * Manages tower inspection / selection panel state.
@@ -47,6 +49,11 @@ export class TowerSelectionService {
     private gameBoardService: GameBoardService,
     private sceneService: SceneService,
     private relicService: RelicService,
+    /**
+     * UX-6: optional so flat test beds without a registry/highlight wired
+     * still construct. Production wires it via GameBoardComponent.providers.
+     */
+    @Optional() private tileHighlightService?: TileHighlightService,
   ) {}
 
   /**
@@ -75,6 +82,9 @@ export class TowerSelectionService {
       this.gameBoardService.getTileSize(),
       this.sceneService.getScene()
     );
+    // UX-6: highlight the tile under the selected tower so the click feels
+    // confirmed beyond the white selection ring + range ring above it.
+    this.tileHighlightService?.applySelectionByCoord(tower.row, tower.col);
   }
 
   /** Recompute and refresh all info-panel display fields from the currently selected tower. */
@@ -100,6 +110,7 @@ export class TowerSelectionService {
 
   /** Clear all selection state and remove the range preview ring from the scene. */
   deselectTower(): void {
+    const prev = this.selectedTowerInfo;
     this.selectedTowerInfo = null;
     this.selectedTowerStats = null;
     this.upgradePreview = null;
@@ -108,6 +119,11 @@ export class TowerSelectionService {
     this.showSpecializationChoice = false;
     this.specOptions = [];
     this.rangeVisualizationService.removePreview(this.sceneService.getScene());
+    // UX-6: clear the tile selection tint that applySelectionByCoord set
+    // on the previously-selected tower's tile.
+    if (prev) {
+      this.tileHighlightService?.restoreSelectionByCoord(prev.row, prev.col);
+    }
   }
 
   /**
