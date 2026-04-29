@@ -1,9 +1,10 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG } from '../constants/ui.constants';
 import { PlacedTower, TowerType, TOWER_CONFIGS, getEffectiveStats } from '../models/tower.model';
 import { disposeMesh } from '../utils/three-utils';
 import { gridToWorld } from '../utils/coordinate-utils';
+import { ElevationService } from './elevation.service';
 
 @Injectable()
 export class RangeVisualizationService {
@@ -11,6 +12,17 @@ export class RangeVisualizationService {
   private hoverRangeMesh: THREE.Mesh | null = null;
   private selectionRingMesh: THREE.Mesh | null = null;
   private rangeRingMeshes: THREE.Mesh[] = [];
+
+  /**
+   * @Optional() — older flat test beds don't register ElevationService.
+   * When absent, all elevation reads return 0 and the rings sit at the
+   * default ground-tile Y. Production wires it via GameModule.
+   */
+  constructor(@Optional() private readonly elevationService?: ElevationService) {}
+
+  private elevationOf(row: number, col: number): number {
+    return this.elevationService?.getElevation(row, col) ?? 0;
+  }
 
   /** Show range ring + selection ring for a placed tower. */
   showForTower(
@@ -24,9 +36,11 @@ export class RangeVisualizationService {
 
     const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
     const { x, z } = gridToWorld(tower.row, tower.col, boardWidth, boardHeight, tileSize);
+    const elevation = this.elevationOf(tower.row, tower.col);
 
-    // Range ring
-    this.rangePreviewMesh = this.createRangeRing(stats.range, stats.color, RANGE_PREVIEW_CONFIG.opacity, x, z);
+    // Range ring — Y elevated with the tile so it doesn't bury inside
+    // raised Highground tiles (UX-2 red-team fix).
+    this.rangePreviewMesh = this.createRangeRing(stats.range, stats.color, RANGE_PREVIEW_CONFIG.opacity, x, z, elevation);
     scene.add(this.rangePreviewMesh);
 
     // Selection ring — tight ring around the tower base to indicate it's selected
@@ -43,7 +57,7 @@ export class RangeVisualizationService {
     });
     this.selectionRingMesh = new THREE.Mesh(selectionGeometry, selectionMaterial);
     this.selectionRingMesh.rotation.x = -Math.PI / 2;
-    this.selectionRingMesh.position.set(x, RANGE_PREVIEW_CONFIG.yPosition + SELECTION_RING_CONFIG.yOffset, z);
+    this.selectionRingMesh.position.set(x, RANGE_PREVIEW_CONFIG.yPosition + SELECTION_RING_CONFIG.yOffset + elevation, z);
     scene.add(this.selectionRingMesh);
   }
 
@@ -64,13 +78,19 @@ export class RangeVisualizationService {
     this.hideHoverRange(scene);
     const config = TOWER_CONFIGS[towerType];
     const { x, z } = gridToWorld(row, col, boardWidth, boardHeight, tileSize);
-    // Slightly lower opacity than placed-tower preview — signals "not yet committed"
+    const elevation = this.elevationOf(row, col);
+    // Soft-desaturated hover color reads as "potential" vs. the saturated
+    // selected-tower ring (UX-2).
+    const hoverColor = new THREE.Color(config.color)
+      .lerp(new THREE.Color(0xffffff), RANGE_PREVIEW_CONFIG.hoverDesaturation)
+      .getHex();
     this.hoverRangeMesh = this.createRangeRing(
       config.range,
-      config.color,
-      RANGE_PREVIEW_CONFIG.opacity * 0.6,
+      hoverColor,
+      RANGE_PREVIEW_CONFIG.opacity * RANGE_PREVIEW_CONFIG.hoverOpacityScale,
       x,
-      z
+      z,
+      elevation,
     );
     scene.add(this.hoverRangeMesh);
   }
@@ -128,7 +148,8 @@ export class RangeVisualizationService {
           RANGE_PREVIEW_CONFIG.allRangesColor,
           RANGE_PREVIEW_CONFIG.opacity * RANGE_PREVIEW_CONFIG.allRangesOpacityScale,
           worldX,
-          worldZ
+          worldZ,
+          this.elevationOf(tower.row, tower.col),
         );
         scene.add(ring);
         this.rangeRingMeshes.push(ring);
@@ -149,7 +170,14 @@ export class RangeVisualizationService {
     this.rangeRingMeshes = [];
   }
 
-  private createRangeRing(radius: number, color: number, opacity: number, x: number, z: number): THREE.Mesh {
+  private createRangeRing(
+    radius: number,
+    color: number,
+    opacity: number,
+    x: number,
+    z: number,
+    elevation = 0,
+  ): THREE.Mesh {
     const geometry = new THREE.RingGeometry(
       radius - RANGE_PREVIEW_CONFIG.ringThickness,
       radius,
@@ -163,7 +191,9 @@ export class RangeVisualizationService {
     });
     const ring = new THREE.Mesh(geometry, material);
     ring.rotation.x = -Math.PI / 2;
-    ring.position.set(x, RANGE_PREVIEW_CONFIG.yPosition, z);
+    // Elevation-aware Y so rings on raised Highground tiles still sit just
+    // above the tile surface instead of burying inside the geometry.
+    ring.position.set(x, RANGE_PREVIEW_CONFIG.yPosition + elevation, z);
     return ring;
   }
 }

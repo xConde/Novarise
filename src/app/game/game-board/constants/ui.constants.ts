@@ -61,12 +61,31 @@ export const TOWER_VISUAL_CONFIG = {
 };
 
 export const RANGE_PREVIEW_CONFIG = {
+  /** Opacity for the SELECTED-tower range ring (showForTower). */
   opacity: 0.35,
-  yPosition: 0.35,
+  /**
+   * Y height of the ring above world Y=0. Tile top is ~tileHeight (0.2),
+   * so 0.22 sits just above the tile surface with minimal floating.
+   * UX-2: lowered from 0.35 to reduce the visible gap between ring and tile.
+   */
+  yPosition: 0.22,
   ringThickness: 0.05,
-  segments: 64,
+  /** Higher segment count for a smoother circle now that the ring is solo. */
+  segments: 96,
   allRangesColor: 0x00ff88,
   allRangesOpacityScale: 0.5,
+  /**
+   * Placement-preview ring (showForPosition) opacity multiplier on top of
+   * `opacity`. Slightly higher than the pre-UX-1 0.6 because the inline
+   * duplicate ring was removed — this is now the sole hover-range visual.
+   */
+  hoverOpacityScale: 0.7,
+  /**
+   * Mix factor toward white when previewing placement (0 = pure tower
+   * color, 1 = pure white). Soft desaturation reads as "potential / not
+   * yet committed" vs. the saturated SELECTED-tower ring.
+   */
+  hoverDesaturation: 0.35,
 };
 
 /** Selection ring shown around the currently selected placed tower. */
