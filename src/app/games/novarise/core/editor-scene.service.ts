@@ -5,6 +5,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass';
 import { disposeMaterial, disposeMesh } from '@game/game-board/utils/three-utils';
 import {
   EDITOR_SCENE_CONFIG,
@@ -97,6 +98,7 @@ export class EditorSceneService {
   private composer!: EffectComposer;
   private bloomPass?: UnrealBloomPass;
   private vignettePass?: ShaderPass;
+  private outputPass?: OutputPass;
   private renderPass?: RenderPass;
   private skybox?: THREE.Mesh;
   private particles: THREE.Points | null = null;
@@ -216,6 +218,12 @@ export class EditorSceneService {
 
     this.vignettePass = new ShaderPass(vignetteShader);
     this.composer.addPass(this.vignettePass);
+
+    // OutputPass MUST be last. Applies the renderer's tone mapping +
+    // outputColorSpace to composer-rendered frames. Without this the
+    // composer bypasses ACESFilmicToneMapping + SRGBColorSpace.
+    this.outputPass = new OutputPass();
+    this.composer.addPass(this.outputPass);
   }
 
   initLights(): void {
@@ -394,6 +402,10 @@ export class EditorSceneService {
     this.disposeSkybox();
 
     // Post-processing
+    if (this.outputPass) {
+      this.outputPass.dispose();
+      this.outputPass = undefined;
+    }
     if (this.vignettePass) {
       this.vignettePass.dispose();
       this.vignettePass = undefined;
