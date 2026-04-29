@@ -206,14 +206,27 @@ describe('TileInstanceLayer', () => {
       expect(pos.y).toBeCloseTo(0.1);
     });
 
-    it('showAt restores baseY captured at construction', () => {
-      layer.setElevationAt(0, 0, 5);
+    it('showAt after hideAt restores construction Y when no elevation history', () => {
+      layer.hideAt(0, 0);
       layer.showAt(0, 0);
       const m = new THREE.Matrix4();
       layer.mesh.getMatrixAt(0, m);
       const pos = new THREE.Vector3();
       m.decompose(pos, new THREE.Quaternion(), new THREE.Vector3());
       expect(pos.y).toBeCloseTo(0.1);
+    });
+
+    it('setElevationAt updates basePos so subsequent showAt restores the elevated Y (sprint 30 red-team fix)', () => {
+      layer.setElevationAt(0, 0, 5);
+      layer.hideAt(0, 0);
+      layer.showAt(0, 0);
+      const m = new THREE.Matrix4();
+      layer.mesh.getMatrixAt(0, m);
+      const pos = new THREE.Vector3();
+      m.decompose(pos, new THREE.Quaternion(), new THREE.Vector3());
+      // Pre-fix: this would snap back to 0.1 (construction Y), losing the
+      // elevation. Post-fix: basePos.y was updated by setElevationAt.
+      expect(pos.y).toBeCloseTo(5);
     });
 
     it('hideAt collapses instance scale to zero (sprint 22 red-team fix)', () => {

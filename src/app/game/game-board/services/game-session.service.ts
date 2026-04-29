@@ -166,7 +166,10 @@ export class GameSessionService {
     this.pathVisualizationService.cleanup();
 
     // Clean up tile highlights (needs tile meshes before they are cleared)
-    this.tileHighlightService.clearHighlights();
+    // Drop all highlight/hover/selection state before layer disposal so the
+    // next encounter's fresh layers aren't poisoned by stale saved colors
+    // (sprint 30 red-team fix).
+    this.tileHighlightService.resetAllState();
 
     // Clean up range preview and range toggle rings
     this.rangeVisualizationService.cleanup(scene);

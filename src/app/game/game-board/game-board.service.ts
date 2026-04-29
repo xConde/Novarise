@@ -211,7 +211,22 @@ export class GameBoardService {
     const geometry = this.geometryRegistry
       ? this.geometryRegistry.getBox(tileFootprint, this.tileHeight, tileFootprint)
       : new THREE.BoxGeometry(tileFootprint, this.tileHeight, tileFootprint);
-    const material = this.makeTileMaterial(targetType);
+
+    // Phase C sprint 30 red-team fix: route the per-type instanced material
+    // through MaterialRegistry so its disposal is owned by the registry's
+    // batch-dispose at encounter teardown. Pre-fix, the layer held a raw
+    // material that was never disposed (TileInstanceLayer.dispose only
+    // disposes the InstancedMesh, not the material; layer comments
+    // incorrectly said the material was registry-owned).
+    //
+    // Per-instance highlights mutate `instanceColor`, NOT the shared
+    // material — the sprint 22 instanceColor strategy is exactly what
+    // makes this caching safe. Per-instance state lives in the buffer
+    // attribute.
+    const materialKey = `tile:instanced:${targetType}`;
+    const material = this.materialRegistry
+      ? this.materialRegistry.getOrCreate(materialKey, () => this.makeTileMaterial(targetType))
+      : this.makeTileMaterial(targetType);
 
     const instances: Array<{ row: number; col: number; worldX: number; worldZ: number; worldY: number }> = [];
     for (let row = 0; row < this.gameBoard.length; row++) {
@@ -230,8 +245,11 @@ export class GameBoardService {
     }
 
     if (instances.length === 0) {
-      // Caller can dispose the per-build material; not registered anywhere.
-      material.dispose();
+      // Material is registry-owned (or per-call when no registry); the
+      // registry's batch dispose handles either case. Don't dispose here.
+      if (!this.materialRegistry) {
+        material.dispose();
+      }
       return null;
     }
 

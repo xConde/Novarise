@@ -139,6 +139,12 @@ export class TileInstanceLayer {
   /**
    * Translate the Y position of the tile at (row, col) without touching X/Z.
    * Used by ElevationService when a tile is raised/lowered (sprint 25).
+   *
+   * Also updates `basePos[idx].y` so a subsequent showAt (e.g. mutation
+   * expiry on a previously-elevated tile) restores to the elevated Y, not
+   * the construction-time ground Y. Without this, "elevate → mutate →
+   * mutation expires" snaps the tile back to ground level even though
+   * the elevation is still active in board state.
    */
   setElevationAt(row: number, col: number, newY: number): boolean {
     const idx = this.findIndex(row, col);
@@ -149,6 +155,7 @@ export class TileInstanceLayer {
     this.scratchMatrix.compose(this.scratchPosition, this.scratchQuaternion, this.scratchScale);
     this.mesh.setMatrixAt(idx, this.scratchMatrix);
     this.mesh.instanceMatrix.needsUpdate = true;
+    this.basePos[idx].y = newY;
     return true;
   }
 

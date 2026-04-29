@@ -124,7 +124,7 @@ describe('GameSessionService', () => {
 
     pathVisSpy = jasmine.createSpyObj('PathVisualizationService', ['hidePath', 'cleanup', 'showPath']);
 
-    tileHighlightSpy = jasmine.createSpyObj('TileHighlightService', ['clearHighlights', 'updateHighlights', 'restoreAfterHover']);
+    tileHighlightSpy = jasmine.createSpyObj('TileHighlightService', ['clearHighlights', 'updateHighlights', 'restoreAfterHover', 'resetAllState']);
 
     rangeVisSpy = jasmine.createSpyObj('RangeVisualizationService', ['cleanup', 'showForTower', 'removePreview', 'toggleAllRanges']);
 
@@ -286,9 +286,9 @@ describe('GameSessionService', () => {
       expect(pathVisSpy.cleanup).toHaveBeenCalled();
     });
 
-    it('should call tileHighlightService.clearHighlights with no args (sprint 22)', () => {
+    it('should call tileHighlightService.resetAllState (sprint 30 red-team fix)', () => {
       service.cleanupScene();
-      expect(tileHighlightSpy.clearHighlights).toHaveBeenCalled();
+      expect(tileHighlightSpy.resetAllState).toHaveBeenCalled();
     });
 
     it('should call rangeVisualizationService.cleanup', () => {

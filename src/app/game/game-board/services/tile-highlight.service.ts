@@ -114,6 +114,20 @@ export class TileHighlightService {
     this.savedHighlightState.clear();
   }
 
+  /**
+   * Clear ALL highlight + hover + selection state. Called by
+   * GameSessionService.cleanupScene at encounter teardown — the underlying
+   * tile layers are about to be disposed, so any saved state pointing at
+   * them must be dropped to avoid restoring stale colors onto the next
+   * encounter's fresh layers.
+   */
+  resetAllState(): void {
+    this.clearHighlights();
+    this.hoverKey = null;
+    this.hoverSaved = null;
+    this.selectedSaved = null;
+  }
+
   // ── Hover ───────────────────────────────────────────────────────────────
 
   /** Apply a hover bump to (row, col). Stores prior state for restore. */
