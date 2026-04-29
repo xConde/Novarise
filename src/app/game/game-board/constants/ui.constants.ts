@@ -102,22 +102,34 @@ export const TILE_EMISSIVE = {
   base: 0.35,
   wall: 0.05,
   special: 0.4,
-  hover: 0.5,
-  selected: 0.8,
-  /** Default emissive color for BASE tiles (used as fallback in highlight restoration). */
-  defaultColor: 0x303848,
+  /**
+   * Hover bump intensity. Bumped from 0.5 → 0.7 in UX-5 because the
+   * Three.js r152+ sRGB→linear conversion of `defaultColor` (0x303848)
+   * makes the resulting instanceColor tint quite subtle on the now
+   * properly-rendered dark tiles.
+   */
+  hover: 0.7,
+  /** Selected tile bump. Bumped from 0.8 → 1.1 in UX-5 (same reason as hover). */
+  selected: 1.1,
+  /**
+   * Default emissive color for BASE tiles (used as fallback in highlight
+   * restoration AND as the hover/selected tint color). Bumped from
+   * 0x303848 → 0x6080a0 in UX-5 — brighter source color produces a
+   * meaningful instanceColor tint after the linear conversion.
+   */
+  defaultColor: 0x6080a0,
   /** Highlight intensity for tiles valid for tower placement (PLACE mode). */
-  validPlacement: 0.35,
+  validPlacement: 0.5,
   /** Emissive color override for valid placement tiles (soft cyan glow). */
   validPlacementColor: 0x00ccaa,
   /** Dimming factor for unaffordable-but-valid tiles in PLACE mode (0-1, lower = dimmer). */
-  unaffordableDimming: 0.35,
+  unaffordableDimming: 0.4,
   /**
    * Intensity for tiles that *would* block the enemy path if a tower were
-   * placed there. Same magnitude as validPlacement so the eye picks them up
+   * placed there. Higher than validPlacement so the eye picks them up
    * at a glance — the color (red) does the disambiguation.
    */
-  blockedPlacement: 0.45,
+  blockedPlacement: 0.6,
   /** Emissive color override for path-blocking tiles (warm red). */
   blockedPlacementColor: 0xcc3322,
 } as const;
