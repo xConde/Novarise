@@ -596,6 +596,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.sceneService.resize(width, height);
     };
     window.addEventListener('resize', this.resizeHandler);
+    // Editor parity (editor-scene.service.ts:187): mobile address-bar
+    // show/hide changes layout viewport without firing 'resize'.
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', this.resizeHandler);
+    }
 
     const canvas = this.sceneService.getRenderer().domElement;
     this.boardPointer.init(canvas, {
@@ -1475,6 +1480,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gameInput.cleanup();
     this.gamePauseService.cleanup();
     window.removeEventListener('resize', this.resizeHandler);
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', this.resizeHandler);
+    }
     this.towerPlacementService.cleanup();
     this.boardPointer.cleanup();
     this.touchInteraction.cleanup();
