@@ -126,6 +126,7 @@ export class SceneService {
 
   // Renderer event handlers — stored for removal on dispose
   private contextLostHandler: ((event: Event) => void) | null = null;
+  private onControlsChange: (() => void) | null = null;
   private contextRestoredHandler: (() => void) | null = null;
 
   // Called by the component to restart the animation loop on context restore
@@ -292,14 +293,17 @@ export class SceneService {
     this.controls.target.set(0, 0, 0);
     this.controls.update();
 
-    // Clamp orbit target to prevent wandering off the map
-    this.controls.addEventListener('change', () => {
+    // Clamp orbit target to prevent wandering off the map.
+    // Stored as a named field so dispose() can detach it — OrbitControls.dispose()
+    // does NOT remove user-added 'change' listeners attached via addEventListener.
+    this.onControlsChange = () => {
       const target = this.controls.target;
       const boardHalf = this.boardSize * CONTROLS_CONFIG.panBoundaryMargin;
       target.x = Math.max(-boardHalf, Math.min(boardHalf, target.x));
       target.z = Math.max(-boardHalf, Math.min(boardHalf, target.z));
-      target.y = Math.max(0, Math.min(5, target.y)); // Keep y reasonable
-    });
+      target.y = Math.max(0, Math.min(5, target.y));
+    };
+    this.controls.addEventListener('change', this.onControlsChange);
   }
 
   initParticles(): void {
@@ -491,8 +495,12 @@ export class SceneService {
     this.onContextLost = null;
     this.onContextRestored = null;
 
-    // Controls
+    // Controls — detach user-added 'change' listener BEFORE dispose
     if (this.controls) {
+      if (this.onControlsChange) {
+        this.controls.removeEventListener('change', this.onControlsChange);
+        this.onControlsChange = null;
+      }
       this.controls.dispose();
     }
 
