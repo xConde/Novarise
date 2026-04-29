@@ -32,6 +32,8 @@ import { LinkMeshService } from './link-mesh.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
 import { GeometryRegistryService } from './geometry-registry.service';
 import { MaterialRegistryService } from './material-registry.service';
+import { TextSpritePoolService } from './text-sprite-pool.service';
+import { GoldPopupService } from './gold-popup.service';
 import { buildDisposeProtect, disposeGroup, DisposeProtect } from '../utils/three-utils';
 
 /**
@@ -72,6 +74,8 @@ export class GameSessionService {
     // don't need to register the registries.
     @Optional() private geometryRegistry?: GeometryRegistryService,
     @Optional() private materialRegistry?: MaterialRegistryService,
+    @Optional() private textSpritePool?: TextSpritePoolService,
+    @Optional() private goldPopupService?: GoldPopupService,
     // @Optional() so pre-Conduit test beds don't need to register this.
     // Production wires it via GameBoardComponent.providers.
     @Optional() private towerGraphService?: TowerGraphService,
@@ -147,8 +151,10 @@ export class GameSessionService {
     // Clean up tower placement preview
     this.towerPreviewService.cleanup(scene);
 
-    // Clean up damage popups
+    // Clean up damage + gold popups (sprint 16 — gold popup cleanup was
+    // missing from cleanupScene before; pre-Phase-B leak fixed here).
     this.damagePopupService.cleanup(scene);
+    this.goldPopupService?.cleanup(scene);
 
     // Clean up minimap
     this.minimapService.cleanup();
@@ -213,6 +219,11 @@ export class GameSessionService {
 
     // Dispose all registry-shared geometries in one batch.
     this.geometryRegistry?.dispose();
+
+    // Dispose pooled sprites + their cached textures (sprint 16).
+    // Must run AFTER gold/damage popup cleanup so popups release back into
+    // the pool first, then the pool drains its caches.
+    this.textSpritePool?.dispose();
 
     // Dispose grid lines (Mesh + Line children, both handled by disposeGroup).
     // Grid material is currently per-instance; once Phase B sprint 28 (or
