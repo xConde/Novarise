@@ -2,7 +2,8 @@ export const SCENE_CONFIG = {
   backgroundColor: 0x080810,
   fogColor: 0x080810,
   fogDensity: 0.006,
-  toneMappingExposure: 1.4
+  toneMappingExposure: 1.4,
+  maxPixelRatio: 2
 };
 
 export const POST_PROCESSING_CONFIG = {

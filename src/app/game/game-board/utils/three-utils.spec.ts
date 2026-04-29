@@ -1,5 +1,27 @@
 import * as THREE from 'three';
-import { disposeMaterial, disposeMesh, disposeGroup, getMaterials } from './three-utils';
+import { clampPixelRatio, disposeMaterial, disposeMesh, disposeGroup, getMaterials } from './three-utils';
+
+describe('clampPixelRatio', () => {
+  it('returns the cap when devicePixelRatio exceeds it', () => {
+    expect(clampPixelRatio(3, 2)).toBe(2);
+  });
+
+  it('returns devicePixelRatio when below the cap', () => {
+    expect(clampPixelRatio(1, 2)).toBe(1);
+  });
+
+  it('returns devicePixelRatio when exactly equal to the cap', () => {
+    expect(clampPixelRatio(2, 2)).toBe(2);
+  });
+
+  it('handles fractional ratios above the cap', () => {
+    expect(clampPixelRatio(2.625, 2)).toBe(2);
+  });
+
+  it('handles fractional ratios below the cap', () => {
+    expect(clampPixelRatio(1.5, 2)).toBe(1.5);
+  });
+});
 
 describe('disposeMaterial', () => {
   it('calls dispose on a single Material', () => {

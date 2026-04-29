@@ -34,6 +34,17 @@ export function getMaterials(mesh: THREE.Mesh): THREE.Material[] {
  * Centralises the "traverse + dispose geometry/material" pattern used inline
  * across enemy.service, tower-combat.service, and enemy-health.service.
  */
+/**
+ * Clamp a device pixel ratio to a maximum cap.
+ *
+ * On 3× retina displays an uncapped ratio triples post-processing fill rate
+ * with no perceptible quality gain past 2×. Centralised here so initRenderer
+ * and resize handlers share one source of truth.
+ */
+export function clampPixelRatio(devicePixelRatio: number, max: number): number {
+  return Math.min(devicePixelRatio, max);
+}
+
 export function disposeGroup(group: THREE.Object3D, scene?: THREE.Scene): void {
   if (scene) {
     scene.remove(group);
