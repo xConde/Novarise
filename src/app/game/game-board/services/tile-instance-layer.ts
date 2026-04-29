@@ -57,7 +57,12 @@ export class TileInstanceLayer {
     const count = instances.length;
     this.mesh = new THREE.InstancedMesh(geometry, material, count);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.mesh.castShadow = true;
+    // Phase C sprint 27: tiles are flat ground — they don't meaningfully
+    // self-shadow each other and shadow-casting them roughly halves the
+    // shadow-map draw count on a 14×14+ board. Cliffs (separate per-mesh)
+    // keep castShadow=true; towers and enemies likewise. Tiles only
+    // RECEIVE shadows from those casters.
+    this.mesh.castShadow = false;
     this.mesh.receiveShadow = true;
     this.mesh.userData['blockType'] = blockType;
 

@@ -90,9 +90,11 @@ describe('TileInstanceLayer', () => {
       layer.dispose();
     });
 
-    it('castShadow + receiveShadow default to true', () => {
+    it('castShadow=false + receiveShadow=true (sprint 27 perf optimisation)', () => {
       const layer = new TileInstanceLayer(BlockType.BASE, geometry, material, sampleInstances(1));
-      expect(layer.mesh.castShadow).toBeTrue();
+      // Tiles are flat ground; they don't meaningfully self-shadow.
+      // Cliffs/towers/enemies still cast onto these tiles via receiveShadow.
+      expect(layer.mesh.castShadow).toBeFalse();
       expect(layer.mesh.receiveShadow).toBeTrue();
       layer.dispose();
     });
