@@ -353,28 +353,29 @@ export class PathMutationService {
       this.registry.tileMeshes.delete(key);
     }
 
-    // If the slot was in an instance layer, hide the instance (matrix
-    // moved off-screen) — sprint 24 will refine. For now `hideAt` is
-    // sufficient because raycasting hits the visible bounding sphere of
-    // the InstancedMesh as a whole.
+    // If the slot was in ANY instance layer (sprint 23: BASE/WALL/SPAWNER/EXIT),
+    // hide it. If the new type ALSO has an instance layer and there's no
+    // mutationOp, show the new layer's instance for that coord.
     //
     // Defensive: tileInstanceLayers + rebuildTilePickables are sprint 22
     // additions; some test beds pass spy registries that don't stub them.
-    const baseLayer = this.registry.tileInstanceLayers?.get(BlockType.BASE);
-    if (baseLayer && baseLayer.findIndex(row, col) >= 0) {
-      if (mutationOp !== undefined) {
-        baseLayer.hideAt(row, col);
-      } else if (newType === BlockType.BASE) {
-        baseLayer.showAt(row, col);
+    const layers = this.registry.tileInstanceLayers;
+    if (layers) {
+      // Hide whichever layer currently owns this coord (if any).
+      for (const layer of layers.values()) {
+        if (layer.findIndex(row, col) >= 0) {
+          layer.hideAt(row, col);
+        }
       }
-    }
-
-    // If reverting to BASE, the instance layer already represents the slot
-    // and there is nothing to allocate — only mutationOp swaps need an
-    // individual mesh.
-    if (newType === BlockType.BASE && mutationOp === undefined && baseLayer && baseLayer.findIndex(row, col) >= 0) {
-      this.registry.rebuildTilePickables?.();
-      return;
+      // If no mutationOp, the new type's layer (if present) should show the slot.
+      if (mutationOp === undefined) {
+        const targetLayer = layers.get(newType);
+        if (targetLayer && targetLayer.findIndex(row, col) >= 0) {
+          targetLayer.showAt(row, col);
+          this.registry.rebuildTilePickables?.();
+          return;
+        }
+      }
     }
 
     // Pass the current tile's elevation so a newly-swapped mesh is positioned at

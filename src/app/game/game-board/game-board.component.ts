@@ -1146,19 +1146,27 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const boardTiles = this.gameBoardService.getGameBoard();
     const scene = this.sceneService.getScene();
 
-    // Phase C sprint 22: BASE tiles render via a single InstancedMesh.
-    // Non-BASE tiles still render as individual meshes (sprint 23 widens).
-    // Mutated tiles always render individually via TerraformPool.
-    const baseLayer = this.gameBoardService.buildTileInstanceLayer(BlockType.BASE);
-    if (baseLayer) {
-      this.meshRegistry.tileInstanceLayers.set(BlockType.BASE, baseLayer);
-      scene.add(baseLayer.mesh);
+    // Phase C sprint 23: BASE / WALL / SPAWNER / EXIT tiles all render via
+    // their own InstancedMesh layer. Mutated tiles (any BlockType with an
+    // active mutationOp) still render as individual TerraformPool meshes.
+    // Sprint 24 refines mutation overlay handling.
+    const instancedTypes: ReadonlyArray<BlockType> = [
+      BlockType.BASE, BlockType.WALL, BlockType.SPAWNER, BlockType.EXIT,
+    ];
+    for (const t of instancedTypes) {
+      const layer = this.gameBoardService.buildTileInstanceLayer(t);
+      if (layer) {
+        this.meshRegistry.tileInstanceLayers.set(t, layer);
+        scene.add(layer.mesh);
+      }
     }
 
     boardTiles.forEach((row, rowIndex) => {
       row.forEach((tile, colIndex) => {
-        // Skip BASE tiles without mutation — they're in the instance layer.
-        if (tile.type === BlockType.BASE && tile.mutationOp === undefined) return;
+        // Skip tiles already represented in an instance layer (any non-mutated
+        // BASE/WALL/SPAWNER/EXIT). Mutated tiles or unsupported BlockTypes
+        // fall through to per-mesh rendering.
+        if (tile.mutationOp === undefined && instancedTypes.includes(tile.type)) return;
         const mesh = this.gameBoardService.createTileMesh(rowIndex, colIndex, tile.type);
         mesh.userData = { row: rowIndex, col: colIndex, tile: tile };
         this.meshRegistry.tileMeshes.set(`${rowIndex}-${colIndex}`, mesh);
