@@ -160,14 +160,21 @@ export class GameBoardService {
     if (mutationOp !== undefined && this.terraformPool) {
       // Shared pool material — do NOT dispose this on individual mesh swap.
       material = this.terraformPool.getMaterial(mutationOp);
-    } else if (this.materialRegistry) {
-      // Shared per-BlockType tile material via MaterialRegistry (sprint 14).
-      material = this.materialRegistry.getOrCreate(
-        `tile:${type}`,
-        () => this.makeTileMaterial(type),
-      );
     } else {
-      // Fallback for flat test beds without MaterialRegistry registered.
+      // Per-instance tile material.
+      //
+      // Phase B sprint 14 originally cached this via MaterialRegistry per
+      // BlockType, but TileHighlightService and BoardPointerService both
+      // mutate `mesh.material.emissive` and `emissiveIntensity` directly to
+      // drive hover, selection, valid-placement, and blocked-placement
+      // tints. A shared cached material aliased every BASE tile to the
+      // last writer's color — visible during placement preview. Reverted to
+      // per-instance allocation pre-sprint-21.
+      //
+      // Sprint 21+ migrates BASE tiles to InstancedMesh + per-instance
+      // color via instanceColor attribute, at which point only one shared
+      // base material is needed and per-instance state lives in the
+      // attribute. Until then, per-tile materials are correct.
       material = this.makeTileMaterial(type);
     }
 
