@@ -72,14 +72,47 @@ const SKYBOX_FRAGMENT_SHADER = `
     vec3 darkBlue = vec3(0.014, 0.008, 0.028);
     vec3 color = mix(deepPurple, darkBlue, vUv.y * 0.5);
 
-    // Stars: rarer (threshold 0.995, was 0.992) AND dimmer per-channel.
-    vec2 starPos = vUv * 150.0;
-    float star = random(floor(starPos));
-    if (star > 0.995) {
-      float baseBright = random(floor(starPos) + 1.0) * 0.5;
-      float twinkle = 0.6 + 0.4 * sin(time * (1.0 + random(floor(starPos) + 2.0) * 3.0));
-      float brightness = baseBright * twinkle;
-      color += vec3(brightness * 0.18, brightness * 0.13, brightness * 0.23);
+    // Stars — organic point sources (soft circular falloff, not pixel squares),
+    // power-law brightness so most read dim with rare brighter pops, and
+    // per-star twinkle parameters (amplitude / phase / speed) so the field
+    // doesn't pulse in unison.
+    vec2 starGrid = vUv * 150.0;
+    vec2 cell = floor(starGrid);
+    vec2 cellPos = fract(starGrid);
+    float starSeed = random(cell);
+    if (starSeed > 0.992) {
+      // Place star inside cell with random offset — breaks the grid pattern
+      // visually so the field reads as natural distribution.
+      vec2 starCenter = vec2(
+        0.3 + 0.4 * random(cell + vec2(7.0, 1.0)),
+        0.3 + 0.4 * random(cell + vec2(2.0, 13.0))
+      );
+      float dist = length(cellPos - starCenter);
+      // Soft circular point — fades smoothly to 0 outside ~0.16 cell-units.
+      float falloff = smoothstep(0.16, 0.0, dist);
+
+      // Power-law brightness: pow(x, 3) skews heavily toward dim values so
+      // the eye perceives "many faint dots, occasional bright stand-out."
+      float rawBright = random(cell + vec2(1.0, 0.0));
+      float brightness = pow(rawBright, 3.0);
+
+      // Per-star twinkle — randomised amp/phase/speed prevents synchronous pulse.
+      float twinkleAmp = 0.2 + 0.5 * random(cell + vec2(3.0, 0.0));
+      float twinklePhase = random(cell + vec2(5.0, 0.0)) * 6.2831853;
+      float twinkleSpeed = 0.5 + 1.5 * random(cell + vec2(2.0, 0.0));
+      float twinkleNorm = 0.5 + 0.5 * sin(time * twinkleSpeed + twinklePhase);
+      float twinkle = (1.0 - twinkleAmp) + twinkleAmp * twinkleNorm;
+
+      // Subtle hue variation — mostly cool white, occasional warm tint
+      // (mimics the spectral variety of real stars without being garish).
+      float colorRoll = random(cell + vec2(9.0, 0.0));
+      vec3 starColor = mix(
+        vec3(0.85, 0.85, 1.0),
+        vec3(1.0, 0.92, 0.78),
+        smoothstep(0.85, 0.97, colorRoll)
+      );
+
+      color += starColor * brightness * twinkle * falloff * 0.4;
     }
 
     // Drifting nebula veins — threshold raised to 0.985 (was 0.97/0.975)
