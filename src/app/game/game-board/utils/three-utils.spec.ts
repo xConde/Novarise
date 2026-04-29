@@ -298,6 +298,57 @@ describe('disposeGroup', () => {
     try { lineMat.dispose(); } catch { /* already disposed */ }
   });
 
+  it('disposes a shared LineBasicMaterial exactly once across N Line children (grid pattern)', () => {
+    const sharedMat = new THREE.LineBasicMaterial();
+    const lineGroup = new THREE.Group();
+    const geoms: THREE.BufferGeometry[] = [];
+    for (let i = 0; i < 5; i++) {
+      const g = new THREE.BufferGeometry();
+      geoms.push(g);
+      lineGroup.add(new THREE.Line(g, sharedMat));
+    }
+
+    spyOn(sharedMat, 'dispose');
+    disposeGroup(lineGroup);
+    expect(sharedMat.dispose).toHaveBeenCalledTimes(1);
+    sharedMat.dispose();
+    geoms.forEach(g => { try { g.dispose(); } catch { /* already */ } });
+  });
+
+  it('disposes a shared MeshStandardMaterial exactly once across N child Meshes (tower pattern)', () => {
+    const sharedMat = new THREE.MeshStandardMaterial();
+    const towerGroup = new THREE.Group();
+    const geoms: THREE.BufferGeometry[] = [];
+    for (let i = 0; i < 7; i++) {
+      const g = new THREE.BoxGeometry(1, 1, 1);
+      geoms.push(g);
+      towerGroup.add(new THREE.Mesh(g, sharedMat));
+    }
+
+    spyOn(sharedMat, 'dispose');
+    disposeGroup(towerGroup);
+    expect(sharedMat.dispose).toHaveBeenCalledTimes(1);
+    sharedMat.dispose();
+    geoms.forEach(g => { try { g.dispose(); } catch { /* already */ } });
+  });
+
+  it('disposes a shared geometry exactly once across N child Meshes', () => {
+    const sharedGeo = new THREE.BoxGeometry(1, 1, 1);
+    const towerGroup = new THREE.Group();
+    const mats: THREE.Material[] = [];
+    for (let i = 0; i < 4; i++) {
+      const m = new THREE.MeshBasicMaterial();
+      mats.push(m);
+      towerGroup.add(new THREE.Mesh(sharedGeo, m));
+    }
+
+    spyOn(sharedGeo, 'dispose');
+    disposeGroup(towerGroup);
+    expect(sharedGeo.dispose).toHaveBeenCalledTimes(1);
+    sharedGeo.dispose();
+    mats.forEach(m => m.dispose());
+  });
+
   it('disposes mixed Mesh and Line descendants in a single traversal', () => {
     const lineGeo = new THREE.BufferGeometry();
     const lineMat = new THREE.LineBasicMaterial();
