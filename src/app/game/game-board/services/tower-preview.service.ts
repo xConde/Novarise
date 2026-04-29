@@ -1,43 +1,46 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
 import { PREVIEW_CONFIG } from '../constants/preview.constants';
-import { PREVIEW_GHOST_CONFIG, PREVIEW_GHOST_DEFAULT } from '../constants/ui.constants';
 import { BOARD_CONFIG } from '../constants/board.constants';
 import { gridToWorld } from '../utils/coordinate-utils';
+import { TowerMeshFactoryService } from './tower-mesh-factory.service';
+import { ElevationService } from './elevation.service';
 
 /**
- * Tracks which tower type the current preview ghost was built for.
+ * UX-3 + UX-4: ghost mesh now uses the REAL tower mesh (via
+ * TowerMeshFactoryService) with each child material swapped for a
+ * translucent BasicMaterial. Players see exactly what they'll get on
+ * placement — no cone/box stand-in.
  *
- * UX-1 (sprint 32): the inline range ring this service used to create has
- * been removed — RangeVisualizationService.showForPosition is now the
- * sole owner of placement-preview range visualisation. This service owns
- * only the ghost-tower mesh.
+ * UX-4 alignment: ghost position now respects tile elevation via
+ * ElevationService, mirroring the actual tower placement logic in
+ * TowerMeshLifecycleService.placeMesh.
  */
 type PreviewState = {
   towerType: TowerType;
-  ghostMesh: THREE.Mesh;
-  yCenter: number;
+  /** The real tower group from TowerMeshFactoryService. */
+  ghostGroup: THREE.Group;
+  /** Translucent materials owned by THIS service (per-ghost). Disposed on cleanup. */
+  ghostMaterials: THREE.MeshBasicMaterial[];
 } | null;
 
 @Injectable()
 export class TowerPreviewService {
   private previewState: PreviewState = null;
+  private boardWidth = 10;
+  private boardHeight = 10;
 
-  /** Set board dimensions — used by gridToWorld() to centre the ghost. */
+  constructor(
+    @Optional() private readonly towerFactory?: TowerMeshFactoryService,
+    @Optional() private readonly elevationService?: ElevationService,
+  ) {}
+
   setBoardSize(width: number, height: number): void {
     this.boardWidth = width;
     this.boardHeight = height;
   }
 
-  private boardWidth = 10;
-  private boardHeight = 10;
-
-  /**
-   * Shows a ghost tower at (row, col).
-   * Reuses the existing mesh when only position/validity changes;
-   * recreates it when the tower type changes.
-   */
   showPreview(
     towerType: TowerType,
     row: number,
@@ -46,24 +49,28 @@ export class TowerPreviewService {
     scene: THREE.Scene
   ): void {
     const { x: worldX, z: worldZ } = gridToWorld(row, col, this.boardWidth, this.boardHeight, BOARD_CONFIG.tileSize);
+    const elevation = this.elevationService?.getElevation(row, col) ?? 0;
+    // Match the real placement Y in TowerMeshLifecycleService.placeMesh:
+    // tower group sits at `elevation + tileHeight` (UX-4 alignment fix).
+    const placementY = elevation + BOARD_CONFIG.tileHeight;
 
     if (this.previewState?.towerType !== towerType) {
       this.removeMeshesFromScene(scene);
       this.disposeMeshes();
       this.previewState = this.createPreviewMeshes(towerType, scene);
-    } else if (this.previewState && !this.previewState.ghostMesh.parent) {
-      // Same tower type but mesh was removed by hidePreview — re-add.
-      scene.add(this.previewState.ghostMesh);
+    } else if (this.previewState && !this.previewState.ghostGroup.parent) {
+      // Same type but mesh was removed by hidePreview — re-add.
+      scene.add(this.previewState.ghostGroup);
     }
 
-    const { ghostMesh } = this.previewState!;
-
+    const { ghostGroup, ghostMaterials } = this.previewState!;
     const ghostColor = isValid
       ? TOWER_CONFIGS[towerType].color
       : PREVIEW_CONFIG.invalidColor;
-    (ghostMesh.material as THREE.MeshBasicMaterial).color.setHex(ghostColor);
-
-    ghostMesh.position.set(worldX, this.previewState!.yCenter, worldZ);
+    for (const mat of ghostMaterials) {
+      mat.color.setHex(ghostColor);
+    }
+    ghostGroup.position.set(worldX, placementY, worldZ);
   }
 
   hidePreview(scene: THREE.Scene): void {
@@ -71,9 +78,7 @@ export class TowerPreviewService {
   }
 
   cleanup(scene?: THREE.Scene): void {
-    if (scene) {
-      this.removeMeshesFromScene(scene);
-    }
+    if (scene) this.removeMeshesFromScene(scene);
     this.disposeMeshes();
   }
 
@@ -82,45 +87,70 @@ export class TowerPreviewService {
   // ---------------------------------------------------------------------------
 
   private createPreviewMeshes(towerType: TowerType, scene: THREE.Scene): NonNullable<PreviewState> {
-    const color = TOWER_CONFIGS[towerType].color;
+    const ghostGroup = this.towerFactory
+      ? this.towerFactory.createTowerMesh(0, 0, towerType, this.boardWidth, this.boardHeight)
+      : this.fallbackGhostGroup(towerType);
 
-    const { geometry, yCenter } = this.createGhostGeometry(towerType);
-    const material = new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: PREVIEW_CONFIG.ghostOpacity,
+    // Replace each child mesh's material with a translucent ghost material.
+    // Geometries stay registry-owned (sprint 12) — we don't touch them.
+    // Materials we install here are per-ghost; disposed on cleanup.
+    const ghostMaterials: THREE.MeshBasicMaterial[] = [];
+    const baseColor = TOWER_CONFIGS[towerType].color;
+    ghostGroup.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        const mat = new THREE.MeshBasicMaterial({
+          color: baseColor,
+          transparent: true,
+          opacity: PREVIEW_CONFIG.ghostOpacity,
+          depthWrite: false,
+        });
+        child.material = mat;
+        // Ghost is translucent — don't cast shadows.
+        child.castShadow = false;
+        child.receiveShadow = false;
+        ghostMaterials.push(mat);
+      }
     });
-    const ghostMesh = new THREE.Mesh(geometry, material);
-    scene.add(ghostMesh);
 
-    return { towerType, ghostMesh, yCenter };
+    scene.add(ghostGroup);
+    return { towerType, ghostGroup, ghostMaterials };
   }
 
-  private createGhostGeometry(towerType: TowerType): { geometry: THREE.BufferGeometry; yCenter: number } {
-    const config = PREVIEW_GHOST_CONFIG[towerType] ?? PREVIEW_GHOST_DEFAULT;
-    const geometry = this.buildGeometry(config.type, config.args);
-    return { geometry, yCenter: config.yCenter };
-  }
-
-  private buildGeometry(type: string, args: readonly number[]): THREE.BufferGeometry {
-    switch (type) {
-      case 'cone':     return new THREE.ConeGeometry(...(args as [number, number, number]));
-      case 'sphere':   return new THREE.SphereGeometry(...(args as [number, number, number, number, number, number, number]));
-      case 'cylinder': return new THREE.CylinderGeometry(...(args as [number, number, number, number]));
-      case 'box':      return new THREE.BoxGeometry(...(args as [number, number, number]));
-      default:         return new THREE.BoxGeometry(...(PREVIEW_GHOST_DEFAULT.args as [number, number, number]));
-    }
+  /**
+   * Fallback when TowerMeshFactoryService isn't injected (flat test beds).
+   * Returns a minimal Group with a single placeholder cylinder so existing
+   * specs that don't wire the factory still produce a renderable preview.
+   */
+  private fallbackGhostGroup(_towerType: TowerType): THREE.Group {
+    const group = new THREE.Group();
+    const geo = new THREE.CylinderGeometry(0.3, 0.3, 1, 8);
+    const mat = new THREE.MeshBasicMaterial();
+    const mesh = new THREE.Mesh(geo, mat);
+    group.add(mesh);
+    return group;
   }
 
   private removeMeshesFromScene(scene: THREE.Scene): void {
     if (!this.previewState) return;
-    scene.remove(this.previewState.ghostMesh);
+    scene.remove(this.previewState.ghostGroup);
   }
 
   private disposeMeshes(): void {
     if (!this.previewState) return;
-    this.previewState.ghostMesh.geometry.dispose();
-    (this.previewState.ghostMesh.material as THREE.MeshBasicMaterial).dispose();
+    // Dispose only the per-ghost materials we created. Geometries are
+    // registry-owned (when factory is present) or single-use fallback.
+    for (const mat of this.previewState.ghostMaterials) {
+      mat.dispose();
+    }
+    // For the fallback path (no factory), the geometry is a one-off — dispose it.
+    // For the factory path, geometries are registry-owned and must NOT be disposed.
+    if (!this.towerFactory) {
+      this.previewState.ghostGroup.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+        }
+      });
+    }
     this.previewState = null;
   }
 }

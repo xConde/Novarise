@@ -46,22 +46,34 @@ describe('TowerPreviewService', () => {
 
     it('uses tower color when placement is valid', () => {
       service.showPreview(TowerType.BASIC, 5, 5, true, scene);
-      const ghost = scene.children[0] as THREE.Mesh;
-      const material = ghost.material as THREE.MeshBasicMaterial;
+      const ghost = scene.children[0] as THREE.Group;
+      // UX-3: ghost is now a Group from TowerMeshFactoryService (or fallback).
+      // Find the first Mesh child to read its material.
+      let firstMesh: THREE.Mesh | null = null;
+      ghost.traverse(c => { if (!firstMesh && c instanceof THREE.Mesh) firstMesh = c; });
+      const material = firstMesh!.material as THREE.MeshBasicMaterial;
       expect(material.color.getHex()).toBe(TOWER_CONFIGS[TowerType.BASIC].color);
     });
 
     it('uses red color when placement is invalid', () => {
       service.showPreview(TowerType.BASIC, 5, 5, false, scene);
-      const ghost = scene.children[0] as THREE.Mesh;
-      const material = ghost.material as THREE.MeshBasicMaterial;
+      const ghost = scene.children[0] as THREE.Group;
+      // UX-3: ghost is now a Group from TowerMeshFactoryService (or fallback).
+      // Find the first Mesh child to read its material.
+      let firstMesh: THREE.Mesh | null = null;
+      ghost.traverse(c => { if (!firstMesh && c instanceof THREE.Mesh) firstMesh = c; });
+      const material = firstMesh!.material as THREE.MeshBasicMaterial;
       expect(material.color.getHex()).toBe(PREVIEW_CONFIG.invalidColor);
     });
 
     it('ghost material is transparent with correct opacity', () => {
       service.showPreview(TowerType.BASIC, 5, 5, true, scene);
-      const ghost = scene.children[0] as THREE.Mesh;
-      const material = ghost.material as THREE.MeshBasicMaterial;
+      const ghost = scene.children[0] as THREE.Group;
+      // UX-3: ghost is now a Group from TowerMeshFactoryService (or fallback).
+      // Find the first Mesh child to read its material.
+      let firstMesh: THREE.Mesh | null = null;
+      ghost.traverse(c => { if (!firstMesh && c instanceof THREE.Mesh) firstMesh = c; });
+      const material = firstMesh!.material as THREE.MeshBasicMaterial;
       expect(material.transparent).toBeTrue();
       expect(material.opacity).toBeCloseTo(PREVIEW_CONFIG.ghostOpacity);
     });
@@ -88,8 +100,12 @@ describe('TowerPreviewService', () => {
     it('validity color updates on subsequent call without tower type change', () => {
       service.showPreview(TowerType.BASIC, 5, 5, true, scene);
       service.showPreview(TowerType.BASIC, 5, 5, false, scene);
-      const ghost = scene.children[0] as THREE.Mesh;
-      const material = ghost.material as THREE.MeshBasicMaterial;
+      const ghost = scene.children[0] as THREE.Group;
+      // UX-3: ghost is now a Group from TowerMeshFactoryService (or fallback).
+      // Find the first Mesh child to read its material.
+      let firstMesh: THREE.Mesh | null = null;
+      ghost.traverse(c => { if (!firstMesh && c instanceof THREE.Mesh) firstMesh = c; });
+      const material = firstMesh!.material as THREE.MeshBasicMaterial;
       expect(material.color.getHex()).toBe(PREVIEW_CONFIG.invalidColor);
     });
   });
@@ -104,8 +120,12 @@ describe('TowerPreviewService', () => {
     it('new ghost uses new tower color', () => {
       service.showPreview(TowerType.BASIC, 5, 5, true, scene);
       service.showPreview(TowerType.SNIPER, 5, 5, true, scene);
-      const ghost = scene.children[0] as THREE.Mesh;
-      const material = ghost.material as THREE.MeshBasicMaterial;
+      const ghost = scene.children[0] as THREE.Group;
+      // UX-3: ghost is now a Group from TowerMeshFactoryService (or fallback).
+      // Find the first Mesh child to read its material.
+      let firstMesh: THREE.Mesh | null = null;
+      ghost.traverse(c => { if (!firstMesh && c instanceof THREE.Mesh) firstMesh = c; });
+      const material = firstMesh!.material as THREE.MeshBasicMaterial;
       expect(material.color.getHex()).toBe(TOWER_CONFIGS[TowerType.SNIPER].color);
     });
   });
