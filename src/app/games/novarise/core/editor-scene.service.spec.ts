@@ -123,24 +123,49 @@ describe('EditorSceneService', () => {
     });
   });
 
-  describe('shadow map disposal', () => {
+  describe('light disposal (Phase A regression)', () => {
     it('dispose() clears shadow light after initLights()', () => {
       service.initScene();
       service.initLights();
-      // Shadow light should exist after init
       const scene = service.getScene();
-      const lightsBeforeDispose = scene.children.filter(
+      const shadowLightsBefore = scene.children.filter(
         (c: THREE.Object3D) => c instanceof THREE.DirectionalLight && (c as THREE.DirectionalLight).castShadow
       );
-      expect(lightsBeforeDispose.length).toBe(1);
+      expect(shadowLightsBefore.length).toBe(1);
 
       service.dispose();
 
-      // Shadow light should be removed from scene
-      const lightsAfterDispose = scene.children.filter(
+      const shadowLightsAfter = scene.children.filter(
         (c: THREE.Object3D) => c instanceof THREE.DirectionalLight && (c as THREE.DirectionalLight).castShadow
       );
-      expect(lightsAfterDispose.length).toBe(0);
+      expect(shadowLightsAfter.length).toBe(0);
+    });
+
+    it('dispose() removes ALL lights from the scene, not just the shadow light', () => {
+      service.initScene();
+      service.initLights();
+      const scene = service.getScene();
+      const lightsBefore = scene.children.filter((c: THREE.Object3D) => c instanceof THREE.Light);
+      // The editor light rig: 1 ambient + 4 directional + 1 bottom directional + 1 hemi + N point.
+      // Whatever the exact count, it should be > 1 (i.e. more than just the shadow light).
+      expect(lightsBefore.length).toBeGreaterThan(1);
+
+      service.dispose();
+
+      const lightsAfter = scene.children.filter((c: THREE.Object3D) => c instanceof THREE.Light);
+      expect(lightsAfter.length).toBe(0);
+    });
+
+    it('disposeLights() is callable directly and is idempotent', () => {
+      service.initScene();
+      service.initLights();
+      expect(() => {
+        service.disposeLights();
+        service.disposeLights();
+      }).not.toThrow();
+      const scene = service.getScene();
+      const lights = scene.children.filter((c: THREE.Object3D) => c instanceof THREE.Light);
+      expect(lights.length).toBe(0);
     });
   });
 });

@@ -105,6 +105,7 @@ export class EditorSceneService {
 
   /** Shadow-casting light — tracked for shadow map disposal. */
   private shadowLight?: THREE.DirectionalLight;
+  private lights: THREE.Light[] = [];
 
   // Context loss handlers — stored for removal on dispose
   private contextLostHandler: ((event: Event) => void) | null = null;
@@ -231,7 +232,7 @@ export class EditorSceneService {
       EDITOR_LIGHTS.ambient.color,
       EDITOR_LIGHTS.ambient.intensity
     );
-    this.scene.add(ambientLight);
+    this.addLight(ambientLight);
 
     const [dl1Cfg, dl2Cfg, dl3Cfg, dl4Cfg] = EDITOR_LIGHTS.directional;
 
@@ -244,38 +245,61 @@ export class EditorSceneService {
     this.shadowLight.shadow.camera.bottom = -dl1Cfg.shadowCameraExtent!;
     this.shadowLight.shadow.mapSize.width = dl1Cfg.shadowMapSize!;
     this.shadowLight.shadow.mapSize.height = dl1Cfg.shadowMapSize!;
-    this.scene.add(this.shadowLight);
+    this.addLight(this.shadowLight);
 
     const directionalLight2 = new THREE.DirectionalLight(dl2Cfg.color, dl2Cfg.intensity);
     directionalLight2.position.set(...dl2Cfg.position);
-    this.scene.add(directionalLight2);
+    this.addLight(directionalLight2);
 
     const directionalLight3 = new THREE.DirectionalLight(dl3Cfg.color, dl3Cfg.intensity);
     directionalLight3.position.set(...dl3Cfg.position);
-    this.scene.add(directionalLight3);
+    this.addLight(directionalLight3);
 
     const directionalLight4 = new THREE.DirectionalLight(dl4Cfg.color, dl4Cfg.intensity);
     directionalLight4.position.set(...dl4Cfg.position);
-    this.scene.add(directionalLight4);
+    this.addLight(directionalLight4);
 
     const blCfg = EDITOR_LIGHTS.bottomLight;
     const bottomLight = new THREE.DirectionalLight(blCfg.color, blCfg.intensity);
     bottomLight.position.set(...blCfg.position);
     bottomLight.lookAt(0, 0, 0);
-    this.scene.add(bottomLight);
+    this.addLight(bottomLight);
 
     const hemiLight = new THREE.HemisphereLight(
       EDITOR_LIGHTS.hemisphere.skyColor,
       EDITOR_LIGHTS.hemisphere.groundColor,
       EDITOR_LIGHTS.hemisphere.intensity
     );
-    this.scene.add(hemiLight);
+    this.addLight(hemiLight);
 
     for (const cfg of EDITOR_LIGHTS.point) {
       const pl = new THREE.PointLight(cfg.color, cfg.intensity, cfg.distance);
       pl.position.set(...cfg.position);
-      this.scene.add(pl);
+      this.addLight(pl);
     }
+  }
+
+  private addLight(light: THREE.Light): void {
+    this.scene.add(light);
+    this.lights.push(light);
+  }
+
+  /**
+   * Remove every tracked light from the scene and dispose any shadow maps.
+   * Lights themselves have no .dispose() — but their shadow.map render
+   * target does, and unrooting them from the scene graph breaks the
+   * scene → light → parent cycle for early GC.
+   */
+  disposeLights(): void {
+    for (const light of this.lights) {
+      const dirLight = light as THREE.DirectionalLight;
+      if (dirLight.shadow?.map) {
+        dirLight.shadow.map.dispose();
+      }
+      this.scene.remove(light);
+    }
+    this.lights = [];
+    this.shadowLight = undefined;
   }
 
   initSkybox(): void {
@@ -443,12 +467,8 @@ export class EditorSceneService {
       this.resizeHandler = null;
     }
 
-    // Shadow map render target
-    if (this.shadowLight) {
-      this.shadowLight.shadow.map?.dispose();
-      this.scene.remove(this.shadowLight);
-      this.shadowLight = undefined;
-    }
+    // Lights (shadow maps + scene unroot)
+    this.disposeLights();
 
     // Controls
     if (this.controls) {
