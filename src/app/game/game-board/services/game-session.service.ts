@@ -34,6 +34,7 @@ import { GeometryRegistryService } from './geometry-registry.service';
 import { MaterialRegistryService } from './material-registry.service';
 import { TextSpritePoolService } from './text-sprite-pool.service';
 import { GoldPopupService } from './gold-popup.service';
+import { VfxPoolService } from './vfx-pool.service';
 import { buildDisposeProtect, disposeGroup, DisposeProtect } from '../utils/three-utils';
 
 /**
@@ -76,6 +77,7 @@ export class GameSessionService {
     @Optional() private materialRegistry?: MaterialRegistryService,
     @Optional() private textSpritePool?: TextSpritePoolService,
     @Optional() private goldPopupService?: GoldPopupService,
+    @Optional() private vfxPool?: VfxPoolService,
     // @Optional() so pre-Conduit test beds don't need to register this.
     // Production wires it via GameBoardComponent.providers.
     @Optional() private towerGraphService?: TowerGraphService,
@@ -224,6 +226,11 @@ export class GameSessionService {
     // Must run AFTER gold/damage popup cleanup so popups release back into
     // the pool first, then the pool drains its caches.
     this.textSpritePool?.dispose();
+
+    // Dispose pooled VFX visuals (chain arcs, mortar zones — sprint 18).
+    // CombatVFXService.cleanup() (called via towerCombatService.cleanup())
+    // already released the active visuals back into the pool above.
+    this.vfxPool?.dispose();
 
     // Dispose grid lines (Mesh + Line children, both handled by disposeGroup).
     // Grid material is currently per-instance; once Phase B sprint 28 (or
