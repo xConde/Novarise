@@ -27,9 +27,7 @@ export const TILE_VISUAL_CONFIG = {
     roughness: 0.7,
   },
   wall: {
-    // Bumped from 0x0a0810 to match Phase-A sRGB-correct pipeline (see
-    // comment in game-board.service.ts colorBase/colorWall — same rationale).
-    emissive: 0x14101e,
+    emissive: 0x0a0810,
     emissiveIntensity: 0.05,
     metalness: 0.5,
     roughness: 0.95,
@@ -41,7 +39,7 @@ export const TILE_VISUAL_CONFIG = {
     roughness: 0.7,
   },
   /** Emissive color for buildable BASE tiles (dim hint they accept towers). */
-  // Bumped from 0x303848 — same Phase-A sRGB-correction rationale.
-  baseEmissive: 0x4a5670,
+  // Small bump from 0x303848 to compensate for Phase A sRGB pipeline change.
+  baseEmissive: 0x363f53,
   envMapIntensity: 0.3,
 } as const;

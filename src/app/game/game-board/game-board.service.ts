@@ -36,16 +36,18 @@ export class GameBoardService {
 
   // Colors for different tile types — base must be visually distinct from wall.
   //
-  // Phase A sprint 2/3 fixed the color pipeline (outputColorSpace = SRGB +
-  // OutputPass at end of composer). Pre-fix, the pipeline rendered linear
-  // values directly without gamma encoding — colors looked ~1.5–2× brighter
-  // than their hex values. These constants were tuned for that broken
-  // pipeline. Post-fix, we bump them so the perceived brightness on a
-  // correctly-encoded sRGB display matches what artists originally intended.
-  private readonly colorBase = 0x6a7488;    // bumped from 0x404858 (sRGB-correct buildable blue-grey)
+  // Iteration history:
+  //  - Pre-branch (main, broken pipeline):     base=0x404858, wall=0x1a1520
+  //  - First fix attempt (+50% bump, Phase A): base=0x6a7488, wall=0x2c2434  ← too bright
+  //  - This iteration (~15% bump):             base=0x4a5366, wall=0x231c2c
+  //
+  // Phase A sprint 2/3 added outputColorSpace + OutputPass to the composer
+  // chain. Tiny perceptual shift; not enough to need the +50% bump that
+  // overshot the dark moody look.
+  private readonly colorBase = 0x4a5366;    // small bump from 0x404858
   private readonly colorSpawner = 0x00ffff;
   private readonly colorExit = 0xff00ff;
-  private readonly colorWall = 0x2c2434;    // bumped from 0x1a1520 (visibly dark, not black)
+  private readonly colorWall = 0x231c2c;    // small bump from 0x1a1520
   private readonly colorGrid = 0x444444;
 
   // State

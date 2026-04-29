@@ -63,12 +63,8 @@ const SKYBOX_FRAGMENT_SHADER = `
   }
 
   void main() {
-    // Phase A sprint 2/3 fixed the color pipeline (outputColorSpace = SRGB +
-    // OutputPass). Linear values now correctly encode to sRGB on output —
-    // dim values come out brighter than they used to under the broken
-    // pipeline. Skybox base + nebula values reduced ~25% to compensate.
-    vec3 deepPurple = vec3(0.03, 0.015, 0.06);
-    vec3 darkBlue = vec3(0.045, 0.03, 0.09);
+    vec3 deepPurple = vec3(0.04, 0.02, 0.08);
+    vec3 darkBlue = vec3(0.06, 0.04, 0.12);
     vec3 color = mix(deepPurple, darkBlue, vUv.y * 0.5);
 
     // Stars with twinkle
@@ -81,15 +77,15 @@ const SKYBOX_FRAGMENT_SHADER = `
       color += vec3(brightness * 0.4, brightness * 0.3, brightness * 0.5);
     }
 
-    // Drifting nebula veins (also reduced ~25% for sRGB-correct pipeline)
+    // Drifting nebula veins
     float drift = time * 0.02;
     float vein1 = random(floor(vUv * 40.0 + vec2(drift, vUv.x * 10.0 + drift * 0.5)));
     if (vein1 > 0.97) {
-      color += vec3(0.18, 0.10, 0.22) * vein1;
+      color += vec3(0.25, 0.15, 0.3) * vein1;
     }
 
     // Slow-shifting bioluminescence
-    float bio = random(floor(vUv * 25.0 + vec2(drift * 0.3))) * 0.09;
+    float bio = random(floor(vUv * 25.0 + vec2(drift * 0.3))) * 0.12;
     color += vec3(bio * 0.3, bio * 0.5, bio * 0.7);
 
     gl_FragColor = vec4(color, 1.0);
