@@ -1,5 +1,80 @@
 import * as THREE from 'three';
-import { clampPixelRatio, disposeMaterial, disposeMesh, disposeGroup, getMaterials } from './three-utils';
+import {
+  applyRendererPolicy,
+  clampPixelRatio,
+  disposeMaterial,
+  disposeMesh,
+  disposeGroup,
+  getMaterials,
+  RendererPolicy
+} from './three-utils';
+
+describe('applyRendererPolicy', () => {
+  let renderer: jasmine.SpyObj<THREE.WebGLRenderer> & {
+    shadowMap: { enabled: boolean; type: THREE.ShadowMapType };
+    localClippingEnabled: boolean;
+    toneMapping: THREE.ToneMapping;
+    toneMappingExposure: number;
+    outputColorSpace: THREE.ColorSpace;
+  };
+  const policy: RendererPolicy = {
+    maxPixelRatio: 2,
+    toneMappingExposure: 1.4,
+    shadowMapType: THREE.PCFSoftShadowMap,
+    toneMapping: THREE.ACESFilmicToneMapping,
+    outputColorSpace: THREE.SRGBColorSpace,
+    localClippingEnabled: true
+  };
+
+  beforeEach(() => {
+    renderer = {
+      setPixelRatio: jasmine.createSpy('setPixelRatio'),
+      setSize: jasmine.createSpy('setSize'),
+      shadowMap: { enabled: false, type: THREE.BasicShadowMap },
+      localClippingEnabled: false,
+      toneMapping: THREE.NoToneMapping,
+      toneMappingExposure: 1,
+      outputColorSpace: THREE.LinearSRGBColorSpace
+    } as unknown as typeof renderer;
+  });
+
+  it('caps pixel ratio at policy.maxPixelRatio when devicePixelRatio exceeds it', () => {
+    applyRendererPolicy(renderer, 800, 600, 3, policy);
+    expect(renderer.setPixelRatio).toHaveBeenCalledWith(2);
+  });
+
+  it('passes devicePixelRatio when below the cap', () => {
+    applyRendererPolicy(renderer, 800, 600, 1, policy);
+    expect(renderer.setPixelRatio).toHaveBeenCalledWith(1);
+  });
+
+  it('sets renderer size to width/height', () => {
+    applyRendererPolicy(renderer, 1920, 1080, 1, policy);
+    expect(renderer.setSize).toHaveBeenCalledWith(1920, 1080);
+  });
+
+  it('enables shadow map and applies policy.shadowMapType', () => {
+    applyRendererPolicy(renderer, 800, 600, 1, policy);
+    expect(renderer.shadowMap.enabled).toBeTrue();
+    expect(renderer.shadowMap.type).toBe(THREE.PCFSoftShadowMap);
+  });
+
+  it('applies tone mapping + exposure', () => {
+    applyRendererPolicy(renderer, 800, 600, 1, policy);
+    expect(renderer.toneMapping).toBe(THREE.ACESFilmicToneMapping);
+    expect(renderer.toneMappingExposure).toBe(1.4);
+  });
+
+  it('sets outputColorSpace to SRGBColorSpace (was unset on game renderer pre-Phase-A)', () => {
+    applyRendererPolicy(renderer, 800, 600, 1, policy);
+    expect(renderer.outputColorSpace).toBe(THREE.SRGBColorSpace);
+  });
+
+  it('enables localClippingEnabled when policy requests it', () => {
+    applyRendererPolicy(renderer, 800, 600, 1, policy);
+    expect(renderer.localClippingEnabled).toBeTrue();
+  });
+});
 
 describe('clampPixelRatio', () => {
   it('returns the cap when devicePixelRatio exceeds it', () => {

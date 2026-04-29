@@ -5,8 +5,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
-import { clampPixelRatio, disposeMaterial, disposeMesh } from '../utils/three-utils';
-import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG, ANIMATION_CONFIG } from '../constants/rendering.constants';
+import { applyRendererPolicy, disposeMaterial, disposeMesh } from '../utils/three-utils';
+import { GAME_RENDERER_POLICY, POST_PROCESSING_CONFIG, SCENE_CONFIG, SKYBOX_CONFIG, ANIMATION_CONFIG } from '../constants/rendering.constants';
 import { KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from '../constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from '../constants/camera.constants';
 import { BOARD_CONFIG } from '../constants/board.constants';
@@ -177,13 +177,13 @@ export class SceneService {
     this.onContextRestored = onContextRestored;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    this.renderer.setPixelRatio(clampPixelRatio(window.devicePixelRatio, SCENE_CONFIG.maxPixelRatio));
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.localClippingEnabled = true;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = SCENE_CONFIG.toneMappingExposure;
+    applyRendererPolicy(
+      this.renderer,
+      window.innerWidth,
+      window.innerHeight,
+      window.devicePixelRatio,
+      GAME_RENDERER_POLICY
+    );
 
     const rendererCanvas = this.renderer.domElement;
 

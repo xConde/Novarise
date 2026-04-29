@@ -1,9 +1,21 @@
+import * as THREE from 'three';
+import type { RendererPolicy } from '../utils/three-utils';
+
 export const SCENE_CONFIG = {
   backgroundColor: 0x080810,
   fogColor: 0x080810,
   fogDensity: 0.006,
   toneMappingExposure: 1.4,
   maxPixelRatio: 2
+};
+
+export const GAME_RENDERER_POLICY: RendererPolicy = {
+  maxPixelRatio: SCENE_CONFIG.maxPixelRatio,
+  toneMappingExposure: SCENE_CONFIG.toneMappingExposure,
+  shadowMapType: THREE.PCFSoftShadowMap,
+  toneMapping: THREE.ACESFilmicToneMapping,
+  outputColorSpace: THREE.SRGBColorSpace,
+  localClippingEnabled: true
 };
 
 export const POST_PROCESSING_CONFIG = {

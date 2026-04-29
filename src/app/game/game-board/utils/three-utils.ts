@@ -45,6 +45,38 @@ export function clampPixelRatio(devicePixelRatio: number, max: number): number {
   return Math.min(devicePixelRatio, max);
 }
 
+export interface RendererPolicy {
+  maxPixelRatio: number;
+  toneMappingExposure: number;
+  shadowMapType: THREE.ShadowMapType;
+  toneMapping: THREE.ToneMapping;
+  outputColorSpace: THREE.ColorSpace;
+  localClippingEnabled: boolean;
+}
+
+/**
+ * Apply the standard Novarise renderer policy to a WebGLRenderer.
+ *
+ * Extracted from initRenderer so the policy is verifiable without
+ * instantiating a real WebGL context (headless Chrome has no WebGL).
+ */
+export function applyRendererPolicy(
+  renderer: THREE.WebGLRenderer,
+  width: number,
+  height: number,
+  devicePixelRatio: number,
+  policy: RendererPolicy
+): void {
+  renderer.setPixelRatio(clampPixelRatio(devicePixelRatio, policy.maxPixelRatio));
+  renderer.setSize(width, height);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = policy.shadowMapType;
+  renderer.localClippingEnabled = policy.localClippingEnabled;
+  renderer.toneMapping = policy.toneMapping;
+  renderer.toneMappingExposure = policy.toneMappingExposure;
+  renderer.outputColorSpace = policy.outputColorSpace;
+}
+
 export function disposeGroup(group: THREE.Object3D, scene?: THREE.Scene): void {
   if (scene) {
     scene.remove(group);
