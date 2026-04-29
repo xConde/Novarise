@@ -63,29 +63,36 @@ const SKYBOX_FRAGMENT_SHADER = `
   }
 
   void main() {
-    vec3 deepPurple = vec3(0.04, 0.02, 0.08);
-    vec3 darkBlue = vec3(0.06, 0.04, 0.12);
+    // Skybox values originally tuned for the pre-Phase-A pipeline that
+    // rendered linear directly to framebuffer (which the browser then
+    // mis-interpreted as sRGB, dimming low values). Post-Phase-A correctly
+    // encodes linear → sRGB, so those same dim values come out brighter
+    // than designed. Dampened across the board to restore the moody
+    // pre-branch atmosphere.
+    vec3 deepPurple = vec3(0.025, 0.012, 0.05);
+    vec3 darkBlue = vec3(0.04, 0.025, 0.08);
     vec3 color = mix(deepPurple, darkBlue, vUv.y * 0.5);
 
-    // Stars with twinkle
+    // Stars with twinkle (per-channel multipliers reduced ~25%)
     vec2 starPos = vUv * 150.0;
     float star = random(floor(starPos));
     if (star > 0.992) {
       float baseBright = random(floor(starPos) + 1.0) * 0.5;
       float twinkle = 0.6 + 0.4 * sin(time * (1.0 + random(floor(starPos) + 2.0) * 3.0));
       float brightness = baseBright * twinkle;
-      color += vec3(brightness * 0.4, brightness * 0.3, brightness * 0.5);
+      color += vec3(brightness * 0.30, brightness * 0.22, brightness * 0.38);
     }
 
-    // Drifting nebula veins
+    // Drifting nebula veins — threshold raised (fewer veins) and color
+    // intensity reduced ~30% (less prominent purple squares).
     float drift = time * 0.02;
     float vein1 = random(floor(vUv * 40.0 + vec2(drift, vUv.x * 10.0 + drift * 0.5)));
-    if (vein1 > 0.97) {
-      color += vec3(0.25, 0.15, 0.3) * vein1;
+    if (vein1 > 0.975) {
+      color += vec3(0.17, 0.10, 0.21) * vein1;
     }
 
-    // Slow-shifting bioluminescence
-    float bio = random(floor(vUv * 25.0 + vec2(drift * 0.3))) * 0.12;
+    // Slow-shifting bioluminescence (slight dim)
+    float bio = random(floor(vUv * 25.0 + vec2(drift * 0.3))) * 0.09;
     color += vec3(bio * 0.3, bio * 0.5, bio * 0.7);
 
     gl_FragColor = vec4(color, 1.0);
