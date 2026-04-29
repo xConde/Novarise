@@ -214,13 +214,33 @@ describe('TileInstanceLayer', () => {
       expect(pos.y).toBeCloseTo(0.1);
     });
 
-    it('hideAt moves instance below frustum', () => {
+    it('hideAt collapses instance scale to zero (sprint 22 red-team fix)', () => {
       layer.hideAt(0, 0);
       const m = new THREE.Matrix4();
       layer.mesh.getMatrixAt(0, m);
       const pos = new THREE.Vector3();
-      m.decompose(pos, new THREE.Quaternion(), new THREE.Vector3());
-      expect(pos.y).toBeLessThan(-100);
+      const scale = new THREE.Vector3();
+      m.decompose(pos, new THREE.Quaternion(), scale);
+      expect(scale.x).toBeCloseTo(0, 5);
+      expect(scale.y).toBeCloseTo(0, 5);
+      expect(scale.z).toBeCloseTo(0, 5);
+    });
+
+    it('lookupCoord returns null for a hidden instance', () => {
+      layer.hideAt(0, 0);
+      expect(layer.lookupCoord(0)).toBeNull();
+    });
+
+    it('showAt restores both position AND scale, and unhides for raycast lookup', () => {
+      layer.hideAt(0, 0);
+      expect(layer.lookupCoord(0)).toBeNull();
+      layer.showAt(0, 0);
+      const m = new THREE.Matrix4();
+      layer.mesh.getMatrixAt(0, m);
+      const scale = new THREE.Vector3();
+      m.decompose(new THREE.Vector3(), new THREE.Quaternion(), scale);
+      expect(scale.x).toBeCloseTo(1, 5);
+      expect(layer.lookupCoord(0)).toEqual({ row: 0, col: 0 });
     });
 
     it('marks instanceMatrix.needsUpdate after elevation change', () => {

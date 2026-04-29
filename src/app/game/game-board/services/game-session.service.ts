@@ -166,7 +166,7 @@ export class GameSessionService {
     this.pathVisualizationService.cleanup();
 
     // Clean up tile highlights (needs tile meshes before they are cleared)
-    this.tileHighlightService.clearHighlights(this.meshRegistry.tileMeshes, scene);
+    this.tileHighlightService.clearHighlights();
 
     // Clean up range preview and range toggle rings
     this.rangeVisualizationService.cleanup(scene);
@@ -182,12 +182,12 @@ export class GameSessionService {
     this.meshRegistry.towerMeshes.forEach(group => disposeGroup(group, scene, protect));
     this.meshRegistry.towerMeshes.clear();
 
-    // Dispose tile meshes.
-    //  - Pool materials (terraformed tiles) skipped here — disposed in batch
-    //    by terraformPool.dispose() below.
-    //  - Registry materials (per-BlockType, sprint 14) skipped — disposed
-    //    in batch by materialRegistry.dispose() below.
-    //  - Geometry skipped if it's the registry-shared box (sprint 12).
+    // Dispose individual tile meshes (non-instanced surfaces — non-BASE
+    // tiles in sprint 22; widens with sprint 23).
+    //  - Pool materials (terraformed tiles) skipped — terraformPool.dispose() below.
+    //  - Registry geometry skipped (sprint 12) — geometryRegistry.dispose() below.
+    //  - Pre-sprint-21 fix: tile materials are per-instance again, so they
+    //    dispose normally (registry guard is a no-op here).
     this.meshRegistry.tileMeshes.forEach(mesh => {
       scene.remove(mesh);
       if (!this.geometryRegistry?.isRegisteredGeometry(mesh.geometry)) {
@@ -202,6 +202,12 @@ export class GameSessionService {
       });
     });
     this.meshRegistry.tileMeshes.clear();
+
+    // Dispose tile InstancedMesh layers (sprint 22 BASE; sprint 23 widens).
+    // Layer.dispose disposes the InstancedMesh itself; geometry + material
+    // are registry-owned and disposed in their respective batch passes.
+    this.meshRegistry.tileInstanceLayers.forEach(layer => layer.dispose(scene));
+    this.meshRegistry.tileInstanceLayers.clear();
 
     // Dispose cliff column meshes (sprint 39 Highground polish).
     // Geometry skipped if registry-shared (sprint 12), material is pool-owned.

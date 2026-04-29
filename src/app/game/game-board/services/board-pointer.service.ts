@@ -32,8 +32,11 @@ export class BoardPointerService implements OnDestroy {
   readonly raycaster = new THREE.Raycaster();
   readonly mouse = new THREE.Vector2();
 
-  // Hover / selection state
-  private hoveredTile: THREE.Mesh | null = null;
+  // Hover / selection state.
+  // Phase C sprint 22: hovered tile is identified by (row, col) rather than
+  // a Mesh ref because BASE tiles now live in an InstancedMesh — there is
+  // no per-tile Mesh to hold a hover handle on.
+  private hoveredCoord: { row: number; col: number } | null = null;
   private selectedTile: { row: number; col: number } | null = null;
   private lastPreviewKey = '';
 
@@ -67,23 +70,40 @@ export class BoardPointerService implements OnDestroy {
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
       this.raycaster.setFromCamera(this.mouse, this.sceneService.getCamera());
-      const intersects = this.raycaster.intersectObjects(this.meshRegistry.getTileMeshArray() as THREE.Mesh[]);
+      const intersects = this.raycaster.intersectObjects(
+        this.meshRegistry.getTilePickables() as THREE.Object3D[],
+      );
 
-      if (this.hoveredTile && this.hoveredTile !== this.getSelectedTileMesh()) {
-        this.tileHighlightService.restoreAfterHover(this.hoveredTile);
+      // Restore the previously-hovered tile (unless it's the selected one,
+      // which has its own highlight).
+      if (this.hoveredCoord) {
+        const sel = this.selectedTile;
+        const isSelected = sel && sel.row === this.hoveredCoord.row && sel.col === this.hoveredCoord.col;
+        if (!isSelected) {
+          this.tileHighlightService.restoreAfterHoverByCoord(
+            this.hoveredCoord.row,
+            this.hoveredCoord.col,
+          );
+        }
       }
 
       if (intersects.length > 0) {
-        const mesh = intersects[0].object as THREE.Mesh;
-        if (mesh !== this.getSelectedTileMesh()) {
-          this.hoveredTile = mesh;
-          const material = mesh.material as THREE.MeshStandardMaterial;
-          material.emissiveIntensity = TILE_EMISSIVE.hover;
+        const coord = this.meshRegistry.resolveTileHit(intersects[0]);
+        if (!coord) {
+          this.hoveredCoord = null;
+          this.canvas!.style.cursor = 'default';
+          return;
+        }
+        const sel = this.selectedTile;
+        const isSelected = sel && sel.row === coord.row && sel.col === coord.col;
+        if (!isSelected) {
+          this.hoveredCoord = coord;
+          this.tileHighlightService.applyHoverByCoord(coord.row, coord.col);
           this.canvas!.style.cursor = 'pointer';
         }
 
-        const row = mesh.userData['row'];
-        const col = mesh.userData['col'];
+        const row = coord.row;
+        const col = coord.col;
         const phase = this.gameStateService.getState().phase;
         const isTerminal = phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT;
         const placement = this.callbacks!.getPlacementState();
@@ -118,7 +138,7 @@ export class BoardPointerService implements OnDestroy {
           this.rangeVisualizationService.hideHoverRange(this.sceneService.getScene());
         }
       } else {
-        this.hoveredTile = null;
+        this.hoveredCoord = null;
         this.canvas!.style.cursor = 'default';
         this.lastPreviewKey = '';
         this.towerPreviewService.hidePreview(this.sceneService.getScene());
@@ -173,27 +193,27 @@ export class BoardPointerService implements OnDestroy {
     }
 
     // Check tile hits
-    const intersects = this.raycaster.intersectObjects(this.meshRegistry.getTileMeshArray() as THREE.Mesh[]);
+    const intersects = this.raycaster.intersectObjects(
+      this.meshRegistry.getTilePickables() as THREE.Object3D[],
+    );
 
-    const prevSelected = this.getSelectedTileMesh();
-    if (prevSelected) {
-      const material = prevSelected.material as THREE.MeshStandardMaterial;
-      const tileType = prevSelected.userData['tile'].type;
-      material.emissiveIntensity =
-        tileType === BlockType.BASE ? TILE_EMISSIVE.base
-        : tileType === BlockType.WALL ? TILE_EMISSIVE.wall
-        : TILE_EMISSIVE.special;
+    if (this.selectedTile) {
+      this.tileHighlightService.restoreSelectionByCoord(
+        this.selectedTile.row,
+        this.selectedTile.col,
+      );
     }
 
     if (intersects.length > 0) {
-      const mesh = intersects[0].object as THREE.Mesh;
-      const row = mesh.userData['row'];
-      const col = mesh.userData['col'];
-
+      const coord = this.meshRegistry.resolveTileHit(intersects[0]);
+      if (!coord) {
+        this.selectedTile = null;
+        this.callbacks.onDeselect();
+        return;
+      }
+      const { row, col } = coord;
       this.selectedTile = { row, col };
-
-      const material = mesh.material as THREE.MeshStandardMaterial;
-      material.emissiveIntensity = TILE_EMISSIVE.selected;
+      this.tileHighlightService.applySelectionByCoord(row, col);
 
       this.callbacks.onDeselect();
 
@@ -218,11 +238,6 @@ export class BoardPointerService implements OnDestroy {
     return this.selectedTile;
   }
 
-  private getSelectedTileMesh(): THREE.Mesh | null {
-    if (!this.selectedTile) return null;
-    return this.meshRegistry.tileMeshes.get(`${this.selectedTile.row}-${this.selectedTile.col}`) ?? null;
-  }
-
   cleanup(): void {
     if (this.canvas) {
       this.canvas.removeEventListener('mousemove', this.mousemoveHandler);
@@ -231,7 +246,7 @@ export class BoardPointerService implements OnDestroy {
       this.canvas = null;
     }
     this.callbacks = null;
-    this.hoveredTile = null;
+    this.hoveredCoord = null;
     this.selectedTile = null;
     this.lastPreviewKey = '';
   }

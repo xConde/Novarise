@@ -286,9 +286,9 @@ describe('GameSessionService', () => {
       expect(pathVisSpy.cleanup).toHaveBeenCalled();
     });
 
-    it('should call tileHighlightService.clearHighlights with the registry tileMeshes map', () => {
+    it('should call tileHighlightService.clearHighlights with no args (sprint 22)', () => {
       service.cleanupScene();
-      expect(tileHighlightSpy.clearHighlights).toHaveBeenCalledWith(meshRegistry.tileMeshes, scene);
+      expect(tileHighlightSpy.clearHighlights).toHaveBeenCalled();
     });
 
     it('should call rangeVisualizationService.cleanup', () => {

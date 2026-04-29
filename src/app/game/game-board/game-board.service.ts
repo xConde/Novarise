@@ -9,6 +9,7 @@ import { MutationOp } from './services/path-mutation.types';
 import { TerraformMaterialPoolService } from './services/terraform-material-pool.service';
 import { GeometryRegistryService } from './services/geometry-registry.service';
 import { MaterialRegistryService } from './services/material-registry.service';
+import { TileInstanceLayer } from './services/tile-instance-layer';
 
 @Injectable()
 export class GameBoardService {
@@ -189,6 +190,52 @@ export class GameBoardService {
     mesh.castShadow = true;
 
     return mesh;
+  }
+
+  /**
+   * Build a TileInstanceLayer for every tile of `targetType` on the current
+   * board that has NO active mutationOp. Returns null if no such tiles exist.
+   *
+   * Used by GameBoardComponent.renderGameBoard (sprint 22+) for BASE tiles
+   * (and sprint 23 for WALL/SPAWNER/EXIT). Mutated tiles render as
+   * individual meshes via createTileMesh — those slots are NOT included
+   * in the instance layer.
+   *
+   * Material is shared across all instances (one MeshStandardMaterial per
+   * BlockType). Geometry comes from GeometryRegistry. Per-instance colour
+   * starts at identity (1, 1, 1); TileHighlightService writes per-instance
+   * tints via `layer.setColorAt`.
+   */
+  buildTileInstanceLayer(targetType: BlockType): TileInstanceLayer | null {
+    const tileFootprint = this.tileSize * TILE_VISUAL_CONFIG.geometryGapFactor;
+    const geometry = this.geometryRegistry
+      ? this.geometryRegistry.getBox(tileFootprint, this.tileHeight, tileFootprint)
+      : new THREE.BoxGeometry(tileFootprint, this.tileHeight, tileFootprint);
+    const material = this.makeTileMaterial(targetType);
+
+    const instances: Array<{ row: number; col: number; worldX: number; worldZ: number; worldY: number }> = [];
+    for (let row = 0; row < this.gameBoard.length; row++) {
+      const rowTiles = this.gameBoard[row];
+      for (let col = 0; col < rowTiles.length; col++) {
+        const tile = rowTiles[col];
+        if (tile.type !== targetType) continue;
+        // Mutated tiles use per-mesh rendering via createTileMesh + TerraformPool.
+        if (tile.mutationOp !== undefined) continue;
+        const elevation = tile.elevation ?? 0;
+        const x = (col - this.gameBoardWidth / 2) * this.tileSize;
+        const z = (row - this.gameBoardHeight / 2) * this.tileSize;
+        const y = elevation + this.tileHeight / 2;
+        instances.push({ row, col, worldX: x, worldZ: z, worldY: y });
+      }
+    }
+
+    if (instances.length === 0) {
+      // Caller can dispose the per-build material; not registered anywhere.
+      material.dispose();
+      return null;
+    }
+
+    return new TileInstanceLayer(targetType, geometry, material, instances);
   }
 
   private makeTileMaterial(type: BlockType): THREE.MeshStandardMaterial {

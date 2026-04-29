@@ -4,6 +4,7 @@ import { Observable, Subscription } from 'rxjs';
 import * as THREE from 'three';
 import { GameBoardService } from './game-board.service';
 import { disposeGroup } from './utils/three-utils';
+import { BlockType } from './models/game-board-tile';
 import { SceneService } from './services/scene.service';
 import { EnemyService } from './services/enemy.service';
 import { MapBridgeService } from '../../core/services/map-bridge.service';
@@ -632,11 +633,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     });
     this.touchInteraction.init(canvas, (x, y) => this.boardPointer.handleInteraction(x, y));
 
-    this.towerPlacementService.init(this.boardPointer.raycaster, this.boardPointer.mouse, () => this.meshRegistry.getTileMeshArray() as THREE.Mesh[], {
-      onEnterPlaceMode: (type) => { this.selectedTowerType = type; this.updateTileHighlights(); },
-      onPlaceAttempt: (row, col) => this.tryPlaceTower(row, col),
-      onDeselectTower: () => this.deselectTower(),
-    });
+    this.towerPlacementService.init(
+      this.boardPointer.raycaster,
+      this.boardPointer.mouse,
+      () => this.meshRegistry.getTilePickables(),
+      (intersection) => this.meshRegistry.resolveTileHit(intersection),
+      {
+        onEnterPlaceMode: (type) => { this.selectedTowerType = type; this.updateTileHighlights(); },
+        onPlaceAttempt: (row, col) => this.tryPlaceTower(row, col),
+        onDeselectTower: () => this.deselectTower(),
+      },
+    );
 
     this.gameInput.init();
     const hotkeyActions: HotkeyActions = {
@@ -836,22 +843,20 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   updateTileHighlights(): void {
     if (!this.isPlaceMode) {
-      this.tileHighlightService.clearHighlights(this.meshRegistry.tileMeshes, this.sceneService.getScene());
+      this.tileHighlightService.clearHighlights();
       return;
     }
     const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
     this.tileHighlightService.updateHighlights(
       this.selectedTowerType!,
-      this.meshRegistry.tileMeshes,
       this.boardPointer.getSelectedTile(),
-      this.sceneService.getScene(),
-      costMult
+      costMult,
     );
   }
 
   /** Remove placement highlights from all tiles, restoring their original emissive. */
   private clearTileHighlights(): void {
-    this.tileHighlightService.clearHighlights(this.meshRegistry.tileMeshes, this.sceneService.getScene());
+    this.tileHighlightService.clearHighlights();
   }
 
   upgradeTower(spec?: TowerSpecialization): void {
@@ -1139,13 +1144,25 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private renderGameBoard(): void {
     const boardTiles = this.gameBoardService.getGameBoard();
+    const scene = this.sceneService.getScene();
+
+    // Phase C sprint 22: BASE tiles render via a single InstancedMesh.
+    // Non-BASE tiles still render as individual meshes (sprint 23 widens).
+    // Mutated tiles always render individually via TerraformPool.
+    const baseLayer = this.gameBoardService.buildTileInstanceLayer(BlockType.BASE);
+    if (baseLayer) {
+      this.meshRegistry.tileInstanceLayers.set(BlockType.BASE, baseLayer);
+      scene.add(baseLayer.mesh);
+    }
 
     boardTiles.forEach((row, rowIndex) => {
       row.forEach((tile, colIndex) => {
+        // Skip BASE tiles without mutation — they're in the instance layer.
+        if (tile.type === BlockType.BASE && tile.mutationOp === undefined) return;
         const mesh = this.gameBoardService.createTileMesh(rowIndex, colIndex, tile.type);
         mesh.userData = { row: rowIndex, col: colIndex, tile: tile };
         this.meshRegistry.tileMeshes.set(`${rowIndex}-${colIndex}`, mesh);
-        this.sceneService.getScene().add(mesh);
+        scene.add(mesh);
       });
     });
 

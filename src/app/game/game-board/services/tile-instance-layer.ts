@@ -35,8 +35,11 @@ export class TileInstanceLayer {
   private readonly scratchScale = new THREE.Vector3(1, 1, 1);
   private readonly scratchQuaternion = new THREE.Quaternion();
 
-  /** Y position originally assigned at construction, per instance. */
-  private readonly baseY: number[];
+  /** X/Y/Z position originally assigned at construction, per instance. */
+  private readonly basePos: Array<{ x: number; y: number; z: number }>;
+
+  /** Indices that have been hidden via hideAt — excluded from raycast resolution. */
+  private readonly hiddenIndices = new Set<number>();
 
   constructor(
     blockType: BlockType,
@@ -60,7 +63,7 @@ export class TileInstanceLayer {
 
     this.indexToCoord = [];
     this.coordToIndex = new Map();
-    this.baseY = [];
+    this.basePos = [];
 
     for (let i = 0; i < count; i++) {
       const inst = instances[i];
@@ -70,7 +73,7 @@ export class TileInstanceLayer {
       this.mesh.setColorAt(i, new THREE.Color(1, 1, 1));
       this.indexToCoord.push({ row: inst.row, col: inst.col });
       this.coordToIndex.set(this.coordKey(inst.row, inst.col), i);
-      this.baseY.push(inst.worldY);
+      this.basePos.push({ x: inst.worldX, y: inst.worldY, z: inst.worldZ });
     }
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) {
@@ -83,8 +86,13 @@ export class TileInstanceLayer {
     return this.indexToCoord.length;
   }
 
-  /** Resolve a raycaster `intersection.instanceId` to its (row, col). */
+  /**
+   * Resolve a raycaster `intersection.instanceId` to its (row, col).
+   * Hidden instances (via hideAt) return null — sprint 24 mutation
+   * overlay tiles must not raycast onto the hidden BASE slot underneath.
+   */
   lookupCoord(instanceId: number): { row: number; col: number } | null {
+    if (this.hiddenIndices.has(instanceId)) return null;
     return this.indexToCoord[instanceId] ?? null;
   }
 
@@ -150,25 +158,41 @@ export class TileInstanceLayer {
     if (idx < 0) return false;
     this.mesh.getMatrixAt(idx, this.scratchMatrix);
     this.scratchMatrix.decompose(this.scratchPosition, this.scratchQuaternion, this.scratchScale);
-    // Off-screen Y. Three.js frustum-culls based on the per-mesh bounding
-    // sphere though, so the InstancedMesh as a whole is still rendered;
-    // the hidden instance just samples a tile-sized box at Y = -1e6 which
-    // is below any real frustum.
-    this.scratchPosition.y = -1e6;
+    // Scale to zero — collapses the bounding box of this instance to a
+    // point at its position so it cannot be raycast hit. Translating to
+    // Y=-1e6 worked visually but expanded the InstancedMesh bounding
+    // sphere enormously, forcing per-instance ray tests on every mouse
+    // move (red-team finding HIGH).
+    this.scratchScale.set(0, 0, 0);
     this.scratchMatrix.compose(this.scratchPosition, this.scratchQuaternion, this.scratchScale);
     this.mesh.setMatrixAt(idx, this.scratchMatrix);
     this.mesh.instanceMatrix.needsUpdate = true;
+    this.hiddenIndices.add(idx);
+    // Reset scratchScale for downstream mutations.
+    this.scratchScale.set(1, 1, 1);
     return true;
   }
 
   /**
-   * Restore an instance's Y to its construction-time baseY. Inverse of hideAt
-   * (or a revert from a setElevationAt call).
+   * Restore an instance's full base transform (position + unit scale + identity
+   * rotation). Inverse of hideAt or a revert from setElevationAt.
+   *
+   * NOTE: cannot decompose the current matrix when scale is (0,0,0) because
+   * decompose divides by scale and produces NaN positions. We reconstruct
+   * the base transform from `basePos` directly.
    */
   showAt(row: number, col: number): boolean {
     const idx = this.findIndex(row, col);
     if (idx < 0) return false;
-    return this.setElevationAt(row, col, this.baseY[idx]);
+    const base = this.basePos[idx];
+    this.scratchPosition.set(base.x, base.y, base.z);
+    this.scratchQuaternion.set(0, 0, 0, 1);
+    this.scratchScale.set(1, 1, 1);
+    this.scratchMatrix.compose(this.scratchPosition, this.scratchQuaternion, this.scratchScale);
+    this.mesh.setMatrixAt(idx, this.scratchMatrix);
+    this.mesh.instanceMatrix.needsUpdate = true;
+    this.hiddenIndices.delete(idx);
+    return true;
   }
 
   /**

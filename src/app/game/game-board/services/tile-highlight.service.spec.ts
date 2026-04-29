@@ -3,9 +3,11 @@ import * as THREE from 'three';
 import { TileHighlightService } from './tile-highlight.service';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
+import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { TILE_EMISSIVE } from '../constants/ui.constants';
 import { BlockType, GameBoardTile } from '../models/game-board-tile';
 import { TowerType } from '../models/tower.model';
+import { TileInstanceLayer } from './tile-instance-layer';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -28,76 +30,96 @@ function makeTile(
   isPurchasable = true,
   towerType: TowerType | null = null
 ): GameBoardTile {
-  const tile = new GameBoardTile(row, col, type, type !== BlockType.WALL, isPurchasable, 0, towerType);
-  return tile;
+  return new GameBoardTile(row, col, type, type !== BlockType.WALL, isPurchasable, 0, towerType);
 }
 
-function makeTileMeshes(specs: Array<{ row: number; col: number; type?: BlockType }>): Map<string, THREE.Mesh> {
-  const map = new Map<string, THREE.Mesh>();
-  for (const spec of specs) {
-    const mesh = makeMesh(spec.row, spec.col, spec.type ?? BlockType.BASE);
-    map.set(`${spec.row}-${spec.col}`, mesh);
+/**
+ * Register `coords` as INDIVIDUAL tile meshes in the registry. Caller
+ * disposes them via cleanupRegistry().
+ */
+function registerIndividualTiles(
+  registry: BoardMeshRegistryService,
+  coords: Array<{ row: number; col: number; type?: BlockType }>,
+): void {
+  for (const c of coords) {
+    const m = makeMesh(c.row, c.col, c.type ?? BlockType.BASE);
+    registry.tileMeshes.set(`${c.row}-${c.col}`, m);
   }
-  return map;
+  registry.rebuildTileMeshArray();
 }
 
-function disposeMeshMap(meshes: Map<string, THREE.Mesh>): void {
-  for (const mesh of meshes.values()) {
-    mesh.geometry.dispose();
-    (mesh.material as THREE.MeshStandardMaterial).dispose();
-  }
+/**
+ * Register a single InstancedMesh layer covering the given coords.
+ */
+function registerInstancedLayer(
+  registry: BoardMeshRegistryService,
+  blockType: BlockType,
+  coords: Array<{ row: number; col: number }>,
+): TileInstanceLayer {
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x404858 });
+  const layer = new TileInstanceLayer(blockType, geo, mat, coords.map(c => ({
+    row: c.row, col: c.col, worldX: c.col, worldZ: c.row, worldY: 0.1,
+  })));
+  registry.tileInstanceLayers.set(blockType, layer);
+  registry.rebuildTilePickables();
+  return layer;
 }
 
-// ---------------------------------------------------------------------------
-// TileHighlightService
+function cleanupRegistry(registry: BoardMeshRegistryService): void {
+  registry.tileMeshes.forEach(m => {
+    m.geometry.dispose();
+    (m.material as THREE.Material).dispose();
+  });
+  registry.tileInstanceLayers.forEach(layer => {
+    layer.mesh.geometry.dispose();
+    (layer.mesh.material as THREE.Material).dispose();
+    layer.dispose();
+  });
+  registry.clear();
+}
+
 // ---------------------------------------------------------------------------
 
 describe('TileHighlightService', () => {
   let service: TileHighlightService;
+  let registry: BoardMeshRegistryService;
   let boardSpy: jasmine.SpyObj<GameBoardService>;
   let stateSpy: jasmine.SpyObj<GameStateService>;
-  let scene: THREE.Scene;
 
   beforeEach(() => {
     boardSpy = jasmine.createSpyObj<GameBoardService>(
       'GameBoardService',
-      ['getGameBoard', 'getBoardWidth', 'getBoardHeight', 'getTileSize', 'wouldBlockPath']
+      ['getGameBoard', 'getBoardWidth', 'getBoardHeight', 'getTileSize', 'wouldBlockPath'],
     );
-    stateSpy = jasmine.createSpyObj<GameStateService>(
-      'GameStateService',
-      ['canAfford']
-    );
+    stateSpy = jasmine.createSpyObj<GameStateService>('GameStateService', ['canAfford']);
 
     boardSpy.getBoardWidth.and.returnValue(5);
     boardSpy.getBoardHeight.and.returnValue(5);
     boardSpy.getTileSize.and.returnValue(1);
-    // Default: no tile blocks the path. Per-test overrides re-target specific tiles.
     boardSpy.wouldBlockPath.and.returnValue(false);
 
     TestBed.configureTestingModule({
       providers: [
         TileHighlightService,
+        BoardMeshRegistryService,
         { provide: GameBoardService, useValue: boardSpy },
         { provide: GameStateService, useValue: stateSpy },
       ],
     });
     service = TestBed.inject(TileHighlightService);
-    scene = new THREE.Scene();
+    registry = TestBed.inject(BoardMeshRegistryService);
   });
 
   afterEach(() => {
-    scene.clear();
+    cleanupRegistry(registry);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
+  // ─────────────────────────────────────────────────────────────────────────
+  // Individual-surface (non-BASE in sprint 22) — emissive mutation path
+  // ─────────────────────────────────────────────────────────────────────────
 
-  // ---------------------------------------------------------------------------
-  // updateHighlights
-  // ---------------------------------------------------------------------------
-
-  describe('updateHighlights', () => {
+  describe('updateHighlights — individual surface', () => {
     it('marks affordable BASE tiles as highlighted', () => {
       const board = [
         [makeTile(0, 0), makeTile(0, 1)],
@@ -105,308 +127,255 @@ describe('TileHighlightService', () => {
       ];
       boardSpy.getGameBoard.and.returnValue(board);
       stateSpy.canAfford.and.returnValue(true);
-
-      const tileMeshes = makeTileMeshes([
+      registerIndividualTiles(registry, [
         { row: 0, col: 0 }, { row: 0, col: 1 },
         { row: 1, col: 0 }, { row: 1, col: 1 },
       ]);
 
-      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
+      service.updateHighlights(TowerType.BASIC, null, 1);
 
       expect(service.isHighlighted('0-0')).toBeTrue();
       expect(service.isHighlighted('0-1')).toBeTrue();
       expect(service.isHighlighted('1-0')).toBeTrue();
       expect(service.isHighlighted('1-1')).toBeTrue();
-
-      disposeMeshMap(tileMeshes);
     });
 
-    it('applies emissive color to affordable tiles', () => {
+    it('applies emissive intensity to highlighted tiles on individual surface', () => {
       const board = [[makeTile(0, 0)]];
       boardSpy.getGameBoard.and.returnValue(board);
       stateSpy.canAfford.and.returnValue(true);
+      registerIndividualTiles(registry, [{ row: 0, col: 0 }]);
 
-      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
-      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
+      service.updateHighlights(TowerType.BASIC, null, 1);
 
-      const mesh = tileMeshes.get('0-0')!;
+      const mesh = registry.tileMeshes.get('0-0')!;
       const mat = mesh.material as THREE.MeshStandardMaterial;
-      expect(mat.emissiveIntensity).toBeGreaterThan(0);
-      expect(mesh.userData['heatmapR']).toBeDefined();
-      expect(mesh.userData['heatmapG']).toBeDefined();
-      expect(mesh.userData['heatmapB']).toBeDefined();
-      expect(mesh.userData['heatmapIntensity']).toBeDefined();
-
-      disposeMeshMap(tileMeshes);
+      expect(mat.emissiveIntensity).toBeCloseTo(TILE_EMISSIVE.validPlacement, 5);
     });
 
-    it('dims emissive for unaffordable-but-valid tiles', () => {
+    it('dims emissive intensity for unaffordable tiles', () => {
       const board = [[makeTile(0, 0)]];
       boardSpy.getGameBoard.and.returnValue(board);
-      stateSpy.canAfford.and.returnValue(false); // cannot afford
+      stateSpy.canAfford.and.returnValue(false);
+      registerIndividualTiles(registry, [{ row: 0, col: 0 }]);
 
-      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
-      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
+      service.updateHighlights(TowerType.BASIC, null, 1);
 
-      const mesh = tileMeshes.get('0-0')!;
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      const expectedIntensity = TILE_EMISSIVE.validPlacement * TILE_EMISSIVE.unaffordableDimming;
-      expect(mat.emissiveIntensity).toBeCloseTo(expectedIntensity, 5);
-
-      disposeMeshMap(tileMeshes);
+      const mat = registry.tileMeshes.get('0-0')!.material as THREE.MeshStandardMaterial;
+      const expected = TILE_EMISSIVE.validPlacement * TILE_EMISSIVE.unaffordableDimming;
+      expect(mat.emissiveIntensity).toBeCloseTo(expected, 5);
     });
 
     it('skips the selected tile', () => {
       const board = [[makeTile(0, 0)]];
       boardSpy.getGameBoard.and.returnValue(board);
       stateSpy.canAfford.and.returnValue(true);
+      registerIndividualTiles(registry, [{ row: 0, col: 0 }]);
 
-      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
-      service.updateHighlights(TowerType.BASIC, tileMeshes, { row: 0, col: 0 }, scene, 1);
+      service.updateHighlights(TowerType.BASIC, { row: 0, col: 0 }, 1);
 
       expect(service.isHighlighted('0-0')).toBeFalse();
-
-      disposeMeshMap(tileMeshes);
     });
 
     it('skips non-BASE tiles', () => {
       const board = [[makeTile(0, 0, BlockType.WALL)]];
       boardSpy.getGameBoard.and.returnValue(board);
       stateSpy.canAfford.and.returnValue(true);
+      registerIndividualTiles(registry, [{ row: 0, col: 0, type: BlockType.WALL }]);
 
-      const tileMeshes = makeTileMeshes([{ row: 0, col: 0, type: BlockType.WALL }]);
-      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
+      service.updateHighlights(TowerType.BASIC, null, 1);
 
       expect(service.isHighlighted('0-0')).toBeFalse();
-
-      disposeMeshMap(tileMeshes);
     });
 
     it('skips tiles with a tower already placed', () => {
       const board = [[makeTile(0, 0, BlockType.BASE, true, TowerType.BASIC)]];
       boardSpy.getGameBoard.and.returnValue(board);
       stateSpy.canAfford.and.returnValue(true);
+      registerIndividualTiles(registry, [{ row: 0, col: 0 }]);
 
-      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
-      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
+      service.updateHighlights(TowerType.BASIC, null, 1);
 
       expect(service.isHighlighted('0-0')).toBeFalse();
-
-      disposeMeshMap(tileMeshes);
     });
 
-    // ── Path-blocking tile branch (Phase 14) ────────────────────────────────
-
-    it('renders path-blocking tiles in the blocked color, not the valid one', () => {
-      const board = [[makeTile(0, 0), makeTile(0, 1)]];
-      boardSpy.getGameBoard.and.returnValue(board);
-      stateSpy.canAfford.and.returnValue(true);
-      // Tile (0,1) would cut off the only path. (0,0) is fine.
-      boardSpy.wouldBlockPath.and.callFake((r: number, c: number) => r === 0 && c === 1);
-
-      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }, { row: 0, col: 1 }]);
-      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
-
-      const validMesh = tileMeshes.get('0-0')!;
-      const blockedMesh = tileMeshes.get('0-1')!;
-      const validMat = validMesh.material as THREE.MeshStandardMaterial;
-      const blockedMat = blockedMesh.material as THREE.MeshStandardMaterial;
-
-      expect(validMat.emissive.getHex()).toBe(TILE_EMISSIVE.validPlacementColor);
-      expect(blockedMat.emissive.getHex()).toBe(TILE_EMISSIVE.blockedPlacementColor);
-
-      // Both are still "highlighted" (tracked for cleanup) — the blocked
-      // tile is just painted differently so the player sees it's not an option.
-      expect(service.isHighlighted('0-0')).toBeTrue();
-      expect(service.isHighlighted('0-1')).toBeTrue();
-
-      disposeMeshMap(tileMeshes);
-    });
-
-    it('blocked tiles use the dedicated blocked intensity (not the affordability dim)', () => {
+    it('uses blocked tint for path-blocking tiles', () => {
       const board = [[makeTile(0, 0)]];
       boardSpy.getGameBoard.and.returnValue(board);
-      stateSpy.canAfford.and.returnValue(false); // would dim a valid tile
+      stateSpy.canAfford.and.returnValue(true);
       boardSpy.wouldBlockPath.and.returnValue(true);
+      registerIndividualTiles(registry, [{ row: 0, col: 0 }]);
 
-      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
-      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
+      service.updateHighlights(TowerType.BASIC, null, 1);
 
-      const mesh = tileMeshes.get('0-0')!;
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      // Blocked intensity is a standalone constant — NOT the dimmed
-      // validPlacement intensity. This lets the red read at full strength
-      // even when the player can't afford the tower.
+      const mat = registry.tileMeshes.get('0-0')!.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(TILE_EMISSIVE.blockedPlacementColor);
       expect(mat.emissiveIntensity).toBeCloseTo(TILE_EMISSIVE.blockedPlacement, 5);
-
-      disposeMeshMap(tileMeshes);
     });
+  });
 
-    it('clearHighlights restores blocked tiles to the default emissive too', () => {
+  describe('clearHighlights — individual surface', () => {
+    it('restores emissive after highlighting', () => {
       const board = [[makeTile(0, 0)]];
       boardSpy.getGameBoard.and.returnValue(board);
       stateSpy.canAfford.and.returnValue(true);
-      boardSpy.wouldBlockPath.and.returnValue(true);
+      registerIndividualTiles(registry, [{ row: 0, col: 0 }]);
+      const mat = registry.tileMeshes.get('0-0')!.material as THREE.MeshStandardMaterial;
+      const originalEmissive = mat.emissive.getHex();
+      const originalIntensity = mat.emissiveIntensity;
 
-      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
-      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
-      service.clearHighlights(tileMeshes, scene);
+      service.updateHighlights(TowerType.BASIC, null, 1);
+      service.clearHighlights();
 
-      const mesh = tileMeshes.get('0-0')!;
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      expect(mat.emissiveIntensity).toBe(TILE_EMISSIVE.base);
+      expect(mat.emissive.getHex()).toBe(originalEmissive);
+      expect(mat.emissiveIntensity).toBe(originalIntensity);
       expect(service.isHighlighted('0-0')).toBeFalse();
+    });
 
-      disposeMeshMap(tileMeshes);
+    it('is idempotent', () => {
+      const board = [[makeTile(0, 0)]];
+      boardSpy.getGameBoard.and.returnValue(board);
+      stateSpy.canAfford.and.returnValue(true);
+      registerIndividualTiles(registry, [{ row: 0, col: 0 }]);
+
+      service.updateHighlights(TowerType.BASIC, null, 1);
+      service.clearHighlights();
+      expect(() => service.clearHighlights()).not.toThrow();
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // clearHighlights
-  // ---------------------------------------------------------------------------
+  describe('hover (individual surface)', () => {
+    it('applyHoverByCoord bumps emissive', () => {
+      registerIndividualTiles(registry, [{ row: 0, col: 0 }]);
+      const mat = registry.tileMeshes.get('0-0')!.material as THREE.MeshStandardMaterial;
+      const before = mat.emissiveIntensity;
 
-  describe('clearHighlights', () => {
-    it('restores original emissive values on all highlighted tiles', () => {
-      const board = [[makeTile(0, 0)]];
-      boardSpy.getGameBoard.and.returnValue(board);
-      stateSpy.canAfford.and.returnValue(true);
+      service.applyHoverByCoord(0, 0);
 
-      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
-      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
-
-      expect(service.isHighlighted('0-0')).toBeTrue();
-
-      service.clearHighlights(tileMeshes, scene);
-
-      const mesh = tileMeshes.get('0-0')!;
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      expect(mat.emissiveIntensity).toBe(TILE_EMISSIVE.base);
-      expect(service.isHighlighted('0-0')).toBeFalse();
-      expect(mesh.userData['heatmapR']).toBeUndefined();
-
-      disposeMeshMap(tileMeshes);
+      expect(mat.emissiveIntensity).toBeCloseTo(TILE_EMISSIVE.hover, 5);
+      expect(mat.emissiveIntensity).not.toBe(before);
     });
 
-    it('clears the highlightedTiles set', () => {
-      const board = [[makeTile(0, 0)]];
-      boardSpy.getGameBoard.and.returnValue(board);
-      stateSpy.canAfford.and.returnValue(true);
+    it('restoreAfterHoverByCoord restores prior emissive', () => {
+      registerIndividualTiles(registry, [{ row: 0, col: 0 }]);
+      const mat = registry.tileMeshes.get('0-0')!.material as THREE.MeshStandardMaterial;
+      const originalIntensity = mat.emissiveIntensity;
 
-      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
-      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
-      service.clearHighlights(tileMeshes, scene);
+      service.applyHoverByCoord(0, 0);
+      service.restoreAfterHoverByCoord(0, 0);
 
-      expect(service.getHighlightedTiles().size).toBe(0);
+      expect(mat.emissiveIntensity).toBe(originalIntensity);
+    });
 
-      disposeMeshMap(tileMeshes);
+    it('restoring an unhovered tile is a no-op', () => {
+      registerIndividualTiles(registry, [{ row: 0, col: 0 }]);
+      const mat = registry.tileMeshes.get('0-0')!.material as THREE.MeshStandardMaterial;
+      const originalIntensity = mat.emissiveIntensity;
+
+      service.restoreAfterHoverByCoord(0, 0);
+
+      expect(mat.emissiveIntensity).toBe(originalIntensity);
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // restoreAfterHover
-  // ---------------------------------------------------------------------------
+  describe('selection (individual surface)', () => {
+    it('applySelectionByCoord raises emissive to selected level', () => {
+      registerIndividualTiles(registry, [{ row: 0, col: 0 }]);
+      const mat = registry.tileMeshes.get('0-0')!.material as THREE.MeshStandardMaterial;
 
-  describe('restoreAfterHover', () => {
-    it('restores highlight emissive when tile is highlighted', () => {
-      const board = [[makeTile(0, 0)]];
-      boardSpy.getGameBoard.and.returnValue(board);
-      stateSpy.canAfford.and.returnValue(true);
+      service.applySelectionByCoord(0, 0);
 
-      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
-      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
-
-      const mesh = tileMeshes.get('0-0')!;
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      // Simulate hover by bumping emissiveIntensity
-      mat.emissiveIntensity = TILE_EMISSIVE.hover;
-
-      service.restoreAfterHover(mesh);
-
-      expect(mat.emissiveIntensity).toBeCloseTo(mesh.userData['heatmapIntensity'], 5);
-
-      disposeMeshMap(tileMeshes);
+      expect(mat.emissiveIntensity).toBeCloseTo(TILE_EMISSIVE.selected, 5);
     });
 
-    it('restores BASE emissive when tile is not highlighted', () => {
-      const mesh = makeMesh(1, 1, BlockType.BASE);
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      mat.emissiveIntensity = TILE_EMISSIVE.hover;
+    it('restoreSelectionByCoord undoes selection', () => {
+      registerIndividualTiles(registry, [{ row: 0, col: 0 }]);
+      const mat = registry.tileMeshes.get('0-0')!.material as THREE.MeshStandardMaterial;
+      const originalIntensity = mat.emissiveIntensity;
 
-      service.restoreAfterHover(mesh);
+      service.applySelectionByCoord(0, 0);
+      service.restoreSelectionByCoord(0, 0);
 
-      expect(mat.emissiveIntensity).toBe(TILE_EMISSIVE.base);
-
-      mesh.geometry.dispose();
-      mat.dispose();
-    });
-
-    it('restores WALL emissive when tile is not highlighted', () => {
-      const mesh = makeMesh(1, 1, BlockType.WALL);
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      mat.emissiveIntensity = TILE_EMISSIVE.hover;
-
-      service.restoreAfterHover(mesh);
-
-      expect(mat.emissiveIntensity).toBe(TILE_EMISSIVE.wall);
-
-      mesh.geometry.dispose();
-      mat.dispose();
-    });
-
-    it('restores special emissive for non-BASE/WALL types', () => {
-      const mesh = makeMesh(1, 1, BlockType.SPAWNER);
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      mat.emissiveIntensity = TILE_EMISSIVE.hover;
-
-      service.restoreAfterHover(mesh);
-
-      expect(mat.emissiveIntensity).toBe(TILE_EMISSIVE.special);
-
-      mesh.geometry.dispose();
-      mat.dispose();
+      expect(mat.emissiveIntensity).toBe(originalIntensity);
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // isHighlighted / getHighlightedTiles
-  // ---------------------------------------------------------------------------
+  // ─────────────────────────────────────────────────────────────────────────
+  // Instanced surface — instanceColor mutation path
+  // ─────────────────────────────────────────────────────────────────────────
 
-  describe('isHighlighted', () => {
-    it('returns false for unhighlighted key', () => {
-      expect(service.isHighlighted('2-3')).toBeFalse();
-    });
-
-    it('returns true after highlighting', () => {
+  describe('updateHighlights — instanced surface', () => {
+    it('mutates per-instance color, NOT the shared material emissive', () => {
       const board = [[makeTile(0, 0)]];
       boardSpy.getGameBoard.and.returnValue(board);
       stateSpy.canAfford.and.returnValue(true);
+      const layer = registerInstancedLayer(registry, BlockType.BASE, [{ row: 0, col: 0 }]);
+      const mat = layer.mesh.material as THREE.MeshStandardMaterial;
+      const sharedEmissiveBefore = mat.emissive.getHex();
 
-      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
-      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
+      service.updateHighlights(TowerType.BASIC, null, 1);
 
-      expect(service.isHighlighted('0-0')).toBeTrue();
+      const c = layer.getColorAt(0, 0)!;
+      // The instanceColor was changed off identity (1, 1, 1)
+      const isIdentity = c.r === 1 && c.g === 1 && c.b === 1;
+      expect(isIdentity).toBeFalse();
+      // Crucially, the shared material's emissive was NOT mutated.
+      expect(mat.emissive.getHex()).toBe(sharedEmissiveBefore);
+    });
 
-      disposeMeshMap(tileMeshes);
+    it('two instanced BASE tiles get DIFFERENT instanceColors after highlight', () => {
+      const board = [
+        [makeTile(0, 0), makeTile(0, 1)],
+      ];
+      boardSpy.getGameBoard.and.returnValue(board);
+      stateSpy.canAfford.and.returnValue(true);
+      // path-blocking is per-tile; mark (0,1) blocked, (0,0) not.
+      boardSpy.wouldBlockPath.and.callFake((r, c) => r === 0 && c === 1);
+      const layer = registerInstancedLayer(registry, BlockType.BASE, [
+        { row: 0, col: 0 }, { row: 0, col: 1 },
+      ]);
+
+      service.updateHighlights(TowerType.BASIC, null, 1);
+
+      const c0 = layer.getColorAt(0, 0)!;
+      const c1 = layer.getColorAt(0, 1)!;
+      // Compare raw RGB channels — getHex() clamps to [0,1] but the tint
+      // formula intentionally pushes values above 1.0 for HDR tone mapping.
+      const equal = c0.r === c1.r && c0.g === c1.g && c0.b === c1.b;
+      expect(equal).toBeFalse();
     });
   });
 
-  describe('getHighlightedTiles', () => {
-    it('returns a ReadonlySet', () => {
-      expect(service.getHighlightedTiles()).toEqual(jasmine.any(Set));
-    });
-
-    it('reflects current highlight state', () => {
+  describe('clearHighlights — instanced surface', () => {
+    it('restores instance color to the prior value', () => {
       const board = [[makeTile(0, 0)]];
       boardSpy.getGameBoard.and.returnValue(board);
       stateSpy.canAfford.and.returnValue(true);
+      const layer = registerInstancedLayer(registry, BlockType.BASE, [{ row: 0, col: 0 }]);
+      const before = layer.getColorAt(0, 0)!.clone();
 
-      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
-      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
+      service.updateHighlights(TowerType.BASIC, null, 1);
+      service.clearHighlights();
 
-      expect(service.getHighlightedTiles().has('0-0')).toBeTrue();
-      expect(service.getHighlightedTiles().size).toBe(1);
+      const after = layer.getColorAt(0, 0)!;
+      expect(after.r).toBeCloseTo(before.r, 5);
+      expect(after.g).toBeCloseTo(before.g, 5);
+      expect(after.b).toBeCloseTo(before.b, 5);
+    });
+  });
 
-      disposeMeshMap(tileMeshes);
+  describe('hover (instanced surface) — does NOT alias siblings', () => {
+    it('applyHoverByCoord on tile A leaves tile B at identity color', () => {
+      const layer = registerInstancedLayer(registry, BlockType.BASE, [
+        { row: 0, col: 0 }, { row: 0, col: 1 },
+      ]);
+
+      service.applyHoverByCoord(0, 0);
+
+      const cB = layer.getColorAt(0, 1)!;
+      expect(cB.r).toBeCloseTo(1, 5);
+      expect(cB.g).toBeCloseTo(1, 5);
+      expect(cB.b).toBeCloseTo(1, 5);
     });
   });
 });

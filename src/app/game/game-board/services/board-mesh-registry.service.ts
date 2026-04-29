@@ -1,5 +1,7 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
+import { BlockType } from '../models/game-board-tile';
+import { TileInstanceLayer } from './tile-instance-layer';
 
 /**
  * Owns all mesh maps for the game board — tiles, towers, and grid lines.
@@ -7,10 +9,18 @@ import * as THREE from 'three';
  *
  * Other services inject this to read/write mesh state without going through
  * the component. The component no longer owns these maps.
+ *
+ * Phase C sprint 22: tile rendering is HYBRID. BASE tiles render via a
+ * single InstancedMesh wrapped in `tileInstanceLayers`; non-BASE tiles
+ * (WALL/SPAWNER/EXIT) and mutation-overlay tiles still render as
+ * individual meshes in `tileMeshes`. Sprint 23 widens layer coverage to
+ * WALL/SPAWNER/EXIT.
  */
 @Injectable()
 export class BoardMeshRegistryService {
   readonly tileMeshes = new Map<string, THREE.Mesh>();
+  /** Per-BlockType InstancedMesh layer (sprint 22+). Currently BASE only. */
+  readonly tileInstanceLayers = new Map<BlockType, TileInstanceLayer>();
   readonly towerMeshes = new Map<string, THREE.Group>();
   /**
    * Cliff column meshes placed under raised tiles (sprint 39 Highground polish).
@@ -24,13 +34,78 @@ export class BoardMeshRegistryService {
   gridLines: THREE.Group | null = null;
 
   private tileMeshArray: THREE.Mesh[] = [];
+  private tilePickables: THREE.Object3D[] = [];
   private towerChildrenArray: THREE.Object3D[] = [];
 
+  /** @deprecated Use getTilePickables() — includes both instanced + individual tiles. */
   getTileMeshArray(): readonly THREE.Mesh[] { return this.tileMeshArray; }
+
+  /**
+   * Raycaster targets: includes individual tile meshes + every instanced
+   * tile layer's InstancedMesh. Sprint 22+: BASE tiles live in instance
+   * layers; non-BASE in individual meshes.
+   */
+  getTilePickables(): readonly THREE.Object3D[] { return this.tilePickables; }
+
   getTowerChildrenArray(): readonly THREE.Object3D[] { return this.towerChildrenArray; }
 
   rebuildTileMeshArray(): void {
     this.tileMeshArray = Array.from(this.tileMeshes.values());
+    this.rebuildTilePickables();
+  }
+
+  rebuildTilePickables(): void {
+    const out: THREE.Object3D[] = [];
+    this.tileInstanceLayers.forEach(layer => out.push(layer.mesh));
+    this.tileMeshes.forEach(mesh => out.push(mesh));
+    this.tilePickables = out;
+  }
+
+  /**
+   * Resolve a raycaster intersection to a tile coord regardless of
+   * whether the hit was an InstancedMesh or an individual Mesh.
+   * Returns null if the hit object isn't a tile.
+   */
+  resolveTileHit(intersection: THREE.Intersection): { row: number; col: number } | null {
+    const obj = intersection.object;
+    if (obj instanceof THREE.InstancedMesh) {
+      const blockType = obj.userData['blockType'] as BlockType | undefined;
+      if (blockType === undefined) return null;
+      const layer = this.tileInstanceLayers.get(blockType);
+      if (!layer || intersection.instanceId === undefined) return null;
+      return layer.lookupCoord(intersection.instanceId);
+    }
+    if (obj instanceof THREE.Mesh) {
+      const row = obj.userData['row'] as number | undefined;
+      const col = obj.userData['col'] as number | undefined;
+      if (row === undefined || col === undefined) return null;
+      return { row, col };
+    }
+    return null;
+  }
+
+  /**
+   * Returns information about which surface owns the (row, col):
+   *   - kind 'instanced': in a TileInstanceLayer (BASE tiles)
+   *   - kind 'individual': in tileMeshes Map (non-BASE, or mutation overlay)
+   *   - kind 'none': not present anywhere
+   *
+   * Used by TileHighlightService and PathMutationService to dispatch the
+   * right strategy per-tile.
+   */
+  findTileSurface(row: number, col: number):
+    | { kind: 'instanced'; layer: TileInstanceLayer; index: number }
+    | { kind: 'individual'; mesh: THREE.Mesh }
+    | { kind: 'none' }
+  {
+    const key = `${row}-${col}`;
+    const individual = this.tileMeshes.get(key);
+    if (individual) return { kind: 'individual', mesh: individual };
+    for (const layer of this.tileInstanceLayers.values()) {
+      const idx = layer.findIndex(row, col);
+      if (idx >= 0) return { kind: 'instanced', layer, index: idx };
+    }
+    return { kind: 'none' };
   }
 
   rebuildTowerChildrenArray(): void {
@@ -70,9 +145,12 @@ export class BoardMeshRegistryService {
    * Caller computes newY (typically `elevation + BOARD_CONFIG.tileHeight / 2`).
    */
   translateTileMesh(row: number, col: number, newY: number): void {
-    const mesh = this.tileMeshes.get(`${row}-${col}`);
-    if (!mesh) return;
-    mesh.position.y = newY;
+    const surface = this.findTileSurface(row, col);
+    if (surface.kind === 'individual') {
+      surface.mesh.position.y = newY;
+    } else if (surface.kind === 'instanced') {
+      surface.layer.setElevationAt(row, col, newY);
+    }
   }
 
   /**
@@ -97,10 +175,12 @@ export class BoardMeshRegistryService {
 
   clear(): void {
     this.tileMeshes.clear();
+    this.tileInstanceLayers.clear();
     this.towerMeshes.clear();
     this.cliffMeshes.clear();
     this.gridLines = null;
     this.tileMeshArray = [];
+    this.tilePickables = [];
     this.towerChildrenArray = [];
   }
 }
