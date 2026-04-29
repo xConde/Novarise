@@ -91,9 +91,17 @@ export const RANGE_PREVIEW_CONFIG = {
 /** Selection ring shown around the currently selected placed tower. */
 export const SELECTION_RING_CONFIG = {
   radius: 0.55,
-  thickness: 0.04,
-  segments: 32,
-  color: 0xffffff,
+  /** Slightly thicker for the cool dark atmosphere — was 0.04 (UX-8). */
+  thickness: 0.05,
+  /** Smoother circle — was 32 (UX-8). */
+  segments: 64,
+  /**
+   * Cool off-white instead of pure 0xffffff (UX-8). Subtle cyan-blue tint
+   * harmonises with the board's cool palette without losing "selected"
+   * affordance. Pure white was visually loud against the new dark
+   * atmosphere.
+   */
+  color: 0xddeaff,
   opacity: 0.6,
   yOffset: 0.01,
 } as const;
