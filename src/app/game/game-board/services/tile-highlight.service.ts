@@ -33,8 +33,14 @@ export class TileHighlightService {
   /** Per-tile saved state — only populated for tiles being highlighted. */
   private savedHighlightState = new Map<string, SavedTileState>();
 
-  /** Per-tile saved state for the currently-selected tile. */
-  private selectedSaved: SavedTileState | null = null;
+  /**
+   * Per-tile selection state keyed by "row-col". Was a single slot pre-UX
+   * polish red-team fix — that collided when both BoardPointerService
+   * (clicking empty tile) and TowerSelectionService (clicking a placed
+   * tower) called applySelectionByCoord. Map keyed by coord lets both
+   * sources coexist without overwriting each other's saved state.
+   */
+  private selectedSavedByKey = new Map<string, SavedTileState>();
 
   /** Per-tile saved state for the currently-hovered tile. */
   private hoverSaved: SavedTileState | null = null;
@@ -125,7 +131,7 @@ export class TileHighlightService {
     this.clearHighlights();
     this.hoverKey = null;
     this.hoverSaved = null;
-    this.selectedSaved = null;
+    this.selectedSavedByKey.clear();
   }
 
   // ── Hover ───────────────────────────────────────────────────────────────
@@ -166,17 +172,20 @@ export class TileHighlightService {
     if (this.hoverKey === key) {
       this.restoreAfterHoverByCoord(row, col);
     }
-    if (this.selectedSaved) {
-      this.restoreTileState(this.selectedSaved);
+    // Idempotent: if this exact tile is already selected, no-op.
+    if (this.selectedSavedByKey.has(key)) {
+      return;
     }
-    this.selectedSaved = this.captureTileState(row, col);
+    this.selectedSavedByKey.set(key, this.captureTileState(row, col));
     this.applyTileTint(row, col, TILE_EMISSIVE.defaultColor, TILE_EMISSIVE.selected);
   }
 
-  restoreSelectionByCoord(_row: number, _col: number): void {
-    if (this.selectedSaved) {
-      this.restoreTileState(this.selectedSaved);
-      this.selectedSaved = null;
+  restoreSelectionByCoord(row: number, col: number): void {
+    const key = `${row}-${col}`;
+    const saved = this.selectedSavedByKey.get(key);
+    if (saved) {
+      this.restoreTileState(saved);
+      this.selectedSavedByKey.delete(key);
     }
   }
 

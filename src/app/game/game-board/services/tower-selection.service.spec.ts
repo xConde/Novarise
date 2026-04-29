@@ -5,6 +5,7 @@ import { TowerSelectionService } from './tower-selection.service';
 import { TowerCombatService } from './tower-combat.service';
 import { GameStateService } from './game-state.service';
 import { RangeVisualizationService } from './range-visualization.service';
+import { TileHighlightService } from './tile-highlight.service';
 import { GameBoardService } from '../game-board.service';
 import { SceneService } from './scene.service';
 import { RelicService } from '../../../run/services/relic.service';
@@ -39,6 +40,7 @@ describe('TowerSelectionService', () => {
   let towerCombatSpy: jasmine.SpyObj<TowerCombatService>;
   let gameStateSpy: jasmine.SpyObj<GameStateService>;
   let rangeVisSpy: jasmine.SpyObj<RangeVisualizationService>;
+  let tileHighlightSpy: jasmine.SpyObj<TileHighlightService>;
   let gameBoardSpy: jasmine.SpyObj<GameBoardService>;
   let sceneSpy: jasmine.SpyObj<SceneService>;
   let relicSpy: jasmine.SpyObj<RelicService>;
@@ -48,6 +50,9 @@ describe('TowerSelectionService', () => {
     gameStateSpy = createGameStateServiceSpy();
     rangeVisSpy = jasmine.createSpyObj<RangeVisualizationService>('RangeVisualizationService', [
       'showForTower', 'removePreview', 'cleanup', 'toggleAllRanges',
+    ]);
+    tileHighlightSpy = jasmine.createSpyObj<TileHighlightService>('TileHighlightService', [
+      'applySelectionByCoord', 'restoreSelectionByCoord',
     ]);
     gameBoardSpy = createGameBoardServiceSpy();
     sceneSpy = createSceneServiceSpy();
@@ -59,6 +64,7 @@ describe('TowerSelectionService', () => {
         { provide: TowerCombatService, useValue: towerCombatSpy },
         { provide: GameStateService, useValue: gameStateSpy },
         { provide: RangeVisualizationService, useValue: rangeVisSpy },
+        { provide: TileHighlightService, useValue: tileHighlightSpy },
         { provide: GameBoardService, useValue: gameBoardSpy },
         { provide: SceneService, useValue: sceneSpy },
         { provide: RelicService, useValue: relicSpy },
@@ -66,6 +72,34 @@ describe('TowerSelectionService', () => {
     });
 
     service = TestBed.inject(TowerSelectionService);
+  });
+
+  describe('UX-6 — tile glow under selected tower', () => {
+    it('selectPlacedTower applies tile selection highlight at tower coord', () => {
+      const tower = createMockTower({ row: 3, col: 5 });
+      towerCombatSpy.getTower.and.returnValue(tower);
+      const onCancel = jasmine.createSpy('onCancel');
+      service.selectPlacedTower(tower.id, onCancel);
+      expect(tileHighlightSpy.applySelectionByCoord).toHaveBeenCalledWith(3, 5);
+    });
+
+    it('deselectTower restores the tile highlight at the previously-selected coord', () => {
+      const tower = createMockTower({ row: 3, col: 5 });
+      towerCombatSpy.getTower.and.returnValue(tower);
+      const onCancel = jasmine.createSpy('onCancel');
+      service.selectPlacedTower(tower.id, onCancel);
+      service.deselectTower();
+      expect(tileHighlightSpy.restoreSelectionByCoord).toHaveBeenCalledWith(3, 5);
+    });
+
+    it('toggling off (selecting same tower twice) restores the tile highlight', () => {
+      const tower = createMockTower({ row: 4, col: 4 });
+      towerCombatSpy.getTower.and.returnValue(tower);
+      const onCancel = jasmine.createSpy('onCancel');
+      service.selectPlacedTower(tower.id, onCancel);
+      service.selectPlacedTower(tower.id, onCancel); // same id → deselect
+      expect(tileHighlightSpy.restoreSelectionByCoord).toHaveBeenCalledWith(4, 4);
+    });
   });
 
   it('should be created', () => {

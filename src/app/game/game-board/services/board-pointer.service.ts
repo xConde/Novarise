@@ -245,6 +245,18 @@ export class BoardPointerService implements OnDestroy {
     this.lastPreviewKey = '';
   }
 
+  /**
+   * Reset the canvas cursor to default. Called by GameBoardComponent on
+   * placement-mode exit (Escape, right-click, etc.) so a stale
+   * 'not-allowed' cursor from hovering an invalid tile in PLACE mode
+   * doesn't bleed through into INSPECT mode (UX-7 red-team fix).
+   */
+  resetCursor(): void {
+    if (this.canvas) {
+      this.canvas.style.cursor = 'default';
+    }
+  }
+
   /** Returns the currently selected tile (read-only). Used for tile highlight updates. */
   getSelectedTile(): { row: number; col: number } | null {
     return this.selectedTile;

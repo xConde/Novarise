@@ -48,8 +48,12 @@ export class TowerUpgradeVisualService {
   /**
    * Add a glow ring at the base of an upgraded tower.
    * towerId is used to track and replace existing rings.
+   *
+   * UX-9 red-team fix: optional `elevation` parameter so the ring sits
+   * on top of raised Highground tiles instead of buried inside them.
+   * Defaults to 0 for non-elevated tiles (no behaviour change).
    */
-  addGlowRing(towerId: string, position: { x: number; z: number }, scene: THREE.Scene): void {
+  addGlowRing(towerId: string, position: { x: number; z: number }, scene: THREE.Scene, elevation = 0): void {
     // Remove existing ring for this tower if any
     this.removeGlowRing(towerId, scene);
 
@@ -64,7 +68,7 @@ export class TowerUpgradeVisualService {
 
     const ring = new THREE.Mesh(geometry, material);
     ring.rotation.x = -Math.PI / 2; // Lay flat on ground
-    ring.position.set(position.x, 0.02, position.z);
+    ring.position.set(position.x, 0.02 + elevation, position.z);
 
     scene.add(ring);
     this.glowRings.set(towerId, ring);

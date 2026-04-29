@@ -797,10 +797,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.cardPlayService.cancelTileTarget();
     this.selectedTowerType = null;
     this.boardPointer.clearSelectedTile();
+    // UX-7 red-team fix: reset cursor so a stale 'not-allowed' from
+    // hovering an invalid tile in PLACE mode doesn't bleed through into
+    // INSPECT mode until the next mousemove fires.
+    this.boardPointer.resetCursor();
     this.clearTileHighlights();
     if (this.sceneService.getScene()) {
       this.towerPreviewService.hidePreview(this.sceneService.getScene());
     }
+    // Also hide the hover-range ring left over from PLACE mode
+    // (RangeVisualizationService.showForPosition).
+    this.rangeVisualizationService.hideHoverRange(this.sceneService.getScene());
   }
 
   /** Whether a tower type is selected for placement (PLACE mode).
