@@ -218,7 +218,14 @@ export class ElevationService {
     // spy-only BoardMeshRegistryService without the cliff map property.
     this.registry.cliffMeshes?.forEach(cliffMesh => {
       scene?.remove(cliffMesh);
-      cliffMesh.geometry.dispose();
+      // Skip dispose if geometry is registry-owned (Phase C sprint 12) —
+      // tiles at the same elevation tier share it. Pre-fix, this path
+      // disposed registry geometry on checkpoint-restore-failure fallback,
+      // poisoning subsequent encounters with disposed BoxGeometry from the
+      // shared cache.
+      if (!this.geometryRegistry?.isRegisteredGeometry(cliffMesh.geometry)) {
+        cliffMesh.geometry.dispose();
+      }
       // Material is pool-owned — DO NOT dispose here.
     });
     this.registry.cliffMeshes?.clear();

@@ -175,8 +175,11 @@ export class CheckpointRestoreCoordinatorService {
           mutation.priorType,
         );
 
-        // Swap the Three.js mesh to match restored tile type
-        this.pathMutationService.swapMesh(mutation.row, mutation.col, targetType, scene);
+        // Swap the Three.js mesh to match restored tile type. Pass `mutation.op`
+        // so swapMesh routes through TerraformMaterialPoolService for the
+        // teal/amber/red/violet tint — without it, restored mutations render
+        // as plain BASE/WALL tiles (Phase C sprint 30 red-team finding).
+        this.pathMutationService.swapMesh(mutation.row, mutation.col, targetType, scene, mutation.op);
       }
       // Invalidate path cache once after all mutations are replayed
       if (checkpoint.pathMutations.mutations.length > 0) {
