@@ -6,7 +6,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass';
-import { disposeMaterial, disposeMesh } from '@game/game-board/utils/three-utils';
+import { clampPixelRatio, disposeMaterial, disposeMesh } from '@game/game-board/utils/three-utils';
 import {
   EDITOR_SCENE_CONFIG,
   EDITOR_RENDERER_CONFIG,
@@ -113,6 +113,7 @@ export class EditorSceneService {
 
   // Resize handler — stored for removal on dispose
   private resizeHandler: (() => void) | null = null;
+  private resizeViewport: VisualViewport | null = null;
 
   // ----- Getters -----
 
@@ -156,7 +157,7 @@ export class EditorSceneService {
     onContextRestored: () => void
   ): void {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, EDITOR_RENDERER_CONFIG.maxPixelRatio));
+    this.renderer.setPixelRatio(clampPixelRatio(window.devicePixelRatio, EDITOR_RENDERER_CONFIG.maxPixelRatio));
 
     const { width, height } = this.getViewportSize();
     this.renderer.setSize(width, height);
@@ -188,7 +189,8 @@ export class EditorSceneService {
 
     window.addEventListener('resize', this.resizeHandler);
     if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', this.resizeHandler);
+      this.resizeViewport = window.visualViewport;
+      this.resizeViewport.addEventListener('resize', this.resizeHandler);
     }
   }
 
@@ -384,7 +386,7 @@ export class EditorSceneService {
     if (this.renderer) {
       // Re-apply pixel ratio: display switch / browser zoom can change
       // window.devicePixelRatio without recreating the renderer.
-      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, EDITOR_RENDERER_CONFIG.maxPixelRatio));
+      this.renderer.setPixelRatio(clampPixelRatio(window.devicePixelRatio, EDITOR_RENDERER_CONFIG.maxPixelRatio));
       this.renderer.setSize(width, height);
     }
     if (this.composer) {
@@ -464,8 +466,9 @@ export class EditorSceneService {
     // Resize handlers
     if (this.resizeHandler) {
       window.removeEventListener('resize', this.resizeHandler);
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', this.resizeHandler);
+      if (this.resizeViewport) {
+        this.resizeViewport.removeEventListener('resize', this.resizeHandler);
+        this.resizeViewport = null;
       }
       this.resizeHandler = null;
     }

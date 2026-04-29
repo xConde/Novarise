@@ -24,17 +24,6 @@ export function getMaterials(mesh: THREE.Mesh): THREE.Material[] {
 }
 
 /**
- * Traverse a Group (or any Object3D), dispose every Mesh AND Line descendant's
- * geometry and material(s), and optionally remove the root from the scene.
- *
- * Mesh and Line share the same `geometry` + `material: Material | Material[]`
- * shape, so the disposal is identical. Including Line lets callers like the
- * grid-lines cleanup path drop their inline traversal.
- *
- * Centralises the "traverse + dispose geometry/material" pattern used inline
- * across enemy.service, tower-combat.service, and enemy-health.service.
- */
-/**
  * Clamp a device pixel ratio to a maximum cap.
  *
  * On 3× retina displays an uncapped ratio triples post-processing fill rate
@@ -77,16 +66,25 @@ export function applyRendererPolicy(
   renderer.outputColorSpace = policy.outputColorSpace;
 }
 
+/**
+ * Traverse a Group (or any Object3D), dispose every Mesh and Line descendant's
+ * geometry and material(s), and optionally remove the root from the scene.
+ *
+ * Mesh and Line share the same `geometry` + `material: Material | Material[]`
+ * shape, so disposal is identical. Including Line lets callers like the
+ * grid-lines cleanup path drop their inline traversal.
+ *
+ * Tracks unique geometries and materials per call to prevent double-dispose
+ * when a group contains children that share a resource (e.g. grid lines
+ * sharing one LineBasicMaterial, or tower meshes sharing one
+ * MeshStandardMaterial across 4-7 child Meshes). Three.js silently no-ops
+ * repeat dispose() today, but it's UB and may break under stricter
+ * refcounting in future versions.
+ */
 export function disposeGroup(group: THREE.Object3D, scene?: THREE.Scene): void {
   if (scene) {
     scene.remove(group);
   }
-  // Track unique geometries + materials to prevent double-dispose when a
-  // group contains children that share a geometry or material (e.g. grid
-  // lines all sharing one LineBasicMaterial, or tower meshes sharing one
-  // MeshStandardMaterial across 4-7 child Meshes). Three.js silently
-  // no-ops repeat dispose() today, but it's UB and may break in future
-  // versions that refcount GPU resources strictly.
   const seenGeometries = new Set<THREE.BufferGeometry>();
   const seenMaterials = new Set<THREE.Material>();
   group.traverse((child) => {

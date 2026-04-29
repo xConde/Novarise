@@ -251,6 +251,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Animation
   private resizeHandler: () => void = () => {};
+  private resizeViewport: VisualViewport | null = null;
   private stateSubscription: Subscription | null = null;
   private hotkeySubscription: Subscription | null = null;
 
@@ -597,9 +598,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     };
     window.addEventListener('resize', this.resizeHandler);
     // Editor parity (editor-scene.service.ts:187): mobile address-bar
-    // show/hide changes layout viewport without firing 'resize'.
+    // show/hide changes layout viewport without firing 'resize'. Store
+    // the viewport reference so dispose can detach even if
+    // window.visualViewport later goes null (some Android WebViews).
     if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', this.resizeHandler);
+      this.resizeViewport = window.visualViewport;
+      this.resizeViewport.addEventListener('resize', this.resizeHandler);
     }
 
     const canvas = this.sceneService.getRenderer().domElement;
@@ -1480,16 +1484,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gameInput.cleanup();
     this.gamePauseService.cleanup();
     window.removeEventListener('resize', this.resizeHandler);
-    if (window.visualViewport) {
-      window.visualViewport.removeEventListener('resize', this.resizeHandler);
+    if (this.resizeViewport) {
+      this.resizeViewport.removeEventListener('resize', this.resizeHandler);
+      this.resizeViewport = null;
     }
     this.towerPlacementService.cleanup();
     this.boardPointer.cleanup();
     this.touchInteraction.cleanup();
 
-    if (this.sceneService.getControls()) {
-      this.sceneService.getControls().dispose();
-    }
+    // Controls disposal owned by sceneService.dispose() below — calling
+    // it here too would skip removeEventListener('change', ...) on the
+    // user-added listener (Phase A sprint 7 fix lives in sceneService).
 
     if (this.sceneService.getScene()) {
       this.cleanupGameObjects();
