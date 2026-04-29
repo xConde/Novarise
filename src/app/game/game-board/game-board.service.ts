@@ -253,55 +253,59 @@ export class GameBoardService {
     });
   }
 
-  // Create grid lines - interior lines positioned BETWEEN tiles (24x19)
+  /**
+   * Create grid lines — interior lines positioned BETWEEN tiles.
+   *
+   * Phase C sprint 28: collapsed from N+M individual `THREE.Line` objects in
+   * a Group (~30 children on a 24×19 board) to ONE `THREE.LineSegments` with
+   * all segment vertices in a single `BufferGeometry`. Same visual, single
+   * draw call.
+   *
+   * Returns a Group for API compatibility — the caller (renderGameBoard)
+   * adds this to the scene as a single child. Disposal goes through
+   * disposeGroup which traverses + disposes the LineSegments inside.
+   */
   createGridLines(): THREE.Group {
     const gridGroup = new THREE.Group();
 
-    // Subtle bioluminescent veins
+    const verticals = this.gameBoardWidth - 1; // interior columns
+    const horizontals = this.gameBoardHeight - 1; // interior rows
+    const segmentCount = verticals + horizontals;
+    if (segmentCount <= 0) return gridGroup;
+
+    // 2 vertices per segment, 3 floats each.
+    const positions = new Float32Array(segmentCount * 2 * 3);
+    let offset = 0;
+
+    // Vertical segments
+    for (let i = 1; i < this.gameBoardWidth; i++) {
+      const x = (i - this.gameBoardWidth / 2 - 0.5) * this.tileSize;
+      const z1 = (-this.gameBoardHeight / 2) * this.tileSize;
+      const z2 = (this.gameBoardHeight / 2 - 1) * this.tileSize;
+      positions[offset++] = x; positions[offset++] = 0.01; positions[offset++] = z1;
+      positions[offset++] = x; positions[offset++] = 0.01; positions[offset++] = z2;
+    }
+    // Horizontal segments
+    for (let i = 1; i < this.gameBoardHeight; i++) {
+      const z = (i - this.gameBoardHeight / 2 - 0.5) * this.tileSize;
+      const x1 = (-this.gameBoardWidth / 2) * this.tileSize;
+      const x2 = (this.gameBoardWidth / 2 - 1) * this.tileSize;
+      positions[offset++] = x1; positions[offset++] = 0.01; positions[offset++] = z;
+      positions[offset++] = x2; positions[offset++] = 0.01; positions[offset++] = z;
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    // Subtle bioluminescent veins.
     const gridMaterial = new THREE.LineBasicMaterial({
       color: 0x7a6a9a,
       transparent: true,
       opacity: 0.45,
-      linewidth: 1
+      linewidth: 1,
     });
-
-    // Create vertical lines between columns - positioned at tile boundaries
-    for (let i = 1; i < this.gameBoardWidth; i++) {
-      const geometry = new THREE.BufferGeometry();
-      // Shift by -0.5 to position lines BETWEEN tiles instead of at centers
-      const x = (i - this.gameBoardWidth / 2 - 0.5) * this.tileSize;
-      // Lines should only extend across actual tile range
-      const z1 = (-this.gameBoardHeight / 2) * this.tileSize;
-      const z2 = (this.gameBoardHeight / 2 - 1) * this.tileSize;
-
-      const vertices = new Float32Array([
-        x, 0.01, z1,
-        x, 0.01, z2
-      ]);
-
-      geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-      const line = new THREE.Line(geometry, gridMaterial);
-      gridGroup.add(line);
-    }
-
-    // Create horizontal lines between rows - positioned at tile boundaries
-    for (let i = 1; i < this.gameBoardHeight; i++) {
-      const geometry = new THREE.BufferGeometry();
-      // Shift by -0.5 to position lines BETWEEN tiles instead of at centers
-      const z = (i - this.gameBoardHeight / 2 - 0.5) * this.tileSize;
-      // Lines should only extend across actual tile range
-      const x1 = (-this.gameBoardWidth / 2) * this.tileSize;
-      const x2 = (this.gameBoardWidth / 2 - 1) * this.tileSize;
-
-      const vertices = new Float32Array([
-        x1, 0.01, z,
-        x2, 0.01, z
-      ]);
-
-      geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-      const line = new THREE.Line(geometry, gridMaterial);
-      gridGroup.add(line);
-    }
+    const lineSegments = new THREE.LineSegments(geometry, gridMaterial);
+    gridGroup.add(lineSegments);
 
     return gridGroup;
   }
