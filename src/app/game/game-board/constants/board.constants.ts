@@ -19,8 +19,14 @@ export const BOARD_CONFIG: BoardConfig = {
  * tuned by eye — group changes here, not in game-board.service.
  */
 export const TILE_VISUAL_CONFIG = {
-  /** Fraction of a tile's footprint that the box geometry occupies, leaving a thin grid gap. */
-  geometryGapFactor: 0.95,
+  /**
+   * Fraction of a tile's footprint that the box geometry occupies, leaving a
+   * thin grid gap. UX-12: tightened 0.95 → 0.97 for a more cohesive board
+   * surface. Original 0.95 left a visible 5% gap that read as "gridded UI"
+   * rather than "continuous terrain"; 0.97 keeps a 3% gap for grid-line
+   * legibility without the gridded-UI feel.
+   */
+  geometryGapFactor: 0.97,
   base: {
     emissiveIntensity: 0.35,
     metalness: 0.1,

@@ -22,10 +22,15 @@ export const HEALTH_BAR_CONFIG = {
   width: 0.5,
   height: 0.06,
   yOffset: 0.2,
-  bgColor: 0x333333,
-  colorGreen: 0x00ff00,
-  colorYellow: 0xffff00,
-  colorRed: 0xff0000,
+  /**
+   * UX-14: bg darkened from 0x333333 → 0x14181f so the colored FG pops
+   * against it on the new darker board. FG colors slightly softened
+   * (less neon, still alarming for low HP).
+   */
+  bgColor: 0x14181f,
+  colorGreen: 0x4cd66c,    // softer than 0x00ff00
+  colorYellow: 0xf0c845,   // warm gold vs harsh 0xffff00
+  colorRed: 0xe04a3a,      // alarming but less neon than 0xff0000
   thresholdHigh: 0.6,
   thresholdLow: 0.3
 };

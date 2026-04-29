@@ -45,8 +45,12 @@ export class GameBoardService {
   // chain. Tiny perceptual shift; not enough to need the +50% bump that
   // overshot the dark moody look.
   private readonly colorBase = 0x4a5366;    // small bump from 0x404858
-  private readonly colorSpawner = 0x00ffff;
-  private readonly colorExit = 0xff00ff;
+  // UX-11: spawner / exit toned from pure cyan / magenta to muted versions
+  // that read as "spawn portal" / "exit goal" without breaking the deep
+  // moody atmosphere. Pure 0x00ffff and 0xff00ff popped as UI-bright
+  // beacons against the dark board.
+  private readonly colorSpawner = 0x2db8c4;  // muted teal-cyan
+  private readonly colorExit = 0xc234a8;     // deep rose-magenta
   private readonly colorWall = 0x231c2c;    // small bump from 0x1a1520
   private readonly colorGrid = 0x444444;
 
@@ -325,10 +329,13 @@ export class GameBoardService {
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
     // Subtle bioluminescent veins.
+    // UX-13: color tinted slightly cooler (was 0x7a6a9a warm purple-grey)
+    // to match the new cool dark atmosphere; opacity reduced 0.45 → 0.30
+    // so the grid reads as ambient veining rather than UI overlay.
     const gridMaterial = new THREE.LineBasicMaterial({
-      color: 0x7a6a9a,
+      color: 0x6a7898,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.30,
       linewidth: 1,
     });
     const lineSegments = new THREE.LineSegments(geometry, gridMaterial);

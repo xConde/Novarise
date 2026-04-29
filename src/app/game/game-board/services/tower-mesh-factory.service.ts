@@ -125,8 +125,15 @@ export class TowerMeshFactoryService {
         const stemBase = this.cyl(0.28, 0.35, 0.3, 8);
         const stemMid = this.cyl(0.24, 0.28, 0.35, 8);
         const capBase = this.cyl(0.4, 0.3, 0.2, 12);
-        // capTop has extra params (phiStart, phiLength, thetaStart, thetaLength) — keep fresh.
-        const capTop = new THREE.SphereGeometry(0.38, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+        // capTop has extra params (phiStart, phiLength, thetaStart, thetaLength).
+        // UX-10: route through GeometryRegistry's escape hatch so it shares
+        // across all SPLASH placements/ghosts instead of allocating per call.
+        const capTop = this.geometryRegistry
+          ? this.geometryRegistry.getOrCreateCustom(
+              'splash:capTop',
+              () => new THREE.SphereGeometry(0.38, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+            )
+          : new THREE.SphereGeometry(0.38, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
         const spore1 = this.sphere(0.08, 6, 6);
         const spore2 = this.sphere(0.06, 6, 6);
         const spore3 = this.sphere(0.07, 6, 6);
