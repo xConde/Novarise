@@ -99,7 +99,6 @@ export class BoardPointerService implements OnDestroy {
         if (!isSelected) {
           this.hoveredCoord = coord;
           this.tileHighlightService.applyHoverByCoord(coord.row, coord.col);
-          this.canvas!.style.cursor = 'pointer';
         }
 
         const row = coord.row;
@@ -107,6 +106,17 @@ export class BoardPointerService implements OnDestroy {
         const phase = this.gameStateService.getState().phase;
         const isTerminal = phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT;
         const placement = this.callbacks!.getPlacementState();
+
+        // UX-7: cursor reflects placement validity in PLACE mode.
+        //   not-allowed → tile is structurally invalid (occupied, wall, etc.)
+        //   pointer    → valid placement target (affordability conveyed by ghost color)
+        //   default    → not in PLACE mode but over a tile
+        if (!isTerminal && !placement.selectedTowerInfo && placement.isPlaceMode) {
+          const structurallyValid = this.gameBoardService.canPlaceTower(row, col);
+          this.canvas!.style.cursor = structurallyValid ? 'pointer' : 'not-allowed';
+        } else if (!isSelected) {
+          this.canvas!.style.cursor = 'pointer';
+        }
 
         if (!isTerminal && !placement.selectedTowerInfo && placement.isPlaceMode) {
           const previewKey = `${row}-${col}-${placement.towerType}-${placement.gold}`;
