@@ -382,6 +382,9 @@ export class EditorSceneService {
       this.camera.updateProjectionMatrix();
     }
     if (this.renderer) {
+      // Re-apply pixel ratio: display switch / browser zoom can change
+      // window.devicePixelRatio without recreating the renderer.
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, EDITOR_RENDERER_CONFIG.maxPixelRatio));
       this.renderer.setSize(width, height);
     }
     if (this.composer) {
