@@ -1,0 +1,190 @@
+import * as THREE from 'three';
+import { BlockType } from '../models/game-board-tile';
+
+/**
+ * Wraps a single `THREE.InstancedMesh` representing every tile of one
+ * `BlockType` on the board. Handles matrix population, per-instance
+ * color (for highlights), coordinate lookups, and disposal.
+ *
+ * Sprint 21 ships this as a standalone class with full unit-test
+ * coverage. Sprints 22+ wire it into BoardMeshRegistryService,
+ * BoardPointerService, and TileHighlightService.
+ *
+ * Design rationale lives in
+ * `docs/threejs-polish/phase-c-instanced-tiles-spike.md`.
+ *
+ * Disposal contract:
+ *   - Caller owns the geometry + material lifecycle. They typically come
+ *     from GeometryRegistry / MaterialRegistry and are NOT disposed by
+ *     this layer.
+ *   - The InstancedMesh itself IS disposed on `.dispose()`.
+ */
+export class TileInstanceLayer {
+  readonly blockType: BlockType;
+  readonly mesh: THREE.InstancedMesh;
+
+  /** instanceId -> { row, col }. Same length as instance count. */
+  private readonly indexToCoord: Array<{ row: number; col: number }>;
+
+  /** "row-col" -> instanceId. */
+  private readonly coordToIndex: Map<string, number>;
+
+  /** Reusable scratch matrix to avoid allocation in setMatrixAt. */
+  private readonly scratchMatrix = new THREE.Matrix4();
+  private readonly scratchPosition = new THREE.Vector3();
+  private readonly scratchScale = new THREE.Vector3(1, 1, 1);
+  private readonly scratchQuaternion = new THREE.Quaternion();
+
+  /** Y position originally assigned at construction, per instance. */
+  private readonly baseY: number[];
+
+  constructor(
+    blockType: BlockType,
+    geometry: THREE.BufferGeometry,
+    material: THREE.Material,
+    instances: ReadonlyArray<{
+      row: number;
+      col: number;
+      worldX: number;
+      worldZ: number;
+      worldY: number;
+    }>,
+  ) {
+    this.blockType = blockType;
+    const count = instances.length;
+    this.mesh = new THREE.InstancedMesh(geometry, material, count);
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.castShadow = true;
+    this.mesh.receiveShadow = true;
+    this.mesh.userData['blockType'] = blockType;
+
+    this.indexToCoord = [];
+    this.coordToIndex = new Map();
+    this.baseY = [];
+
+    for (let i = 0; i < count; i++) {
+      const inst = instances[i];
+      this.scratchPosition.set(inst.worldX, inst.worldY, inst.worldZ);
+      this.scratchMatrix.compose(this.scratchPosition, this.scratchQuaternion, this.scratchScale);
+      this.mesh.setMatrixAt(i, this.scratchMatrix);
+      this.mesh.setColorAt(i, new THREE.Color(1, 1, 1));
+      this.indexToCoord.push({ row: inst.row, col: inst.col });
+      this.coordToIndex.set(this.coordKey(inst.row, inst.col), i);
+      this.baseY.push(inst.worldY);
+    }
+    this.mesh.instanceMatrix.needsUpdate = true;
+    if (this.mesh.instanceColor) {
+      this.mesh.instanceColor.needsUpdate = true;
+    }
+  }
+
+  /** Number of instances. */
+  get count(): number {
+    return this.indexToCoord.length;
+  }
+
+  /** Resolve a raycaster `intersection.instanceId` to its (row, col). */
+  lookupCoord(instanceId: number): { row: number; col: number } | null {
+    return this.indexToCoord[instanceId] ?? null;
+  }
+
+  /** Find the instance index for a (row, col), or -1 if not present in this layer. */
+  findIndex(row: number, col: number): number {
+    const idx = this.coordToIndex.get(this.coordKey(row, col));
+    return idx ?? -1;
+  }
+
+  /**
+   * Set the per-instance color for the tile at (row, col).
+   * The color multiplies with the material's base color in the shader.
+   * Returns false if the tile is not in this layer.
+   */
+  setColorAt(row: number, col: number, color: THREE.Color): boolean {
+    const idx = this.findIndex(row, col);
+    if (idx < 0) return false;
+    this.mesh.setColorAt(idx, color);
+    if (this.mesh.instanceColor) {
+      this.mesh.instanceColor.needsUpdate = true;
+    }
+    return true;
+  }
+
+  /** Reset the per-instance color to identity (1, 1, 1). */
+  resetColorAt(row: number, col: number): boolean {
+    return this.setColorAt(row, col, new THREE.Color(1, 1, 1));
+  }
+
+  /** Read the current per-instance color. Returns null if not present. */
+  getColorAt(row: number, col: number): THREE.Color | null {
+    const idx = this.findIndex(row, col);
+    if (idx < 0) return null;
+    const out = new THREE.Color();
+    this.mesh.getColorAt(idx, out);
+    return out;
+  }
+
+  /**
+   * Translate the Y position of the tile at (row, col) without touching X/Z.
+   * Used by ElevationService when a tile is raised/lowered (sprint 25).
+   */
+  setElevationAt(row: number, col: number, newY: number): boolean {
+    const idx = this.findIndex(row, col);
+    if (idx < 0) return false;
+    this.mesh.getMatrixAt(idx, this.scratchMatrix);
+    this.scratchMatrix.decompose(this.scratchPosition, this.scratchQuaternion, this.scratchScale);
+    this.scratchPosition.y = newY;
+    this.scratchMatrix.compose(this.scratchPosition, this.scratchQuaternion, this.scratchScale);
+    this.mesh.setMatrixAt(idx, this.scratchMatrix);
+    this.mesh.instanceMatrix.needsUpdate = true;
+    return true;
+  }
+
+  /**
+   * Move an instance to an "off-screen" position (very far Y). Used by
+   * sprint 24 when a tile mutates to a TerraformPool-managed type and
+   * the slot needs to be visually removed without resizing the
+   * InstancedMesh count.
+   */
+  hideAt(row: number, col: number): boolean {
+    const idx = this.findIndex(row, col);
+    if (idx < 0) return false;
+    this.mesh.getMatrixAt(idx, this.scratchMatrix);
+    this.scratchMatrix.decompose(this.scratchPosition, this.scratchQuaternion, this.scratchScale);
+    // Off-screen Y. Three.js frustum-culls based on the per-mesh bounding
+    // sphere though, so the InstancedMesh as a whole is still rendered;
+    // the hidden instance just samples a tile-sized box at Y = -1e6 which
+    // is below any real frustum.
+    this.scratchPosition.y = -1e6;
+    this.scratchMatrix.compose(this.scratchPosition, this.scratchQuaternion, this.scratchScale);
+    this.mesh.setMatrixAt(idx, this.scratchMatrix);
+    this.mesh.instanceMatrix.needsUpdate = true;
+    return true;
+  }
+
+  /**
+   * Restore an instance's Y to its construction-time baseY. Inverse of hideAt
+   * (or a revert from a setElevationAt call).
+   */
+  showAt(row: number, col: number): boolean {
+    const idx = this.findIndex(row, col);
+    if (idx < 0) return false;
+    return this.setElevationAt(row, col, this.baseY[idx]);
+  }
+
+  /**
+   * Dispose the InstancedMesh and detach from its parent if attached.
+   * Geometry + material are NOT disposed (registry-owned).
+   */
+  dispose(scene?: THREE.Scene): void {
+    if (scene) {
+      scene.remove(this.mesh);
+    } else if (this.mesh.parent) {
+      this.mesh.parent.remove(this.mesh);
+    }
+    this.mesh.dispose();
+  }
+
+  private coordKey(row: number, col: number): string {
+    return `${row}-${col}`;
+  }
+}
