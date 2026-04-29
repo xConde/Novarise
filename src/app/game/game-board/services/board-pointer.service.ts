@@ -113,12 +113,14 @@ export class BoardPointerService implements OnDestroy {
           if (previewKey !== this.lastPreviewKey) {
             this.lastPreviewKey = previewKey;
             const tileCost = this.gameStateService.getEffectiveTowerCost(placement.towerType!);
-            const canPlace = this.gameBoardService.canPlaceTower(row, col)
-              && this.gameStateService.canAfford(tileCost);
+            const structurallyValid = this.gameBoardService.canPlaceTower(row, col);
+            const canPlace = structurallyValid && this.gameStateService.canAfford(tileCost);
             this.towerPreviewService.showPreview(placement.towerType!, row, col, canPlace, this.sceneService.getScene());
-            // Show range ring at the hovered tile so players can see coverage
-            // before committing — only when placement is actually valid.
-            if (canPlace) {
+            // Show range ring whenever the tile is structurally placeable —
+            // affordability is conveyed by the red/valid ghost color, not by
+            // hiding the ring (which would strip range feedback exactly when
+            // players need gold-context).
+            if (structurallyValid) {
               this.rangeVisualizationService.showForPosition(
                 placement.towerType!,
                 row,

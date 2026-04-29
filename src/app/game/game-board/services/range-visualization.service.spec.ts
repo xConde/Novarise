@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { RangeVisualizationService } from './range-visualization.service';
-import { PlacedTower, TowerType, TargetingMode } from '../models/tower.model';
+import { PlacedTower, TowerType, TargetingMode, getEffectiveStats } from '../models/tower.model';
 import { RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG } from '../constants/ui.constants';
 
 // ---------------------------------------------------------------------------
@@ -269,6 +269,31 @@ describe('RangeVisualizationService', () => {
 
     it('is safe to call when nothing exists', () => {
       expect(() => service.cleanup(scene)).not.toThrow();
+    });
+  });
+
+  // Per-tower range coverage migrated from tower-preview.service.spec when
+  // sprint UX-1 removed the inline ring. RangeVisualizationService is now
+  // the sole owner of placement-preview range rings.
+  describe('showForPosition — range matches tower stats', () => {
+    const towerTypes = [
+      TowerType.BASIC,
+      TowerType.SNIPER,
+      TowerType.SPLASH,
+      TowerType.SLOW,
+      TowerType.CHAIN,
+      TowerType.MORTAR,
+    ];
+
+    towerTypes.forEach((type) => {
+      it(`range ring for ${type} uses level-1 range`, () => {
+        service.showForPosition(type, 5, 5, BOARD_WIDTH, BOARD_HEIGHT, TILE_SIZE, scene);
+        const ring = scene.children[0] as THREE.Mesh;
+        const geo = ring.geometry as THREE.RingGeometry;
+        const expectedRange = getEffectiveStats(type, 1).range;
+        expect(geo.parameters.outerRadius).toBeCloseTo(expectedRange);
+        service.hideHoverRange(scene);
+      });
     });
   });
 });
