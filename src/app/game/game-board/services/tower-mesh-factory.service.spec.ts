@@ -11,6 +11,9 @@ import {
   SNIPER_RECOIL_CONFIG,
   SPLASH_DRUM_CONFIG,
   SPLASH_TUBE_EMIT_CONFIG,
+  SLOW_EMITTER_PULSE_CONFIG,
+  SLOW_EMITTER_PULSE_FIRE,
+  SLOW_CRYSTAL_Y,
 } from '../constants/tower-anim.constants';
 
 function disposeGroupHelper(group: THREE.Group): void {
@@ -571,6 +574,120 @@ describe('TowerMeshFactoryService', () => {
       expect(tube1).toBeTruthy();
       expect(tube2).toBeTruthy();
       expect(tube1!.material).not.toBe(tube2!.material);
+    });
+  });
+
+  // --- SLOW tower redesign (Phase E) ---
+
+  describe('SLOW tower Phase E redesign', () => {
+    let slowGroup: THREE.Group;
+
+    beforeEach(() => {
+      slowGroup = service.createTowerMesh(5, 5, TowerType.SLOW, boardWidth, boardHeight);
+      createdGroups.push(slowGroup);
+    });
+
+    it('has no child named "crystal" (old ice-pad removed)', () => {
+      const crystal = slowGroup.getObjectByName('crystal');
+      expect(crystal).toBeUndefined();
+    });
+
+    it('has no child named "iceBase" (old pad removed)', () => {
+      const iceBase = slowGroup.getObjectByName('iceBase');
+      expect(iceBase).toBeUndefined();
+    });
+
+    it('has a child named "coil" (T1 pulse coil ring)', () => {
+      const coil = slowGroup.getObjectByName('coil');
+      expect(coil).toBeTruthy();
+    });
+
+    it('has a child named "emitter" (cryo emitter dish)', () => {
+      const emitter = slowGroup.getObjectByName('emitter');
+      expect(emitter).toBeTruthy();
+    });
+
+    it('emitter uses a separate material with emissiveIntensity at SLOW_EMITTER_PULSE_CONFIG.min', () => {
+      const emitter = slowGroup.getObjectByName('emitter') as THREE.Mesh | undefined;
+      expect(emitter).toBeTruthy();
+      expect(emitter!.material).toBeInstanceOf(THREE.MeshStandardMaterial);
+      const mat = emitter!.material as THREE.MeshStandardMaterial;
+      expect(mat.emissiveIntensity).toBeCloseTo(SLOW_EMITTER_PULSE_CONFIG.min, 4);
+    });
+
+    it('T2 coil2 part is hidden at creation with minTier=2', () => {
+      const coil2 = slowGroup.getObjectByName('coil2') as THREE.Object3D | undefined;
+      expect(coil2).toBeTruthy();
+      expect(coil2!.visible).toBeFalse();
+      expect(coil2!.userData['minTier']).toBe(2);
+    });
+
+    it('T3 crystalCore part is hidden at creation with minTier=3 and floatBob flag', () => {
+      const crystal = slowGroup.getObjectByName('crystalCore') as THREE.Object3D | undefined;
+      expect(crystal).toBeTruthy();
+      expect(crystal!.visible).toBeFalse();
+      expect(crystal!.userData['minTier']).toBe(3);
+      expect(crystal!.userData['floatBob']).toBeTrue();
+    });
+
+    it('registers an idleTick function on userData', () => {
+      expect(typeof slowGroup.userData['idleTick']).toBe('function');
+    });
+
+    it('idleTick modulates emitter emissiveIntensity within SLOW_EMITTER_PULSE_CONFIG bounds', () => {
+      const tick = slowGroup.userData['idleTick'] as (g: THREE.Group, t: number) => void;
+      const emitter = slowGroup.getObjectByName('emitter') as THREE.Mesh;
+      const mat = emitter.material as THREE.MeshStandardMaterial;
+
+      tick(slowGroup, 0);
+      const atZero = mat.emissiveIntensity;
+
+      tick(slowGroup, SLOW_EMITTER_PULSE_CONFIG.periodSec / 4);
+      const atQuarter = mat.emissiveIntensity;
+
+      expect(atZero).toBeGreaterThanOrEqual(SLOW_EMITTER_PULSE_CONFIG.min - 0.01);
+      expect(atQuarter).toBeLessThanOrEqual(SLOW_EMITTER_PULSE_CONFIG.max + 0.01);
+    });
+
+    it('idleTick rotates the coil ring around its Z axis', () => {
+      const tick = slowGroup.userData['idleTick'] as (g: THREE.Group, t: number) => void;
+      const coil = slowGroup.getObjectByName('coil') as THREE.Mesh;
+
+      tick(slowGroup, 0);
+      const atZero = coil.rotation.z;
+      tick(slowGroup, 1.0);
+      const atOne = coil.rotation.z;
+
+      expect(atOne).toBeGreaterThan(atZero);
+    });
+
+    it('idleTick bobs the crystalCore when floatBob is set and T3 is visible', () => {
+      const tick = slowGroup.userData['idleTick'] as (g: THREE.Group, t: number) => void;
+      const crystal = slowGroup.getObjectByName('crystalCore') as THREE.Mesh;
+      crystal.visible = true; // simulate T3 revealed
+
+      tick(slowGroup, 0);
+      const y0 = crystal.position.y;
+      tick(slowGroup, Math.PI / 2.4); // quarter-period of 1.2 rad/s sine
+      const y1 = crystal.position.y;
+
+      // Y must have changed from the base position
+      expect(Math.abs(y1 - SLOW_CRYSTAL_Y)).toBeGreaterThan(0.01);
+      // And the two values differ (it's animating)
+      expect(y0).not.toBeCloseTo(y1, 3);
+    });
+
+    it('registers a fireTick function on userData', () => {
+      expect(typeof slowGroup.userData['fireTick']).toBe('function');
+    });
+
+    it('fireTick stores emitterPulseStart and emitterPulseDuration on the group', () => {
+      const fire = slowGroup.userData['fireTick'] as (g: THREE.Group, d: number) => void;
+      fire(slowGroup, SLOW_EMITTER_PULSE_FIRE.durationSec);
+
+      expect(slowGroup.userData['emitterPulseStart']).toBeDefined();
+      expect(slowGroup.userData['emitterPulseDuration'])
+        .toBeCloseTo(SLOW_EMITTER_PULSE_FIRE.durationSec, 5);
     });
   });
 

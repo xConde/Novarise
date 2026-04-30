@@ -309,3 +309,95 @@ export const SPLASH_TUBE_EMIT_CONFIG = {
   /** Multiplier applied to the tube material's base emissiveIntensity during the pulse. */
   emissiveMultiplier: 3,
 } as const;
+
+// ─── SLOW tower constants ──────────────────────────────────────────────────────
+
+export const SLOW_GEOM = {
+  // Octahedron base (cut-gem look, flattened on Y)
+  octRadius:  0.32,
+  octDetail:  0,
+  octScaleY:  0.5,    // flatten to read as a pad from above
+
+  // Support struts (×3 at 120° offsets, small cylinders)
+  strutRadius:   0.04,
+  strutHeight:   0.12,
+  strutSegments: 6,
+  strutRadial:   0.26, // radial distance from axis to strut centre
+
+  // Pulse coil ring — torus geometry lying horizontal (T1; T2 adds a second)
+  coilRadius:     0.36, // distance from torus centre to tube centre
+  coilTube:       0.04,
+  coilRadSeg:     8,
+  coilTubSeg:     24,
+
+  // T2 second coil ring (slightly smaller for visual hierarchy)
+  coil2Radius:    0.28,
+
+  // Cryo emitter dish at top — concave half-sphere facing up
+  // Parameterised as SphereGeometry with phiStart/phiLength/thetaStart/thetaLength
+  emitterRadius:  0.22,
+  emitterWidSeg:  12,
+  emitterHeiSeg:  8,
+  // phiStart = 0, phiLength = Math.PI*2 (full circle)
+  // thetaStart = Math.PI/2 (equator), thetaLength = Math.PI/2 (upper bowl)
+  emitterThetaStart:  Math.PI / 2,
+  emitterThetaLen:    Math.PI / 2,
+
+  // T3 floating crystal core — small octahedron above the emitter dish
+  crystalRadius:  0.1,
+  crystalDetail:  0,
+  crystalBaseYOffset: 0.18, // distance above emitter centre when at rest
+} as const;
+
+// ─── SLOW Y positions relative to tower group origin ──────────────────────────
+
+/** Y centre of the octahedron base (sits at ground level). */
+export const SLOW_BASE_Y = SLOW_GEOM.octRadius * SLOW_GEOM.octScaleY * 0.5;
+
+/** Y centre of the coil ring (sits above the struts). */
+export const SLOW_COIL_Y = SLOW_GEOM.octRadius * SLOW_GEOM.octScaleY + 0.06;
+
+/** Y centre of the T2 second coil (one tube-diameter above the first). */
+export const SLOW_COIL2_Y = SLOW_COIL_Y + SLOW_GEOM.coilTube * 3;
+
+/** Y of the emitter dish centre (above the coil). */
+export const SLOW_EMITTER_Y = SLOW_COIL_Y + SLOW_GEOM.coilTube * 2 + SLOW_GEOM.emitterRadius * 0.7;
+
+/** Y of the T3 crystal core at rest (above the emitter). */
+export const SLOW_CRYSTAL_Y = SLOW_EMITTER_Y + SLOW_GEOM.crystalBaseYOffset;
+
+/** Y for the accent point-light (at emitter height). */
+export const SLOW_ACCENT_Y = SLOW_EMITTER_Y + 0.1;
+
+// ─── SLOW idle animation (emitter pulse + coil spin) ──────────────────────────
+
+export const SLOW_EMITTER_PULSE_CONFIG = {
+  /** Minimum emissive intensity for the breathing emitter dish. */
+  min:       0.7,
+  /** Maximum emissive intensity for the breathing emitter dish. */
+  max:       1.0,
+  /** Period of one full breath cycle in seconds. */
+  periodSec: 2.0,
+  /** Coil ring idle rotation speed (radians per second around its local Y axis). */
+  coilRotSpeed: 0.5,
+} as const;
+
+// ─── SLOW fire animation (emitter scale pulse) ─────────────────────────────────
+
+export const SLOW_EMITTER_PULSE_FIRE = {
+  /** Peak scale factor applied to the emitter dish on fire. */
+  scaleMax:    1.15,
+  /** Duration of the emitter scale pulse (seconds). */
+  durationSec: 0.3,
+} as const;
+
+// ─── SLOW frost-mist config (ambient particles — deferred to Phase H) ─────────
+
+export const SLOW_FROST_CONFIG = {
+  /** Target interval between each frost particle spawn (seconds). */
+  spawnIntervalSec: 0.4,
+  /** How many particles to emit per interval. */
+  particleCount: 1,
+  /** Downward drift speed per frame. */
+  fallSpeed: 0.02,
+} as const;

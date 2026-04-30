@@ -5,7 +5,7 @@ import { PlacedTower, TowerType, TargetingMode } from '../models/tower.model';
 import { BlockType } from '../models/game-board-tile';
 import { MUZZLE_FLASH_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
 import { ANIMATION_CONFIG } from '../constants/rendering.constants';
-import { BASIC_RECOIL_CONFIG, SPLASH_TUBE_EMIT_CONFIG } from '../constants/tower-anim.constants';
+import { BASIC_RECOIL_CONFIG, SPLASH_TUBE_EMIT_CONFIG, SLOW_EMITTER_PULSE_FIRE } from '../constants/tower-anim.constants';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1021,6 +1021,82 @@ describe('TowerAnimationService', () => {
       expect(barrel.position.y).toBeCloseTo(-BASIC_RECOIL_CONFIG.distance, 4);
 
       disposeRecoilGroup(group);
+    });
+  });
+
+  // ---- tickEmitterPulses ----
+
+  describe('tickEmitterPulses', () => {
+    function makeEmitterGroup(): { group: THREE.Group; emitter: THREE.Mesh } {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.SLOW;
+
+      const geo = new THREE.SphereGeometry(0.22, 8, 6);
+      const mat = new THREE.MeshStandardMaterial({ emissiveIntensity: 0.8 });
+      const emitter = new THREE.Mesh(geo, mat);
+      emitter.name = 'emitter';
+      group.add(emitter);
+
+      return { group, emitter };
+    }
+
+    it('handles an empty towerMeshes map gracefully', () => {
+      expect(() => service.tickEmitterPulses(new Map(), 1.0)).not.toThrow();
+    });
+
+    it('skips groups without emitterPulseStart state', () => {
+      const { group, emitter } = makeEmitterGroup();
+      emitter.scale.setScalar(1.0);
+      expect(() => service.tickEmitterPulses(new Map([['s', group]]), 1.0)).not.toThrow();
+      expect(emitter.scale.x).toBeCloseTo(1.0, 4);
+      emitter.geometry.dispose();
+      (emitter.material as THREE.Material).dispose();
+    });
+
+    it('scales emitter above 1.0 at the start of a pulse', () => {
+      const { group, emitter } = makeEmitterGroup();
+      const now = performance.now() / 1000;
+      group.userData['emitterPulseStart'] = now;
+      group.userData['emitterPulseDuration'] = SLOW_EMITTER_PULSE_FIRE.durationSec;
+
+      // Very small elapsed — emitter should be near peak scale
+      service.tickEmitterPulses(new Map([['s', group]]), now + 0.001);
+
+      expect(emitter.scale.x).toBeGreaterThan(1.0);
+      expect(emitter.scale.x).toBeLessThanOrEqual(SLOW_EMITTER_PULSE_FIRE.scaleMax + 0.01);
+
+      emitter.geometry.dispose();
+      (emitter.material as THREE.Material).dispose();
+    });
+
+    it('returns emitter scale to 1.0 and clears state after pulse expires', () => {
+      const { group, emitter } = makeEmitterGroup();
+      const now = performance.now() / 1000;
+      group.userData['emitterPulseStart'] = now;
+      group.userData['emitterPulseDuration'] = SLOW_EMITTER_PULSE_FIRE.durationSec;
+      emitter.scale.setScalar(1.1);
+
+      service.tickEmitterPulses(
+        new Map([['s', group]]),
+        now + SLOW_EMITTER_PULSE_FIRE.durationSec + 0.01,
+      );
+
+      expect(emitter.scale.x).toBeCloseTo(1.0, 4);
+      expect(group.userData['emitterPulseStart']).toBeUndefined();
+      expect(group.userData['emitterPulseDuration']).toBeUndefined();
+
+      emitter.geometry.dispose();
+      (emitter.material as THREE.Material).dispose();
+    });
+
+    it('does not error when the group has no emitter child', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.SLOW;
+      const now = performance.now() / 1000;
+      group.userData['emitterPulseStart'] = now;
+      group.userData['emitterPulseDuration'] = 0.3;
+
+      expect(() => service.tickEmitterPulses(new Map([['s', group]]), now + 0.001)).not.toThrow();
     });
   });
 });

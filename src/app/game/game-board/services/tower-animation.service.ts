@@ -5,7 +5,7 @@ import { BlockType } from '../models/game-board-tile';
 import { ANIMATION_CONFIG } from '../constants/rendering.constants';
 import { MUZZLE_FLASH_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
 import { getMaterials } from '../utils/three-utils';
-import { BASIC_RECOIL_CONFIG, SPLASH_TUBE_EMIT_CONFIG } from '../constants/tower-anim.constants';
+import { BASIC_RECOIL_CONFIG, SPLASH_TUBE_EMIT_CONFIG, SLOW_EMITTER_PULSE_FIRE } from '../constants/tower-anim.constants';
 
 @Injectable()
 export class TowerAnimationService {
@@ -282,6 +282,45 @@ export class TowerAnimationService {
         group.userData['tubeEmitStart'] = undefined;
         group.userData['tubeEmitDuration'] = undefined;
       }
+    }
+  }
+
+  /**
+   * Drive emitter-scale pulse animations on SLOW towers.
+   *
+   * Called once per animation frame alongside `tickRecoilAnimations` and
+   * `tickTubeEmits`. Each SLOW tower stores `userData['emitterPulseStart']`
+   * and `userData['emitterPulseDuration']` when `fireTick` is called. This
+   * method scales the 'emitter' dish from 1.0 → SLOW_EMITTER_PULSE_FIRE.scaleMax
+   * (quick ease-out) → back to 1.0 over the pulse duration, then clears state.
+   */
+  tickEmitterPulses(towerMeshes: Map<string, THREE.Group>, nowSeconds: number): void {
+    for (const group of towerMeshes.values()) {
+      const pulseStart = group.userData['emitterPulseStart'] as number | undefined;
+      const pulseDuration = group.userData['emitterPulseDuration'] as number | undefined;
+      if (pulseStart === undefined || pulseDuration === undefined || pulseDuration <= 0) continue;
+
+      const elapsed = nowSeconds - pulseStart;
+      const emitter = group.getObjectByName('emitter') as THREE.Mesh | undefined;
+
+      if (elapsed >= SLOW_EMITTER_PULSE_FIRE.durationSec) {
+        // Pulse complete — restore neutral scale and clear state
+        if (emitter) emitter.scale.setScalar(1.0);
+        group.userData['emitterPulseStart'] = undefined;
+        group.userData['emitterPulseDuration'] = undefined;
+        continue;
+      }
+
+      if (!emitter) continue;
+
+      // Normalised time [0..1] over the fixed pulse duration constant; easeOutCubic
+      const raw = elapsed / SLOW_EMITTER_PULSE_FIRE.durationSec;
+      const eased = 1 - Math.pow(1 - raw, 3);
+
+      // Scale expands quickly to peak then eases back toward 1.0
+      const scale = SLOW_EMITTER_PULSE_FIRE.scaleMax
+        - (SLOW_EMITTER_PULSE_FIRE.scaleMax - 1.0) * eased;
+      emitter.scale.setScalar(scale);
     }
   }
 

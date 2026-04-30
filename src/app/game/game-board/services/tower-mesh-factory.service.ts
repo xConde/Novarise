@@ -34,6 +34,14 @@ import {
   SPLASH_TUBE_T3_EXTRA,
   SPLASH_DRUM_CONFIG,
   SPLASH_TUBE_EMIT_CONFIG,
+  SLOW_GEOM,
+  SLOW_BASE_Y,
+  SLOW_COIL_Y,
+  SLOW_COIL2_Y,
+  SLOW_EMITTER_Y,
+  SLOW_CRYSTAL_Y,
+  SLOW_ACCENT_Y,
+  SLOW_EMITTER_PULSE_CONFIG,
 } from '../constants/tower-anim.constants';
 
 @Injectable()
@@ -735,30 +743,181 @@ export class TowerMeshFactoryService {
       }
 
       case TowerType.SLOW: {
-        // Ice/freeze pad — flat wide cylinder base with a raised ring on top
-        const iceBase = this.cyl(0.4, 0.45, 0.15, 12);
-        const icePillar = this.cyl(0.18, 0.22, 0.45, 8);
-        const iceRingOuter = this.cyl(0.42, 0.42, 0.08, 24);
-        const iceRingInner = this.cyl(0.32, 0.32, 0.09, 24);
-        const iceCrystal = this.oct(0.14, 0);
+        // Crystalline cryo emitter on pulse-coil base (field-effect support tower)
 
-        const slBase = new THREE.Mesh(iceBase, mat);
-        slBase.position.y = 0.075;
+        // ── Octahedron base (cut-gem, flattened on Y) ───────────────────────
+        const baseGeom = this.oct(SLOW_GEOM.octRadius, SLOW_GEOM.octDetail);
+        const base = new THREE.Mesh(baseGeom, mat);
+        base.position.y = SLOW_BASE_Y;
+        base.scale.y = SLOW_GEOM.octScaleY;
+        towerGroup.add(base);
 
-        const slPillar = new THREE.Mesh(icePillar, mat);
-        slPillar.position.y = 0.375;
+        // ── Support struts (×3, 120° offsets) ───────────────────────────────
+        const strutGeom = this.cyl(
+          SLOW_GEOM.strutRadius, SLOW_GEOM.strutRadius,
+          SLOW_GEOM.strutHeight, SLOW_GEOM.strutSegments,
+        );
+        for (let i = 0; i < 3; i++) {
+          const angle = (i / 3) * Math.PI * 2;
+          const strut = new THREE.Mesh(strutGeom, mat);
+          strut.position.set(
+            Math.cos(angle) * SLOW_GEOM.strutRadial,
+            SLOW_GEOM.strutHeight / 2,
+            Math.sin(angle) * SLOW_GEOM.strutRadial,
+          );
+          towerGroup.add(strut);
+        }
 
-        const slRingOuter = new THREE.Mesh(iceRingOuter, mat);
-        slRingOuter.position.y = 0.64;
+        // ── T1 pulse coil ring (horizontal torus, named 'coil') ─────────────
+        const coilGeom = this.geometryRegistry
+          ? this.geometryRegistry.getOrCreateCustom(
+              'slow:coil',
+              () => new THREE.TorusGeometry(
+                SLOW_GEOM.coilRadius, SLOW_GEOM.coilTube,
+                SLOW_GEOM.coilRadSeg, SLOW_GEOM.coilTubSeg,
+              ),
+            )
+          : new THREE.TorusGeometry(
+              SLOW_GEOM.coilRadius, SLOW_GEOM.coilTube,
+              SLOW_GEOM.coilRadSeg, SLOW_GEOM.coilTubSeg,
+            );
+        const coilMesh = new THREE.Mesh(coilGeom, mat);
+        coilMesh.name = 'coil';
+        coilMesh.rotation.x = -Math.PI / 2; // lie horizontal
+        coilMesh.position.y = SLOW_COIL_Y;
+        towerGroup.add(coilMesh);
 
-        const slRingInner = new THREE.Mesh(iceRingInner, mat);
-        slRingInner.position.y = 0.645;
+        // ── T2: second coil ring (hidden until T2, slightly smaller radius) ──
+        const coil2Geom = this.geometryRegistry
+          ? this.geometryRegistry.getOrCreateCustom(
+              'slow:coil2',
+              () => new THREE.TorusGeometry(
+                SLOW_GEOM.coil2Radius, SLOW_GEOM.coilTube,
+                SLOW_GEOM.coilRadSeg, SLOW_GEOM.coilTubSeg,
+              ),
+            )
+          : new THREE.TorusGeometry(
+              SLOW_GEOM.coil2Radius, SLOW_GEOM.coilTube,
+              SLOW_GEOM.coilRadSeg, SLOW_GEOM.coilTubSeg,
+            );
+        const coil2Mesh = new THREE.Mesh(coil2Geom, mat);
+        coil2Mesh.name = 'coil2';
+        coil2Mesh.rotation.x = -Math.PI / 2;
+        coil2Mesh.position.y = SLOW_COIL2_Y;
+        coil2Mesh.visible = false;
+        coil2Mesh.userData['minTier'] = 2;
+        towerGroup.add(coil2Mesh);
 
-        const slCrystal = new THREE.Mesh(iceCrystal, mat);
-        slCrystal.name = 'crystal';
-        slCrystal.position.y = 0.82;
+        // ── Cryo emitter dish (concave bowl facing up, named 'emitter') ──────
+        // SphereGeometry with thetaStart = Math.PI/2 so only the upper bowl renders
+        const slowCfg = TOWER_MATERIAL_CONFIGS[TowerType.SLOW];
+        const emitterGeom = this.geometryRegistry
+          ? this.geometryRegistry.getOrCreateCustom(
+              'slow:emitterDish',
+              () => new THREE.SphereGeometry(
+                SLOW_GEOM.emitterRadius,
+                SLOW_GEOM.emitterWidSeg,
+                SLOW_GEOM.emitterHeiSeg,
+                0,
+                Math.PI * 2,
+                SLOW_GEOM.emitterThetaStart,
+                SLOW_GEOM.emitterThetaLen,
+              ),
+            )
+          : new THREE.SphereGeometry(
+              SLOW_GEOM.emitterRadius,
+              SLOW_GEOM.emitterWidSeg,
+              SLOW_GEOM.emitterHeiSeg,
+              0,
+              Math.PI * 2,
+              SLOW_GEOM.emitterThetaStart,
+              SLOW_GEOM.emitterThetaLen,
+            );
+        const emitterMat = this.materialRegistry
+          ? this.materialRegistry.getOrCreate(
+              'slow:emitter',
+              () => new THREE.MeshStandardMaterial({
+                color:             slowCfg.color,
+                emissive:          new THREE.Color(slowCfg.emissive),
+                emissiveIntensity: SLOW_EMITTER_PULSE_CONFIG.min,
+                metalness:         slowCfg.metalness,
+                roughness:         slowCfg.roughness,
+                transparent:       slowCfg.transparent,
+                opacity:           slowCfg.opacity,
+              }),
+            )
+          : new THREE.MeshStandardMaterial({
+              color:             slowCfg.color,
+              emissive:          new THREE.Color(slowCfg.emissive),
+              emissiveIntensity: SLOW_EMITTER_PULSE_CONFIG.min,
+              metalness:         slowCfg.metalness,
+              roughness:         slowCfg.roughness,
+              transparent:       slowCfg.transparent,
+              opacity:           slowCfg.opacity,
+            });
+        const emitterMesh = new THREE.Mesh(emitterGeom, emitterMat);
+        emitterMesh.name = 'emitter';
+        // Flip 180° around X so the open bowl faces upward
+        emitterMesh.rotation.x = Math.PI;
+        emitterMesh.position.y = SLOW_EMITTER_Y;
+        towerGroup.add(emitterMesh);
 
-        towerGroup.add(slBase, slPillar, slRingOuter, slRingInner, slCrystal);
+        // ── T3: floating crystal core (small octahedron, named 'crystalCore') ─
+        const crystalGeom = this.oct(SLOW_GEOM.crystalRadius, SLOW_GEOM.crystalDetail);
+        const crystalCore = new THREE.Mesh(crystalGeom, mat);
+        crystalCore.name = 'crystalCore';
+        crystalCore.position.y = SLOW_CRYSTAL_Y;
+        crystalCore.visible = false;
+        crystalCore.userData['minTier'] = 3;
+        crystalCore.userData['floatBob'] = true;
+        towerGroup.add(crystalCore);
+
+        // ── Idle animation: emitter breathes + coil spins slowly ─────────────
+        towerGroup.userData['idleTick'] = (group: THREE.Group, t: number): void => {
+          // Emitter emissive intensity — sine breath
+          const emitter = group.getObjectByName('emitter') as THREE.Mesh | undefined;
+          if (emitter && emitter.material instanceof THREE.MeshStandardMaterial) {
+            const range = SLOW_EMITTER_PULSE_CONFIG.max - SLOW_EMITTER_PULSE_CONFIG.min;
+            const omega = (Math.PI * 2) / SLOW_EMITTER_PULSE_CONFIG.periodSec;
+            emitter.material.emissiveIntensity =
+              SLOW_EMITTER_PULSE_CONFIG.min + range * (0.5 + 0.5 * Math.sin(t * omega));
+          }
+
+          // Coil ring — slow rotation around its up-axis (the torus is already
+          // lying flat, so world-Y rotation gives a "spinning ring" detail)
+          const coil = group.getObjectByName('coil') as THREE.Mesh | undefined;
+          if (coil) {
+            coil.rotation.z = t * SLOW_EMITTER_PULSE_CONFIG.coilRotSpeed;
+          }
+
+          // T3 crystal core — slow Y bob
+          group.traverse(child => {
+            if (child.userData['floatBob'] && child instanceof THREE.Mesh) {
+              const baseY = child.userData['floatBobBaseY'] as number | undefined
+                ?? SLOW_CRYSTAL_Y;
+              if (child.userData['floatBobBaseY'] === undefined) {
+                child.userData['floatBobBaseY'] = baseY;
+              }
+              child.position.y = baseY + Math.sin(t * 1.2) * 0.04;
+            }
+          });
+        };
+
+        // ── Firing animation: emitter scale pulse ────────────────────────────
+        towerGroup.userData['fireTick'] = (group: THREE.Group, duration: number): void => {
+          group.userData['emitterPulseStart'] = performance.now() / 1000;
+          group.userData['emitterPulseDuration'] = duration;
+        };
+
+        // ── Accent point light at emitter height ─────────────────────────────
+        const isSlowLowEnd = typeof document !== 'undefined'
+          && document.body.classList.contains('reduce-motion');
+        this.attachAccentLight(towerGroup, TowerType.SLOW, isSlowLowEnd);
+        const slowLight = towerGroup.userData['accentLight'] as THREE.PointLight | undefined;
+        if (slowLight) {
+          slowLight.position.set(0, SLOW_ACCENT_Y, 0);
+        }
+
         break;
       }
 

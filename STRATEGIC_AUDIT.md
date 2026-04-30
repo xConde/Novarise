@@ -2077,5 +2077,5 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 
 ### Deferred Findings (non-critical, no fix this commit)
 
-- **Finding D-a (MEDIUM):** `heatVent` material (`emissiveIntensity: 0.9`) is NOT in `applyUpgradeVisuals`'s skip-set (`['tip', 'orb', 'scope']`). On T3 upgrade the ratchet overwrites the vent's intentional glow to `emissiveBase + 2 * emissiveIncrement`. Needs `'heatVent'` added to `animatedNames` in `tower-upgrade-visual.service.ts`.
+- **Finding D-a (MEDIUM):** `heatVent` material (`emissiveIntensity: 0.9`) is NOT in `applyUpgradeVisuals`'s skip-set (`['tip', 'orb', 'scope']`). On T3 upgrade the ratchet overwrites the vent's intentional glow to `emissiveBase + 2 * emissiveIncrement`. Needs `'heatVent'` added to `animatedNames` in `tower-upgrade-visual.service.ts`. **Status:** Fixed in Phase E — `'heatVent'` and `'emitter'` (SLOW idle-driven mesh) both added to skip-set.
 - **Finding D-b (LOW):** `drumPrevT` uses the `t` parameter (from `time * msToSeconds`) while `drumSpinBoostUntil` uses `performance.now() / 1000` directly. Both are the same clock, so no current bug — but if `updateTowerAnimations` is ever called with a synthetic `time` in tests, boost detection will use wall clock vs test clock and produce wrong results. Track for Phase H cohesion sprint.

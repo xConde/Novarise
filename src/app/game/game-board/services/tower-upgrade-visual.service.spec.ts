@@ -184,6 +184,40 @@ describe('TowerUpgradeVisualService', () => {
       mat.dispose();
     });
 
+    it('should skip "heatVent" child (SPLASH T3 intentional emissive)', () => {
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+      mat.emissiveIntensity = 0.9; // intentional T3 heat-vent glow
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = 'heatVent';
+      const group = new THREE.Group();
+      group.add(mesh);
+
+      service.applyUpgradeVisuals(group, 3);
+
+      expect(mat.emissiveIntensity).toBeCloseTo(0.9, 4);
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('should skip "emitter" child (SLOW idle-driven emissive)', () => {
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+      mat.emissiveIntensity = 0.85; // mid-breath value set by idleTick
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = 'emitter';
+      const group = new THREE.Group();
+      group.add(mesh);
+
+      service.applyUpgradeVisuals(group, 2);
+
+      expect(mat.emissiveIntensity).toBeCloseTo(0.85, 4);
+
+      geo.dispose();
+      mat.dispose();
+    });
+
     it('should apply specialization tint when specialization is provided', () => {
       const geo = new THREE.BoxGeometry(1, 1, 1);
       const mat = new THREE.MeshStandardMaterial();

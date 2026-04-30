@@ -159,9 +159,11 @@ export class TowerUpgradeVisualService {
     const scale = TOWER_VISUAL_CONFIG.scaleBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
     towerGroup.scale.set(scale, scale, scale);
 
-    // 'tip', 'orb', 'scope' are driven per-frame by animation ticks — skip them
-    // here so the emissive boost doesn't override their per-frame values.
-    const animatedNames = new Set(['tip', 'orb', 'scope']);
+    // 'tip', 'orb', 'scope', 'heatVent', 'emitter' are driven per-frame by
+    // animation ticks — skip them here so the emissive boost doesn't override
+    // their per-frame values.  heatVent (SPLASH T3) and emitter (SLOW idle)
+    // both have intentional emissive intensities that must not be ratcheted.
+    const animatedNames = new Set(['tip', 'orb', 'scope', 'heatVent', 'emitter']);
     towerGroup.traverse(child => {
       if (
         child instanceof THREE.Mesh &&
