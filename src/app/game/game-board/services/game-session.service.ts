@@ -35,6 +35,7 @@ import { MaterialRegistryService } from './material-registry.service';
 import { TextSpritePoolService } from './text-sprite-pool.service';
 import { GoldPopupService } from './gold-popup.service';
 import { VfxPoolService } from './vfx-pool.service';
+import { TowerDecalLibraryService } from './tower-decal-library.service';
 import { buildDisposeProtect, disposeGroup } from '../utils/three-utils';
 
 /**
@@ -84,6 +85,9 @@ export class GameSessionService {
     // @Optional() — LinkMeshService owns all link-mesh disposal; cleanupScene
     // delegates to its dispose().
     @Optional() private linkMeshService?: LinkMeshService,
+    // @Optional() — Phase A tower polish. Caches CanvasTextures; dispose()
+    // must be called at encounter teardown to release GPU texture memory.
+    @Optional() private towerDecalLibrary?: TowerDecalLibraryService,
   ) {}
 
   /**
@@ -240,6 +244,10 @@ export class GameSessionService {
     // CombatVFXService.cleanup() (called via towerCombatService.cleanup())
     // already released the active visuals back into the pool above.
     this.vfxPool?.dispose();
+
+    // Dispose decal CanvasTextures. Must run after tower mesh disposal so any
+    // material that held a decal texture reference is already gone.
+    this.towerDecalLibrary?.dispose();
 
     // Dispose grid lines (Mesh + Line children, both handled by disposeGroup).
     // Grid material is currently per-instance; once Phase B sprint 28 (or

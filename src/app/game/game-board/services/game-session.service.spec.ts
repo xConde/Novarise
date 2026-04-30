@@ -30,6 +30,7 @@ import { GamePauseService } from './game-pause.service';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
+import { TowerDecalLibraryService } from './tower-decal-library.service';
 import { GameState, DifficultyLevel, GamePhase } from '../models/game-state.model';
 import { GameStats } from './game-stats.service';
 import { ChallengeSnapshot } from './challenge-tracking.service';
@@ -60,6 +61,7 @@ describe('GameSessionService', () => {
   let wavePreviewSpy: jasmine.SpyObj<WavePreviewService>;
   let gamePauseSpy: jasmine.SpyObj<GamePauseService>;
   let terraformPoolSpy: jasmine.SpyObj<TerraformMaterialPoolService>;
+  let decalLibrarySpy: jasmine.SpyObj<TowerDecalLibraryService>;
   let scene: THREE.Scene;
 
   beforeEach(() => {
@@ -158,6 +160,11 @@ describe('GameSessionService', () => {
     // material disposal path is exercised (no actual pooled meshes in registry).
     terraformPoolSpy.isPoolMaterial.and.returnValue(false);
 
+    decalLibrarySpy = jasmine.createSpyObj<TowerDecalLibraryService>(
+      'TowerDecalLibraryService',
+      ['getDecal', 'dispose'],
+    );
+
     TestBed.configureTestingModule({
       providers: [
         GameSessionService,
@@ -194,6 +201,7 @@ describe('GameSessionService', () => {
           useValue: jasmine.createSpyObj<ElevationService>('ElevationService', ['reset']),
         },
         { provide: TerraformMaterialPoolService, useValue: terraformPoolSpy },
+        { provide: TowerDecalLibraryService, useValue: decalLibrarySpy },
       ],
     });
 
@@ -364,6 +372,11 @@ describe('GameSessionService', () => {
     it('should call terraformPool.dispose() during cleanupScene', () => {
       service.cleanupScene();
       expect(terraformPoolSpy.dispose).toHaveBeenCalled();
+    });
+
+    it('should call towerDecalLibrary.dispose() during cleanupScene to release CanvasTexture GPU memory', () => {
+      service.cleanupScene();
+      expect(decalLibrarySpy.dispose).toHaveBeenCalled();
     });
 
     it('should not dispose pool materials via individual mesh disposal', () => {

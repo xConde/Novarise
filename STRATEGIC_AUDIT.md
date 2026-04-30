@@ -1948,3 +1948,37 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 - **WYRM_ASCENDANT wave placement:** currently in wave 10 alongside VEINSEEKER (hard cohabitation). If Phase 4 or balance PR adds wave 15/20 boss slots, migrate WYRM out. Tracked in the sprint-39 commit body TODO.
 
 **Verdict:** Phase 4 can proceed. The carryover list is **smaller** than Phase 2's close — Phase 3's red-team gate surfaced exactly one production-blocking bug (Finding 1), which was fixed this phase. The composition-spec lesson should become a Phase 4 entry criterion. The damage-stack refactor (critique #2) and the cliff-mesh-service extraction (critique #4) are polish backlog — neither gates Phase 4 primitives or card work.
+
+---
+
+## Red Team Critique — Phase A (Tower Polish Foundation) — 2026-04-30
+
+### Finding 1: TowerDecalLibraryService.dispose() never called — CanvasTexture leak on every encounter teardown (CRITICAL)
+
+**Location:** `tower-decal-library.service.ts` / `game-session.service.ts`
+
+**Risk:** `TowerDecalLibraryService` is component-scoped and provides a `dispose()` method that frees all cached `THREE.CanvasTexture` GPU allocations. However, nothing in `GameBoardComponent.ngOnDestroy()`, `cleanupGameObjects()`, or `GameSessionService.cleanupScene()` calls it. Every encounter teardown leaks up to 4 `CanvasTexture` objects (one per `DecalKey`). In a long run session with repeated encounter restarts, this compounds. The service's own JSDoc says "callers must NOT call `.dispose()` on the returned texture directly; call `this.dispose()` to tear down the whole library at encounter teardown" — which is exactly what the codebase was not doing.
+
+**Fix:** Added `TowerDecalLibraryService` as an `@Optional()` dependency in `GameSessionService`. Call `this.towerDecalLibrary?.dispose()` in `cleanupScene()` after `vfxPool.dispose()` (textures should release after all meshes referencing them are gone). Added regression spec: `should call towerDecalLibrary.dispose() during cleanupScene`.
+
+**Status:** Fixed in commit [pending]
+
+---
+
+### Finding 2: fireTick callback not isolated — a throwing hook halts the entire fireTurn pass (HIGH)
+
+**Location:** `tower-animation.service.ts:102`
+
+**Risk:** `triggerFire()` calls `fireTick(tower.mesh, duration)` with no try/catch. If any Phase B–G implementation registers a `fireTick` that throws (a common regression path when refactoring animation code), the exception propagates up through `TowerCombatService.fireTurn()` at the `this.towerAnimationService.triggerFire(tower)` call site. This terminates the entire `for (const tower of towerList)` loop mid-pass: every tower after the throwing one fails to fire that turn without any log or user-visible signal. Combat silently breaks. The existing test confirms "does not error when `fireTick` is absent" but has no coverage for a `fireTick` that throws.
+
+**Fix (not yet applied — Phase B entry criterion):** Wrap the `fireTick` invocation in `try/catch` and log a `console.error` (dev-only guard via `isDevMode()`) so the broken hook surfaces in development but does not interrupt combat for other towers. Alternatively, validate each `fireTick` at registration time (type + smoke test) and reject invalid registrations. The test to add: `it('isolates a throwing fireTick so other tower combat continues')` in `tower-animation.service.spec.ts`.
+
+---
+
+### Finding 3: idleTick/named-mesh traverse double-writes crystal position — comment contradicts code behavior (MEDIUM)
+
+**Location:** `tower-animation.service.ts:11–31`, `tower-animation.service.ts:38–48`
+
+**Risk:** The JSDoc says "bespoke animations [registered via `idleTick`] take priority over the generic ones below." The code does NOT implement that priority. `idleTick` runs first, but the named-mesh traverse runs unconditionally afterward with no guard. If a Phase B BASIC tower's `idleTick` sets `crystal.position.y = 1.35` (rest pose) and then the `'crystal'` branch immediately overwrites it with `TOWER_ANIM_CONFIG.crystalBaseY + sin(...)`, the `idleTick` result is silently discarded every frame. The effective winner is always the traverse — the opposite of what the comment promises. Phase B developers will register an `idleTick` that appears to work in isolation (unit test with a spy) but does nothing in production because the traverse stomps it.
+
+**Fix (not yet applied — Phase B entry criterion before any BASIC redesign sprint):** Either (a) skip the named-mesh case for a given child if `idleTick` is registered on the group (opt-out flag on `userData['skipLegacyAnims']`), or (b) add a guard inside the `'crystal'` case: `if (typeof group.userData['idleTick'] === 'function') break;`. Option (b) is surgical and lower-risk. The test to add: registers both an `idleTick` spy and adds a named `crystal` child; asserts that after `updateTowerAnimations`, the crystal's `position.y` reflects only the `idleTick` output, not the legacy traverse formula.
