@@ -1607,5 +1607,238 @@ describe('TowerAnimationService', () => {
       mortarMat.dispose();
       geo.dispose();
     });
+
+    // Sprint 4 — Baseline assertion invariant for all 6 tower configs
+
+    describe('baseline invariant — all six tower configs return to baseline after 10 fire cycles', () => {
+      interface TowerConfig {
+        type: TowerType;
+        baselineIntensity: number;
+        label: string;
+      }
+
+      const TOWER_CONFIGS: TowerConfig[] = [
+        { type: TowerType.BASIC,  baselineIntensity: 0.4,  label: 'BASIC'  },
+        { type: TowerType.SNIPER, baselineIntensity: 0.45, label: 'SNIPER' },
+        { type: TowerType.SPLASH, baselineIntensity: 0.4,  label: 'SPLASH' },
+        { type: TowerType.SLOW,   baselineIntensity: 0.45, label: 'SLOW'   },
+        { type: TowerType.CHAIN,  baselineIntensity: 0.4,  label: 'CHAIN'  },
+        { type: TowerType.MORTAR, baselineIntensity: 0.3,  label: 'MORTAR' },
+      ];
+
+      for (const cfg of TOWER_CONFIGS) {
+        it(`${cfg.label}: emissive returns to baseline (${cfg.baselineIntensity}) after 10 fire cycles`, () => {
+          const mat = new THREE.MeshStandardMaterial({ emissiveIntensity: cfg.baselineIntensity });
+          const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+          const group = new THREE.Group();
+          group.userData['towerType'] = cfg.type;
+          const body = new THREE.Mesh(geo, mat);
+          body.name = 'body';
+          group.add(body);
+
+          // Snapshot baselines (mirrors TowerMeshFactoryService.snapshotEmissiveBaselines)
+          const baselines = new Map<string, number>();
+          group.traverse(child => {
+            if (!(child instanceof THREE.Mesh)) return;
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            for (const m of mats) {
+              baselines.set(child.uuid + '_' + m.uuid,
+                (m as THREE.MeshStandardMaterial).emissiveIntensity);
+            }
+          });
+          group.userData['emissiveBaselines'] = baselines;
+
+          const tower: PlacedTower = {
+            id: '0-0', type: cfg.type, level: 1,
+            row: 0, col: 0, kills: 0, totalInvested: 50,
+            targetingMode: TargetingMode.NEAREST, mesh: group,
+          };
+
+          const towersMap = new Map<string, PlacedTower>([['0-0', tower]]);
+
+          for (let cycle = 0; cycle < 10; cycle++) {
+            service.startMuzzleFlash(tower);
+            service.updateMuzzleFlashes(towersMap, MUZZLE_FLASH_CONFIG.duration + 0.001);
+          }
+
+          const tolerance = cfg.baselineIntensity * 0.05;
+          expect(mat.emissiveIntensity).toBeGreaterThanOrEqual(cfg.baselineIntensity - tolerance);
+          expect(mat.emissiveIntensity).toBeLessThanOrEqual(cfg.baselineIntensity + tolerance);
+
+          mat.dispose();
+          geo.dispose();
+        });
+      }
+    });
+
+    // Sprint 7 — Re-flash (mid-flash second fire) correctness
+
+    it('re-flash: firing again mid-flash resets timer without double-saving or ratcheting', () => {
+      const mat = new THREE.MeshStandardMaterial({ emissiveIntensity: BASELINE });
+      const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      const body = new THREE.Mesh(geo, mat);
+      body.name = 'body';
+      group.add(body);
+
+      const baselines = new Map<string, number>();
+      baselines.set(body.uuid + '_' + mat.uuid, BASELINE);
+      group.userData['emissiveBaselines'] = baselines;
+
+      const tower: PlacedTower = {
+        id: '0-0', type: TowerType.BASIC, level: 1,
+        row: 0, col: 0, kills: 0, totalInvested: 50,
+        targetingMode: TargetingMode.NEAREST, mesh: group,
+      };
+      const towersMap = new Map<string, PlacedTower>([['0-0', tower]]);
+
+      // First flash
+      service.startMuzzleFlash(tower);
+      expect(mat.emissiveIntensity).toBeCloseTo(BASELINE * MUZZLE_FLASH_CONFIG.intensityMultiplier, 4);
+
+      // Advance 50% of flash duration (timer not yet expired)
+      service.updateMuzzleFlashes(towersMap, MUZZLE_FLASH_CONFIG.duration * 0.5);
+      expect(tower.muzzleFlashTimer).toBeGreaterThan(0);
+
+      // Fire again mid-flash — isReflash = true, must reuse saved value (0.4 not 0.6)
+      service.startMuzzleFlash(tower);
+      // Timer reset to full duration
+      expect(tower.muzzleFlashTimer).toBeCloseTo(MUZZLE_FLASH_CONFIG.duration, 4);
+      // Material still at spiked value from the saved BASELINE (not a double-spike)
+      expect(mat.emissiveIntensity).toBeCloseTo(BASELINE * MUZZLE_FLASH_CONFIG.intensityMultiplier, 4);
+
+      // Expire the timer
+      service.updateMuzzleFlashes(towersMap, MUZZLE_FLASH_CONFIG.duration + 0.001);
+      // Restore must return to baseline, not to any intermediate value
+      const tolerance = BASELINE * 0.05;
+      expect(mat.emissiveIntensity).toBeGreaterThanOrEqual(BASELINE - tolerance);
+      expect(mat.emissiveIntensity).toBeLessThanOrEqual(BASELINE + tolerance);
+
+      mat.dispose();
+      geo.dispose();
+    });
+
+    // Sprint 8 — Sell mid-flash: no stuck-spiked emissive on disposal
+
+    it('sell mid-flash: tickSellAnimations correctly fades emissive even if flash was active', () => {
+      const mat = new THREE.MeshStandardMaterial({ emissiveIntensity: BASELINE });
+      const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      const body = new THREE.Mesh(geo, mat);
+      body.name = 'body';
+      group.add(body);
+
+      const baselines = new Map<string, number>();
+      baselines.set(body.uuid + '_' + mat.uuid, BASELINE);
+      group.userData['emissiveBaselines'] = baselines;
+
+      const tower: PlacedTower = {
+        id: '0-0', type: TowerType.BASIC, level: 1,
+        row: 0, col: 0, kills: 0, totalInvested: 50,
+        targetingMode: TargetingMode.NEAREST, mesh: group,
+      };
+      const towersMap = new Map<string, PlacedTower>([['0-0', tower]]);
+      const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
+
+      // Spike the flash
+      service.startMuzzleFlash(tower);
+      expect(mat.emissiveIntensity).toBeCloseTo(BASELINE * MUZZLE_FLASH_CONFIG.intensityMultiplier, 4);
+
+      // Start a sell animation while the flash is active
+      const nowSec = 0;
+      group.userData['selling'] = true;
+      group.userData['sellingStart'] = nowSec;
+
+      // Advance sell animation to 50% — emissive should be fading, not stuck at spiked value.
+      // tickSellAnimations snaps a baseline on first call using current mat value.
+      // The spiked value is the "base" it fades from. This is expected behavior.
+      const sellHalfSec = nowSec + SELL_ANIM_CONFIG.durationSec * 0.5;
+      let onExpireCalled = false;
+      service.tickSellAnimations(towerMeshes, sellHalfSec, () => { onExpireCalled = true; });
+
+      // emissive must be strictly less than the spiked peak (fading in progress)
+      expect(mat.emissiveIntensity).toBeLessThan(BASELINE * MUZZLE_FLASH_CONFIG.intensityMultiplier);
+      expect(onExpireCalled).toBeFalse();
+
+      // Complete the sell — onExpire fires
+      const sellDoneSec = nowSec + SELL_ANIM_CONFIG.durationSec + 0.01;
+      service.tickSellAnimations(towerMeshes, sellDoneSec, () => { onExpireCalled = true; });
+      expect(onExpireCalled).toBeTrue();
+
+      // Flash restore for the expired-but-unsold timer must not crash.
+      // In production the mesh is disposed after onExpire, so updateMuzzleFlashes
+      // becomes a no-op. In the test the mesh lives on; the restore writes the
+      // baseline value but the key behavior is no throw.
+      expect(() => service.updateMuzzleFlashes(towersMap, MUZZLE_FLASH_CONFIG.duration + 0.001)).not.toThrow();
+
+      mat.dispose();
+      geo.dispose();
+    });
+
+    // Sprint 9 — Sustained-fire simulation: 50 turns, all 6 tower types
+
+    it('sustained 50-turn simulation: no tower emissive exceeds baseline × intensityMultiplier', () => {
+      // Create one tower of each type with their canonical baselines.
+      // All body meshes share distinct per-type materials (mirroring the
+      // per-type registry in production). Fire all 6 every "turn" for 50 turns.
+      const towerSetups: Array<{ tower: PlacedTower; bodyMat: THREE.Material; baseline: number }> = [];
+      const geoBox = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+
+      const typeBaselines: Array<{ type: TowerType; baseline: number }> = [
+        { type: TowerType.BASIC,  baseline: 0.4  },
+        { type: TowerType.SNIPER, baseline: 0.45 },
+        { type: TowerType.SPLASH, baseline: 0.4  },
+        { type: TowerType.SLOW,   baseline: 0.45 },
+        { type: TowerType.CHAIN,  baseline: 0.4  },
+        { type: TowerType.MORTAR, baseline: 0.3  },
+      ];
+
+      for (const { type, baseline } of typeBaselines) {
+        const mat = new THREE.MeshStandardMaterial({ emissiveIntensity: baseline });
+        const group = new THREE.Group();
+        group.userData['towerType'] = type;
+        const body = new THREE.Mesh(geoBox, mat);
+        body.name = 'body';
+        group.add(body);
+
+        const baselines = new Map<string, number>();
+        baselines.set(body.uuid + '_' + mat.uuid, baseline);
+        group.userData['emissiveBaselines'] = baselines;
+
+        const tower: PlacedTower = {
+          id: `${type}-0`, type, level: 1,
+          row: 0, col: 0, kills: 0, totalInvested: 50,
+          targetingMode: TargetingMode.NEAREST, mesh: group,
+        };
+        towerSetups.push({ tower, bodyMat: mat, baseline });
+      }
+
+      const towersMap = new Map<string, PlacedTower>(
+        towerSetups.map(({ tower }) => [tower.id, tower]),
+      );
+
+      for (let turn = 0; turn < 50; turn++) {
+        // All towers fire in the same turn
+        for (const { tower } of towerSetups) {
+          service.startMuzzleFlash(tower);
+        }
+        // Expire all flash timers
+        service.updateMuzzleFlashes(towersMap, MUZZLE_FLASH_CONFIG.duration + 0.001);
+
+        // Assert no tower exceeds baseline × intensityMultiplier at any point
+        for (const { bodyMat, baseline } of towerSetups) {
+          const mat = bodyMat as THREE.MeshStandardMaterial;
+          const maxAllowed = baseline * MUZZLE_FLASH_CONFIG.intensityMultiplier;
+          expect(mat.emissiveIntensity).toBeLessThanOrEqual(maxAllowed + baseline * 0.05);
+        }
+      }
+
+      geoBox.dispose();
+      for (const { bodyMat } of towerSetups) {
+        (bodyMat as THREE.MeshStandardMaterial).dispose();
+      }
+    });
   });
 });
