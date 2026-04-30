@@ -2188,3 +2188,44 @@ Priority order for Phase H cleanup:
 7. **E-c (LOW):** Legacy SLOW crystal bob specs — move to labelled describe block.
 8. **D-b (LOW):** `drumPrevT` vs `drumSpinBoostUntil` clock-source mismatch — annotate or unify.
 9. **F-c / F-d (LOW):** CHAIN orbit visibility edge-case + `arcMat` registry comment — annotate only.
+
+---
+
+## Red Team Critique — Phase H (cohesion + integration) — 2026-04-30
+
+### Finding H-1: F-a deferral rationale was incorrect — dead 'orb' code removed (MEDIUM)
+
+**Location:** `tower-animation.service.ts:62-68` (removed); `tower-animation.service.spec.ts:137-168` (removed); `effects.constants.ts:105-108` (removed)
+
+**Risk:** The agent deferred removing the `'orb'` traverse case, claiming legacy SPLASH specs depended on it. This is wrong: the specs (`makeTowerGroup(TowerType.SPLASH, 'orb')`) create a *synthetic* group with an 'orb'-named child — they test the `case 'orb'` branch directly but that branch can never fire for a real SPLASH tower (the Phase D redesign replaced the orb mesh with the drum/tube cluster; no mesh in the factory is named 'orb'). The specs were testing a code path that is permanently unreachable in production. The constants `orbPulseSpeed/Min/Max` in `effects.constants.ts` were also orphaned.
+
+**Fix applied:** Removed `case 'orb'` from the legacy traverse switch, deleted the two dead 'orb pulse' specs, and removed the three orphaned `orbPulse*` constants.
+
+**Note — wider legacy traverse concern (deferred):** Inspection reveals `case 'crystal'`, `case 'spark'`, `case 'spore'`, and `case 'tip'` in the same switch are also unreachable for real towers — no mesh in the factory bears any of those names post-Phase-D. The entire legacy traverse body is dead code for any tower with an `idleTick`. The per-tower idleTick migration pattern is correct; the legacy switch body should be removed wholesale in Phase I to eliminate confusion. MORTAR currently has no `idleTick` but also has no named children matching the switch cases, so the traverse fires but is a no-op. Deferring full removal to Phase I to avoid a wide sweep here.
+
+### Finding H-2: Stale JSDoc in tickEmitterPulses still referenced emitterPulseDuration (LOW)
+
+**Location:** `tower-animation.service.ts:335`
+
+**Risk:** The JSDoc comment for `tickEmitterPulses` still said `userData['emitterPulseDuration']` after the E-a cleanup removed that field. Future engineers reading the comment would write `emitterPulseDuration` into `userData`, introducing the exact dead write the fix was meant to remove.
+
+**Fix applied:** Updated the doc string to `userData['emitterPulseStart']` to match the actual implementation.
+
+### Finding H-3: MORTAR per-instance clone does not register with materialRegistry — disposal relies on full-traverse path (LOW, verified correct)
+
+**Location:** `tower-mesh-factory.service.ts:1259` (`const mortarMat = mat.clone()`)
+
+**Risk investigated:** `mortarMat` is a clone of the registry prototype — it is NOT tracked by `materialRegistry`. When `disposeGroup` runs with `buildDisposeProtect(geometryRegistry, materialRegistry)`, `isMaterial(mortarMat)` returns false, so the clone IS disposed. Because all MORTAR child meshes share the same `mortarMat` reference, `seenMaterials` in `disposeGroup` ensures single-dispose. The regression spec asserts tower-A's chassis material UUID !== tower-B's chassis material UUID. Verified: behavior is correct. Material-audit.md correctly notes "1 per-instance clone" for MORTAR.
+
+**Status: No action required.** Noting for Phase I material budget: up to ~80 MORTAR towers on a max board = 80 extra `MeshStandardMaterial` instances. Acceptable at this scale.
+
+### Finding H-4: Placement ghost (concern #10) — traverse is correct, no bug
+
+**Location:** `tower-preview.service.ts:99-113`
+
+**Claim verified:** `createPreviewMeshes` calls `ghostGroup.traverse((child) => { if (child instanceof THREE.Mesh) { child.material = mat; ... } })`. `traverse` is a depth-first full scene-graph walk, so nested groups (BASIC's `turretGroup/barrelGroup`, MORTAR's `barrelPivot`) are covered at all depths. The agent's claim that `Group.traverse covers nested groups` is correct. **No ghost overlay bug exists.**
+
+### Deferred to Phase I
+
+1. **H-1 residual (LOW):** Remove `case 'crystal'`, `case 'spark'`, `case 'spore'`, `case 'tip'` from legacy traverse switch — all are dead code post Phase-D. Full sweep deferred to Phase I closure sprint.
+2. **D-b (LOW):** Clock-source annotation for `drumSpinBoostUntil` vs `t` — annotation applied in Phase H, unification deferred.
