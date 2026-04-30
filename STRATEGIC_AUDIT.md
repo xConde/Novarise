@@ -2358,13 +2358,11 @@ After 30 turns of two same-type towers: `0.4 × 1.5^30 ≈ 76 700×` baseline. R
 
 ---
 
-### Finding A-2: `noTargetGraceTime` accumulated but never consumed — dead state (LOW — deferred to Phase B)
+### Finding A-2: `noTargetGraceTime` accumulated but never consumed — dead state (CLOSED — Phase C sprint 40)
 
-**Location:** `tower-animation.service.ts:tickAim` (lines 170-174)
+**Location:** `tower-animation.service.ts:tickAim`
 
-**Risk:** `noTargetGraceTime` is incremented and capped at `AIM_FALLBACK_CONFIG.noTargetGraceSec` (0.5s) when no target is found, then reset to 0 when a target is found. However, the value is never READ anywhere. The idle-gesture handoff is already correctly gated by `currentAimTarget == null` in `updateTowerAnimations`. The grace timer is pure dead state that accumulates without effect. Phase C "no-target fallback transition" (sprint 30) needs this value to implement the 0.5s ease-back-to-idle delay — but Phase A sets it up without consuming it, which is a latent trap: Phase B per-tower aim hooks may assume the grace timer is functional and write `aimTick` callbacks that branch on it, then find nothing happens.
-
-**No fix applied.** The value is benign dead state in Phase A. Fix: Phase B sprint immediately following per-tower aim hook registration should add a `getGraceProgress(group): number` accessor to `tickAim` output and consume it in the `aimTick` callback chain, or move grace-timer logic to the per-tower hook itself. Document in Phase B kickoff to prevent silent assumption of a functional timer.
+**Fix:** `tickAim` now reads `noTargetGraceTime` and sets `userData['aimEngaged']` accordingly. `updateTowerAnimations` reads `aimEngaged` (not `currentAimTarget != null`) to gate idle suppression. Grace window = `AIM_FALLBACK_CONFIG.noTargetGraceSec` (0.5s). Tower holds last yaw during grace; idle resumes once grace expires. Cold-start (never aimed) correctly leaves `aimEngaged` false so idle is never spuriously suppressed.
 
 ---
 
@@ -2404,8 +2402,8 @@ Result: when SNIPER has a target in range, `tickAim`'s lerpYaw result is immedia
 
 **Deferred findings (not fixed this pass):**
 
-- **Finding B-2 (LOW):** No integration test exercises SNIPER tier-visibility through a real factory-built group. `revealTierParts` specs use synthetic flat groups; the tier-tag-preserved assertions in Phase B only check `getObjectByName` + `userData['minTier']`, not that `visible` is set correctly after calling `applyUpgradeVisuals` on the actual SNIPER mesh. `revealTierParts` uses `traverse` which walks into nested groups, so this is unlikely to fail — but a true integration spec (factory → applyUpgradeVisuals(group, 3) → stabilizer.visible === true) does not exist. Defer to Phase C QA.
+- **Finding B-2 (CLOSED — Phase C sprint 41):** Integration spec `target-preview-integration.spec.ts` now covers factory-built SNIPER T3 group: `applyUpgradeVisuals(group, 3)` → `stabilizer.visible === true` + T1 scope hidden. Spec also asserts idempotence (double-apply at T3 keeps stabilizer visible).
 
-- **Finding B-3 (LOW):** `noTargetGraceTime` is still dead state (carried forward from Finding A-2). Towers stay at last yaw indefinitely when target leaves range rather than easing back to idle after 0.5s. Phase C sprint 30 "no-target fallback transition" is the correct fix location.
+- **Finding B-3 (CLOSED — Phase C sprint 40, same fix as A-2):** `noTargetGraceTime` is now consumed by `tickAim`. `aimEngaged` userData flag bridges the gap: set true on target-found, held true during grace window (< 0.5s), cleared to false when grace expires. `updateTowerAnimations` reads `aimEngaged` (not `currentAimTarget != null`) to gate idle-gesture suppression. 5 new specs covering all grace-timer states.
 
 - **Finding B-4 (LOW, cosmetic):** CHAIN orbiting spheres (orbitSphere2/3) are children of `chainYaw`. When `tickAim` yaws `chainYaw`, the orbital plane rotates with it. The orbit pattern is computed in `chainYaw`-local space, so the satellites orbit in a plane that is itself yawed toward the target. Cosmetically this means the orbit ring tilts to face the target side rather than being a fixed world-horizontal ring. The plan noted this as "orbit isn't truly their own" — cosmetic, acceptable, but should be evaluated in browser smoke test for Phase D visual review.
