@@ -2050,3 +2050,32 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 **Risk:** The scope housing (`scopeMesh`) correctly carries `userData['maxTier'] = 1`, so `revealTierParts` hides it at T2. The lens disk (`lensMesh`, named `'scope'`) has no `maxTier` tag — `revealTierParts` leaves it visible. At T2+ the invisible housing is gone but the glowing lens disk remains floating in space. No spec tested the lens's `maxTier` because the spec only checked the housing. The upgrade-visual spec for `maxTier` behaviour validates the service logic correctly, but the factory spec didn't assert this field on the lens.
 
 **Fix applied:** Added `lensMesh.userData['maxTier'] = 1` immediately after lens mesh construction. Added a factory spec asserting `getObjectByName('scope').userData['maxTier'] === 1`. Fixed in commit `fb04703`.
+
+---
+
+## Red Team Critique — Phase D (SPLASH silhouette) — 2026-04-30
+
+### Finding 10: All 8 SPLASH tubes share one material — tickTubeEmits lights ALL tubes on every fire (CRITICAL)
+
+**Location:** `tower-mesh-factory.service.ts` SPLASH case, tube construction (~line 569–601)
+
+**Risk:** `getTowerMaterial(TowerType.SPLASH)` returns the registry-cached singleton (one `MeshStandardMaterial` instance). All 8 tube meshes were constructed with `new THREE.Mesh(tubeGeom, mat)` — the same reference. `tickTubeEmits` mutates `tubeMesh.material.emissiveIntensity` on the emitting tube, but since every tube shares that instance, **all 8 tubes light up simultaneously on every fire**. The round-robin cycling is entirely inert visually: no matter which tube index is selected, the glow appears on all of them. This also contaminates the muzzle-flash restore path: `startMuzzleFlash` saves `emissiveIntensity` per `(child.uuid, mat.uuid)` key; a shared material means the first tube's save clobbers the rest (all tubes write the same `mat.uuid`, so only the last write survives), and restore sets all tubes to the last-saved value.
+
+**Fix applied:** Each tube now calls `mat.clone()` at construction time, producing 8 independent `MeshStandardMaterial` instances. Clones are lightweight (same GPU shader/textures, only uniform state differs). Added regression spec: `'each tube has its own material instance (emissive isolation)'` asserts `tube1.material !== tube2.material`. Fixed in this commit.
+
+---
+
+### Finding 11: fireTick round-robin skips hidden tubes silently — ~50% of shots produce no emit pulse at T1 (HIGH)
+
+**Location:** `tower-mesh-factory.service.ts` SPLASH `fireTick` closure (~line 691)
+
+**Risk:** The original implementation computed `nextIdx = counter % 8` and incremented unconditionally, then only set emit state if the tube was visible. At T1 there are only 4 visible tubes (indices 0–3); indices 4–7 are hidden. Over 8 consecutive fires the counter cycles 0→7, but 4 of those shots (`nextIdx` = 4, 5, 6, 7) find `tubeMesh.visible = false` and silently skip the emit state assignment. Result: the T1 SPLASH fires produce an emit pulse only ~50% of the time, making the animation feel broken rather than round-robin.
+
+**Fix applied:** `fireTick` now scans forward from `startIdx` (up to 8 steps) until it finds a visible tube, then sets `nextTubeIndex` past that found tube. No visible tube is silently consumed. A degenerate fallback (no visible tubes) still advances the counter. Added spec: `'fireTick skips hidden tubes and always emits from a visible tube'` — hides 6 of 8 tubes, starts counter past the visible pair, asserts emit lands on a visible index. Fixed in this commit.
+
+---
+
+### Deferred Findings (non-critical, no fix this commit)
+
+- **Finding D-a (MEDIUM):** `heatVent` material (`emissiveIntensity: 0.9`) is NOT in `applyUpgradeVisuals`'s skip-set (`['tip', 'orb', 'scope']`). On T3 upgrade the ratchet overwrites the vent's intentional glow to `emissiveBase + 2 * emissiveIncrement`. Needs `'heatVent'` added to `animatedNames` in `tower-upgrade-visual.service.ts`.
+- **Finding D-b (LOW):** `drumPrevT` uses the `t` parameter (from `time * msToSeconds`) while `drumSpinBoostUntil` uses `performance.now() / 1000` directly. Both are the same clock, so no current bug — but if `updateTowerAnimations` is ever called with a synthetic `time` in tests, boost detection will use wall clock vs test clock and produce wrong results. Track for Phase H cohesion sprint.

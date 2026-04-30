@@ -507,12 +507,39 @@ describe('TowerMeshFactoryService', () => {
       expect(boostUntil).toBeGreaterThan(beforeFire);
     });
 
-    it('fireTick increments nextTubeIndex each call (round-robin)', () => {
+    it('fireTick increments nextTubeIndex each call (round-robin, T1 visible tubes)', () => {
       const fire = splashGroup.userData['fireTick'] as (g: THREE.Group, d: number) => void;
+      // At T1 all 4 base tubes are visible; first fire lands on tube1 (idx 0) → counter = 1
       fire(splashGroup, 0.1);
       expect(splashGroup.userData['nextTubeIndex']).toBe(1);
+      // Second fire lands on tube2 (idx 1) → counter = 2
       fire(splashGroup, 0.1);
       expect(splashGroup.userData['nextTubeIndex']).toBe(2);
+    });
+
+    it('fireTick skips hidden tubes and always emits from a visible tube', () => {
+      const fire = splashGroup.userData['fireTick'] as (g: THREE.Group, d: number) => void;
+      const drum = splashGroup.getObjectByName('drum')!;
+
+      // Force all tubes except tube3 and tube4 (idx 2 and 3) to be hidden,
+      // then start the counter at idx 4 (first hidden T2 tube position).
+      // The round-robin must skip hidden tubes 5-8 and wrap to find tube1.
+      for (const name of ['tube1','tube2','tube5','tube6','tube7','tube8']) {
+        const t = drum.getObjectByName(name) as THREE.Mesh | undefined;
+        if (t) t.visible = false;
+      }
+      // tube3 (idx 2) and tube4 (idx 3) remain visible.
+      // Start the counter right past the visible pair so the scan must skip hidden ones.
+      splashGroup.userData['nextTubeIndex'] = 4; // points to tube5 (hidden T2)
+
+      fire(splashGroup, 0.1);
+
+      const emitting = splashGroup.userData['emittingTubeIndex'] as number | undefined;
+      // Should have wrapped around and found tube3 (idx 2) or tube4 (idx 3)
+      expect(emitting).toBeDefined();
+      expect([2, 3]).toContain(emitting!);
+      // Emit state must be set (no silent skip)
+      expect(splashGroup.userData['tubeEmitStart']).toBeDefined();
     });
 
     it('fireTick sets emittingTubeIndex pointing to a visible tube', () => {
@@ -520,7 +547,7 @@ describe('TowerMeshFactoryService', () => {
       fire(splashGroup, 0.1);
 
       const emitting = splashGroup.userData['emittingTubeIndex'] as number | undefined;
-      // At T1 only tubes 0-3 exist, so index must be in that range
+      // At T1 only tubes 0-3 are visible, so index must be in that range
       expect(emitting).toBeDefined();
       expect(emitting!).toBeGreaterThanOrEqual(0);
       expect(emitting!).toBeLessThanOrEqual(3);
@@ -532,6 +559,18 @@ describe('TowerMeshFactoryService', () => {
 
       expect(splashGroup.userData['tubeEmitStart']).toBeDefined();
       expect(splashGroup.userData['tubeEmitDuration']).toBeCloseTo(SPLASH_TUBE_EMIT_CONFIG.duration, 4);
+    });
+
+    it('each tube has its own material instance (emissive isolation)', () => {
+      // Regression guard for shared-material bug: if all tubes shared one material,
+      // mutating tube1.material.emissiveIntensity would affect all tubes.
+      const drum = splashGroup.getObjectByName('drum')!;
+      const tube1 = drum.getObjectByName('tube1') as THREE.Mesh | undefined;
+      const tube2 = drum.getObjectByName('tube2') as THREE.Mesh | undefined;
+
+      expect(tube1).toBeTruthy();
+      expect(tube2).toBeTruthy();
+      expect(tube1!.material).not.toBe(tube2!.material);
     });
   });
 

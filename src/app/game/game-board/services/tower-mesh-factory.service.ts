@@ -566,8 +566,11 @@ export class TowerMeshFactoryService {
           SPLASH_GEOM.tubeLength, SPLASH_GEOM.tubeSegments,
         );
 
+        // Each tube gets its own material clone so tickTubeEmits can mutate
+        // emissiveIntensity on the target tube without lighting ALL tubes (which
+        // would happen if they shared the registry-cached material instance).
         SPLASH_TUBE_GRID.forEach(([tx, ty], idx) => {
-          const tube = new THREE.Mesh(tubeGeom, mat);
+          const tube = new THREE.Mesh(tubeGeom, mat.clone());
           tube.name = `tube${idx + 1}`;
           tube.userData['tubeIndex'] = idx;
           // Tubes face +Z (forward), so rotate cylinder to point along Z
@@ -578,7 +581,7 @@ export class TowerMeshFactoryService {
 
         // ── T2: 2 extra tubes (top and bottom) ──────────────────────────────
         SPLASH_TUBE_T2_EXTRA.forEach(([tx, ty], i) => {
-          const tube = new THREE.Mesh(tubeGeom, mat);
+          const tube = new THREE.Mesh(tubeGeom, mat.clone());
           tube.name = `tube${5 + i}`;
           tube.userData['tubeIndex'] = 4 + i;
           tube.userData['minTier'] = 2;
@@ -590,7 +593,7 @@ export class TowerMeshFactoryService {
 
         // ── T3: 2 more tubes (left and right) + heat-vent disk at drum rear ──
         SPLASH_TUBE_T3_EXTRA.forEach(([tx, ty], i) => {
-          const tube = new THREE.Mesh(tubeGeom, mat);
+          const tube = new THREE.Mesh(tubeGeom, mat.clone());
           tube.name = `tube${7 + i}`;
           tube.userData['tubeIndex'] = 6 + i;
           tube.userData['minTier'] = 3;
@@ -692,20 +695,30 @@ export class TowerMeshFactoryService {
           const now = performance.now() / 1000;
           group.userData['drumSpinBoostUntil'] = now + duration;
 
-          // Round-robin tube selection
-          const nextIdx = ((group.userData['nextTubeIndex'] as number | undefined) ?? 0) % 8;
-          group.userData['nextTubeIndex'] = nextIdx + 1;
-
-          // Only pulse a tube if it exists and is visible (respects tier)
+          // Round-robin tube selection — scan forward (up to 8 steps) from the
+          // current index until we land on a VISIBLE tube. This prevents the
+          // counter from silently consuming "slots" on hidden T2/T3 tubes at lower
+          // tiers, which would cause every other shot to produce no emit pulse at T1.
           const drum = group.getObjectByName('drum');
-          if (drum) {
-            const tubeName = `tube${nextIdx + 1}`;
-            const tubeMesh = drum.getObjectByName(tubeName) as THREE.Mesh | undefined;
-            if (tubeMesh && tubeMesh.visible) {
-              group.userData['emittingTubeIndex'] = nextIdx;
+          const startIdx = ((group.userData['nextTubeIndex'] as number | undefined) ?? 0) % 8;
+          let found = false;
+          for (let step = 0; step < 8; step++) {
+            const candidateIdx = (startIdx + step) % 8;
+            const tubeName = `tube${candidateIdx + 1}`;
+            const tubeMesh = drum?.getObjectByName(tubeName) as THREE.Mesh | undefined;
+            if (tubeMesh?.visible) {
+              // Advance the counter past this tube so next fire starts from the next one
+              group.userData['nextTubeIndex'] = candidateIdx + 1;
+              group.userData['emittingTubeIndex'] = candidateIdx;
               group.userData['tubeEmitStart'] = now;
               group.userData['tubeEmitDuration'] = SPLASH_TUBE_EMIT_CONFIG.duration;
+              found = true;
+              break;
             }
+          }
+          if (!found) {
+            // No visible tube found (degenerate state); advance counter anyway
+            group.userData['nextTubeIndex'] = startIdx + 1;
           }
         };
 
