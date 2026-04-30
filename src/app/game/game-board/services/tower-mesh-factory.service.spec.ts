@@ -3,19 +3,11 @@ import * as THREE from 'three';
 import { TowerMeshFactoryService } from './tower-mesh-factory.service';
 import { TowerType } from '../models/tower.model';
 import { BOARD_CONFIG } from '../constants/board.constants';
+import { TOWER_ACCENT_LIGHT_CONFIG } from '../constants/lighting.constants';
+import { disposeGroup } from '../utils/three-utils';
 
-/** Dispose all geometry/material on a group to free WebGL resources. */
-function disposeGroup(group: THREE.Group): void {
-  group.traverse(child => {
-    if (child instanceof THREE.Mesh) {
-      child.geometry.dispose();
-      if (Array.isArray(child.material)) {
-        child.material.forEach(m => m.dispose());
-      } else {
-        (child.material as THREE.Material).dispose();
-      }
-    }
-  });
+function disposeGroupHelper(group: THREE.Group): void {
+  disposeGroup(group);
 }
 
 describe('TowerMeshFactoryService', () => {
@@ -31,7 +23,7 @@ describe('TowerMeshFactoryService', () => {
 
   afterEach(() => {
     // Dispose all Three.js objects created during the test
-    createdGroups.forEach(disposeGroup);
+    createdGroups.forEach(g => disposeGroupHelper(g));
     createdGroups.length = 0;
   });
 
@@ -137,6 +129,59 @@ describe('TowerMeshFactoryService', () => {
       const group = service.createTowerMesh(5, 5, 'UNKNOWN' as TowerType, boardWidth, boardHeight);
       createdGroups.push(group);
       expect(group.children.length).toBeGreaterThan(0);
+    });
+  });
+
+  // --- attachAccentLight ---
+
+  describe('attachAccentLight', () => {
+    it('adds a PointLight to the group when isLowEnd is false', () => {
+      const group = new THREE.Group();
+      createdGroups.push(group);
+
+      service.attachAccentLight(group, TowerType.BASIC, false);
+
+      const light = group.userData['accentLight'];
+      expect(light).toBeInstanceOf(THREE.PointLight);
+      expect(group.children).toContain(light as THREE.Object3D);
+    });
+
+    it('stores the light reference in userData[accentLight]', () => {
+      const group = new THREE.Group();
+      createdGroups.push(group);
+
+      service.attachAccentLight(group, TowerType.CHAIN, false);
+
+      expect(group.userData['accentLight']).toBeInstanceOf(THREE.PointLight);
+    });
+
+    it('uses TOWER_ACCENT_LIGHT_CONFIG values for intensity and distance', () => {
+      const group = new THREE.Group();
+      createdGroups.push(group);
+
+      service.attachAccentLight(group, TowerType.SNIPER, false);
+
+      const light = group.userData['accentLight'] as THREE.PointLight;
+      expect(light.intensity).toBeCloseTo(TOWER_ACCENT_LIGHT_CONFIG.intensity);
+      expect(light.distance).toBeCloseTo(TOWER_ACCENT_LIGHT_CONFIG.distance);
+    });
+
+    it('does NOT add a PointLight when isLowEnd is true', () => {
+      const group = new THREE.Group();
+      createdGroups.push(group);
+
+      service.attachAccentLight(group, TowerType.BASIC, true);
+
+      expect(group.userData['accentLight']).toBeUndefined();
+      expect(group.children.length).toBe(0);
+    });
+
+    it('disposeGroup runs without error on a group containing an accent light', () => {
+      // THREE.PointLight holds no GPU resources — disposeGroup should not error.
+      const group = service.createTowerMesh(5, 5, TowerType.BASIC, boardWidth, boardHeight);
+      service.attachAccentLight(group, TowerType.BASIC, false);
+
+      expect(() => disposeGroup(group)).not.toThrow();
     });
   });
 });

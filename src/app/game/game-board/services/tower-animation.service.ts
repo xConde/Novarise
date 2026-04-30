@@ -8,12 +8,28 @@ import { getMaterials } from '../utils/three-utils';
 
 @Injectable()
 export class TowerAnimationService {
-  /** Animate tower idle effects (crystal bob, orb pulse, spark bob, spore bob, tip glow). */
+  /**
+   * Animate tower idle effects. For each group:
+   *  1. If `group.userData['idleTick']` is a function, call it first so
+   *     per-tower redesigns (Phases B–G) can drive their own logic without
+   *     forking this service.
+   *  2. The existing named-mesh traverse runs unconditionally after that so
+   *     legacy animations (crystal bob, orb pulse, etc.) keep working until
+   *     each tower type migrates its named children in its own Phase sprint.
+   */
   updateTowerAnimations(towerMeshes: Map<string, THREE.Group>, time: number): void {
     const t = time * ANIMATION_CONFIG.msToSeconds;
     for (const group of towerMeshes.values()) {
       const towerType = group.userData['towerType'] as TowerType | undefined;
       if (!towerType) continue;
+
+      // Per-tower idle hook — registered by Phases B–G when a tower's geometry
+      // ships. Runs before the named-mesh traverse so bespoke animations take
+      // priority over the generic ones below.
+      const idleTick = group.userData['idleTick'] as ((g: THREE.Group, t: number) => void) | undefined;
+      if (typeof idleTick === 'function') {
+        idleTick(group, t);
+      }
 
       group.traverse((child) => {
         if (!(child instanceof THREE.Mesh)) return;
@@ -62,6 +78,28 @@ export class TowerAnimationService {
           }
         }
       });
+    }
+  }
+
+  /**
+   * Trigger a firing animation for the given tower. Always calls `startMuzzleFlash`
+   * to preserve the existing emissive-spike behaviour. If the tower's mesh group has
+   * a `userData['fireTick']` function registered, calls it with the group and the
+   * muzzle-flash duration so per-tower recoil / charge animations can play without
+   * forking this service.
+   *
+   * Call sites in TowerCombatService should use `triggerFire` instead of calling
+   * `startMuzzleFlash` directly so future firing-animation additions don't require
+   * touching the combat service again.
+   */
+  triggerFire(tower: PlacedTower): void {
+    this.startMuzzleFlash(tower);
+
+    if (!tower.mesh) return;
+    const fireTick = tower.mesh.userData['fireTick'] as
+      ((group: THREE.Group, durationSeconds: number) => void) | undefined;
+    if (typeof fireTick === 'function') {
+      fireTick(tower.mesh, MUZZLE_FLASH_CONFIG.duration);
     }
   }
 

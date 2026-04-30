@@ -574,4 +574,127 @@ describe('TowerAnimationService', () => {
       });
     });
   });
+
+  // ---- idleTick hook (Sprint 6) ----
+
+  describe('idleTick hook', () => {
+    it('calls userData.idleTick before named-mesh traverse when present', () => {
+      const { group } = makeTowerGroup(TowerType.BASIC, 'crystal');
+      const tickSpy = jasmine.createSpy('idleTick');
+      group.userData['idleTick'] = tickSpy;
+
+      const time = 2000;
+      service.updateTowerAnimations(new Map([['0-0', group]]), time);
+
+      const expectedT = time * ANIMATION_CONFIG.msToSeconds;
+      expect(tickSpy).toHaveBeenCalledOnceWith(group, expectedT);
+
+      disposeTowerGroup(group);
+    });
+
+    it('does not error when userData.idleTick is absent', () => {
+      const { group } = makeTowerGroup(TowerType.CHAIN, 'orb');
+      // No idleTick registered
+
+      expect(() => service.updateTowerAnimations(new Map([['0-0', group]]), 1000)).not.toThrow();
+
+      disposeTowerGroup(group);
+    });
+
+    it('does not call idleTick if it is not a function', () => {
+      const { group } = makeTowerGroup(TowerType.BASIC, 'crystal');
+      group.userData['idleTick'] = 'not-a-function';
+
+      // Should not throw even with a non-function value stored
+      expect(() => service.updateTowerAnimations(new Map([['0-0', group]]), 500)).not.toThrow();
+
+      disposeTowerGroup(group);
+    });
+  });
+
+  // ---- triggerFire hook (Sprint 7) ----
+
+  describe('triggerFire', () => {
+    function makePlacedTower(
+      childName: string,
+      initialIntensity: number,
+    ): { tower: PlacedTower; child: THREE.Mesh } {
+      const group = new THREE.Group();
+      const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+      const mat = new THREE.MeshStandardMaterial({ emissiveIntensity: initialIntensity });
+      const child = new THREE.Mesh(geo, mat);
+      child.name = childName;
+      group.add(child);
+
+      const tower: PlacedTower = {
+        id: '0-0',
+        type: TowerType.BASIC,
+        level: 1,
+        row: 0,
+        col: 0,
+        kills: 0,
+        totalInvested: 50,
+        targetingMode: TargetingMode.NEAREST,
+        mesh: group,
+      };
+
+      return { tower, child };
+    }
+
+    function disposePlacedTower(tower: PlacedTower): void {
+      tower.mesh?.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+          (obj.material as THREE.MeshStandardMaterial).dispose();
+        }
+      });
+    }
+
+    it('calls startMuzzleFlash internally (muzzleFlashTimer is set)', () => {
+      const { tower } = makePlacedTower('base', 0.5);
+
+      service.triggerFire(tower);
+
+      expect(tower.muzzleFlashTimer).toBeCloseTo(MUZZLE_FLASH_CONFIG.duration, 5);
+
+      disposePlacedTower(tower);
+    });
+
+    it('calls userData.fireTick with the group and duration when present', () => {
+      const { tower } = makePlacedTower('base', 0.5);
+      const fireTickSpy = jasmine.createSpy('fireTick');
+      tower.mesh!.userData['fireTick'] = fireTickSpy;
+
+      service.triggerFire(tower);
+
+      expect(fireTickSpy).toHaveBeenCalledOnceWith(tower.mesh, MUZZLE_FLASH_CONFIG.duration);
+
+      disposePlacedTower(tower);
+    });
+
+    it('does not error when userData.fireTick is absent', () => {
+      const { tower } = makePlacedTower('base', 0.5);
+      // No fireTick registered
+
+      expect(() => service.triggerFire(tower)).not.toThrow();
+
+      disposePlacedTower(tower);
+    });
+
+    it('does not call fireTick when tower.mesh is null', () => {
+      const tower: PlacedTower = {
+        id: '0-0',
+        type: TowerType.BASIC,
+        level: 1,
+        row: 0,
+        col: 0,
+        kills: 0,
+        totalInvested: 50,
+        targetingMode: TargetingMode.NEAREST,
+        mesh: null,
+      };
+
+      expect(() => service.triggerFire(tower)).not.toThrow();
+    });
+  });
 });

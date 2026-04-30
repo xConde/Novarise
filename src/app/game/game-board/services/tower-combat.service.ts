@@ -458,7 +458,7 @@ export class TowerCombatService {
       for (let shot = 0; shot < shotsPerTurn; shot++) {
         if (tower.type === TowerType.SLOW) {
           this.applySlowAura(tower, stats, turnNumber);
-          this.towerAnimationService.startMuzzleFlash(tower);
+          this.towerAnimationService.triggerFire(tower);
           fired.push(tower.type);
           break; // Aura fires once regardless of shotsPerTurn.
         }
@@ -466,7 +466,7 @@ export class TowerCombatService {
         const target = this.findTarget(tower, stats);
         if (!target) break;
 
-        this.towerAnimationService.startMuzzleFlash(tower);
+        this.towerAnimationService.triggerFire(tower);
         fired.push(tower.type);
         lastTarget = target;
 
@@ -508,7 +508,7 @@ export class TowerCombatService {
           };
           if (!this.isTargetInRange(passenger, lastTarget, passengerStats)) continue;
           if (lastTarget.health <= 0) continue;
-          this.towerAnimationService.startMuzzleFlash(passenger);
+          this.towerAnimationService.triggerFire(passenger);
           fired.push(passenger.type);
           const passengerResult = this.fireShotAtTarget(
             passenger, lastTarget, passengerStats, scene, turnNumber,

@@ -53,6 +53,21 @@ export const UNDER_LIGHT: LightConfig = {
   position: [0, -5, 0]
 };
 
+/**
+ * Per-tower accent point-light configuration. A small, low-intensity point light
+ * is attached near the tower's emissive tip so the glow reads in shadowed areas.
+ * These lights are omitted on low-end mode to keep frame-rate acceptable on
+ * weaker hardware.
+ */
+export const TOWER_ACCENT_LIGHT_CONFIG = {
+  /** Intensity of the accent point light (0–∞, kept low to avoid washing out tiles). */
+  intensity: 0.3,
+  /** World-unit radius — light falls off to zero at this distance. */
+  distance: 1.2,
+  /** Physically-based decay factor (2 = inverse-square, 1 = linear). */
+  decay: 1.5,
+} as const;
+
 export const ACCENT_LIGHTS: LightConfig[] = [
   {
     color: 0x9a6abf,

@@ -2,42 +2,15 @@ import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { TowerType } from '../models/tower.model';
 import { BOARD_CONFIG } from '../constants/board.constants';
+import { TOWER_ACCENT_LIGHT_CONFIG } from '../constants/lighting.constants';
 import { gridToWorld } from '../utils/coordinate-utils';
 import { GeometryRegistryService } from './geometry-registry.service';
 import { MaterialRegistryService } from './material-registry.service';
-
-interface TowerMaterialConfig {
-  color: number;
-  emissive: number;
-  emissiveIntensity: number;
-  metalness: number;
-  roughness: number;
-  transparent?: boolean;
-  opacity?: number;
-}
-
-// Each tower body is desaturated and dimmed so it reads as
-// "powered equipment placed in the scene" rather than a neon UI
-// sprite, matching the cool deep-space board palette. Hue per type
-// is preserved for at-a-glance distinguishability; saturation drops
-// roughly 25-40% and emissive intensity drops to ~0.4 so towers no
-// longer over-bloom against the dark board.
-const TOWER_MATERIAL_CONFIGS: Readonly<Record<TowerType, TowerMaterialConfig>> = {
-  [TowerType.BASIC]:  { color: 0x9a6238, emissive: 0x5a3a18, emissiveIntensity: 0.4,  metalness: 0.3,  roughness: 0.6 },
-  [TowerType.SNIPER]: { color: 0x6a5290, emissive: 0x3e2c5c, emissiveIntensity: 0.45, metalness: 0.4,  roughness: 0.4 },
-  [TowerType.SPLASH]: { color: 0x3e8a5a, emissive: 0x205038, emissiveIntensity: 0.4,  metalness: 0.25, roughness: 0.7 },
-  [TowerType.SLOW]:   { color: 0x4870b8, emissive: 0x1c3470, emissiveIntensity: 0.45, metalness: 0.5,  roughness: 0.3, transparent: true, opacity: 0.9 },
-  [TowerType.CHAIN]:  { color: 0xa88840, emissive: 0x6a4a08, emissiveIntensity: 0.4,  metalness: 0.6,  roughness: 0.2 },
-  [TowerType.MORTAR]: { color: 0x664422, emissive: 0x442200, emissiveIntensity: 0.3,  metalness: 0.7,  roughness: 0.5 },
-};
-
-const DEFAULT_TOWER_MATERIAL_CONFIG: TowerMaterialConfig = {
-  color: 0x9a6238, emissive: 0x4a2e10, emissiveIntensity: 0.25, metalness: 0.2, roughness: 0.6,
-};
-
-function makeTowerMaterialFromConfig(cfg: TowerMaterialConfig): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ ...cfg });
-}
+import {
+  TOWER_MATERIAL_CONFIGS,
+  DEFAULT_TOWER_MATERIAL_CONFIG,
+  createTowerMaterial,
+} from './tower-material.factory';
 
 @Injectable()
 export class TowerMeshFactoryService {
@@ -321,14 +294,46 @@ export class TowerMeshFactoryService {
       : new THREE.DodecahedronGeometry(radius, detail);
   }
 
-  private getTowerMaterial(towerType: TowerType): THREE.MeshStandardMaterial {
+  /**
+   * Attaches a small accent PointLight near the tower's tip so its emissive
+   * glow reads in shadowed areas. The light color is drawn from the tower's
+   * body emissive so it reinforces the per-type brand color.
+   *
+   * Returns early without adding a light when `isLowEnd` is true — point
+   * lights are expensive on mobile; the caller should pass
+   * `document.body.classList.contains('reduce-motion')` for this flag, which
+   * mirrors the pattern used by ScreenShakeService.
+   *
+   * The light reference is stored on `group.userData['accentLight']` so that
+   * disposal code can traverse and dispose it alongside the mesh.
+   *
+   * Phases B–G will call this for individual tower types once their redesigned
+   * geometry ships.
+   */
+  attachAccentLight(
+    group: THREE.Group,
+    towerType: TowerType,
+    isLowEnd: boolean,
+  ): void {
+    if (isLowEnd) return;
+
     const cfg = TOWER_MATERIAL_CONFIGS[towerType] ?? DEFAULT_TOWER_MATERIAL_CONFIG;
-    if (this.materialRegistry) {
-      return this.materialRegistry.getOrCreate(
-        `tower:${towerType}`,
-        () => makeTowerMaterialFromConfig(cfg),
-      );
-    }
-    return makeTowerMaterialFromConfig(cfg);
+    const light = new THREE.PointLight(
+      cfg.emissive,
+      TOWER_ACCENT_LIGHT_CONFIG.intensity,
+      TOWER_ACCENT_LIGHT_CONFIG.distance,
+      TOWER_ACCENT_LIGHT_CONFIG.decay,
+    );
+
+    // Position at approximate tower tip — groups vary by type but ~1.4u is a
+    // reasonable default before per-tower overrides land in Phases B–G.
+    light.position.set(0, 1.4, 0);
+
+    group.userData['accentLight'] = light;
+    group.add(light);
+  }
+
+  private getTowerMaterial(towerType: TowerType): THREE.MeshStandardMaterial {
+    return createTowerMaterial(towerType, this.materialRegistry);
   }
 }

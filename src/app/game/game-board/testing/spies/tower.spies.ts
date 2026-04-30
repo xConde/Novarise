@@ -134,10 +134,11 @@ export function createTowerSelectionServiceSpy(): jasmine.SpyObj<TowerSelectionS
  * Create a pre-configured TowerAnimationService spy.
  *
  * All animation methods are stubbed as no-op voids:
- *   - startMuzzleFlash / updateMuzzleFlashes / updateTowerAnimations / updateTilePulse
+ *   - triggerFire / startMuzzleFlash / updateMuzzleFlashes / updateTowerAnimations / updateTilePulse
  */
 export function createTowerAnimationServiceSpy(): jasmine.SpyObj<TowerAnimationService> {
   return jasmine.createSpyObj<TowerAnimationService>('TowerAnimationService', [
+    'triggerFire',
     'startMuzzleFlash',
     'updateMuzzleFlashes',
     'updateTowerAnimations',
