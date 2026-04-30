@@ -297,7 +297,7 @@ export class GameBoardService {
       // front-face occlusion makes inconsistent across axes).
       params.emissive = 0xffffff;
       params.emissiveMap = this.getWallEdgeTexture();
-      params.emissiveIntensity = 0.55;
+      params.emissiveIntensity = 0.4;
     }
     return new THREE.MeshStandardMaterial(params);
   }
@@ -318,10 +318,11 @@ export class GameBoardService {
     // shows through unchanged on the cell interior.
     ctx.fillStyle = 'rgb(0, 0, 0)';
     ctx.fillRect(0, 0, size, size);
-    // Cool purple-grey accent (matches the trim plane color) on every
-    // cell edge → consistent border visible regardless of axis or
-    // camera angle.
-    ctx.fillStyle = 'rgb(106, 88, 120)';
+    // Deep-space cool purple — much darker than the wall material is
+    // bright, so the rim reads as an extension of the background
+    // palette. The contrast against the navy wall fill is what makes
+    // it perceptually lighter without being a saturated UI line.
+    ctx.fillStyle = 'rgb(58, 48, 80)';
     ctx.fillRect(0, 0, size, edge);
     ctx.fillRect(0, size - edge, size, edge);
     ctx.fillRect(0, 0, edge, size);
@@ -356,16 +357,15 @@ export class GameBoardService {
 
     if (this.gameBoardWidth <= 0 || this.gameBoardHeight <= 0) return gridGroup;
 
-    // Cool purple-grey accent extending the deep-space palette. Only
-    // the buildable area uses a trim plane; walls bake the same
-    // accent color into an emissive edge texture on their material so
-    // the border shows consistently on every wall cell at any camera
-    // angle (a plane-based wall trim was inconsistent — front-face
-    // occlusion hid horizontal seams while verticals showed through).
-    const TRIM_ACCENT = 0x6a5878;
+    // Deep-space cool purple — same hue as the wall edge texture so
+    // the whole board shares one accent palette. Dark enough that
+    // the trim reads as a natural extension of the background; the
+    // contrast against the lighter buildable tile faces is what
+    // makes the border perceptually visible without saturation.
+    const TRIM_ACCENT = 0x3a3050;
     const nonWallBB = this.computeTileBoundingBox(t => t.type !== BlockType.WALL);
     if (nonWallBB) {
-      gridGroup.add(this.buildTrimPlane(nonWallBB, TRIM_ACCENT, 0.45, 0.005));
+      gridGroup.add(this.buildTrimPlane(nonWallBB, TRIM_ACCENT, 0.6, 0.005));
     }
 
     return gridGroup;
