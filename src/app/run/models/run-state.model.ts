@@ -66,6 +66,14 @@ export interface RunState {
   readonly encounterResults: EncounterResult[];
   readonly status: RunStatus;
   readonly startedAt: number;
+  /**
+   * Wall-clock timestamp captured the instant the run terminates
+   * (DEFEAT / VICTORY / ABANDONED). Absent while the run is in
+   * progress; the summary screen uses (endedAt ?? Date.now()) to
+   * derive duration so paused / saved-and-resumed runs do not keep
+   * accumulating time after the run is over.
+   */
+  readonly endedAt?: number;
   readonly score: number;
   /** Item inventory persisted at run level. Absent in saves made before H5. */
   readonly itemInventory?: SerializedItemInventory;

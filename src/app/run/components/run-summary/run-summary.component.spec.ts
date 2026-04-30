@@ -69,7 +69,7 @@ describe('RunSummaryComponent', () => {
 
   it('renders victory header for VICTORY status', () => {
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Ascent Complete!');
+    expect(el.textContent).toContain('Ascent Complete');
   });
 
   it('renders defeat header for DEFEAT status', () => {
@@ -138,7 +138,7 @@ describe('RunSummaryComponent', () => {
     let emitted = false;
     component.returnToMenu.subscribe(() => (emitted = true));
 
-    const btn = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.run-summary__btn--secondary');
+    const btn = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.run-summary__btn--ghost');
     btn?.click();
 
     expect(emitted).toBeTrue();
@@ -156,7 +156,7 @@ describe('RunSummaryComponent', () => {
 
   it('displays the score prominently', () => {
     const el = fixture.nativeElement as HTMLElement;
-    const scoreEl = el.querySelector('.run-summary__score-value');
+    const scoreEl = el.querySelector('.run-summary__hero-value');
     expect(scoreEl?.textContent?.trim()).toBe('1200');
   });
 

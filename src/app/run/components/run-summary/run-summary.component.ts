@@ -49,10 +49,18 @@ export class RunSummaryComponent {
   }
 
   get runDuration(): string {
-    const ms = Date.now() - this.runState.startedAt;
-    const mins = Math.floor(ms / MS_PER_MINUTE);
+    // Use endedAt when present so duration freezes at run termination
+    // and does not keep accumulating across pause / save-resume.
+    const endRef = this.runState.endedAt ?? Date.now();
+    const ms = Math.max(0, endRef - this.runState.startedAt);
+    const totalMins = Math.floor(ms / MS_PER_MINUTE);
     const secs = Math.floor((ms % MS_PER_MINUTE) / MS_PER_SECOND);
-    return `${mins}m ${secs}s`;
+    if (totalMins >= 60) {
+      const hrs = Math.floor(totalMins / 60);
+      const mins = totalMins % 60;
+      return `${hrs}h ${mins}m`;
+    }
+    return `${totalMins}m ${secs}s`;
   }
 
   get actsReached(): number {

@@ -294,7 +294,7 @@ export class RunService {
     if (!this.runState) return;
     // Clear checkpoint so a re-start does not inherit a stale encounter.
     this.encounterCheckpointService.clearCheckpoint();
-    const abandonedState = { ...this.runState, status: RunStatus.ABANDONED };
+    const abandonedState = { ...this.runState, status: RunStatus.ABANDONED, endedAt: Date.now() };
     this.updateState(abandonedState);
     this.playerProfile.recordRun(abandonedState);
     this.cleanup();
@@ -418,6 +418,7 @@ export class RunService {
         lives: 0,
         encounterResults: newEncounterResults,
         status: RunStatus.DEFEAT,
+        endedAt: Date.now(),
       };
       this.updateState(defeatState);
       this.playerProfile.recordRun(defeatState);
@@ -884,6 +885,7 @@ export class RunService {
       gold: newGold,
       relicIds: newRelicIds,
       status: newStatus,
+      endedAt: newStatus === RunStatus.DEFEAT ? Date.now() : state.endedAt,
       completedNodeIds: this.computeNodeCompletedArray(state),
     });
 
@@ -973,7 +975,7 @@ export class RunService {
 
     if (nextAct >= state.config.actsCount) {
       // Run complete — victory!
-      const victoryState = { ...state, status: RunStatus.VICTORY };
+      const victoryState = { ...state, status: RunStatus.VICTORY, endedAt: Date.now() };
       this.updateState(victoryState);
       this.persistence.setMaxAscension(state.ascensionLevel + 1);
       this.playerProfile.recordRun(victoryState);
