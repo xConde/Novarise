@@ -2061,7 +2061,7 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 
 **Risk:** `getTowerMaterial(TowerType.SPLASH)` returns the registry-cached singleton (one `MeshStandardMaterial` instance). All 8 tube meshes were constructed with `new THREE.Mesh(tubeGeom, mat)` — the same reference. `tickTubeEmits` mutates `tubeMesh.material.emissiveIntensity` on the emitting tube, but since every tube shares that instance, **all 8 tubes light up simultaneously on every fire**. The round-robin cycling is entirely inert visually: no matter which tube index is selected, the glow appears on all of them. This also contaminates the muzzle-flash restore path: `startMuzzleFlash` saves `emissiveIntensity` per `(child.uuid, mat.uuid)` key; a shared material means the first tube's save clobbers the rest (all tubes write the same `mat.uuid`, so only the last write survives), and restore sets all tubes to the last-saved value.
 
-**Fix applied:** Each tube now calls `mat.clone()` at construction time, producing 8 independent `MeshStandardMaterial` instances. Clones are lightweight (same GPU shader/textures, only uniform state differs). Added regression spec: `'each tube has its own material instance (emissive isolation)'` asserts `tube1.material !== tube2.material`. Fixed in this commit.
+**Fix applied:** Each tube now calls `mat.clone()` at construction time, producing 8 independent `MeshStandardMaterial` instances. Clones are lightweight (same GPU shader/textures, only uniform state differs). Added regression spec: `'each tube has its own material instance (emissive isolation)'` asserts `tube1.material !== tube2.material`. Fixed in commit `668ada5`.
 
 ---
 
@@ -2071,7 +2071,7 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 
 **Risk:** The original implementation computed `nextIdx = counter % 8` and incremented unconditionally, then only set emit state if the tube was visible. At T1 there are only 4 visible tubes (indices 0–3); indices 4–7 are hidden. Over 8 consecutive fires the counter cycles 0→7, but 4 of those shots (`nextIdx` = 4, 5, 6, 7) find `tubeMesh.visible = false` and silently skip the emit state assignment. Result: the T1 SPLASH fires produce an emit pulse only ~50% of the time, making the animation feel broken rather than round-robin.
 
-**Fix applied:** `fireTick` now scans forward from `startIdx` (up to 8 steps) until it finds a visible tube, then sets `nextTubeIndex` past that found tube. No visible tube is silently consumed. A degenerate fallback (no visible tubes) still advances the counter. Added spec: `'fireTick skips hidden tubes and always emits from a visible tube'` — hides 6 of 8 tubes, starts counter past the visible pair, asserts emit lands on a visible index. Fixed in this commit.
+**Fix applied:** `fireTick` now scans forward from `startIdx` (up to 8 steps) until it finds a visible tube, then sets `nextTubeIndex` past that found tube. No visible tube is silently consumed. A degenerate fallback (no visible tubes) still advances the counter. Added spec: `'fireTick skips hidden tubes and always emits from a visible tube'` — hides 6 of 8 tubes, starts counter past the visible pair, asserts emit lands on a visible index. Fixed in commit `668ada5`.
 
 ---
 
