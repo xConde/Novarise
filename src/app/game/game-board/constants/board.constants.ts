@@ -27,16 +27,16 @@ export const TILE_VISUAL_CONFIG = {
    */
   geometryGapFactor: 0.93,
   /**
-   * Walls render as a continuous solid surface; the slight overlap
-   * eliminates per-cell seams that would otherwise read as "tiles
-   * you can see between" rather than impassable structure. The
-   * trim plane is constrained to the non-wall bounding box so this
-   * overlap is also what guarantees no bright trim leaks through
-   * any wall column gap. Visible cell structure on walls comes
-   * from the front-face lighting shadow plus the wall emissive
-   * accent, not from gap-based plane bleed.
+   * Walls keep a hairline gap so the wall-scoped accent trim plane
+   * shows through column seams as the tinted cell structure. Tight
+   * enough that walls still read as a connected impassable surface,
+   * not as a row of placeable blocks. Horizontal seams stay hidden
+   * by wall front-face occlusion at the default camera angle —
+   * that's expected; the visible vertical accent lines + emissive-
+   * tinted top faces give walls the cell read without exposing the
+   * full grid like buildable tiles do.
    */
-  wallGapFactor: 1.005,
+  wallGapFactor: 0.985,
   base: {
     emissiveIntensity: 0.35,
     /** Slight metalness pairs with the lower roughness to let the top

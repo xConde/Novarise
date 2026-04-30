@@ -291,70 +291,93 @@ export class GameBoardService {
   }
 
   /**
-   * Cool-tinted plane sitting just above the floor so the grout between
-   * non-wall tiles reads as designed trim. Tiles cover their share of
-   * the plane from above; the gap between adjacent buildable tiles
-   * exposes a thin line of the plane color at every cell boundary.
+   * Two trim planes sitting just above the floor: a bright cool plane
+   * scoped to the bounding box of non-wall tiles (designed trim
+   * between buildable cells) and a dimmer purple-grey plane scoped to
+   * the wall bounding box (accent-tinted structure between wall
+   * cells). Each plane is hidden by its respective tile geometry from
+   * above; the cell gap exposes a strip of plane color at every
+   * boundary.
    *
-   * The plane is sized to the bounding box of NON-WALL tiles only.
-   * Walls (and tile-less cells outside the buildable region) leave the
-   * plane absent, so wall column gaps and tile-less cells stay dark
-   * instead of leaking the bright trim color through.
-   *
-   * Implemented as a plane (not LineSegments) because WebGL clamps line
-   * width to 1 device pixel regardless of `linewidth`; on a dark tile
-   * face the 1-pixel line was sub-perceptual.
+   * Two planes (rather than one full-board plane) prevent the bright
+   * trim from leaking through wall column seams and into tile-less
+   * cells beyond the playable area, while still giving walls visible
+   * cell structure with their own accent-tinted color.
    *
    * Returns a Group for API compatibility — disposal traverses the
-   * group and disposes the mesh's geometry/material.
+   * group and disposes each mesh's geometry/material.
    */
   createGridLines(): THREE.Group {
     const gridGroup = new THREE.Group();
 
     if (this.gameBoardWidth <= 0 || this.gameBoardHeight <= 0) return gridGroup;
 
+    const nonWallBB = this.computeTileBoundingBox(t => t.type !== BlockType.WALL);
+    if (nonWallBB) {
+      gridGroup.add(this.buildTrimPlane(nonWallBB, 0xd6e2ff, 0.38, 0.005));
+    }
+
+    const wallBB = this.computeTileBoundingBox(t => t.type === BlockType.WALL);
+    if (wallBB) {
+      // Dim purple-grey accent — high enough opacity to show through
+      // tight wall gaps, dark enough that the wall structure reads as
+      // tinted rather than as the same trim brightness as the
+      // buildable interior. Y is offset slightly below the bright
+      // plane so any bounding-box overlap renders deterministically.
+      gridGroup.add(this.buildTrimPlane(wallBB, 0x6a5878, 0.6, 0.004));
+    }
+
+    return gridGroup;
+  }
+
+  private computeTileBoundingBox(
+    filter: (tile: GameBoardTile) => boolean,
+  ): { minRow: number; maxRow: number; minCol: number; maxCol: number } | null {
     let minRow = Number.POSITIVE_INFINITY;
     let maxRow = Number.NEGATIVE_INFINITY;
     let minCol = Number.POSITIVE_INFINITY;
     let maxCol = Number.NEGATIVE_INFINITY;
-    let hasNonWall = false;
+    let any = false;
     for (let row = 0; row < this.gameBoard.length; row++) {
       const rowTiles = this.gameBoard[row];
       for (let col = 0; col < rowTiles.length; col++) {
         const tile = rowTiles[col];
-        if (!tile || tile.type === BlockType.WALL) continue;
-        hasNonWall = true;
+        if (!tile || !filter(tile)) continue;
+        any = true;
         if (row < minRow) minRow = row;
         if (row > maxRow) maxRow = row;
         if (col < minCol) minCol = col;
         if (col > maxCol) maxCol = col;
       }
     }
-    if (!hasNonWall) return gridGroup;
+    return any ? { minRow, maxRow, minCol, maxCol } : null;
+  }
 
-    const planeWidth = (maxCol - minCol + 1) * this.tileSize;
-    const planeHeight = (maxRow - minRow + 1) * this.tileSize;
-    const centerX = ((minCol + maxCol) / 2 - this.gameBoardWidth / 2) * this.tileSize;
-    const centerZ = ((minRow + maxRow) / 2 - this.gameBoardHeight / 2) * this.tileSize;
+  private buildTrimPlane(
+    bb: { minRow: number; maxRow: number; minCol: number; maxCol: number },
+    color: number,
+    opacity: number,
+    y: number,
+  ): THREE.Mesh {
+    const planeWidth = (bb.maxCol - bb.minCol + 1) * this.tileSize;
+    const planeHeight = (bb.maxRow - bb.minRow + 1) * this.tileSize;
+    const centerX = ((bb.minCol + bb.maxCol) / 2 - this.gameBoardWidth / 2) * this.tileSize;
+    const centerZ = ((bb.minRow + bb.maxRow) / 2 - this.gameBoardHeight / 2) * this.tileSize;
 
     const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
     const material = new THREE.MeshBasicMaterial({
-      color: 0xd6e2ff,
+      color,
       transparent: true,
-      opacity: 0.55,
+      opacity,
       depthWrite: false,
     });
 
-    const grout = new THREE.Mesh(geometry, material);
-    grout.rotation.x = -Math.PI / 2;
-    // Just above the floor so it sits inside the tile's vertical extent;
-    // tiles occlude it from above where they exist, gaps expose it.
-    grout.position.set(centerX, 0.005, centerZ);
-    grout.renderOrder = -1;
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(centerX, y, centerZ);
+    mesh.renderOrder = -1;
 
-    gridGroup.add(grout);
-
-    return gridGroup;
+    return mesh;
   }
 
   private getTileColor(type: BlockType): number {
