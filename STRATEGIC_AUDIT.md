@@ -1995,7 +1995,7 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 
 **Fix:** Call `this.towerAnimationService.tickRecoilAnimations(this.meshRegistry.towerMeshes, performance.now() / 1000)` in `GameRenderService.renderFrame()` after `updateTowerAnimations`. Add `tickRecoilAnimations` to `createTowerAnimationServiceSpy()` in `tower.spies.ts`. Add a spec in `game-render.service.spec.ts` asserting that `tickRecoilAnimations` is called on every render frame.
 
-**Status:** Fixed in commit [pending — see refactor(towers) phase B red-team hardening]
+**Status:** Fixed in commit `1e964ee`
 
 ---
 
