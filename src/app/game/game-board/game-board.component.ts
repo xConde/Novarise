@@ -891,6 +891,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const towerMesh = this.meshRegistry.towerMeshes.get(this.selectedTowerInfo.id);
     if (towerMesh) {
       this.towerUpgradeVisualService.applyUpgradeVisuals(towerMesh, result.newLevel, result.specialization);
+      // Refresh stored emissive baselines so the next muzzle flash saves the
+      // post-upgrade intensity rather than the pre-upgrade value.
+      TowerMeshFactoryService.snapshotEmissiveBaselines(towerMesh);
     }
 
     // Invalidate muzzle flash saved emissive — upgrade changed the baseline
@@ -898,6 +901,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (placedTower) {
       placedTower.originalEmissiveIntensity = undefined;
       placedTower.muzzleFlashTimer = undefined;
+      placedTower.emissiveBaselines = undefined; // will be re-read from mesh userData on next fire
     }
 
     // Refresh info panel
@@ -1289,6 +1293,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.towerCombatService.upgradeTower(`${row}-${col}`, 0);
       // Apply L2 visuals so the mesh matches the combat stats.
       this.towerUpgradeVisualService.applyUpgradeVisuals(towerMesh, 2, undefined);
+      // Refresh emissive baselines after the upgrade changes material intensity.
+      TowerMeshFactoryService.snapshotEmissiveBaselines(towerMesh);
       this.towerUpgradeVisualService.spawnUpgradeFlash(towerMesh.position, this.sceneService.getScene());
     }
 

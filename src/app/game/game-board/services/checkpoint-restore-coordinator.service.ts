@@ -246,6 +246,10 @@ export class CheckpointRestoreCoordinatorService {
             this.towerUpgradeVisualService.applyUpgradeVisuals(
               mesh, tower.level, tower.specialization,
             );
+            // Refresh emissive baselines after applyUpgradeVisuals changes
+            // material intensity, so the next muzzle flash saves the
+            // post-upgrade baseline rather than the pre-upgrade value.
+            TowerMeshFactoryService.snapshotEmissiveBaselines(mesh);
           }
         }
       }

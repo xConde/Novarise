@@ -8,6 +8,7 @@ import { GameStatsService } from './game-stats.service';
 import { GameBoardService } from '../game-board.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { TowerUpgradeVisualService } from './tower-upgrade-visual.service';
+import { TowerMeshFactoryService } from './tower-mesh-factory.service';
 import { AudioService } from './audio.service';
 import { SceneService } from './scene.service';
 import { TowerCombatService } from './tower-combat.service';
@@ -805,11 +806,14 @@ export class CardPlayService {
       const towerMesh = this.meshRegistry.towerMeshes.get(key);
       if (towerMesh) {
         this.towerUpgradeVisualService.applyUpgradeVisuals(towerMesh, target.level + 1, undefined);
+        // Refresh emissive baselines after the upgrade changes material intensity.
+        TowerMeshFactoryService.snapshotEmissiveBaselines(towerMesh);
       }
 
       // Invalidate muzzle flash saved emissive — upgrade changed the baseline.
       target.originalEmissiveIntensity = undefined;
       target.muzzleFlashTimer = undefined;
+      target.emissiveBaselines = undefined; // will be re-read from mesh userData on next fire
     }
 
     this.callbacks?.onRefreshUI();

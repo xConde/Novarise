@@ -1526,7 +1526,43 @@ export class TowerMeshFactoryService {
       }
     });
 
+    // Snapshot canonical emissive baselines immediately after construction so
+    // startMuzzleFlash can always restore to the true baseline rather than the
+    // current (possibly spiked) material value. This prevents shared-material
+    // ratchet when multiple same-type towers fire in the same combat turn.
+    TowerMeshFactoryService.snapshotEmissiveBaselines(towerGroup);
+
     return towerGroup;
+  }
+
+  // ── Emissive baseline utilities ───────────────────────────────────────────
+
+  /**
+   * Record the current emissiveIntensity of every non-animated mesh in the
+   * group into `group.userData['emissiveBaselines']`.
+   *
+   * Call once immediately after construction and again after any call to
+   * `applyUpgradeVisuals` so the stored baselines reflect the post-upgrade
+   * material state.
+   *
+   * The skip-set mirrors `startMuzzleFlash`: 'tip' and 'sphere' are excluded
+   * because their emissive is driven by per-frame animation ticks and must
+   * not be locked to a snapshot.
+   */
+  static snapshotEmissiveBaselines(group: THREE.Group): void {
+    const baselines = new Map<string, number>();
+    group.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      if (child.name === 'tip' || child.name === 'sphere') return;
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      for (const m of mats) {
+        const mat = m as THREE.MeshStandardMaterial;
+        if (mat.emissiveIntensity !== undefined) {
+          baselines.set(child.uuid + '_' + mat.uuid, mat.emissiveIntensity);
+        }
+      }
+    });
+    group.userData['emissiveBaselines'] = baselines;
   }
 
   // ── Geometry shortcuts (registry-aware) ──────────────────────────────────

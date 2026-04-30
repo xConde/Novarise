@@ -93,6 +93,16 @@ export interface PlacedTower {
   /** Per-mesh snapshot of emissiveIntensity before the flash was applied, keyed by mesh uuid. */
   originalEmissiveIntensity?: Map<string, number>;
   /**
+   * Canonical emissive-intensity baselines recorded when the mesh was first built
+   * (and refreshed after upgrades). Keyed by `child.uuid + '_' + mat.uuid`.
+   *
+   * `startMuzzleFlash` reads from this map instead of from the current material
+   * value, preventing shared-material cross-talk: when two towers of the same
+   * type fire in the same turn the second tower would otherwise snapshot the
+   * already-spiked material and permanently elevate the baseline (ratchet bug).
+   */
+  emissiveBaselines?: Map<string, number>;
+  /**
    * The combat turn number on which this tower was placed. Set by
    * TowerCombatService.registerTower() using the caller-supplied turn number.
    * Defaults to 0 for towers placed before combat begins (setup phase).

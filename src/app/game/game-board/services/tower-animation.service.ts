@@ -91,7 +91,7 @@ export class TowerAnimationService {
 
   /**
    * Spikes emissive intensity on all non-tip meshes in the tower's group when it fires.
-   * Saves the current intensity per mesh so `updateMuzzleFlashes` can restore it exactly.
+   * Saves the canonical baseline per mesh so `updateMuzzleFlashes` can restore it exactly.
    * Calling again while a flash is already active resets the timer (re-trigger on rapid fire).
    *
    * Skip-set: `'tip'` (constant glow — must not be capped) and `'sphere'` (CHAIN tower
@@ -99,6 +99,13 @@ export class TowerAnimationService {
    * Snapshotting the current animated value as the "original" would restore the sphere
    * to a random charge phase instead of a stable baseline, matching the Finding 12/14
    * class of save/restore cross-contamination).
+   *
+   * Shared-material ratchet prevention: the saved baseline is read from
+   * `tower.emissiveBaselines` (recorded at mesh construction time) rather than from
+   * `mat.emissiveIntensity` at fire time. Without this, two towers sharing a body
+   * material that fire in the same turn would ratchet: Tower-B's save would capture
+   * Tower-A's already-spiked value, and restore would elevate the shared baseline
+   * permanently — compounding across every subsequent turn.
    */
   startMuzzleFlash(tower: PlacedTower): void {
     if (!tower.mesh) return;
@@ -110,6 +117,12 @@ export class TowerAnimationService {
 
     if (!isReflash) {
       const saved = new Map<string, number>();
+      // Read baselines from the pre-recorded snapshot rather than from the current
+      // material value. Shared materials may already be spiked by a sibling tower
+      // that fired earlier in the same combat batch; using the current value would
+      // save the elevated intensity and restore to it, permanently ratcheting.
+      const baselines = tower.emissiveBaselines
+        ?? (tower.mesh.userData['emissiveBaselines'] as Map<string, number> | undefined);
 
       tower.mesh.traverse((child) => {
         if (!(child instanceof THREE.Mesh)) return;
@@ -120,8 +133,12 @@ export class TowerAnimationService {
         const materials = getMaterials(child) as THREE.MeshStandardMaterial[];
 
         for (const mat of materials) {
-          if (mat.emissiveIntensity === undefined) continue;
-          saved.set(child.uuid + '_' + mat.uuid, mat.emissiveIntensity);
+          const key = child.uuid + '_' + mat.uuid;
+          // Prefer the pre-recorded baseline; fall back to current value for
+          // any mesh that was added after construction (e.g. dynamic debug overlays).
+          const baselineValue = baselines?.get(key) ?? mat.emissiveIntensity;
+          if (baselineValue === undefined) continue;
+          saved.set(key, baselineValue);
         }
       });
 

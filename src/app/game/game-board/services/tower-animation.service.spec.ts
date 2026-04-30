@@ -1521,14 +1521,11 @@ describe('TowerAnimationService', () => {
 
     it('body material returns to baseline after 30 fire cycles with two shared-material towers', () => {
       const sharedMat = new THREE.MeshStandardMaterial({ emissiveIntensity: BASELINE });
-      const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
 
+      // Each tower has its own group with one body mesh referencing the same material.
+      // All baselines are captured before any flash fires.
       const towerA = makeSharedMatTower('0-0', sharedMat);
       const towerB = makeSharedMatTower('0-1', sharedMat);
-      // towerB body mesh also needs its own geo instance but shares sharedMat
-      const bodyB = new THREE.Mesh(geo, sharedMat);
-      bodyB.name = 'body';
-      towerB.mesh!.add(bodyB);
 
       const towersMap = new Map<string, PlacedTower>([
         ['0-0', towerA],
@@ -1536,11 +1533,14 @@ describe('TowerAnimationService', () => {
       ]);
 
       for (let cycle = 0; cycle < 30; cycle++) {
-        // Both towers fire in the same batch (same turn)
+        // Both towers fire in the same batch (same turn).
+        // Without the baseline-snapshot fix the second save captures the already-spiked
+        // value and restore writes it back permanently. With the fix both saves read 0.4
+        // from their respective baseline maps and both restores write 0.4.
         service.startMuzzleFlash(towerA);
         service.startMuzzleFlash(towerB);
 
-        // Advance past flash duration to expire both timers
+        // Advance past flash duration to expire both timers in one call.
         service.updateMuzzleFlashes(towersMap, MUZZLE_FLASH_CONFIG.duration + 0.001);
       }
 
@@ -1549,12 +1549,11 @@ describe('TowerAnimationService', () => {
       expect(sharedMat.emissiveIntensity).toBeLessThanOrEqual(BASELINE + tolerance);
 
       sharedMat.dispose();
-      geo.dispose();
       towerA.mesh?.traverse(obj => {
-        if (obj instanceof THREE.Mesh && obj.geometry !== geo) obj.geometry.dispose();
+        if (obj instanceof THREE.Mesh) obj.geometry.dispose();
       });
       towerB.mesh?.traverse(obj => {
-        if (obj instanceof THREE.Mesh && obj.geometry !== geo) obj.geometry.dispose();
+        if (obj instanceof THREE.Mesh) obj.geometry.dispose();
       });
     });
 
