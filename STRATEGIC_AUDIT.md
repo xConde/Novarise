@@ -2140,3 +2140,51 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 - **Finding F-b (LOW):** `idleTick` electrode shimmer uses `child.position.x * 4.0` as a phase offset — `4.0` is a magic number. Should be named `CHAIN_ELECTRODE_CONFIG.shimmerPhaseScale` for tuning consistency. Deferred to Phase H.
 - **Finding F-c (LOW):** T2/T3 orbiting spheres advance their position in `idleTick` even when hidden (`orbit2?.visible` guard is present, correct). But the `visible = false` test is on the Mesh directly, not on the group parent — if a parent group were hidden instead, `orbit2.visible` would still be true. Not a current bug; the CHAIN group is always visible when placed. Note for Phase H if group-level visibility ever becomes a feature.
 - **Finding F-d (LOW):** `arcMat` (the idle arc cylinder material) is allocated raw without going through `materialRegistry`. It is per-instance and mutable (opacity changes per frame), so registry sharing would be incorrect. However, it is also not registered with the geometry registry for its `arcGeom`. Both are disposed correctly by `disposeGroup`'s full traverse (the protect predicate only skips registry-owned resources; `arcMat` is not registered, so it is disposed). No bug, but the comment in the factory should clarify this intentional pattern so future reviewers don't "fix" it by pushing `arcMat` through the registry.
+
+---
+
+## Red Team Critique — Phase G (MORTAR silhouette) — 2026-04-30
+
+### Finding G-1: MORTAR body material is registry-shared → muzzle-flash cross-talk between placed instances (HIGH)
+
+**Location:** `tower-mesh-factory.service.ts` MORTAR case; `tower-material.factory.ts:createTowerMaterial`
+
+**Risk:** `getTowerMaterial(TowerType.MORTAR)` calls `createTowerMaterial` which routes through `registry.getOrCreate('tower:MORTAR', ...)`, returning the same `MeshStandardMaterial` singleton for every MORTAR placed on the board. `startMuzzleFlash` mutates `mat.emissiveIntensity` on every mesh in the group. Since chassis, treads, vents, housing, and all barrel meshes share the one registry material, firing MORTAR-A spikes the emissive on MORTAR-B's body simultaneously (they share the same GPU uniform slot). `updateMuzzleFlashes` restores per-`(child.uuid + '_' + mat.uuid)` key; because all MORTAR meshes share `mat.uuid`, the last-writer wins and restore is nondeterministic. Same class as Finding 10 (SPLASH tubes) and Finding 12 (SLOW emitter). The body material need not be animated, but the save/restore path still corrupts across instances.
+
+**Status: Deferred.** The fix pattern is identical to prior findings (clone at construction: `mat.clone()` per tower instance). Given the MORTAR body has no idle-driven emissive animation, the one-frame contamination window is shorter than for CHAIN/SLOW — visible only if two MORTAR towers fire within a single `updateMuzzleFlashes` tick (~16ms). Deferred to Phase H cleanup sprint along with F-a, F-b, E-a, E-b, D-b.
+
+---
+
+### Finding G-2: `tickRecoilAnimations` writes absolute position.y = 0 at snap — destroys barrel rest position (CRITICAL)
+
+**Location:** `tower-animation.service.ts:tickRecoilAnimations` (snap-to-neutral path); `tower-mesh-factory.service.ts` MORTAR barrel construction
+
+**Risk:** All MORTAR barrels are positioned at `barrelLength / 2` in `barrelPivot` local space (CylinderGeometry origin is at its centre; `position.y = length/2` places the base at the pivot). The recoil tick used `b.position.y = -distance * (1 - eased)` (absolute from 0) during animation, and `b.position.y = 0` at snap. The result: at peak recoil the barrel teleports from `+0.275` to `−0.15` — a `0.425u` jump rather than the intended `0.15u` slide. At animation end it snaps to `y=0` rather than the rest position `+0.275`, leaving every barrel permanently half-embedded in the pivot origin until the next fire trigger. The bug affects all tier transitions (T1, T2, T3) and `dualBarrel`'s Z-offset is preserved through the snap but the Y is still wrong. BASIC and SNIPER barrels carry the same latent bug but are visually less obvious (smaller geometry, tip-only named mesh).
+
+**Fix applied:** Factory stores `userData['recoilBaseY']` on each barrel cylinder at construction time. `tickRecoilAnimations` now uses `baseY = b.userData['recoilBaseY'] ?? 0` as the neutral — in-flight: `b.position.y = baseY + recoilOffset`; snap: `b.position.y = baseY`. Existing tests (barrels at y=0) fall through the `?? 0` path unchanged. New specs: `'MORTAR barrel: respects recoilBaseY when snapping to neutral (Finding G-2)'` in `tower-animation.service.spec.ts`; three `recoilBaseY` assertions in `tower-mesh-factory.service.spec.ts`. Fixed in commit `[see hardening commit]`.
+
+---
+
+### Finding G-3: `dualBarrel` Z-offset uses wrong axis for "above the other" intent (MEDIUM)
+
+**Location:** `tower-mesh-factory.service.ts` line `dualBarrel.position.set(0, barrelT2Length/2, dualBarrelYOffset)` — the `dualBarrelYOffset = 0.14` is in barrelPivot **local Z**, not local Y.
+
+**Risk:** In `barrelPivot`'s local frame (rotated `−45°` around world X), local `+Z` maps to world `[0, −0.707, +0.707]` (down-and-forward), NOT "above". The comment says "second barrel sits above the first". At the −45° elevation, a displacement along local +Z shifts the second barrel slightly downward and forward in world space, not upward. The canonical "above" (perpendicular to bore axis, toward world +Y) requires components in both local +Y and −Z. Visually the two barrels still appear offset rather than coincident, so the silhouette reads as dual-barrel — but the axis is semantically wrong and will produce an unexpected visual if the barrel elevation angle ever changes. No player-visible crash; aesthetic accuracy issue.
+
+**Status: Deferred.** Axis-correct placement requires either: (a) moving the offset to local X (side-by-side, canonical dual-barrel read from above), or (b) computing the true "above-bore" vector. Phase H cohesion sprint should revisit alongside the side-by-side silhouette test (sprint 50 in the plan).
+
+---
+
+### Deferred Phase G Findings (cumulative backlog for Phase H)
+
+Priority order for Phase H cleanup:
+
+1. **G-1 (HIGH):** MORTAR body material clone — body has no animated emissive so risk window is narrow, but the contract violation is real. Fix: `mat.clone()` in MORTAR case, same as SPLASH tube fix.
+2. **G-3 (MEDIUM):** `dualBarrel` Z-offset axis — aesthetic bug in dual-barrel read. Fix: move offset to local X for a side-by-side placement, update constant name to `dualBarrelXOffset`.
+3. **F-b (LOW):** Electrode shimmer `4.0` magic number → `CHAIN_ELECTRODE_CONFIG.shimmerPhaseScale`.
+4. **F-a (LOW):** Remove dormant `'orb'` case from legacy traverse.
+5. **E-a (LOW):** `tickEmitterPulses` `pulseDuration` stored in userData but never read — remove or use.
+6. **E-b (LOW):** SLOW `idleTick` crystal traverse vs `getObjectByName` — clarify pattern.
+7. **E-c (LOW):** Legacy SLOW crystal bob specs — move to labelled describe block.
+8. **D-b (LOW):** `drumPrevT` vs `drumSpinBoostUntil` clock-source mismatch — annotate or unify.
+9. **F-c / F-d (LOW):** CHAIN orbit visibility edge-case + `arcMat` registry comment — annotate only.
