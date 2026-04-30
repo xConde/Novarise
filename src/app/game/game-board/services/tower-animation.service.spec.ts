@@ -3,9 +3,9 @@ import * as THREE from 'three';
 import { TowerAnimationService } from './tower-animation.service';
 import { PlacedTower, TowerType, TargetingMode } from '../models/tower.model';
 import { BlockType } from '../models/game-board-tile';
-import { MUZZLE_FLASH_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
+import { MUZZLE_FLASH_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
 import { ANIMATION_CONFIG } from '../constants/rendering.constants';
-import { BASIC_RECOIL_CONFIG, SPLASH_TUBE_EMIT_CONFIG, SLOW_EMITTER_PULSE_FIRE, MORTAR_RECOIL_CONFIG, MORTAR_BARREL_NAMES } from '../constants/tower-anim.constants';
+import { BASIC_RECOIL_CONFIG, SPLASH_TUBE_EMIT_CONFIG, SLOW_EMITTER_PULSE_FIRE, MORTAR_RECOIL_CONFIG, MORTAR_BARREL_NAMES, TIER_UP_BOUNCE_CONFIG, SELL_ANIM_CONFIG, SELECTION_PULSE_CONFIG } from '../constants/tower-anim.constants';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -66,170 +66,6 @@ describe('TowerAnimationService', () => {
   // ---- updateTowerAnimations ----
 
   describe('updateTowerAnimations', () => {
-    describe('crystal bob — BASIC tower', () => {
-      it('sets child.position.y to a value derived from crystalBaseY', () => {
-        const { group, child } = makeTowerGroup(TowerType.BASIC, 'crystal');
-        const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
-        const time = 1000; // 1 second in ms
-
-        service.updateTowerAnimations(towerMeshes, time);
-
-        const t = time * ANIMATION_CONFIG.msToSeconds;
-        const expectedY = TOWER_ANIM_CONFIG.crystalBaseY
-          + Math.sin(t * TOWER_ANIM_CONFIG.crystalBobSpeed) * TOWER_ANIM_CONFIG.crystalBobAmplitude;
-        expect(child.position.y).toBeCloseTo(expectedY, 5);
-
-        disposeTowerGroup(group);
-      });
-
-      it('rotates crystal around Y axis', () => {
-        const { group, child } = makeTowerGroup(TowerType.BASIC, 'crystal');
-        const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
-        const time = 2000;
-
-        service.updateTowerAnimations(towerMeshes, time);
-
-        const t = time * ANIMATION_CONFIG.msToSeconds;
-        expect(child.rotation.y).toBeCloseTo(t * TOWER_ANIM_CONFIG.basicCrystalRotSpeed, 5);
-
-        disposeTowerGroup(group);
-      });
-    });
-
-    // These specs exercise the legacy named-mesh traverse path for SLOW towers
-    // that have not yet been rebuilt with an idleTick hook (i.e., bare groups
-    // created in unit tests). The redesigned SLOW tower registers idleTick and
-    // skips this traverse entirely — see TowerMeshFactoryService SLOW case.
-    // Keep these specs: they ensure the fallback path stays correct for any
-    // future tower type that reuses the 'crystal' naming convention without idleTick.
-    describe('legacy SLOW crystal handler — pre-Phase-E fallback path', () => {
-      describe('crystal bob — SLOW tower', () => {
-        it('sets child.position.y to a value derived from slowCrystalBaseY', () => {
-          const { group, child } = makeTowerGroup(TowerType.SLOW, 'crystal');
-          const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
-          const time = 1500;
-
-          service.updateTowerAnimations(towerMeshes, time);
-
-          const t = time * ANIMATION_CONFIG.msToSeconds;
-          const expectedY = TOWER_ANIM_CONFIG.slowCrystalBaseY
-            + Math.sin(t * TOWER_ANIM_CONFIG.crystalBobSpeed) * TOWER_ANIM_CONFIG.slowCrystalBobAmplitude;
-          expect(child.position.y).toBeCloseTo(expectedY, 5);
-
-          disposeTowerGroup(group);
-        });
-
-        it('rotates SLOW crystal at slowCrystalRotSpeed', () => {
-          const { group, child } = makeTowerGroup(TowerType.SLOW, 'crystal');
-          const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
-          const time = 1000;
-
-          service.updateTowerAnimations(towerMeshes, time);
-
-          const t = time * ANIMATION_CONFIG.msToSeconds;
-          expect(child.rotation.y).toBeCloseTo(t * TOWER_ANIM_CONFIG.slowCrystalRotSpeed, 5);
-
-          disposeTowerGroup(group);
-        });
-      });
-    });
-
-    describe('spark bob — CHAIN tower', () => {
-      it('captures baseY on first call if not set', () => {
-        const { group, child } = makeTowerGroup(TowerType.CHAIN, 'spark');
-        child.position.set(0, 0.5, 0); // set initial position before first call
-        const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
-
-        service.updateTowerAnimations(towerMeshes, 0);
-
-        expect(child.userData['baseY']).toBeCloseTo(0.5, 5);
-
-        disposeTowerGroup(group);
-      });
-
-      it('sets spark position.y based on sparkBobAmplitude', () => {
-        const { group, child } = makeTowerGroup(TowerType.CHAIN, 'spark');
-        child.position.set(1.0, 0.3, 0);
-        const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
-        const time = 800;
-
-        service.updateTowerAnimations(towerMeshes, time);
-
-        const t = time * ANIMATION_CONFIG.msToSeconds;
-        const baseY = 0.3;
-        const expectedY = baseY
-          + Math.sin(t * TOWER_ANIM_CONFIG.sparkBobSpeed + child.position.x * TOWER_ANIM_CONFIG.sparkPhaseScale)
-          * TOWER_ANIM_CONFIG.sparkBobAmplitude;
-        expect(child.position.y).toBeCloseTo(expectedY, 5);
-
-        disposeTowerGroup(group);
-      });
-    });
-
-    describe('spore bob — MORTAR tower', () => {
-      it('captures baseY on first call if not set', () => {
-        const { group, child } = makeTowerGroup(TowerType.MORTAR, 'spore');
-        child.position.set(0, 0.7, 0);
-        const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
-
-        service.updateTowerAnimations(towerMeshes, 0);
-
-        expect(child.userData['baseY']).toBeCloseTo(0.7, 5);
-
-        disposeTowerGroup(group);
-      });
-
-      it('sets spore position.y based on sporeBobAmplitude', () => {
-        const { group, child } = makeTowerGroup(TowerType.MORTAR, 'spore');
-        child.position.set(0.5, 0.4, 0);
-        const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
-        const time = 600;
-
-        service.updateTowerAnimations(towerMeshes, time);
-
-        const t = time * ANIMATION_CONFIG.msToSeconds;
-        const baseY = 0.4;
-        const expectedY = baseY
-          + Math.sin(t * TOWER_ANIM_CONFIG.sporeBobSpeed + child.position.x * TOWER_ANIM_CONFIG.sporePhaseScale)
-          * TOWER_ANIM_CONFIG.sporeBobAmplitude;
-        expect(child.position.y).toBeCloseTo(expectedY, 5);
-
-        disposeTowerGroup(group);
-      });
-    });
-
-    describe('tip glow — SNIPER tower', () => {
-      it('sets emissiveIntensity within [tipGlowMin, tipGlowMax]', () => {
-        const { group, child } = makeTowerGroup(TowerType.SNIPER, 'tip');
-        const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
-
-        service.updateTowerAnimations(towerMeshes, 750);
-
-        const mat = child.material as THREE.MeshStandardMaterial;
-        expect(mat.emissiveIntensity).toBeGreaterThanOrEqual(TOWER_ANIM_CONFIG.tipGlowMin);
-        expect(mat.emissiveIntensity).toBeLessThanOrEqual(TOWER_ANIM_CONFIG.tipGlowMax);
-
-        disposeTowerGroup(group);
-      });
-
-      it('matches the expected glow formula', () => {
-        const { group, child } = makeTowerGroup(TowerType.SNIPER, 'tip');
-        const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
-        const time = 999;
-
-        service.updateTowerAnimations(towerMeshes, time);
-
-        const t = time * ANIMATION_CONFIG.msToSeconds;
-        const expected = TOWER_ANIM_CONFIG.tipGlowMin
-          + (Math.sin(t * TOWER_ANIM_CONFIG.tipGlowSpeed) * 0.5 + 0.5)
-          * (TOWER_ANIM_CONFIG.tipGlowMax - TOWER_ANIM_CONFIG.tipGlowMin);
-        const mat = child.material as THREE.MeshStandardMaterial;
-        expect(mat.emissiveIntensity).toBeCloseTo(expected, 5);
-
-        disposeTowerGroup(group);
-      });
-    });
-
     it('skips groups with no towerType in userData', () => {
       const group = new THREE.Group(); // no userData['towerType']
       const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
@@ -923,12 +759,12 @@ describe('TowerAnimationService', () => {
     });
   });
 
-  // ---- Phase A debt: Finding 3 — idleTick precedence over legacy traverse ----
+  // ---- Phase A debt: Finding 3 — idleTick is always used when registered ----
 
   describe('idleTick precedence (Finding 3)', () => {
-    it('does NOT run the legacy crystal traverse when idleTick is registered', () => {
-      // Build a SLOW tower group (which has a 'crystal' legacy path) but also
-      // register an idleTick — the legacy traverse must be skipped entirely.
+    it('calls idleTick with the correct converted time when registered', () => {
+      // All six redesigned tower types register an idleTick. Verify the service
+      // calls it correctly with the msToSeconds-converted time value.
       const { group, child } = makeTowerGroup(TowerType.SLOW, 'crystal');
       const initialY = 0.82;
       child.position.y = initialY;
@@ -939,26 +775,26 @@ describe('TowerAnimationService', () => {
       const time = 2000;
       service.updateTowerAnimations(new Map([['0-0', group]]), time);
 
-      // idleTick was called
+      // idleTick was called with the correct time
       expect(idleTickSpy).toHaveBeenCalledOnceWith(group, time * ANIMATION_CONFIG.msToSeconds);
-      // Legacy crystal handler was NOT called — position must remain unchanged
+      // Crystal position was not touched by the service (idleTick is solely responsible)
       expect(child.position.y).toBeCloseTo(initialY, 5);
 
       disposeTowerGroup(group);
     });
 
-    it('falls through to legacy traverse when idleTick is absent', () => {
+    it('does not move a crystal child when idleTick is absent (no-op, not legacy)', () => {
+      // The legacy named-mesh traverse was removed in Phase I. Groups without
+      // idleTick simply skip animation — no fallback traverse runs.
       const { group, child } = makeTowerGroup(TowerType.SLOW, 'crystal');
-      child.position.y = 0.82;
+      const initialY = 0.82;
+      child.position.y = initialY;
       // No idleTick registered
 
       service.updateTowerAnimations(new Map([['0-0', group]]), 1000);
 
-      // Legacy path changed the crystal position
-      const t = 1000 * ANIMATION_CONFIG.msToSeconds;
-      const expectedY = TOWER_ANIM_CONFIG.slowCrystalBaseY
-        + Math.sin(t * TOWER_ANIM_CONFIG.crystalBobSpeed) * TOWER_ANIM_CONFIG.slowCrystalBobAmplitude;
-      expect(child.position.y).toBeCloseTo(expectedY, 5);
+      // Position must be UNCHANGED — no legacy code should alter it
+      expect(child.position.y).toBeCloseTo(initialY, 5);
 
       disposeTowerGroup(group);
     });
@@ -1355,6 +1191,201 @@ describe('TowerAnimationService', () => {
       group.userData['emitterPulseStart'] = now;
 
       expect(() => service.tickEmitterPulses(new Map([['s', group]]), now + 0.001)).not.toThrow();
+    });
+  });
+
+  // ---- tickTierUpScale (Phase I Sprint 60) ----
+
+  describe('tickTierUpScale', () => {
+    function makeScaleGroup(baseScale: number): THREE.Group {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      group.userData['scaleAnimBaseScale'] = baseScale;
+      group.userData['scaleAnimStart'] = performance.now() / 1000;
+      group.scale.setScalar(baseScale * TIER_UP_BOUNCE_CONFIG.peakScale);
+      return group;
+    }
+
+    it('handles empty map gracefully', () => {
+      expect(() => service.tickTierUpScale(new Map(), 1.0)).not.toThrow();
+    });
+
+    it('skips groups without scaleAnimStart', () => {
+      const group = new THREE.Group();
+      group.scale.setScalar(1.5);
+      service.tickTierUpScale(new Map([['t', group]]), 10.0);
+      expect(group.scale.x).toBeCloseTo(1.5, 4);
+    });
+
+    it('snaps to base scale and clears state when duration elapses', () => {
+      const base = 1.0;
+      const group = makeScaleGroup(base);
+      const start = group.userData['scaleAnimStart'] as number;
+
+      service.tickTierUpScale(new Map([['t', group]]), start + TIER_UP_BOUNCE_CONFIG.durationSec + 0.01);
+
+      expect(group.scale.x).toBeCloseTo(base, 4);
+      expect(group.userData['scaleAnimStart']).toBeUndefined();
+      expect(group.userData['scaleAnimBaseScale']).toBeUndefined();
+    });
+
+    it('returns a scale above base at mid-animation', () => {
+      const base = 1.0;
+      const group = makeScaleGroup(base);
+      const start = group.userData['scaleAnimStart'] as number;
+
+      // At 50% through, scale should be between base and peak
+      service.tickTierUpScale(new Map([['t', group]]), start + TIER_UP_BOUNCE_CONFIG.durationSec * 0.5);
+
+      expect(group.scale.x).toBeGreaterThan(base);
+      expect(group.scale.x).toBeLessThanOrEqual(TIER_UP_BOUNCE_CONFIG.peakScale * base + 0.01);
+    });
+  });
+
+  // ---- tickSellAnimations (Phase I Sprint 61) ----
+
+  describe('tickSellAnimations', () => {
+    function makeSellingGroup(): THREE.Group {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      group.userData['selling'] = true;
+      group.userData['sellingStart'] = performance.now() / 1000;
+      group.scale.setScalar(1.0);
+      const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+      const mat = new THREE.MeshStandardMaterial({ emissiveIntensity: 0.5 });
+      const mesh = new THREE.Mesh(geo, mat);
+      group.add(mesh);
+      return group;
+    }
+
+    function disposeSellingGroup(group: THREE.Group): void {
+      group.traverse(obj => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+          (obj.material as THREE.MeshStandardMaterial).dispose();
+        }
+      });
+    }
+
+    it('handles empty map gracefully', () => {
+      expect(() => service.tickSellAnimations(new Map(), 1.0, jasmine.createSpy())).not.toThrow();
+    });
+
+    it('skips groups without selling flag', () => {
+      const group = new THREE.Group();
+      group.scale.setScalar(1.0);
+      const spy = jasmine.createSpy('onExpire');
+      service.tickSellAnimations(new Map([['t', group]]), 10.0, spy);
+      expect(group.scale.x).toBeCloseTo(1.0, 4);
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('reduces scale during animation', () => {
+      const group = makeSellingGroup();
+      const start = group.userData['sellingStart'] as number;
+      const spy = jasmine.createSpy('onExpire');
+
+      service.tickSellAnimations(new Map([['t', group]]), start + SELL_ANIM_CONFIG.durationSec * 0.5, spy);
+
+      expect(group.scale.x).toBeLessThan(1.0);
+      expect(group.scale.x).toBeGreaterThan(0);
+      expect(spy).not.toHaveBeenCalled();
+      disposeSellingGroup(group);
+    });
+
+    it('calls onExpire and clears selling flag when animation completes', () => {
+      const group = makeSellingGroup();
+      const start = group.userData['sellingStart'] as number;
+      const spy = jasmine.createSpy('onExpire');
+
+      service.tickSellAnimations(
+        new Map([['myKey', group]]),
+        start + SELL_ANIM_CONFIG.durationSec + 0.01,
+        spy,
+      );
+
+      expect(spy).toHaveBeenCalledOnceWith('myKey');
+      expect(group.userData['selling']).toBeFalse();
+      disposeSellingGroup(group);
+    });
+  });
+
+  // ---- tickSelectionPulse (Phase I Sprint 63 infra) ----
+
+  describe('tickSelectionPulse', () => {
+    function makeRingMesh(selected: boolean): THREE.Mesh {
+      const geo = new THREE.RingGeometry(0.4, 0.5, 16);
+      const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.5 });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.userData['selected'] = selected;
+      return mesh;
+    }
+
+    function disposeRing(mesh: THREE.Mesh): void {
+      mesh.geometry.dispose();
+      (mesh.material as THREE.MeshBasicMaterial).dispose();
+    }
+
+    it('handles empty map gracefully', () => {
+      expect(() => service.tickSelectionPulse(new Map(), 1.0)).not.toThrow();
+    });
+
+    it('pulses opacity on selected rings', () => {
+      const ring = makeRingMesh(true);
+      service.tickSelectionPulse(new Map([['t', ring]]), 0.0);
+      const opacity = (ring.material as THREE.MeshBasicMaterial).opacity;
+      expect(opacity).toBeGreaterThanOrEqual(SELECTION_PULSE_CONFIG.opacityMin);
+      expect(opacity).toBeLessThanOrEqual(SELECTION_PULSE_CONFIG.opacityMax);
+      disposeRing(ring);
+    });
+
+    it('does not change opacity on unselected rings', () => {
+      const ring = makeRingMesh(false);
+      const mat = ring.material as THREE.MeshBasicMaterial;
+      mat.opacity = 0.42;
+      service.tickSelectionPulse(new Map([['t', ring]]), 1.0);
+      expect(mat.opacity).toBeCloseTo(0.42, 4);
+      disposeRing(ring);
+    });
+  });
+
+  // ---- tickHoverLift (Phase I Sprint 62 infra) ----
+
+  describe('tickHoverLift', () => {
+    function makeGroupWithLight(intensity: number): THREE.Group {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      const light = new THREE.PointLight(0xffffff, intensity);
+      group.userData['accentLight'] = light;
+      group.add(light);
+      return group;
+    }
+
+    it('handles groups without accent light gracefully', () => {
+      const group = new THREE.Group();
+      expect(() => service.tickHoverLift(new Map([['t', group]]))).not.toThrow();
+    });
+
+    it('captures base intensity on first call', () => {
+      const group = makeGroupWithLight(0.8);
+      service.tickHoverLift(new Map([['t', group]]));
+      expect(group.userData['accentLightBaseIntensity']).toBeCloseTo(0.8, 4);
+    });
+
+    it('lifts light intensity when hoverLift is true', () => {
+      const group = makeGroupWithLight(0.8);
+      group.userData['hoverLift'] = true;
+      service.tickHoverLift(new Map([['t', group]]));
+      const light = group.userData['accentLight'] as THREE.PointLight;
+      expect(light.intensity).toBeGreaterThan(0.8);
+    });
+
+    it('restores base intensity when hoverLift is false', () => {
+      const group = makeGroupWithLight(0.8);
+      group.userData['hoverLift'] = false;
+      service.tickHoverLift(new Map([['t', group]]));
+      const light = group.userData['accentLight'] as THREE.PointLight;
+      expect(light.intensity).toBeCloseTo(0.8, 4);
     });
   });
 });

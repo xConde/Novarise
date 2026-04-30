@@ -57,6 +57,10 @@ import {
   MORTAR_ACCENT_Y,
   MORTAR_RECOIL_CONFIG,
   MORTAR_BARREL_NAMES,
+  MORTAR_IDLE_CONFIG,
+  CHAIN_RECOIL_CONFIG,
+  SNIPER_TRACK_CONFIG,
+  SPLASH_CHARGE_CONFIG,
 } from '../constants/tower-anim.constants';
 
 @Injectable()
@@ -475,7 +479,11 @@ export class TowerMeshFactoryService {
         stabMesh.userData['minTier'] = 3;
         towerGroup.add(stabMesh);
 
-        // ── Idle animation: scope lens emissive pulse ────────────────────────
+        // ── Idle animation: scope lens emissive pulse + phantom-target tracking ──
+        // The scope lens pulses continuously (active optic read). Layered on top
+        // is a slow ±2° barrel rotation drift — the sniper "tracking" a phantom
+        // target off to one side. The drift is intentionally slower than the lens
+        // pulse so the two gestures feel independent.
         towerGroup.userData['idleTick'] = (group: THREE.Group, t: number): void => {
           const lens = group.getObjectByName('scope') as THREE.Mesh | undefined;
           if (lens && lens.material instanceof THREE.MeshStandardMaterial) {
@@ -484,6 +492,14 @@ export class TowerMeshFactoryService {
               SNIPER_SCOPE_GLOW_CONFIG.min +
               range * (0.5 + 0.5 * Math.sin(t * SNIPER_SCOPE_GLOW_CONFIG.speed));
           }
+
+          // Phantom-target tracking: whole tower group slowly yaws ±2° so the
+          // barrel appears to drift toward an off-axis target. Uses group.rotation.y
+          // directly so the drift is independent from fireTick (which slides the
+          // barrel along local Y, not the group Y axis).
+          group.rotation.y =
+            Math.sin(t * SNIPER_TRACK_CONFIG.speedHz * Math.PI * 2)
+            * SNIPER_TRACK_CONFIG.amplitudeRad;
         };
 
         // Charge-tick: same as idleTick — always pulses to indicate active optic.
@@ -693,6 +709,10 @@ export class TowerMeshFactoryService {
         // boost speed change from fireTick is seamless with no visual jump.
         // Tube-emit pulse state is advanced separately by tickTubeEmits() in
         // TowerAnimationService, called once per frame from the render loop.
+        //
+        // Charge-cycle signature gesture: every SPLASH_CHARGE_CONFIG.cycleIntervalSec,
+        // the drum briefly spins faster even without a shot. This hints at the ammo
+        // drum cycling through a reload phase and makes the tower feel active.
         towerGroup.userData['idleTick'] = (group: THREE.Group, t: number): void => {
           const drum = group.getObjectByName('drum');
           if (!drum) return;
@@ -702,17 +722,24 @@ export class TowerMeshFactoryService {
           // game runs in real time. `drumSpinBoostUntil` is written by fireTick using
           // `performance.now() / 1000` for the same reason (fireTick does not receive
           // `t`). Both clocks track wall time and stay in sync during normal gameplay.
-          // If updateTowerAnimations is ever driven by a synthetic clock in tests,
-          // the boost-window check will drift; unify clocks at that point.
           const now = performance.now() / 1000;
           const prevT = group.userData['drumPrevT'] as number | undefined;
           const deltaT = prevT !== undefined ? Math.min(t - prevT, 0.1) : 0;
           group.userData['drumPrevT'] = t;
 
-          const boostUntil = group.userData['drumSpinBoostUntil'] as number | undefined;
-          const speed = (boostUntil !== undefined && now < boostUntil)
+          const fireBoostUntil = group.userData['drumSpinBoostUntil'] as number | undefined;
+          const isFireBoosted = fireBoostUntil !== undefined && now < fireBoostUntil;
+
+          // Charge-cycle burst: compute whether we are inside the periodic burst window.
+          // Use `t` (wall-clock seconds) to drive the cycle so it stays deterministic.
+          const cyclePos = t % SPLASH_CHARGE_CONFIG.cycleIntervalSec;
+          const isChargeBurst = cyclePos < SPLASH_CHARGE_CONFIG.burstDurationSec;
+
+          const speed = isFireBoosted
             ? SPLASH_DRUM_CONFIG.fireSpeedRadPerSec
-            : SPLASH_DRUM_CONFIG.idleSpeedRadPerSec;
+            : isChargeBurst
+              ? SPLASH_DRUM_CONFIG.idleSpeedRadPerSec * SPLASH_CHARGE_CONFIG.burstSpeedMultiplier
+              : SPLASH_DRUM_CONFIG.idleSpeedRadPerSec;
 
           const angle = (group.userData['drumAngle'] as number | undefined) ?? 0;
           const newAngle = angle + deltaT * speed;
@@ -1227,12 +1254,15 @@ export class TowerMeshFactoryService {
           }
         };
 
-        // ── Firing animation: fireTick stores a brief charge spike marker ─────
+        // ── Firing animation: small spark-kick recoil ────────────────────────
+        // CHAIN_RECOIL_CONFIG.distance (0.03u) — smaller than BASIC's 0.05u to
+        // reinforce the electric-discharge read without a full ballistic recoil.
         // The 'sphere' mesh is excluded from startMuzzleFlash's skip-set (Finding 14
         // fix) so chargeTick drives sphere emissive independently without contamination.
         towerGroup.userData['fireTick'] = (group: THREE.Group, duration: number): void => {
           group.userData['recoilStart'] = performance.now() / 1000;
           group.userData['recoilDuration'] = duration;
+          group.userData['recoilDistance'] = CHAIN_RECOIL_CONFIG.distance;
         };
 
         // ── Accent point light at sphere height ─────────────────────────────
@@ -1417,6 +1447,34 @@ export class TowerMeshFactoryService {
           );
           towerGroup.add(shell);
         }
+
+        // ── Idle animation: barrel elevate gesture every ~4 s ───────────────
+        // The barrelPivot is raised by MORTAR_IDLE_CONFIG.peakExtraRadians on
+        // top of its rest angle (MORTAR_BARREL_ELEVATION_RAD) for a brief window,
+        // then eases back. This "loading gesture" makes the mortar feel like it
+        // is chambering a round between shots.
+        towerGroup.userData['idleTick'] = (group: THREE.Group, t: number): void => {
+          const pivot = group.getObjectByName('barrelPivot') as THREE.Group | undefined;
+          if (!pivot) return;
+
+          const cyclePos = t % MORTAR_IDLE_CONFIG.cycleIntervalSec;
+          const totalGestureSec = MORTAR_IDLE_CONFIG.raiseDurationSec + MORTAR_IDLE_CONFIG.returnDurationSec;
+
+          let extraRad = 0;
+          if (cyclePos < MORTAR_IDLE_CONFIG.raiseDurationSec) {
+            // Raise phase: easeOutCubic from 0 → peakExtraRadians
+            const raw = cyclePos / MORTAR_IDLE_CONFIG.raiseDurationSec;
+            const eased = 1 - Math.pow(1 - raw, 3);
+            extraRad = MORTAR_IDLE_CONFIG.peakExtraRadians * eased;
+          } else if (cyclePos < totalGestureSec) {
+            // Return phase: easeOutCubic from peakExtraRadians → 0
+            const raw = (cyclePos - MORTAR_IDLE_CONFIG.raiseDurationSec) / MORTAR_IDLE_CONFIG.returnDurationSec;
+            const eased = 1 - Math.pow(1 - raw, 3);
+            extraRad = MORTAR_IDLE_CONFIG.peakExtraRadians * (1 - eased);
+          }
+          // Rest of cycle: extraRad = 0, barrel at neutral elevation
+          pivot.rotation.x = MORTAR_BARREL_ELEVATION_RAD + extraRad;
+        };
 
         // ── Firing animation: exaggerated recoil (3× BASIC) ─────────────────
         // Barrel slides back along its local +Y axis (the bore axis after the

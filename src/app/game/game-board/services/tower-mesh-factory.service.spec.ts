@@ -1066,11 +1066,24 @@ describe('TowerMeshFactoryService', () => {
       expect(legacyRingCount).toBe(0);
     });
 
-    it('does NOT register an idleTick (no idle animation for MORTAR)', () => {
-      // MORTAR is static at idle — no turret swivel or sphere bob.
-      // Absence of idleTick lets the animation loop fall through to legacy traverse
-      // which has no named meshes to animate (confirming no accidental interference).
-      expect(mortarGroup.userData['idleTick']).toBeUndefined();
+    it('registers an idleTick for the barrel-elevate gesture', () => {
+      // Sprint 64: MORTAR barrel slowly elevates at the start of each 4-second idle
+      // cycle to suggest shell loading, then returns to base angle.
+      expect(typeof mortarGroup.userData['idleTick']).toBe('function');
+    });
+
+    it('idleTick moves the barrelPivot rotation.x during the raise window', () => {
+      const idleTick = mortarGroup.userData['idleTick'] as (g: THREE.Group, t: number) => void;
+      const pivot = mortarGroup.getObjectByName('barrelPivot') as THREE.Group | undefined;
+      if (!pivot) pending('barrelPivot not present in mesh — skip');
+
+      // At t=0 the cycle position is 0 (start of raise window, eased value ~0)
+      idleTick(mortarGroup, 0);
+      const baseRotX = pivot!.rotation.x;
+
+      // At t=0.25 (halfway through the 0.5s raise window) rotation should be > base
+      idleTick(mortarGroup, 0.25);
+      expect(pivot!.rotation.x).toBeGreaterThan(baseRotX);
     });
 
     it('body meshes use per-instance materials so muzzle-flash does not cross-contaminate', () => {
