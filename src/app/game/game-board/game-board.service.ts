@@ -297,7 +297,7 @@ export class GameBoardService {
       // front-face occlusion makes inconsistent across axes).
       params.emissive = 0xffffff;
       params.emissiveMap = this.getWallEdgeTexture();
-      params.emissiveIntensity = 0.32;
+      params.emissiveIntensity = 0.22;
     }
     return new THREE.MeshStandardMaterial(params);
   }
@@ -322,7 +322,9 @@ export class GameBoardService {
     // bright, so the rim reads as an extension of the background
     // palette. The contrast against the navy wall fill is what makes
     // it perceptually lighter without being a saturated UI line.
-    ctx.fillStyle = 'rgb(44, 36, 64)';
+    // Tuned barely above the wall fill color so wall cells read as
+    // "toned out / out-of-bounds" rather than as active board.
+    ctx.fillStyle = 'rgb(36, 30, 52)';
     ctx.fillRect(0, 0, size, edge);
     ctx.fillRect(0, size - edge, size, edge);
     ctx.fillRect(0, 0, edge, size);
