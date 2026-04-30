@@ -33,8 +33,14 @@ export const TILE_VISUAL_CONFIG = {
     roughness: 0.7,
   },
   wall: {
-    emissive: 0x0a0810,
-    emissiveIntensity: 0.05,
+    /** UX-36: emissive 0x0a0810 → 0x18121e (slightly more depth, matches
+     *  the cool palette). Walls were reading as visual voids on the new
+     *  dark board; subtle emissive lift makes them feel like solid
+     *  impassable structures, not holes. */
+    emissive: 0x18121e,
+    /** UX-36: intensity 0.05 → 0.10. Tiny bump — still reads as inert
+     *  vs. BASE's 0.35 buildable glow. */
+    emissiveIntensity: 0.10,
     metalness: 0.5,
     roughness: 0.95,
   },
