@@ -312,19 +312,21 @@ export class GameBoardService {
 
     if (this.gameBoardWidth <= 0 || this.gameBoardHeight <= 0) return gridGroup;
 
+    // Both planes use the same cool purple-grey accent so trim across
+    // the whole board reads as the deep-space palette extended, not
+    // as bright sci-fi UI. Walls get a touch more opacity since the
+    // gap they expose is tighter than the buildable gap.
+    const TRIM_ACCENT = 0x7a6a98;
     const nonWallBB = this.computeTileBoundingBox(t => t.type !== BlockType.WALL);
     if (nonWallBB) {
-      gridGroup.add(this.buildTrimPlane(nonWallBB, 0xd6e2ff, 0.38, 0.005));
+      gridGroup.add(this.buildTrimPlane(nonWallBB, TRIM_ACCENT, 0.55, 0.005));
     }
 
     const wallBB = this.computeTileBoundingBox(t => t.type === BlockType.WALL);
     if (wallBB) {
-      // Dim purple-grey accent — high enough opacity to show through
-      // tight wall gaps, dark enough that the wall structure reads as
-      // tinted rather than as the same trim brightness as the
-      // buildable interior. Y is offset slightly below the bright
-      // plane so any bounding-box overlap renders deterministically.
-      gridGroup.add(this.buildTrimPlane(wallBB, 0x6a5878, 0.6, 0.004));
+      // Y offset slightly below the buildable plane so any bounding-
+      // box overlap renders deterministically.
+      gridGroup.add(this.buildTrimPlane(wallBB, TRIM_ACCENT, 0.7, 0.004));
     }
 
     return gridGroup;
