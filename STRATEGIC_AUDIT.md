@@ -2400,7 +2400,7 @@ Result: when SNIPER has a target in range, `tickAim`'s lerpYaw result is immedia
 - "chargeTick does NOT write aimGroup.rotation.y (B-1 regression: aim-fight guard)" — sets aimGroup.rotation.y to a known value, runs chargeTick, asserts value unchanged.
 - "chargeTick still pulses scope lens emissiveIntensity (emissive pulse survives split)" — asserts the lens emissive still modulates after the split.
 
-**Fixed in commit:** see Phase B hardening commit.
+**Fixed in commit:** `c63b0b9`.
 
 **Deferred findings (not fixed this pass):**
 
