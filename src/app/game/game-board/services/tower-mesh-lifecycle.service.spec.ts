@@ -96,5 +96,36 @@ describe('TowerMeshLifecycleService', () => {
       service.removeMesh('99-99');
       expect(meshRegistrySpy.rebuildTowerChildrenArray).not.toHaveBeenCalled();
     });
+
+    it('should mark group as selling and defer disposal when animated=true', () => {
+      const group = new THREE.Group();
+      fakeScene.add(group);
+      meshRegistrySpy.towerMeshes.set('3-4', group);
+
+      service.removeMesh('3-4', true);
+
+      // Group still in scene (not removed yet) and still in registry
+      expect(fakeScene.children).toContain(group);
+      expect(meshRegistrySpy.towerMeshes.has('3-4')).toBeTrue();
+      // Selling flag and start time must be written
+      expect(group.userData['selling']).toBeTrue();
+      expect(typeof group.userData['sellingStart']).toBe('number');
+      // Rebuild still called so animation ticks track the selling group
+      expect(meshRegistrySpy.rebuildTowerChildrenArray).toHaveBeenCalled();
+
+      group.clear();
+    });
+
+    it('should remove synchronously when animated=false even if selling was set', () => {
+      const group = new THREE.Group();
+      group.userData['selling'] = true; // simulate interrupted animation
+      fakeScene.add(group);
+      meshRegistrySpy.towerMeshes.set('5-6', group);
+
+      service.removeMesh('5-6', false);
+
+      expect(fakeScene.children).not.toContain(group);
+      expect(meshRegistrySpy.towerMeshes.has('5-6')).toBeFalse();
+    });
   });
 });

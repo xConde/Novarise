@@ -8,6 +8,7 @@ import { GameStateService } from './game-state.service';
 import { EnemyService } from './enemy.service';
 import { TowerAnimationService } from './tower-animation.service';
 import { TowerCombatService } from './tower-combat.service';
+import { TowerMeshLifecycleService } from './tower-mesh-lifecycle.service';
 import { ParticleService } from './particle.service';
 import { GoldPopupService } from './gold-popup.service';
 import { DamagePopupService } from './damage-popup.service';
@@ -31,6 +32,7 @@ describe('GameRenderService', () => {
   let enemy: jasmine.SpyObj<EnemyService>;
   let towerAnim: jasmine.SpyObj<TowerAnimationService>;
   let towerCombat: jasmine.SpyObj<TowerCombatService>;
+  let towerMeshLifecycle: jasmine.SpyObj<TowerMeshLifecycleService>;
   let particle: jasmine.SpyObj<ParticleService>;
   let goldPopup: jasmine.SpyObj<GoldPopupService>;
   let damagePopup: jasmine.SpyObj<DamagePopupService>;
@@ -77,9 +79,11 @@ describe('GameRenderService', () => {
     ]);
     enemy.getEnemies.and.returnValue(new Map());
     towerAnim = jasmine.createSpyObj<TowerAnimationService>('TowerAnimationService', [
-      'updateTowerAnimations', 'tickRecoilAnimations', 'tickTubeEmits', 'updateTilePulse', 'updateMuzzleFlashes',
+      'updateTowerAnimations', 'tickRecoilAnimations', 'tickTubeEmits', 'tickEmitterPulses',
+      'tickTierUpScale', 'tickSellAnimations', 'updateTilePulse', 'updateMuzzleFlashes',
     ]);
     towerCombat = jasmine.createSpyObj<TowerCombatService>('TowerCombatService', ['getPlacedTowers']);
+    towerMeshLifecycle = jasmine.createSpyObj<TowerMeshLifecycleService>('TowerMeshLifecycleService', ['removeMesh']);
     towerCombat.getPlacedTowers.and.returnValue(new Map());
     particle = jasmine.createSpyObj<ParticleService>('ParticleService', ['spawnDeathBurst']);
     goldPopup = jasmine.createSpyObj<GoldPopupService>('GoldPopupService', ['spawn', 'update']);
@@ -107,7 +111,7 @@ describe('GameRenderService', () => {
     );
 
     service = new GameRenderService(
-      audio, fps, gameInput, scene, gameState, enemy, towerAnim, towerCombat,
+      audio, fps, gameInput, scene, gameState, enemy, towerAnim, towerCombat, towerMeshLifecycle,
       particle, goldPopup, damagePopup, screenShake, combatVfx, statusEffect,
       minimap, notification, cardEffect, gameBoard, meshRegistry,
     );

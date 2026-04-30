@@ -7,6 +7,7 @@ import { GameStateService } from './game-state.service';
 import { EnemyService } from './enemy.service';
 import { TowerAnimationService } from './tower-animation.service';
 import { TowerCombatService } from './tower-combat.service';
+import { TowerMeshLifecycleService } from './tower-mesh-lifecycle.service';
 import { ParticleService } from './particle.service';
 import { GoldPopupService } from './gold-popup.service';
 import { DamagePopupService } from './damage-popup.service';
@@ -60,6 +61,7 @@ export class GameRenderService {
     private enemyService: EnemyService,
     private towerAnimationService: TowerAnimationService,
     private towerCombatService: TowerCombatService,
+    private towerMeshLifecycle: TowerMeshLifecycleService,
     private particleService: ParticleService,
     private goldPopupService: GoldPopupService,
     private damagePopupService: DamagePopupService,
@@ -147,6 +149,12 @@ export class GameRenderService {
     this.towerAnimationService.tickRecoilAnimations(this.meshRegistry.towerMeshes, nowSeconds);
     this.towerAnimationService.tickTubeEmits(this.meshRegistry.towerMeshes, nowSeconds);
     this.towerAnimationService.tickEmitterPulses(this.meshRegistry.towerMeshes, nowSeconds);
+    this.towerAnimationService.tickTierUpScale(this.meshRegistry.towerMeshes, nowSeconds);
+    this.towerAnimationService.tickSellAnimations(
+      this.meshRegistry.towerMeshes,
+      nowSeconds,
+      (key) => this.towerMeshLifecycle.removeMesh(key, false),
+    );
     this.towerAnimationService.updateTilePulse(this.meshRegistry.tileMeshes, time);
     this.towerAnimationService.updateMuzzleFlashes(this.towerCombatService.getPlacedTowers(), deltaTime);
 

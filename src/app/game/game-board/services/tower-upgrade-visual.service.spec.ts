@@ -136,18 +136,31 @@ describe('TowerUpgradeVisualService', () => {
   });
 
   describe('applyUpgradeVisuals', () => {
-    it('should set scale to level-based value for L2 (newLevel=2)', () => {
+    it('should set scale to peak bounce value for L2 (newLevel=2, scale × 1.1 at start)', () => {
+      // applyUpgradeVisuals immediately sets the group to baseScale × 1.1 so
+      // tickTierUpScale can ease it back to baseScale. Verify the initial peak.
       const group = new THREE.Group();
       service.applyUpgradeVisuals(group, 2);
-      const expectedScale = TOWER_VISUAL_CONFIG.scaleBase + (2 - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
-      expect(group.scale.x).toBeCloseTo(expectedScale);
+      const baseScale = TOWER_VISUAL_CONFIG.scaleBase + (2 - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
+      expect(group.scale.x).toBeCloseTo(baseScale * 1.1, 4);
     });
 
-    it('should set scale to level-based value for L3 (newLevel=3)', () => {
+    it('should set scale to peak bounce value for L3 (newLevel=3, scale × 1.1 at start)', () => {
       const group = new THREE.Group();
       service.applyUpgradeVisuals(group, 3);
-      const expectedScale = TOWER_VISUAL_CONFIG.scaleBase + (3 - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
-      expect(group.scale.x).toBeCloseTo(expectedScale);
+      const baseScale = TOWER_VISUAL_CONFIG.scaleBase + (3 - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
+      expect(group.scale.x).toBeCloseTo(baseScale * 1.1, 4);
+    });
+
+    it('should store scaleAnimBaseScale and scaleAnimStart for tickTierUpScale', () => {
+      const group = new THREE.Group();
+      const before = performance.now() / 1000;
+      service.applyUpgradeVisuals(group, 2);
+      const after = performance.now() / 1000;
+      const baseScale = TOWER_VISUAL_CONFIG.scaleBase + (2 - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
+      expect(group.userData['scaleAnimBaseScale']).toBeCloseTo(baseScale, 4);
+      expect(group.userData['scaleAnimStart']).toBeGreaterThanOrEqual(before);
+      expect(group.userData['scaleAnimStart']).toBeLessThanOrEqual(after);
     });
 
     it('should boost emissive intensity on MeshStandardMaterial children', () => {
@@ -167,7 +180,7 @@ describe('TowerUpgradeVisualService', () => {
       mat.dispose();
     });
 
-    it('should skip animated children named "tip" and "orb"', () => {
+    it('should skip animated child named "tip" (per-frame emissive)', () => {
       const geo = new THREE.BoxGeometry(1, 1, 1);
       const mat = new THREE.MeshStandardMaterial();
       mat.emissiveIntensity = 0;
@@ -418,18 +431,35 @@ describe('TowerUpgradeVisualService', () => {
       mat.dispose();
     });
 
-    it('should skip animated "tip" children', () => {
+    it('should skip animated "tip" children (only "tip" is in the skip-set)', () => {
       const geo = new THREE.BoxGeometry(1, 1, 1);
       const mat = new THREE.MeshStandardMaterial();
       mat.emissiveIntensity = 0;
       const mesh = new THREE.Mesh(geo, mat);
-      mesh.name = 'orb';
+      mesh.name = 'tip';
       const group = new THREE.Group();
       group.add(mesh);
 
       service.applySpecializationVisual(group, TowerSpecialization.ALPHA);
 
       expect(mat.emissiveIntensity).toBe(0);
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('should apply tint to non-animated children (e.g. body mesh)', () => {
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const mat = new THREE.MeshStandardMaterial();
+      mat.emissiveIntensity = 0;
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = 'body';
+      const group = new THREE.Group();
+      group.add(mesh);
+
+      service.applySpecializationVisual(group, TowerSpecialization.ALPHA);
+
+      expect(mat.emissiveIntensity).toBe(SPECIALIZATION_VISUAL_CONFIG.alpha.emissiveIntensity);
 
       geo.dispose();
       mat.dispose();

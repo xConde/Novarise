@@ -149,21 +149,29 @@ export class TowerUpgradeVisualService {
 
   /**
    * Apply level-based scale AND emissive boost to a tower mesh group.
-   * Skips 'tip' and 'orb' children whose emissive is driven per-frame by TowerAnimationService.
+   * Skips 'tip', 'scope', 'heatVent', 'emitter' children whose emissive is
+   * driven per-frame by TowerAnimationService.
    * Call this after a successful upgrade (L1→L2 or L2→L3).
    *
    * Also reveals any tier-gated mesh children tagged with `userData['minTier']`
    * so T2/T3 detail parts become visible at the correct level.
+   *
+   * Triggers a brief scale-bounce animation: the group jumps to 1.1× of the
+   * target scale and eases back over ~300 ms via TowerAnimationService.tickTierUpScale.
+   * The base scale is stored in `userData['scaleAnimBaseScale']` and the start
+   * timestamp in `userData['scaleAnimStart']` so tickTierUpScale can drive it
+   * without requiring a reference to this service.
    */
   applyUpgradeVisuals(towerGroup: THREE.Group, newLevel: number, specialization?: TowerSpecialization): void {
     const scale = TOWER_VISUAL_CONFIG.scaleBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
     towerGroup.scale.set(scale, scale, scale);
 
-    // 'tip', 'orb', 'scope', 'heatVent', 'emitter' are driven per-frame by
+    // 'tip', 'scope', 'heatVent', 'emitter' are driven per-frame by
     // animation ticks — skip them here so the emissive boost doesn't override
     // their per-frame values.  heatVent (SPLASH T3) and emitter (SLOW idle)
     // both have intentional emissive intensities that must not be ratcheted.
-    const animatedNames = new Set(['tip', 'orb', 'scope', 'heatVent', 'emitter']);
+    // Note: 'orb' removed from skip-set — no current tower uses that name.
+    const animatedNames = new Set(['tip', 'scope', 'heatVent', 'emitter']);
     towerGroup.traverse(child => {
       if (
         child instanceof THREE.Mesh &&
@@ -180,6 +188,13 @@ export class TowerUpgradeVisualService {
     if (specialization) {
       this.applySpecializationVisual(towerGroup, specialization);
     }
+
+    // Trigger scale-bounce: capture the final target scale so tickTierUpScale
+    // can ease back to it after the peak. Set the group to peak scale immediately;
+    // the tick will animate it back down each frame.
+    towerGroup.userData['scaleAnimBaseScale'] = scale;
+    towerGroup.userData['scaleAnimStart'] = performance.now() / 1000;
+    towerGroup.scale.setScalar(scale * 1.1); // jump to peak immediately
   }
 
   /**
@@ -216,14 +231,15 @@ export class TowerUpgradeVisualService {
 
   /**
    * Apply ALPHA (warm orange) or BETA (cool blue) emissive tint to all MeshStandardMaterial
-   * children in the tower group. Skips 'tip' and 'orb' mesh names whose emissive is
+   * children in the tower group. Skips 'tip' mesh names whose emissive is
    * driven per-frame by TowerAnimationService.
+   * Note: 'orb' removed — no current tower uses that mesh name.
    */
   applySpecializationVisual(towerGroup: THREE.Group, spec: TowerSpecialization): void {
     const config = spec === TowerSpecialization.ALPHA
       ? SPECIALIZATION_VISUAL_CONFIG.alpha
       : SPECIALIZATION_VISUAL_CONFIG.beta;
-    const animatedNames = new Set(['tip', 'orb']);
+    const animatedNames = new Set(['tip']);
     towerGroup.traverse(child => {
       if (child instanceof THREE.Mesh && !animatedNames.has(child.name)) {
         const materials = getMaterials(child);

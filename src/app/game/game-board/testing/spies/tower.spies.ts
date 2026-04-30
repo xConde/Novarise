@@ -143,6 +143,12 @@ export function createTowerAnimationServiceSpy(): jasmine.SpyObj<TowerAnimationS
     'updateMuzzleFlashes',
     'updateTowerAnimations',
     'tickRecoilAnimations',
+    'tickTubeEmits',
+    'tickEmitterPulses',
+    'tickTierUpScale',
+    'tickSellAnimations',
+    'tickSelectionPulse',
+    'tickHoverLift',
     'updateTilePulse',
   ]);
 }
