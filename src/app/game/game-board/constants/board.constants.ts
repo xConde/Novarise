@@ -58,7 +58,7 @@ export const TILE_VISUAL_CONFIG = {
     emissive: 0x2a2238,
     /** Inert next to BASE's 0.35, but high enough that the front-
      *  face shadows pick up a perceptible accent tint. */
-    emissiveIntensity: 0.22,
+    emissiveIntensity: 0.32,
     /** Paired with the lower roughness to amplify the top-edge
      *  specular into a soft border highlight. */
     metalness: 0.55,
