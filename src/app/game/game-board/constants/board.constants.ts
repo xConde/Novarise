@@ -27,6 +27,15 @@ export const TILE_VISUAL_CONFIG = {
    * legibility without the gridded-UI feel.
    */
   geometryGapFactor: 0.97,
+  /**
+   * UX-41: walls use a slight overlap (>1) instead of a gap so neighbouring
+   * impassable tiles read as a continuous structure. The 0.5% overhang is
+   * imperceptible at game-camera distance but eliminates the visible seam
+   * lines between connected walls. Top faces share Y so there is no
+   * z-fight; side faces only overlap where two walls touch — exactly the
+   * faces that would be hidden anyway.
+   */
+  wallGapFactor: 1.005,
   base: {
     emissiveIntensity: 0.35,
     metalness: 0.1,
@@ -39,10 +48,21 @@ export const TILE_VISUAL_CONFIG = {
      *  impassable structures, not holes. */
     emissive: 0x18121e,
     /** UX-36: intensity 0.05 → 0.10. Tiny bump — still reads as inert
-     *  vs. BASE's 0.35 buildable glow. */
-    emissiveIntensity: 0.10,
-    metalness: 0.5,
-    roughness: 0.95,
+     *  vs. BASE's 0.35 buildable glow.
+     *  UX-41: 0.10 → 0.13 — pairs with reduced roughness so wall faces
+     *  catch a touch more rim/key light, giving connected walls the
+     *  subtle dark-to-light border treatment without distracting glow. */
+    emissiveIntensity: 0.13,
+    /** UX-41: 0.5 → 0.55 — slight bump amplifies specular highlights along
+     *  the top edge where the key light grazes, producing the darker-to-
+     *  lighter border without requiring an emissive boost that would read
+     *  as "wall is lit from within". */
+    metalness: 0.55,
+    /** UX-41: 0.95 → 0.78 — high roughness (0.95) killed all specular,
+     *  leaving walls as flat dark prisms. 0.78 is still rough (no mirror
+     *  highlights) but lets the edges pick up enough specular from the
+     *  key/rim lights to create the subtle border lift the user asked for. */
+    roughness: 0.78,
   },
   /** Spawner / Exit / unmarked tile material settings. */
   other: {
