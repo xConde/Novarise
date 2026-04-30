@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { TargetPreviewService } from './target-preview.service';
 import { TowerCombatService } from './tower-combat.service';
-import { TowerType, TOWER_CONFIGS, TargetingMode, PlacedTower } from '../models/tower.model';
+import { TowerType, TOWER_CONFIGS, TowerSpecialization, getEffectiveStats, MAX_TOWER_LEVEL, TargetingMode, PlacedTower } from '../models/tower.model';
 import { Enemy } from '../models/enemy.model';
 import { createTestEnemy } from '../testing';
 
@@ -14,14 +14,17 @@ describe('TargetPreviewService', () => {
     col: number,
     type = TowerType.BASIC,
     mode = TargetingMode.NEAREST,
+    level = 1,
+    specialization?: TowerSpecialization,
   ): PlacedTower {
     return {
       id: `${row}-${col}`,
       type,
-      level: 1,
+      level,
       row,
       col,
       targetingMode: mode,
+      specialization,
       mesh: undefined,
       actualCost: TOWER_CONFIGS[type].cost,
       placedAtTurn: 0,
@@ -59,7 +62,7 @@ describe('TargetPreviewService', () => {
       expect(result).toBe(enemy);
       expect(combatServiceSpy.findTarget).toHaveBeenCalledWith(
         tower,
-        TOWER_CONFIGS[TowerType.BASIC],
+        getEffectiveStats(TowerType.BASIC, 1, undefined),
       );
     });
 
@@ -72,16 +75,46 @@ describe('TargetPreviewService', () => {
       expect(result).toBeNull();
     });
 
-    it('passes the correct tower stats for the tower type', () => {
+    it('passes L1 base stats for a L1 tower — matches TOWER_CONFIGS', () => {
       const tower = makeTower(3, 3, TowerType.SNIPER);
       combatServiceSpy.findTarget.and.returnValue(null);
 
       service.getPreviewTarget(tower);
 
+      // L1 effective stats equal TOWER_CONFIGS baseline
       expect(combatServiceSpy.findTarget).toHaveBeenCalledWith(
         tower,
-        TOWER_CONFIGS[TowerType.SNIPER],
+        getEffectiveStats(TowerType.SNIPER, 1, undefined),
       );
+    });
+
+    it('passes level-scaled stats for a L2 tower (Red-Team Finding A-1)', () => {
+      // A L2 BASIC has +15% range — aim must respect that, otherwise the
+      // tower visually ignores enemies inside its actual effective range.
+      const tower = makeTower(5, 5, TowerType.BASIC, TargetingMode.NEAREST, 2);
+      combatServiceSpy.findTarget.and.returnValue(null);
+
+      service.getPreviewTarget(tower);
+
+      const expectedStats = getEffectiveStats(TowerType.BASIC, 2, undefined);
+      // Effective range at L2 must be larger than L1 base
+      expect(expectedStats.range).toBeGreaterThan(TOWER_CONFIGS[TowerType.BASIC].range);
+      expect(combatServiceSpy.findTarget).toHaveBeenCalledWith(tower, expectedStats);
+    });
+
+    it('passes specialization-boosted stats for a T3 specialized tower (Red-Team Finding A-1)', () => {
+      // A T3 SNIPER with ALPHA specialization gets +20% range. Aim must use
+      // the same range `fireTurn` would use, so the visual tracks enemies it
+      // can actually hit and doesn't aim at enemies outside effective range.
+      const spec = TowerSpecialization.ALPHA;
+      const tower = makeTower(2, 2, TowerType.SNIPER, TargetingMode.NEAREST, MAX_TOWER_LEVEL, spec);
+      combatServiceSpy.findTarget.and.returnValue(null);
+
+      service.getPreviewTarget(tower);
+
+      const expectedStats = getEffectiveStats(TowerType.SNIPER, 3, spec);
+      expect(expectedStats.range).toBeGreaterThan(TOWER_CONFIGS[TowerType.SNIPER].range);
+      expect(combatServiceSpy.findTarget).toHaveBeenCalledWith(tower, expectedStats);
     });
 
     it('respects targeting mode: returns null when no enemy is in range', () => {

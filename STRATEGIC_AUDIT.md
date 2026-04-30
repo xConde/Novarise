@@ -2339,3 +2339,39 @@ After 30 turns of two same-type towers: `0.4 × 1.5^30 ≈ 76 700×` baseline. R
 - **Finding 3 (LOW):** `applyUpgradeVisuals` internal skip-set (`tip`, `scope`, `heatVent`, `emitter`, `sphere`) is wider than `snapshotEmissiveBaselines` skip-set (`tip`, `sphere`, `tube*`). `scope`, `heatVent`, and `emitter` ARE captured in the snapshot. At snapshot time (immediately after construction or immediately after upgrade), these meshes are at their initial/stable values — not yet animated — so the snapshot is correct. This asymmetry is benign but creates a maintenance trap: if a future animation tick begins driving `scope` emissive before the snapshot is taken, the snapshot becomes stale. No fix applied — document only.
 
 **Lesson:** Any future code path that modifies shared material `emissiveIntensity` must either (a) use the snapshot from `emissiveBaselines` as source of truth, or (b) call `snapshotEmissiveBaselines` immediately after to update the stored baseline.
+
+---
+
+## Red Team Critique — Phase A (Aim foundation) — 2026-04-30
+
+### Finding A-1: `TargetPreviewService` uses L1 base stats — aim mismatches fire range for upgraded towers (HIGH — FIXED)
+
+**Location:** `target-preview.service.ts:getPreviewTarget` (was `TOWER_CONFIGS[tower.type]`)
+
+**Risk:** `getPreviewTarget` passed `TOWER_CONFIGS[tower.type]` (the L1 base config) to `findTarget`, while `fireTurn` uses `getEffectiveStats(tower.type, tower.level, tower.specialization)`. A T3 SNIPER with the ALPHA specialization has +20% range. With the old code, the aim subsystem would NOT aim at enemies in the bonus range band (they appear as out-of-range to aim but in-range to fire), and WOULD waste aim cycles on enemies just outside base range that are also out of fire range. For a T3 specialized SNIPER (the most likely target for aim polish), the visual aim and the actual shot diverge by 20–50% of the range radius — directly contradicting the plan's "teaches the targeting algorithm" design goal.
+
+**Fix:** Changed `TOWER_CONFIGS[tower.type]` → `getEffectiveStats(tower.type, tower.level, tower.specialization)` in `getPreviewTarget`. Import updated accordingly.
+
+**Tests added/updated:** `target-preview.service.spec.ts` — updated existing "passes the correct tower stats" spec to assert `getEffectiveStats` output; added "passes level-scaled stats for a L2 tower" and "passes specialization-boosted stats for a T3 specialized tower" — both assert that effective range is greater than L1 base and that `findTarget` receives the correct upgraded stats object.
+
+**Test delta:** +3 new specs, −1 stale spec (was asserting the wrong `TOWER_CONFIGS` reference) = net +2.
+
+---
+
+### Finding A-2: `noTargetGraceTime` accumulated but never consumed — dead state (LOW — deferred to Phase B)
+
+**Location:** `tower-animation.service.ts:tickAim` (lines 170-174)
+
+**Risk:** `noTargetGraceTime` is incremented and capped at `AIM_FALLBACK_CONFIG.noTargetGraceSec` (0.5s) when no target is found, then reset to 0 when a target is found. However, the value is never READ anywhere. The idle-gesture handoff is already correctly gated by `currentAimTarget == null` in `updateTowerAnimations`. The grace timer is pure dead state that accumulates without effect. Phase C "no-target fallback transition" (sprint 30) needs this value to implement the 0.5s ease-back-to-idle delay — but Phase A sets it up without consuming it, which is a latent trap: Phase B per-tower aim hooks may assume the grace timer is functional and write `aimTick` callbacks that branch on it, then find nothing happens.
+
+**No fix applied.** The value is benign dead state in Phase A. Fix: Phase B sprint immediately following per-tower aim hook registration should add a `getGraceProgress(group): number` accessor to `tickAim` output and consume it in the `aimTick` callback chain, or move grace-timer logic to the per-tower hook itself. Document in Phase B kickoff to prevent silent assumption of a functional timer.
+
+---
+
+### Finding A-3: Perf gate tests the loop overhead only — not the spatial-grid cost (LOW — documented)
+
+**Location:** `tower-animation.service.spec.ts` — "tickAim perf gate" describe block; `docs/towers/aim-perf-contingency.md`
+
+**Risk:** The perf spec spies `getPreviewTarget` to return a mock enemy immediately, bypassing `TowerCombatService.findTarget` and the `spatialGrid.queryRadius` call entirely. The 5ms budget covers 30 group iterations + `lerpYaw` math only. A slow spatial grid (e.g., after a Phase C real-service wire-in) would still pass the spec. The gate does not catch the performance bug it was designed to prevent.
+
+**No fix applied.** The perf contingency doc (`docs/towers/aim-perf-contingency.md`) already notes the round-robin fallback plan. Added a JSDoc comment to the perf gate spec clarifying the limitation. A meaningful perf gate needs `TowerCombatService` instantiated with a real spatial grid under load — suitable for Phase E's performance audit (sprint 37), not Phase A's unit scope.

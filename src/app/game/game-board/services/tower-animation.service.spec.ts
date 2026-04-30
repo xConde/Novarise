@@ -2195,6 +2195,13 @@ describe('TowerAnimationService', () => {
   });
 
   // ---- tickAim perf gate spec (Sprint 17) ----
+  //
+  // NOTE (Red-Team Finding A-3): this spec measures the loop iteration overhead
+  // and lerpYaw math only. `getPreviewTarget` is spied to return immediately,
+  // bypassing TowerCombatService.findTarget and spatialGrid.queryRadius entirely.
+  // A slow spatial grid would still pass this gate. A real end-to-end perf
+  // measurement (Phase E sprint 37) should instantiate TowerCombatService with a
+  // live spatial grid under load to validate the full round-trip budget.
 
   describe('tickAim perf gate', () => {
     it('completes tickAim on 30 towers × 50 enemies in under 5ms', () => {

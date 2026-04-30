@@ -1,6 +1,6 @@
 import { Injectable, Optional } from '@angular/core';
 import { Enemy } from '../models/enemy.model';
-import { PlacedTower, TOWER_CONFIGS } from '../models/tower.model';
+import { PlacedTower, getEffectiveStats } from '../models/tower.model';
 import { TowerCombatService } from './tower-combat.service';
 
 /**
@@ -33,13 +33,18 @@ export class TargetPreviewService {
    * Returns the highest-priority in-range target for the given tower, using
    * the tower's current targeting mode.
    *
-   * Delegates directly to `TowerCombatService.findTarget` with the tower's
-   * effective base stats. Phase C will gate this behind a dirty flag so bulk
-   * recompute can be amortised across frames.
+   * Uses `getEffectiveStats` so that level-scaled range and specialization
+   * bonuses are applied, matching the stats `fireTurn` would use. Without
+   * this, a T3 SNIPER (specialization +50% range) would aim at enemies
+   * outside L1 range that it can actually hit, while ignoring enemies inside
+   * effective range that are outside L1 range.
+   *
+   * Delegates directly to `TowerCombatService.findTarget`. Phase C will gate
+   * this behind a dirty flag so bulk recompute is amortised across frames.
    */
   getPreviewTarget(tower: PlacedTower): Enemy | null {
     if (!this.combatService) return null;
-    const stats = TOWER_CONFIGS[tower.type];
+    const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
     return this.combatService.findTarget(tower, stats);
   }
 
