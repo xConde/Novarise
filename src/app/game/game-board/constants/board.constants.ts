@@ -27,13 +27,14 @@ export const TILE_VISUAL_CONFIG = {
    */
   geometryGapFactor: 0.93,
   /**
-   * Walls use a slight overlap (>1) so neighbouring impassable tiles
-   * read as a continuous structure rather than a row of boxes. Top
-   * faces share Y so the overlap can never z-fight; side faces only
-   * intersect where two walls touch — exactly the faces that would be
-   * hidden anyway.
+   * Walls use a much tighter gap than buildable tiles. A full overlap
+   * (>=1) erases the cell separation entirely and reads as a single
+   * black slab; the standard gap reads as gridded UI on impassable
+   * terrain. ~1% leaves a hairline seam — adjacent walls still read
+   * as a connected structure, but each cell is individually
+   * recognisable.
    */
-  wallGapFactor: 1.005,
+  wallGapFactor: 0.99,
   base: {
     emissiveIntensity: 0.35,
     /** Slight metalness pairs with the lower roughness to let the top
