@@ -248,6 +248,36 @@ describe('Target-preview integration (Sprint 41)', () => {
     // getPreviewTarget must NOT be called for selling groups
     expect(targetPreviewSpy.findTarget).not.toHaveBeenCalled();
   });
+
+  // ── Finding C-2: tickPreviewCache must clear DIRTY_ALL after tickAim ────────
+
+  it('tickPreviewCache() clears DIRTY_ALL so a subsequent call uses cache (not recompute)', () => {
+    // Simulates what game-render.service calls after tickAim:
+    // enemy event → DIRTY_ALL set → tickAim reads all towers (cache cleared per key)
+    // → tickPreviewCache() removes DIRTY_ALL sentinel → next frame uses cache.
+    const tower = makeTower(5, 5);
+    targetPreviewSpy.findTarget.and.returnValue(null);
+
+    // Prime the cache
+    targetPreview.getPreviewTarget(tower);
+    expect(targetPreviewSpy.findTarget).toHaveBeenCalledTimes(1);
+
+    // Bulk invalidation (simulates enemy event)
+    enemyChangedSubject.next('spawn');
+    expect(targetPreview.getDirtyCount()).toBe(-1); // DIRTY_ALL set
+
+    // First read after invalidation — recomputes
+    targetPreview.getPreviewTarget(tower);
+    expect(targetPreviewSpy.findTarget).toHaveBeenCalledTimes(2);
+
+    // tickPreviewCache clears the DIRTY_ALL sentinel (called by game-render after tickAim)
+    targetPreview.tickPreviewCache();
+    expect(targetPreview.getDirtyCount()).toBe(0);
+
+    // Second read — cache is now clean for this key, no recompute
+    targetPreview.getPreviewTarget(tower);
+    expect(targetPreviewSpy.findTarget).toHaveBeenCalledTimes(2); // still 2
+  });
 });
 
 // ── Finding B-2: SNIPER T3 tier visibility ───────────────────────────────────

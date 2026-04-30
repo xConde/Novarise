@@ -158,6 +158,11 @@ export class GameRenderService {
       this.targetPreviewService,
       typeof document !== 'undefined' && document.body.classList.contains('reduce-motion'),
     );
+    // Clear the DIRTY_ALL sentinel after the full tickAim pass has read every tower.
+    // Without this call the sentinel accumulates until individual tower keys are
+    // each read once, which may take many frames for towers not yet in towerMeshes.
+    // (Phase C red-team Finding C-2.)
+    this.targetPreviewService?.tickPreviewCache();
     this.towerAnimationService.updateTowerAnimations(this.meshRegistry.towerMeshes, time);
     this.towerAnimationService.tickRecoilAnimations(this.meshRegistry.towerMeshes, nowSeconds);
     this.towerAnimationService.tickTubeEmits(this.meshRegistry.towerMeshes, nowSeconds);

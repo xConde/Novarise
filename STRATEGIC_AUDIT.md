@@ -2407,3 +2407,48 @@ Result: when SNIPER has a target in range, `tickAim`'s lerpYaw result is immedia
 - **Finding B-3 (CLOSED — Phase C sprint 40, same fix as A-2):** `noTargetGraceTime` is now consumed by `tickAim`. `aimEngaged` userData flag bridges the gap: set true on target-found, held true during grace window (< 0.5s), cleared to false when grace expires. `updateTowerAnimations` reads `aimEngaged` (not `currentAimTarget != null`) to gate idle-gesture suppression. 5 new specs covering all grace-timer states.
 
 - **Finding B-4 (LOW, cosmetic):** CHAIN orbiting spheres (orbitSphere2/3) are children of `chainYaw`. When `tickAim` yaws `chainYaw`, the orbital plane rotates with it. The orbit pattern is computed in `chainYaw`-local space, so the satellites orbit in a plane that is itself yawed toward the target. Cosmetically this means the orbit ring tilts to face the target side rather than being a fixed world-horizontal ring. The plan noted this as "orbit isn't truly their own" — cosmetic, acceptable, but should be evaluated in browser smoke test for Phase D visual review.
+
+---
+
+## Red Team Critique — Phase C (Planning-phase preview) — 2026-04-30
+
+### Finding C-1: `cleanup()` emits N `'remove'` events for N enemies — bulk-DIRTY_ALL storm (HIGH — FIXED)
+
+**Location:** `enemy.service.ts:cleanup()` — calls `removeEnemy(id, scene)` per enemy in a forEach loop; `removeEnemy` calls `this.enemiesChanged.next('remove')` unconditionally.
+
+**Risk:** During encounter teardown (or game restart), `cleanup()` loops over all living enemies and disposes each. With 20 enemies alive at wave-end, this fires 20 synchronous RxJS `next('remove')` events in one JS frame. Each event invokes `TargetPreviewService.wireEnemySubscription` callback, which calls `invalidate()`, which does `dirty.clear(); dirty.add(DIRTY_ALL)`. The result is 20 DIRTY_ALL set-operations in one frame. Although set-operations are idempotent (DIRTY_ALL is a singleton in the Set), 20 RxJS `next()` calls and 20 `invalidate()` dispatches burn CPU unnecessarily during teardown — exactly when the frame budget is tightest (disposal + scene removal). The comment in `aim-invalidation-sites.md` states "EnemyService emits one signal per turn-step, not per enemy" — correct for `stepEnemiesOneTurn`, but false for `cleanup()` and `updateDyingAnimations`. The documented contract was violated by the implementation.
+
+**Fix:** Extracted `removeEnemySilent(id, scene)` — identical to `removeEnemy` minus the `enemiesChanged.next('remove')` call. `cleanup()` now calls `removeEnemySilent` per enemy in the loop and fires a single `enemiesChanged.next('remove')` afterward (only if there were enemies). `removeEnemy` is unchanged for all other callers (individual death from `updateDyingAnimations`, `fireTurn` kill-confirm, etc.).
+
+**New specs** (`enemy.service.spec.ts`):
+- "emits exactly ONE remove event for N enemies during cleanup (Phase C Finding C-1)"
+- "emits no remove event when cleanup is called with no enemies"
+
+**Fixed in commit:** see Phase C hardening commit below.
+
+---
+
+### Finding C-2: `tickPreviewCache()` never called — DIRTY_ALL sentinel accumulates (MEDIUM — FIXED)
+
+**Location:** `game-render.service.ts:animate()` — calls `tickAim` but not `tickPreviewCache` afterward; `target-preview.service.ts:tickPreviewCache()` — exists but has zero production callers.
+
+**Risk:** After a bulk invalidation (enemy spawn/move/remove), `invalidate()` adds the `DIRTY_ALL` sentinel to the dirty Set. Each subsequent `getPreviewTarget` call checks `dirty.has(DIRTY_ALL)`, recomputes, clears the per-key entry, but does NOT clear DIRTY_ALL. The comment in `getPreviewTarget` acknowledges: "leave DIRTY_ALL in the set — it will be cleared when `tickPreviewCache()` runs a full pass." But `tickPreviewCache()` was never wired into the render pump. Result: after the first enemy event, DIRTY_ALL persists until `clearAll()` is called (encounter teardown). Every `getPreviewTarget` call for the rest of the encounter recomputes (DIRTY_ALL is always set), defeating the caching model entirely. The per-key dirty entries added by tower-placement and targeting-mode hooks are redundant since DIRTY_ALL makes everything dirty anyway. This is a silent correctness degradation — no errors, just wasted `findTarget` calls every frame for every tower.
+
+**Fix:** Added `this.targetPreviewService?.tickPreviewCache()` immediately after `tickAim` in `game-render.service.ts:animate()`. `tickPreviewCache()` clears only the DIRTY_ALL sentinel (not per-key entries), so mid-frame per-tower invalidations from card-play or targeting-mode toggles are preserved until their next `getPreviewTarget` read.
+
+**New spec** (`target-preview-integration.spec.ts`):
+- "tickPreviewCache() clears DIRTY_ALL so a subsequent call uses cache (not recompute)" — full lifecycle: prime → bulk invalidation → recompute → `tickPreviewCache()` → cache hit on next read.
+
+**Fixed in commit:** see Phase C hardening commit below.
+
+---
+
+### Finding C-3: Stale aim during STRONGEST/WEAKEST modes on mid-turn damage (LOW — documented, deferred)
+
+**Location:** `enemy.service.ts:damageEnemy()` — does NOT emit `enemiesChanged`.
+
+**Risk:** STRONGEST and WEAKEST targeting modes pick based on current enemy health. When `fireTurn` damages an enemy mid-combat (lowering it from highest-health to second-highest), `TargetPreviewService` does NOT recompute. The aim visual continues pointing at the damaged enemy (now second-highest), while the next `findTarget` call on the actual fire pass correctly picks the true strongest. One-turn visual mismatch — the tower aims at a target it will NOT fire at. The `aim-invalidation-sites.md` doc already documents this gap and the trade-off: adding `'damage'` emissions would fire dozens of times per turn-step (once per damage instance), costing more than the current over-invalidation-on-move approach.
+
+**No fix applied.** The visual inconsistency is one-frame and non-exploitable (targeting is correct at fire time). A future fix: add `'damage'` to the Subject and gate DIRTY_ALL in `wireEnemySubscription` behind a STRONGEST/WEAKEST mode check on the affected tower. Deferred to Phase D or E.
+
+**Deferred to Phase D.**

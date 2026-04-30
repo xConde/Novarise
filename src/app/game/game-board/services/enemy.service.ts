@@ -1118,16 +1118,45 @@ export class EnemyService {
   /**
    * Remove all enemies from the scene, dispose their geometries/materials,
    * and clear the internal enemies map. Call on game restart or route teardown.
+   *
+   * Emits a single 'remove' event after all enemies are disposed rather than
+   * once per enemy. N per-enemy emissions during bulk teardown would fire N
+   * DIRTY_ALL invalidations on TargetPreviewService in one synchronous pass —
+   * wasteful when the cache is about to be cleared anyway (Phase C Finding C-1).
    */
   cleanup(scene: THREE.Scene): void {
+    let hadEnemies = false;
     this.enemies.forEach((enemy, id) => {
-      this.removeEnemy(id, scene);
+      hadEnemies = true;
+      // Suppress the per-enemy 'remove' emission; emit once below.
+      this.removeEnemySilent(id, scene);
     });
     // removeEnemy deletes entries during forEach — ensure map is cleared in case
     // any entry was skipped (e.g. enemy with no mesh)
     this.enemies.clear();
 
+    if (hadEnemies) {
+      this.enemiesChanged.next('remove');
+    }
+
     // Dispose shared status-particle geometry and materials (owned by EnemyVisualService)
     this.enemyVisual.cleanup();
+  }
+
+  /**
+   * Dispose a single enemy without emitting an `enemiesChanged` event.
+   * Used by `cleanup()` to coalesce N per-enemy emissions into one signal.
+   * All other callers must use `removeEnemy` so the aim cache stays coherent.
+   */
+  private removeEnemySilent(enemyId: string, scene: THREE.Scene): void {
+    const enemy = this.enemies.get(enemyId);
+    if (enemy) {
+      this.enemyVisual.removeStatusParticles(enemy, scene);
+      if (enemy.mesh) {
+        disposeGroup(enemy.mesh, scene,
+          buildDisposeProtect(this.geometryRegistry, this.materialRegistry));
+      }
+      this.enemies.delete(enemyId);
+    }
   }
 }

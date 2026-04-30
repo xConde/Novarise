@@ -1185,6 +1185,35 @@ describe('EnemyService', () => {
       expect(newEnemy).toBeTruthy();
       expect(service.getEnemies().size).toBe(1);
     });
+
+    it('emits exactly ONE remove event for N enemies during cleanup (Phase C Finding C-1)', () => {
+      // Bulk cleanup must not fire N DIRTY_ALL invalidations on TargetPreviewService.
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+      service.spawnEnemy(EnemyType.HEAVY, mockScene);
+
+      let removeCount = 0;
+      const sub = service.getEnemiesChanged().subscribe(type => {
+        if (type === 'remove') removeCount++;
+      });
+
+      service.cleanup(mockScene);
+      sub.unsubscribe();
+
+      expect(removeCount).toBe(1);
+    });
+
+    it('emits no remove event when cleanup is called with no enemies', () => {
+      let removeCount = 0;
+      const sub = service.getEnemiesChanged().subscribe(type => {
+        if (type === 'remove') removeCount++;
+      });
+
+      service.cleanup(mockScene);
+      sub.unsubscribe();
+
+      expect(removeCount).toBe(0);
+    });
   });
 
   describe('reset()', () => {
