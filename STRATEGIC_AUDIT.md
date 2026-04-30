@@ -1961,7 +1961,7 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 
 **Fix:** Added `TowerDecalLibraryService` as an `@Optional()` dependency in `GameSessionService`. Call `this.towerDecalLibrary?.dispose()` in `cleanupScene()` after `vfxPool.dispose()` (textures should release after all meshes referencing them are gone). Added regression spec: `should call towerDecalLibrary.dispose() during cleanupScene`.
 
-**Status:** Fixed in commit [pending]
+**Status:** Fixed in commit `da57b35`
 
 ---
 
