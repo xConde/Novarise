@@ -291,65 +291,49 @@ export class GameBoardService {
   }
 
   /**
-   * Create grid lines — interior lines positioned BETWEEN tiles.
+   * Cool-tinted plane sitting just above the floor so the grout between
+   * tiles reads as designed trim. Tiles cover their share of the plane
+   * from above; the gap between adjacent tiles exposes a thin line of
+   * the plane color at every cell boundary. Walls overlap the plane
+   * fully (their slight cell-overlap factor erases internal seams), so
+   * the trim only appears on the buildable interior — exactly where
+   * cell-level borders belong.
    *
-   * Phase C sprint 28: collapsed from N+M individual `THREE.Line` objects in
-   * a Group (~30 children on a 24×19 board) to ONE `THREE.LineSegments` with
-   * all segment vertices in a single `BufferGeometry`. Same visual, single
-   * draw call.
+   * Implemented as a plane (not LineSegments) because WebGL clamps line
+   * width to 1 device pixel regardless of `linewidth`; on a dark tile
+   * face the 1-pixel line was sub-perceptual.
    *
-   * Returns a Group for API compatibility — the caller (renderGameBoard)
-   * adds this to the scene as a single child. Disposal goes through
-   * disposeGroup which traverses + disposes the LineSegments inside.
+   * Returns a Group for API compatibility — disposal traverses the
+   * group and disposes the mesh's geometry/material.
    */
   createGridLines(): THREE.Group {
     const gridGroup = new THREE.Group();
 
-    const verticals = this.gameBoardWidth - 1; // interior columns
-    const horizontals = this.gameBoardHeight - 1; // interior rows
-    const segmentCount = verticals + horizontals;
-    if (segmentCount <= 0) return gridGroup;
+    if (this.gameBoardWidth <= 0 || this.gameBoardHeight <= 0) return gridGroup;
 
-    // 2 vertices per segment, 3 floats each.
-    const positions = new Float32Array(segmentCount * 2 * 3);
-    let offset = 0;
+    const planeWidth = this.gameBoardWidth * this.tileSize;
+    const planeHeight = this.gameBoardHeight * this.tileSize;
 
-    // Vertical segments
-    for (let i = 1; i < this.gameBoardWidth; i++) {
-      const x = (i - this.gameBoardWidth / 2 - 0.5) * this.tileSize;
-      const z1 = (-this.gameBoardHeight / 2) * this.tileSize;
-      const z2 = (this.gameBoardHeight / 2 - 1) * this.tileSize;
-      positions[offset++] = x; positions[offset++] = 0.01; positions[offset++] = z1;
-      positions[offset++] = x; positions[offset++] = 0.01; positions[offset++] = z2;
-    }
-    // Horizontal segments
-    for (let i = 1; i < this.gameBoardHeight; i++) {
-      const z = (i - this.gameBoardHeight / 2 - 0.5) * this.tileSize;
-      const x1 = (-this.gameBoardWidth / 2) * this.tileSize;
-      const x2 = (this.gameBoardWidth / 2 - 1) * this.tileSize;
-      positions[offset++] = x1; positions[offset++] = 0.01; positions[offset++] = z;
-      positions[offset++] = x2; positions[offset++] = 0.01; positions[offset++] = z;
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-    // Cool-tinted grid line — reads as designed sci-fi trim between
-    // buildable cells, not as accidental seam aliasing. Color stays in
-    // the cool atmosphere palette; opacity is high enough that the line
-    // registers clearly at the default game camera angle without
-    // overpowering the tile faces. Walls hide their portion of the
-    // grid by sitting on top of it (intentional — walls are a solid
-    // surface, the cell-level border belongs only on the buildable
-    // interior).
-    const gridMaterial = new THREE.LineBasicMaterial({
+    const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+    const material = new THREE.MeshBasicMaterial({
       color: 0xd6e2ff,
       transparent: true,
-      opacity: 0.95,
-      linewidth: 1,
+      opacity: 0.55,
+      depthWrite: false,
     });
-    const lineSegments = new THREE.LineSegments(geometry, gridMaterial);
-    gridGroup.add(lineSegments);
+
+    const grout = new THREE.Mesh(geometry, material);
+    grout.rotation.x = -Math.PI / 2;
+    // Just above the floor so it sits inside the tile's vertical extent;
+    // tiles occlude it from above where they exist, gaps expose it.
+    grout.position.set(
+      -this.tileSize / 2,
+      0.005,
+      -this.tileSize / 2,
+    );
+    grout.renderOrder = -1;
+
+    gridGroup.add(grout);
 
     return gridGroup;
   }
