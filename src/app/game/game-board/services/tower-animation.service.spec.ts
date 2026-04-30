@@ -1231,7 +1231,7 @@ describe('TowerAnimationService', () => {
       mat.dispose();
     });
 
-    it('MORTAR multi-barrel: snaps all barrels to 0 when animation completes', () => {
+    it('MORTAR multi-barrel: snaps all barrels to 0 when animation completes (no recoilBaseY set)', () => {
       const group = new THREE.Group();
       group.userData['towerType'] = TowerType.MORTAR;
 
@@ -1265,6 +1265,46 @@ describe('TowerAnimationService', () => {
 
       expect(b1.position.y).toBeCloseTo(0, 5);
       expect(group.userData['recoilStart']).toBeUndefined();
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('MORTAR barrel: respects recoilBaseY when snapping to neutral (Finding G-2)', () => {
+      // Barrels in the real factory start at position.y = length/2 (centre of cylinder
+      // rests at the pivot origin). The recoil tick must snap back to that position, not 0.
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.MORTAR;
+
+      const barrelPivot = new THREE.Group();
+      barrelPivot.name = 'barrelPivot';
+      group.add(barrelPivot);
+
+      const geo = new THREE.BoxGeometry(0.1, 0.55, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+
+      const restY = 0.55 / 2; // matches factory: barrelT1Length / 2
+      const b1 = new THREE.Mesh(geo, mat);
+      b1.name = 'barrelT1';
+      b1.visible = true;
+      b1.position.y = restY;
+      b1.userData['recoilBaseY'] = restY;
+      barrelPivot.add(b1);
+
+      const now = 400.0;
+      const duration = 0.15;
+      group.userData['recoilStart'] = now;
+      group.userData['recoilDuration'] = duration;
+      group.userData['recoilDistance'] = MORTAR_RECOIL_CONFIG.distance;
+      group.userData['mortarBarrelNames'] = MORTAR_BARREL_NAMES;
+
+      // Mid-animation: barrel should be at restY - distance (not 0 - distance)
+      service.tickRecoilAnimations(new Map([['m', group]]), now);
+      expect(b1.position.y).toBeCloseTo(restY - MORTAR_RECOIL_CONFIG.distance, 4);
+
+      // After animation: barrel snaps back to restY, not 0
+      service.tickRecoilAnimations(new Map([['m', group]]), now + duration + 0.01);
+      expect(b1.position.y).toBeCloseTo(restY, 5);
 
       geo.dispose();
       mat.dispose();

@@ -1309,6 +1309,9 @@ export class TowerMeshFactoryService {
         barrelT1.name = 'barrelT1';
         // Cylinder origin is at its centre. Position so base rests at pivot origin.
         barrelT1.position.y = MORTAR_GEOM.barrelT1Length / 2;
+        // Store neutral Y so tickRecoilAnimations can compute delta-based offset
+        // and snap correctly — see Finding G-2.
+        barrelT1.userData['recoilBaseY'] = MORTAR_GEOM.barrelT1Length / 2;
         barrelT1.userData['maxTier'] = 1;
         barrelPivot.add(barrelT1);
 
@@ -1320,6 +1323,7 @@ export class TowerMeshFactoryService {
         const barrelT2 = new THREE.Mesh(barrelT2Geom, mat);
         barrelT2.name = 'barrelT2';
         barrelT2.position.y = MORTAR_GEOM.barrelT2Length / 2;
+        barrelT2.userData['recoilBaseY'] = MORTAR_GEOM.barrelT2Length / 2;
         barrelT2.visible = false;
         barrelT2.userData['minTier'] = 2;
         barrelPivot.add(barrelT2);
@@ -1330,6 +1334,7 @@ export class TowerMeshFactoryService {
         const dualBarrel = new THREE.Mesh(dualBarrelGeom, mat);
         dualBarrel.name = 'dualBarrel';
         dualBarrel.position.set(0, MORTAR_GEOM.barrelT2Length / 2, MORTAR_GEOM.dualBarrelYOffset);
+        dualBarrel.userData['recoilBaseY'] = MORTAR_GEOM.barrelT2Length / 2;
         dualBarrel.visible = false;
         dualBarrel.userData['minTier'] = 3;
         barrelPivot.add(dualBarrel);

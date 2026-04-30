@@ -946,6 +946,26 @@ describe('TowerMeshFactoryService', () => {
       }
     });
 
+    it('barrelT1 stores recoilBaseY = barrelT1Length/2 (Finding G-2: delta-based recoil snap)', () => {
+      const b = mortarGroup.getObjectByName('barrelT1') as THREE.Mesh | undefined;
+      expect(b).toBeTruthy();
+      expect(b!.userData['recoilBaseY']).toBeCloseTo(0.55 / 2, 5);
+    });
+
+    it('barrelT2 stores recoilBaseY = barrelT2Length/2', () => {
+      const b = mortarGroup.getObjectByName('barrelT2') as THREE.Mesh | undefined;
+      expect(b).toBeTruthy();
+      expect(b!.userData['recoilBaseY']).toBeCloseTo(0.55 / 2, 5);
+    });
+
+    it('dualBarrel stores recoilBaseY = barrelT2Length/2 (position.z offset preserved through recoil)', () => {
+      const b = mortarGroup.getObjectByName('dualBarrel') as THREE.Mesh | undefined;
+      expect(b).toBeTruthy();
+      expect(b!.userData['recoilBaseY']).toBeCloseTo(0.55 / 2, 5);
+      // Z offset (dualBarrelYOffset) must still be present after recoil snap
+      expect(b!.position.z).toBeCloseTo(0.14, 4);
+    });
+
     it('tier visibility — T1: barrelT1 visible, barrelT2 hidden, dualBarrel hidden', () => {
       // Simulate revealTierParts at level 1
       mortarGroup.traverse(obj => {

@@ -252,10 +252,12 @@ export class TowerAnimationService {
 
       const elapsed = nowSeconds - recoilStart;
       if (elapsed >= recoilDuration) {
-        // Animation complete — snap back to neutral and clear state
+        // Animation complete — snap back to neutral and clear state.
+        // Use recoilBaseY (stored at factory construction time) so barrels
+        // return to their original rest position, not absolute 0. (Finding G-2)
         for (const name of barrelNames) {
           const b = group.getObjectByName(name) as THREE.Mesh | undefined;
-          if (b) b.position.y = 0;
+          if (b) b.position.y = (b.userData['recoilBaseY'] as number | undefined) ?? 0;
         }
         group.userData['recoilStart'] = undefined;
         group.userData['recoilDuration'] = undefined;
@@ -266,15 +268,19 @@ export class TowerAnimationService {
       const raw = elapsed / recoilDuration;
       const eased = 1 - Math.pow(1 - raw, 3);
 
-      // Slide back at the start, return toward neutral as eased approaches 1.
-      // Peak recoil at t=0 (offset = -distance), returns to 0 at t=1.
-      const offset = -distance * (1 - eased);
+      // Slide back relative to the barrel's rest position (recoilBaseY).
+      // Peak recoil at elapsed=0: position = baseY - distance.
+      // Returns to baseY as eased → 1. (Finding G-2: was absolute 0-based)
+      const recoilOffset = -distance * (1 - eased);
 
       for (const name of barrelNames) {
         const b = group.getObjectByName(name) as THREE.Mesh | undefined;
         // Apply recoil only to visible barrels (invisible barrels are tier-gated
         // and should not accumulate a position offset that would appear on reveal).
-        if (b?.visible) b.position.y = offset;
+        if (b?.visible) {
+          const baseY = (b.userData['recoilBaseY'] as number | undefined) ?? 0;
+          b.position.y = baseY + recoilOffset;
+        }
       }
     }
   }
