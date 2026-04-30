@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import { AudioService } from './audio.service';
 import { FpsCounterService } from './fps-counter.service';
 import { GameInputService } from './game-input.service';
@@ -7,6 +7,7 @@ import { GameStateService } from './game-state.service';
 import { EnemyService } from './enemy.service';
 import { TowerAnimationService } from './tower-animation.service';
 import { TowerCombatService } from './tower-combat.service';
+import { TargetPreviewService } from './target-preview.service';
 import { TowerMeshLifecycleService } from './tower-mesh-lifecycle.service';
 import { ParticleService } from './particle.service';
 import { GoldPopupService } from './gold-popup.service';
@@ -73,6 +74,9 @@ export class GameRenderService {
     private cardEffectService: CardEffectService,
     private gameBoardService: GameBoardService,
     private meshRegistry: BoardMeshRegistryService,
+    // @Optional() — not provided in GameRenderService test beds. tickAim
+    // degrades gracefully to a no-op when the service is absent.
+    @Optional() private targetPreviewService?: TargetPreviewService,
   ) {}
 
   /** Initialize the render service. Call in ngAfterViewInit. */
@@ -145,6 +149,15 @@ export class GameRenderService {
 
     // Animate tower idle effects, recoil, tube emits, emitter pulses, and tile pulses
     const nowSeconds = performance.now() / 1000;
+    // Aim pre-pass: resolve primary targets and write currentAimTarget onto each
+    // group BEFORE updateTowerAnimations so the aimTick callbacks see current data.
+    this.towerAnimationService.tickAim(
+      this.meshRegistry.towerMeshes,
+      this.towerCombatService.getPlacedTowers(),
+      deltaTime,
+      this.targetPreviewService,
+      typeof document !== 'undefined' && document.body.classList.contains('reduce-motion'),
+    );
     this.towerAnimationService.updateTowerAnimations(this.meshRegistry.towerMeshes, time);
     this.towerAnimationService.tickRecoilAnimations(this.meshRegistry.towerMeshes, nowSeconds);
     this.towerAnimationService.tickTubeEmits(this.meshRegistry.towerMeshes, nowSeconds);
