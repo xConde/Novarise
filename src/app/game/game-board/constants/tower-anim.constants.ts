@@ -206,3 +206,106 @@ export const SNIPER_RECOIL_CONFIG = {
   /** Easing profile identifier. */
   easing: 'easeOutCubic' as const,
 } as const;
+
+// ─── SPLASH tower constants ────────────────────────────────────────────────────
+
+export const SPLASH_GEOM = {
+  // Stubby armored chassis base (wide, flat, tank-read)
+  baseW:   0.85,
+  baseH:   0.18,
+  baseD:   0.85,
+
+  // Side fins (×4, thin boxes radiating from each face)
+  finW:    0.06,
+  finH:    0.16,
+  finD:    0.22,
+  /** Distance from chassis centre to the fin's outer face. */
+  finOffset: 0.42,
+
+  // Rotating drum housing (horizontal cylinder, faces +Z)
+  drumRadius:   0.32,
+  drumLength:   0.5,
+  drumSegments: 12,
+
+  // Radial port-detail boxes on the drum circumference (×4)
+  portW:   0.06,
+  portH:   0.06,
+  portD:   0.12,
+  portRadial: 0.3,  // radial distance from drum axis to port centre
+
+  // Rocket tube cylinders (×4 base, ×6 at T2, ×8 at T3)
+  tubeRadius:   0.07,
+  tubeLength:   0.32,
+  tubeSegments: 6,
+
+  // T2/T3 extra tube geometry dimensions match the base tubes above.
+
+  // Ammo-belt housing (left-side decorative box)
+  beltW: 0.08,
+  beltH: 0.12,
+  beltD: 0.3,
+  beltXOffset: -0.38,
+  beltYOffset:  0.0,
+  beltZOffset:  0.0,
+
+  // Ammo-round spheres on the belt detail (×3)
+  roundRadius:   0.04,
+  roundSegments: 6,
+  roundSpacing:  0.08,
+
+  // T3 heat-vent disk at the rear of the drum
+  heatVentRadius:   0.12,
+  heatVentDepth:    0.03,
+  heatVentSegments: 10,
+} as const;
+
+// Y world-positions relative to the tower group origin
+export const SPLASH_Y = {
+  /** Top face of the chassis base where the drum sits. */
+  chassisTop:  SPLASH_GEOM.baseH,
+  /** Centre of the drum housing (sits flush on the chassis top). */
+  drumCentre:  SPLASH_GEOM.baseH + SPLASH_GEOM.drumRadius,
+  /** Accent light height — just above the drum. */
+  accentLight: SPLASH_GEOM.baseH + SPLASH_GEOM.drumRadius * 2 + 0.05,
+} as const;
+
+/** Z offset of the tube cluster front face from the drum centre (forward protrusion). */
+export const SPLASH_TUBE_Z = SPLASH_GEOM.drumLength / 2 + SPLASH_GEOM.tubeLength / 2;
+
+/** 2×2 grid offsets for the 4 base tubes (x, y relative to drum face centre). */
+export const SPLASH_TUBE_GRID = [
+  [-0.1,  0.1],
+  [ 0.1,  0.1],
+  [-0.1, -0.1],
+  [ 0.1, -0.1],
+] as const;
+
+/** Extra 2 tube positions added at T2 (top and bottom centre). */
+export const SPLASH_TUBE_T2_EXTRA = [
+  [0.0,  0.22],
+  [0.0, -0.22],
+] as const;
+
+/** Extra 2 tube positions added at T3 (left and right centre). */
+export const SPLASH_TUBE_T3_EXTRA = [
+  [-0.22, 0.0],
+  [ 0.22, 0.0],
+] as const;
+
+// ─── SPLASH idle animation ─────────────────────────────────────────────────────
+
+export const SPLASH_DRUM_CONFIG = {
+  /** Drum rotation speed at idle (radians per second around drum's forward axis). */
+  idleSpeedRadPerSec: 0.4,
+  /** Drum rotation speed during a fire-boost window (radians per second). */
+  fireSpeedRadPerSec: 4.5,
+} as const;
+
+// ─── SPLASH tube emit animation ────────────────────────────────────────────────
+
+export const SPLASH_TUBE_EMIT_CONFIG = {
+  /** How long the selected tube stays emissive-pulsed after a fire event (seconds). */
+  duration: 0.25,
+  /** Multiplier applied to the tube material's base emissiveIntensity during the pulse. */
+  emissiveMultiplier: 3,
+} as const;

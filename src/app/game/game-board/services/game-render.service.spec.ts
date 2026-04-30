@@ -77,7 +77,7 @@ describe('GameRenderService', () => {
     ]);
     enemy.getEnemies.and.returnValue(new Map());
     towerAnim = jasmine.createSpyObj<TowerAnimationService>('TowerAnimationService', [
-      'updateTowerAnimations', 'tickRecoilAnimations', 'updateTilePulse', 'updateMuzzleFlashes',
+      'updateTowerAnimations', 'tickRecoilAnimations', 'tickTubeEmits', 'updateTilePulse', 'updateMuzzleFlashes',
     ]);
     towerCombat = jasmine.createSpyObj<TowerCombatService>('TowerCombatService', ['getPlacedTowers']);
     towerCombat.getPlacedTowers.and.returnValue(new Map());
@@ -262,6 +262,20 @@ describe('GameRenderService', () => {
     it('tickRecoilAnimations spy accepts a Map and a nowSeconds argument without throwing', () => {
       expect(() =>
         towerAnim.tickRecoilAnimations(new Map<string, THREE.Group>(), 1.0),
+      ).not.toThrow();
+    });
+  });
+
+  describe('tickTubeEmits render-loop wiring', () => {
+    it('tickTubeEmits is exposed on TowerAnimationService so the render loop can call it', () => {
+      // If tickTubeEmits were absent from the real service, jasmine.createSpyObj
+      // (called in beforeEach) would have thrown at test setup, never reaching here.
+      expect(towerAnim.tickTubeEmits).toBeDefined();
+    });
+
+    it('tickTubeEmits spy accepts a Map and a nowSeconds argument without throwing', () => {
+      expect(() =>
+        towerAnim.tickTubeEmits(new Map<string, THREE.Group>(), 1.0),
       ).not.toThrow();
     });
   });

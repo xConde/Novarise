@@ -9,6 +9,8 @@ import {
   BASIC_IDLE_CONFIG,
   SNIPER_SCOPE_GLOW_CONFIG,
   SNIPER_RECOIL_CONFIG,
+  SPLASH_DRUM_CONFIG,
+  SPLASH_TUBE_EMIT_CONFIG,
 } from '../constants/tower-anim.constants';
 
 function disposeGroupHelper(group: THREE.Group): void {
@@ -333,6 +335,203 @@ describe('TowerMeshFactoryService', () => {
       const lens = sniperGroup.getObjectByName('scope') as THREE.Object3D | undefined;
       expect(lens).toBeTruthy();
       expect((lens!.userData as Record<string, unknown>)['maxTier']).toBe(1);
+    });
+  });
+
+  // --- SPLASH tower redesign (Phase D) ---
+
+  describe('SPLASH tower Phase D redesign', () => {
+    let splashGroup: THREE.Group;
+
+    beforeEach(() => {
+      splashGroup = service.createTowerMesh(5, 5, TowerType.SPLASH, boardWidth, boardHeight);
+      createdGroups.push(splashGroup);
+    });
+
+    it('has no child named "spore" (old mushroom removed)', () => {
+      const spore = splashGroup.getObjectByName('spore');
+      expect(spore).toBeUndefined();
+    });
+
+    it('has a child named "drum" (rotating drum housing)', () => {
+      const drum = splashGroup.getObjectByName('drum');
+      expect(drum).toBeTruthy();
+    });
+
+    it('drum is a THREE.Group (so its rotation drives child tubes)', () => {
+      const drum = splashGroup.getObjectByName('drum');
+      expect(drum instanceof THREE.Group).toBeTrue();
+    });
+
+    it('has 4 base tube children on the drum (T1)', () => {
+      const drum = splashGroup.getObjectByName('drum')!;
+      const tubes: THREE.Object3D[] = [];
+      drum.traverse(obj => {
+        if (obj.name.startsWith('tube') && (obj.userData['minTier'] === undefined)) {
+          tubes.push(obj);
+        }
+      });
+      // Tubes without a minTier tag are always visible (T1 base set)
+      expect(tubes.length).toBe(4);
+    });
+
+    it('tubes 1-4 have tubeIndex in userData [0..3]', () => {
+      const drum = splashGroup.getObjectByName('drum')!;
+      for (let i = 0; i < 4; i++) {
+        const tube = drum.getObjectByName(`tube${i + 1}`) as THREE.Object3D | undefined;
+        expect(tube).withContext(`tube${i + 1} missing`).toBeTruthy();
+        expect(tube!.userData['tubeIndex']).toBe(i);
+      }
+    });
+
+    it('T2 tubes (tube5, tube6) are hidden at creation with minTier=2', () => {
+      const drum = splashGroup.getObjectByName('drum')!;
+      for (const name of ['tube5', 'tube6']) {
+        const tube = drum.getObjectByName(name) as THREE.Object3D | undefined;
+        expect(tube).withContext(`${name} missing`).toBeTruthy();
+        expect(tube!.visible).withContext(`${name} should start hidden`).toBeFalse();
+        expect(tube!.userData['minTier']).withContext(`${name} minTier`).toBe(2);
+      }
+    });
+
+    it('T3 tubes (tube7, tube8) are hidden at creation with minTier=3', () => {
+      const drum = splashGroup.getObjectByName('drum')!;
+      for (const name of ['tube7', 'tube8']) {
+        const tube = drum.getObjectByName(name) as THREE.Object3D | undefined;
+        expect(tube).withContext(`${name} missing`).toBeTruthy();
+        expect(tube!.visible).withContext(`${name} should start hidden`).toBeFalse();
+        expect(tube!.userData['minTier']).withContext(`${name} minTier`).toBe(3);
+      }
+    });
+
+    it('T3 heat-vent is hidden at creation with minTier=3', () => {
+      const heatVent = splashGroup.getObjectByName('heatVent') as THREE.Object3D | undefined;
+      expect(heatVent).toBeTruthy();
+      expect(heatVent!.visible).toBeFalse();
+      expect(heatVent!.userData['minTier']).toBe(3);
+    });
+
+    it('revealTierParts at level 1 shows 4 tubes only', () => {
+      const drum = splashGroup.getObjectByName('drum')!;
+
+      // Simulate T1: manually apply what revealTierParts does (minTier <= level)
+      drum.traverse(obj => {
+        const minTier = obj.userData['minTier'] as number | undefined;
+        if (minTier !== undefined) { obj.visible = minTier <= 1; }
+      });
+
+      const visibleTubes: THREE.Object3D[] = [];
+      drum.traverse(obj => {
+        if (obj.name.startsWith('tube') && obj.visible) visibleTubes.push(obj);
+      });
+      expect(visibleTubes.length).toBe(4);
+    });
+
+    it('revealTierParts at level 2 shows 6 tubes', () => {
+      const drum = splashGroup.getObjectByName('drum')!;
+      drum.traverse(obj => {
+        const minTier = obj.userData['minTier'] as number | undefined;
+        if (minTier !== undefined) { obj.visible = minTier <= 2; }
+      });
+
+      const visibleTubes: THREE.Object3D[] = [];
+      drum.traverse(obj => {
+        if (obj.name.startsWith('tube') && obj.visible) visibleTubes.push(obj);
+      });
+      expect(visibleTubes.length).toBe(6);
+    });
+
+    it('revealTierParts at level 3 shows 8 tubes and the heat-vent', () => {
+      const drum = splashGroup.getObjectByName('drum')!;
+      drum.traverse(obj => {
+        const minTier = obj.userData['minTier'] as number | undefined;
+        if (minTier !== undefined) { obj.visible = minTier <= 3; }
+      });
+
+      const visibleTubes: THREE.Object3D[] = [];
+      drum.traverse(obj => {
+        if (obj.name.startsWith('tube') && obj.visible) visibleTubes.push(obj);
+      });
+      expect(visibleTubes.length).toBe(8);
+
+      const heatVent = drum.getObjectByName('heatVent') as THREE.Object3D | undefined;
+      expect(heatVent?.visible).toBeTrue();
+    });
+
+    it('registers an idleTick function on userData', () => {
+      expect(typeof splashGroup.userData['idleTick']).toBe('function');
+    });
+
+    it('idleTick advances drum rotation angle on each call', () => {
+      const drum = splashGroup.getObjectByName('drum') as THREE.Group;
+      expect(drum).toBeTruthy();
+
+      const tick = splashGroup.userData['idleTick'] as (g: THREE.Group, t: number) => void;
+
+      // First call seeds prevT, deltaT=0 → angle stays 0
+      tick(splashGroup, 1.0);
+      expect(drum.rotation.z).toBeCloseTo(0, 4);
+
+      // Second call at t=1.1 → deltaT=0.1, angle = 0.1 * idleSpeed
+      tick(splashGroup, 1.1);
+      const expected = 0.1 * SPLASH_DRUM_CONFIG.idleSpeedRadPerSec;
+      expect(drum.rotation.z).toBeCloseTo(expected, 4);
+    });
+
+    it('idleTick uses fire speed when drumSpinBoostUntil is in the future', () => {
+      const drum = splashGroup.getObjectByName('drum') as THREE.Group;
+      const boostFuture = performance.now() / 1000 + 10;
+      splashGroup.userData['drumSpinBoostUntil'] = boostFuture;
+
+      const tick = splashGroup.userData['idleTick'] as (g: THREE.Group, t: number) => void;
+
+      // Seed prevT
+      tick(splashGroup, 1.0);
+      // Second call with deltaT=0.1 and boost active
+      tick(splashGroup, 1.1);
+
+      const expected = 0.1 * SPLASH_DRUM_CONFIG.fireSpeedRadPerSec;
+      expect(drum.rotation.z).toBeCloseTo(expected, 4);
+    });
+
+    it('registers a fireTick function on userData', () => {
+      expect(typeof splashGroup.userData['fireTick']).toBe('function');
+    });
+
+    it('fireTick sets drumSpinBoostUntil to a future timestamp', () => {
+      const fire = splashGroup.userData['fireTick'] as (g: THREE.Group, d: number) => void;
+      const beforeFire = performance.now() / 1000;
+      fire(splashGroup, 0.3);
+
+      const boostUntil = splashGroup.userData['drumSpinBoostUntil'] as number;
+      expect(boostUntil).toBeGreaterThan(beforeFire);
+    });
+
+    it('fireTick increments nextTubeIndex each call (round-robin)', () => {
+      const fire = splashGroup.userData['fireTick'] as (g: THREE.Group, d: number) => void;
+      fire(splashGroup, 0.1);
+      expect(splashGroup.userData['nextTubeIndex']).toBe(1);
+      fire(splashGroup, 0.1);
+      expect(splashGroup.userData['nextTubeIndex']).toBe(2);
+    });
+
+    it('fireTick sets emittingTubeIndex pointing to a visible tube', () => {
+      const fire = splashGroup.userData['fireTick'] as (g: THREE.Group, d: number) => void;
+      fire(splashGroup, 0.1);
+
+      const emitting = splashGroup.userData['emittingTubeIndex'] as number | undefined;
+      // At T1 only tubes 0-3 exist, so index must be in that range
+      expect(emitting).toBeDefined();
+      expect(emitting!).toBeGreaterThanOrEqual(0);
+      expect(emitting!).toBeLessThanOrEqual(3);
+    });
+
+    it('fireTick stores tubeEmitStart and tubeEmitDuration', () => {
+      const fire = splashGroup.userData['fireTick'] as (g: THREE.Group, d: number) => void;
+      fire(splashGroup, 0.2);
+
+      expect(splashGroup.userData['tubeEmitStart']).toBeDefined();
+      expect(splashGroup.userData['tubeEmitDuration']).toBeCloseTo(SPLASH_TUBE_EMIT_CONFIG.duration, 4);
     });
   });
 

@@ -5,7 +5,7 @@ import { BlockType } from '../models/game-board-tile';
 import { ANIMATION_CONFIG } from '../constants/rendering.constants';
 import { MUZZLE_FLASH_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
 import { getMaterials } from '../utils/three-utils';
-import { BASIC_RECOIL_CONFIG } from '../constants/tower-anim.constants';
+import { BASIC_RECOIL_CONFIG, SPLASH_TUBE_EMIT_CONFIG } from '../constants/tower-anim.constants';
 
 @Injectable()
 export class TowerAnimationService {
@@ -240,6 +240,48 @@ export class TowerAnimationService {
 
       const barrel = group.getObjectByName('barrel') as THREE.Mesh | undefined;
       if (barrel) barrel.position.y = offset;
+    }
+  }
+
+  /**
+   * Advance per-frame tube-emit pulse animations on SPLASH towers.
+   *
+   * Called once per animation frame alongside `tickRecoilAnimations`. Each
+   * SPLASH tower group tracks which tube is currently emitting via
+   * `userData['emittingTubeIndex']`, `userData['tubeEmitStart']`, and
+   * `userData['tubeEmitDuration']`. This method fades the emissive intensity
+   * of the active tube from peak to zero over the emit duration, then clears
+   * the state when done.
+   *
+   * The drum group (named 'drum') is walked to locate the tube mesh because
+   * tubes are children of the drum and therefore rotate with it.
+   */
+  tickTubeEmits(towerMeshes: Map<string, THREE.Group>, nowSeconds: number): void {
+    for (const group of towerMeshes.values()) {
+      const tubeIdx = group.userData['emittingTubeIndex'] as number | undefined;
+      const emitStart = group.userData['tubeEmitStart'] as number | undefined;
+      const emitDur = group.userData['tubeEmitDuration'] as number | undefined;
+
+      if (tubeIdx === undefined || emitStart === undefined || emitDur === undefined) continue;
+
+      const elapsed = nowSeconds - emitStart;
+      const drum = group.getObjectByName('drum');
+      if (!drum) continue;
+
+      const tubeName = `tube${tubeIdx + 1}`;
+      const tubeMesh = drum.getObjectByName(tubeName) as THREE.Mesh | undefined;
+
+      if (!tubeMesh || !(tubeMesh.material instanceof THREE.MeshStandardMaterial)) continue;
+
+      if (elapsed < emitDur) {
+        const alpha = 1 - elapsed / emitDur;
+        tubeMesh.material.emissiveIntensity = alpha * SPLASH_TUBE_EMIT_CONFIG.emissiveMultiplier;
+      } else {
+        tubeMesh.material.emissiveIntensity = 0;
+        group.userData['emittingTubeIndex'] = undefined;
+        group.userData['tubeEmitStart'] = undefined;
+        group.userData['tubeEmitDuration'] = undefined;
+      }
     }
   }
 

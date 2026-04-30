@@ -141,9 +141,11 @@ export class GameRenderService {
       }
     }
 
-    // Animate tower idle effects, recoil, and tile pulses
+    // Animate tower idle effects, recoil, tube emits, and tile pulses
+    const nowSeconds = performance.now() / 1000;
     this.towerAnimationService.updateTowerAnimations(this.meshRegistry.towerMeshes, time);
-    this.towerAnimationService.tickRecoilAnimations(this.meshRegistry.towerMeshes, performance.now() / 1000);
+    this.towerAnimationService.tickRecoilAnimations(this.meshRegistry.towerMeshes, nowSeconds);
+    this.towerAnimationService.tickTubeEmits(this.meshRegistry.towerMeshes, nowSeconds);
     this.towerAnimationService.updateTilePulse(this.meshRegistry.tileMeshes, time);
     this.towerAnimationService.updateMuzzleFlashes(this.towerCombatService.getPlacedTowers(), deltaTime);
 

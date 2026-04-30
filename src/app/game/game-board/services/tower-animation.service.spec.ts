@@ -5,7 +5,7 @@ import { PlacedTower, TowerType, TargetingMode } from '../models/tower.model';
 import { BlockType } from '../models/game-board-tile';
 import { MUZZLE_FLASH_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
 import { ANIMATION_CONFIG } from '../constants/rendering.constants';
-import { BASIC_RECOIL_CONFIG } from '../constants/tower-anim.constants';
+import { BASIC_RECOIL_CONFIG, SPLASH_TUBE_EMIT_CONFIG } from '../constants/tower-anim.constants';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -573,6 +573,112 @@ describe('TowerAnimationService', () => {
 
         disposePlacedTower(tower);
       });
+    });
+  });
+
+  // ---- tickTubeEmits ----
+
+  describe('tickTubeEmits', () => {
+    function makeSplashGroup(): { group: THREE.Group; tube: THREE.Mesh; drumGroup: THREE.Group } {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.SPLASH;
+
+      const drumGroup = new THREE.Group();
+      drumGroup.name = 'drum';
+      group.add(drumGroup);
+
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const mat = new THREE.MeshStandardMaterial({ emissive: new THREE.Color(0x00ff00), emissiveIntensity: 0 });
+      const tube = new THREE.Mesh(geo, mat);
+      tube.name = 'tube1';
+      tube.userData['tubeIndex'] = 0;
+      drumGroup.add(tube);
+
+      return { group, tube, drumGroup };
+    }
+
+    function disposeSplashGroup(group: THREE.Group): void {
+      group.traverse(obj => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+          (obj.material as THREE.MeshStandardMaterial).dispose();
+        }
+      });
+    }
+
+    it('does nothing when no emit state is active', () => {
+      const { group, tube } = makeSplashGroup();
+      // No emit userData set
+      service.tickTubeEmits(new Map([['0-0', group]]), 1.0);
+      expect((tube.material as THREE.MeshStandardMaterial).emissiveIntensity).toBeCloseTo(0, 5);
+      disposeSplashGroup(group);
+    });
+
+    it('sets tube emissiveIntensity to peak multiplier at t=emitStart', () => {
+      const { group, tube } = makeSplashGroup();
+      const now = 5.0;
+      group.userData['emittingTubeIndex'] = 0;
+      group.userData['tubeEmitStart'] = now;
+      group.userData['tubeEmitDuration'] = SPLASH_TUBE_EMIT_CONFIG.duration;
+
+      // At t=now: elapsed=0, alpha=1, intensity = 1 * multiplier
+      service.tickTubeEmits(new Map([['0-0', group]]), now);
+
+      const mat = tube.material as THREE.MeshStandardMaterial;
+      expect(mat.emissiveIntensity).toBeCloseTo(SPLASH_TUBE_EMIT_CONFIG.emissiveMultiplier, 4);
+      disposeSplashGroup(group);
+    });
+
+    it('fades tube emissiveIntensity linearly toward zero over emit duration', () => {
+      const { group, tube } = makeSplashGroup();
+      const start = 10.0;
+      const dur = SPLASH_TUBE_EMIT_CONFIG.duration;
+      group.userData['emittingTubeIndex'] = 0;
+      group.userData['tubeEmitStart'] = start;
+      group.userData['tubeEmitDuration'] = dur;
+
+      // At halfway through emit duration
+      service.tickTubeEmits(new Map([['0-0', group]]), start + dur * 0.5);
+
+      const mat = tube.material as THREE.MeshStandardMaterial;
+      // alpha = 1 - 0.5 = 0.5; intensity = 0.5 * multiplier
+      const expected = 0.5 * SPLASH_TUBE_EMIT_CONFIG.emissiveMultiplier;
+      expect(mat.emissiveIntensity).toBeCloseTo(expected, 4);
+      disposeSplashGroup(group);
+    });
+
+    it('resets tube emissiveIntensity to 0 and clears state when emit expires', () => {
+      const { group, tube } = makeSplashGroup();
+      const start = 20.0;
+      const dur = SPLASH_TUBE_EMIT_CONFIG.duration;
+      group.userData['emittingTubeIndex'] = 0;
+      group.userData['tubeEmitStart'] = start;
+      group.userData['tubeEmitDuration'] = dur;
+
+      // Advance past the end of the emit
+      service.tickTubeEmits(new Map([['0-0', group]]), start + dur + 0.01);
+
+      const mat = tube.material as THREE.MeshStandardMaterial;
+      expect(mat.emissiveIntensity).toBeCloseTo(0, 5);
+      expect(group.userData['emittingTubeIndex']).toBeUndefined();
+      expect(group.userData['tubeEmitStart']).toBeUndefined();
+      expect(group.userData['tubeEmitDuration']).toBeUndefined();
+      disposeSplashGroup(group);
+    });
+
+    it('handles an empty towerMeshes map gracefully', () => {
+      expect(() => service.tickTubeEmits(new Map(), 1.0)).not.toThrow();
+    });
+
+    it('skips groups that have no drum child', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.SPLASH;
+      group.userData['emittingTubeIndex'] = 0;
+      group.userData['tubeEmitStart'] = 1.0;
+      group.userData['tubeEmitDuration'] = 0.25;
+      // No 'drum' child added
+
+      expect(() => service.tickTubeEmits(new Map([['0-0', group]]), 1.0)).not.toThrow();
     });
   });
 

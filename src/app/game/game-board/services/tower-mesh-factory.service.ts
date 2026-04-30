@@ -26,6 +26,14 @@ import {
   SNIPER_ACCENT_Y,
   SNIPER_SCOPE_GLOW_CONFIG,
   SNIPER_RECOIL_CONFIG,
+  SPLASH_GEOM,
+  SPLASH_Y,
+  SPLASH_TUBE_Z,
+  SPLASH_TUBE_GRID,
+  SPLASH_TUBE_T2_EXTRA,
+  SPLASH_TUBE_T3_EXTRA,
+  SPLASH_DRUM_CONFIG,
+  SPLASH_TUBE_EMIT_CONFIG,
 } from '../constants/tower-anim.constants';
 
 @Injectable()
@@ -479,48 +487,237 @@ export class TowerMeshFactoryService {
       }
 
       case TowerType.SPLASH: {
-        // Mushroom-like spore launcher - organic and bulbous
-        const stemBase = this.cyl(0.28, 0.35, 0.3, 8);
-        const stemMid = this.cyl(0.24, 0.28, 0.35, 8);
-        const capBase = this.cyl(0.4, 0.3, 0.2, 12);
-        // capTop has extra params (phiStart, phiLength, thetaStart, thetaLength).
-        // UX-10: route through GeometryRegistry's escape hatch so it shares
-        // across all SPLASH placements/ghosts instead of allocating per call.
-        const capTop = this.geometryRegistry
+        // Stubby armored base + rotating drum + 4-tube rocket cluster (AOE threat)
+
+        // ── Armored chassis base ─────────────────────────────────────────────
+        const chassisGeom = this.geometryRegistry
           ? this.geometryRegistry.getOrCreateCustom(
-              'splash:capTop',
-              () => new THREE.SphereGeometry(0.38, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+              'splash:chassis',
+              () => new THREE.BoxGeometry(SPLASH_GEOM.baseW, SPLASH_GEOM.baseH, SPLASH_GEOM.baseD),
             )
-          : new THREE.SphereGeometry(0.38, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
-        const spore1 = this.sphere(0.08, 6, 6);
-        const spore2 = this.sphere(0.06, 6, 6);
-        const spore3 = this.sphere(0.07, 6, 6);
+          : new THREE.BoxGeometry(SPLASH_GEOM.baseW, SPLASH_GEOM.baseH, SPLASH_GEOM.baseD);
+        const chassis = new THREE.Mesh(chassisGeom, mat);
+        chassis.position.y = SPLASH_GEOM.baseH / 2;
+        towerGroup.add(chassis);
 
-        const spStemBase = new THREE.Mesh(stemBase, mat);
-        spStemBase.position.y = 0.15;
+        // Side fins (×4 — one per face, chamfered-look via thin boxes)
+        const finGeom = this.geometryRegistry
+          ? this.geometryRegistry.getOrCreateCustom(
+              'splash:fin',
+              () => new THREE.BoxGeometry(SPLASH_GEOM.finW, SPLASH_GEOM.finH, SPLASH_GEOM.finD),
+            )
+          : new THREE.BoxGeometry(SPLASH_GEOM.finW, SPLASH_GEOM.finH, SPLASH_GEOM.finD);
 
-        const spStemMid = new THREE.Mesh(stemMid, mat);
-        spStemMid.position.y = 0.475;
+        // Fin arrangement: +X, -X, +Z, -Z faces
+        const finOffsets: [number, number, number, number][] = [
+          [ SPLASH_GEOM.finOffset, 0, 0,  0],
+          [-SPLASH_GEOM.finOffset, 0, 0,  0],
+          [0, 0,  SPLASH_GEOM.finOffset, Math.PI / 2],
+          [0, 0, -SPLASH_GEOM.finOffset, Math.PI / 2],
+        ];
+        for (const [fx, , fz, ry] of finOffsets) {
+          const fin = new THREE.Mesh(finGeom, mat);
+          fin.position.set(fx, SPLASH_GEOM.baseH / 2, fz);
+          fin.rotation.y = ry;
+          towerGroup.add(fin);
+        }
 
-        const spCapBase = new THREE.Mesh(capBase, mat);
-        spCapBase.position.y = 0.75;
+        // ── Rotating drum housing ────────────────────────────────────────────
+        // Drum is a horizontal cylinder lying along +Z (faces forward).
+        // It lives in a sub-group so rotation.z drives the barrel-roll spin
+        // without disturbing the drum's world position.
+        const drumGroup = new THREE.Group();
+        drumGroup.name = 'drum';
+        drumGroup.position.set(0, SPLASH_Y.drumCentre, 0);
+        towerGroup.add(drumGroup);
 
-        const spCapTop = new THREE.Mesh(capTop, mat);
-        spCapTop.position.y = 0.85;
+        const drumGeom = this.cyl(
+          SPLASH_GEOM.drumRadius, SPLASH_GEOM.drumRadius,
+          SPLASH_GEOM.drumLength, SPLASH_GEOM.drumSegments,
+        );
+        // Rotate the drum body 90° around X so the cylinder faces +Z (forward)
+        const drumBody = new THREE.Mesh(drumGeom, mat);
+        drumBody.rotation.x = Math.PI / 2;
+        drumGroup.add(drumBody);
 
-        const spSpore1 = new THREE.Mesh(spore1, mat);
-        spSpore1.name = 'spore';
-        spSpore1.position.set(0.15, 0.95, 0.1);
+        // Radial port-detail boxes on the drum (×4, evenly spaced)
+        const portGeom = this.geometryRegistry
+          ? this.geometryRegistry.getOrCreateCustom(
+              'splash:drumPort',
+              () => new THREE.BoxGeometry(SPLASH_GEOM.portW, SPLASH_GEOM.portH, SPLASH_GEOM.portD),
+            )
+          : new THREE.BoxGeometry(SPLASH_GEOM.portW, SPLASH_GEOM.portH, SPLASH_GEOM.portD);
 
-        const spSpore2 = new THREE.Mesh(spore2, mat);
-        spSpore2.name = 'spore';
-        spSpore2.position.set(-0.12, 0.9, -0.08);
+        for (let i = 0; i < 4; i++) {
+          const angle = (i / 4) * Math.PI * 2;
+          const port = new THREE.Mesh(portGeom, mat);
+          port.position.set(
+            Math.cos(angle) * SPLASH_GEOM.portRadial,
+            Math.sin(angle) * SPLASH_GEOM.portRadial,
+            0,
+          );
+          port.rotation.z = angle;
+          drumGroup.add(port);
+        }
 
-        const spSpore3 = new THREE.Mesh(spore3, mat);
-        spSpore3.name = 'spore';
-        spSpore3.position.set(0.08, 1.0, -0.15);
+        // ── 4-tube rocket cluster (T1 base; children of drumGroup so they spin with it) ──
+        const tubeGeom = this.cyl(
+          SPLASH_GEOM.tubeRadius, SPLASH_GEOM.tubeRadius,
+          SPLASH_GEOM.tubeLength, SPLASH_GEOM.tubeSegments,
+        );
 
-        towerGroup.add(spStemBase, spStemMid, spCapBase, spCapTop, spSpore1, spSpore2, spSpore3);
+        SPLASH_TUBE_GRID.forEach(([tx, ty], idx) => {
+          const tube = new THREE.Mesh(tubeGeom, mat);
+          tube.name = `tube${idx + 1}`;
+          tube.userData['tubeIndex'] = idx;
+          // Tubes face +Z (forward), so rotate cylinder to point along Z
+          tube.rotation.x = Math.PI / 2;
+          tube.position.set(tx, ty, SPLASH_TUBE_Z);
+          drumGroup.add(tube);
+        });
+
+        // ── T2: 2 extra tubes (top and bottom) ──────────────────────────────
+        SPLASH_TUBE_T2_EXTRA.forEach(([tx, ty], i) => {
+          const tube = new THREE.Mesh(tubeGeom, mat);
+          tube.name = `tube${5 + i}`;
+          tube.userData['tubeIndex'] = 4 + i;
+          tube.userData['minTier'] = 2;
+          tube.rotation.x = Math.PI / 2;
+          tube.position.set(tx, ty, SPLASH_TUBE_Z);
+          tube.visible = false;
+          drumGroup.add(tube);
+        });
+
+        // ── T3: 2 more tubes (left and right) + heat-vent disk at drum rear ──
+        SPLASH_TUBE_T3_EXTRA.forEach(([tx, ty], i) => {
+          const tube = new THREE.Mesh(tubeGeom, mat);
+          tube.name = `tube${7 + i}`;
+          tube.userData['tubeIndex'] = 6 + i;
+          tube.userData['minTier'] = 3;
+          tube.rotation.x = Math.PI / 2;
+          tube.position.set(tx, ty, SPLASH_TUBE_Z);
+          tube.visible = false;
+          drumGroup.add(tube);
+        });
+
+        // Heat-vent emissive disk at the rear of the drum (T3 only)
+        const heatVentGeom = this.cyl(
+          SPLASH_GEOM.heatVentRadius, SPLASH_GEOM.heatVentRadius,
+          SPLASH_GEOM.heatVentDepth, SPLASH_GEOM.heatVentSegments,
+        );
+        const splashCfg = TOWER_MATERIAL_CONFIGS[TowerType.SPLASH];
+        const heatVentMat = this.materialRegistry
+          ? this.materialRegistry.getOrCreate(
+              'splash:heatVent',
+              () => new THREE.MeshStandardMaterial({
+                color:             splashCfg.color,
+                emissive:          new THREE.Color(splashCfg.emissive),
+                emissiveIntensity: 0.9,
+                metalness:         splashCfg.metalness,
+                roughness:         splashCfg.roughness,
+              }),
+            )
+          : new THREE.MeshStandardMaterial({
+              color:             splashCfg.color,
+              emissive:          new THREE.Color(splashCfg.emissive),
+              emissiveIntensity: 0.9,
+              metalness:         splashCfg.metalness,
+              roughness:         splashCfg.roughness,
+            });
+        const heatVent = new THREE.Mesh(heatVentGeom, heatVentMat);
+        heatVent.name = 'heatVent';
+        // Rear face of the drum along -Z; disk lies horizontal so rotate to face +Z
+        heatVent.rotation.x = Math.PI / 2;
+        heatVent.position.set(0, 0, -(SPLASH_GEOM.drumLength / 2 + SPLASH_GEOM.heatVentDepth / 2));
+        heatVent.userData['minTier'] = 3;
+        heatVent.visible = false;
+        drumGroup.add(heatVent);
+
+        // ── Ammo-belt side detail (left chassis face) ────────────────────────
+        const beltGeom = this.geometryRegistry
+          ? this.geometryRegistry.getOrCreateCustom(
+              'splash:beltBox',
+              () => new THREE.BoxGeometry(SPLASH_GEOM.beltW, SPLASH_GEOM.beltH, SPLASH_GEOM.beltD),
+            )
+          : new THREE.BoxGeometry(SPLASH_GEOM.beltW, SPLASH_GEOM.beltH, SPLASH_GEOM.beltD);
+        const beltDetail = new THREE.Mesh(beltGeom, mat);
+        beltDetail.position.set(
+          SPLASH_GEOM.beltXOffset,
+          SPLASH_GEOM.baseH / 2 + SPLASH_GEOM.beltYOffset,
+          SPLASH_GEOM.beltZOffset,
+        );
+        towerGroup.add(beltDetail);
+
+        // Ammo rounds decorating the belt (×3 spheres, evenly spaced along Z)
+        const roundGeom = this.sphere(
+          SPLASH_GEOM.roundRadius, SPLASH_GEOM.roundSegments, SPLASH_GEOM.roundSegments,
+        );
+        for (let i = 0; i < 3; i++) {
+          const round = new THREE.Mesh(roundGeom, mat);
+          round.position.set(
+            SPLASH_GEOM.beltXOffset - SPLASH_GEOM.beltW / 2,
+            SPLASH_GEOM.baseH / 2,
+            (i - 1) * SPLASH_GEOM.roundSpacing,
+          );
+          towerGroup.add(round);
+        }
+
+        // ── Idle animation: drum rotates slowly around its forward axis (Z) ──
+        // Uses delta-time accumulation (drumAngle stored in userData) so the
+        // boost speed change from fireTick is seamless with no visual jump.
+        // Tube-emit pulse state is advanced separately by tickTubeEmits() in
+        // TowerAnimationService, called once per frame from the render loop.
+        towerGroup.userData['idleTick'] = (group: THREE.Group, t: number): void => {
+          const drum = group.getObjectByName('drum');
+          if (!drum) return;
+
+          const now = performance.now() / 1000;
+          const prevT = group.userData['drumPrevT'] as number | undefined;
+          const deltaT = prevT !== undefined ? Math.min(t - prevT, 0.1) : 0;
+          group.userData['drumPrevT'] = t;
+
+          const boostUntil = group.userData['drumSpinBoostUntil'] as number | undefined;
+          const speed = (boostUntil !== undefined && now < boostUntil)
+            ? SPLASH_DRUM_CONFIG.fireSpeedRadPerSec
+            : SPLASH_DRUM_CONFIG.idleSpeedRadPerSec;
+
+          const angle = (group.userData['drumAngle'] as number | undefined) ?? 0;
+          const newAngle = angle + deltaT * speed;
+          group.userData['drumAngle'] = newAngle;
+          drum.rotation.z = newAngle;
+        };
+
+        // ── Firing animation: drum spins faster + selected tube pulses ────────
+        towerGroup.userData['fireTick'] = (group: THREE.Group, duration: number): void => {
+          const now = performance.now() / 1000;
+          group.userData['drumSpinBoostUntil'] = now + duration;
+
+          // Round-robin tube selection
+          const nextIdx = ((group.userData['nextTubeIndex'] as number | undefined) ?? 0) % 8;
+          group.userData['nextTubeIndex'] = nextIdx + 1;
+
+          // Only pulse a tube if it exists and is visible (respects tier)
+          const drum = group.getObjectByName('drum');
+          if (drum) {
+            const tubeName = `tube${nextIdx + 1}`;
+            const tubeMesh = drum.getObjectByName(tubeName) as THREE.Mesh | undefined;
+            if (tubeMesh && tubeMesh.visible) {
+              group.userData['emittingTubeIndex'] = nextIdx;
+              group.userData['tubeEmitStart'] = now;
+              group.userData['tubeEmitDuration'] = SPLASH_TUBE_EMIT_CONFIG.duration;
+            }
+          }
+        };
+
+        // ── Accent point light ───────────────────────────────────────────────
+        const isSplashLowEnd = typeof document !== 'undefined'
+          && document.body.classList.contains('reduce-motion');
+        this.attachAccentLight(towerGroup, TowerType.SPLASH, isSplashLowEnd);
+        const splashLight = towerGroup.userData['accentLight'] as THREE.PointLight | undefined;
+        if (splashLight) {
+          splashLight.position.set(0, SPLASH_Y.accentLight, 0);
+        }
+
         break;
       }
 
