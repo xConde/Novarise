@@ -329,13 +329,15 @@ export class GameBoardService {
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
     // Subtle bioluminescent veins.
-    // UX-13: color tinted slightly cooler (was 0x7a6a9a warm purple-grey)
-    // to match the new cool dark atmosphere; opacity reduced 0.45 → 0.30
-    // so the grid reads as ambient veining rather than UI overlay.
+    // UX-13 + red-team: grid line color tinted cooler to match the dark
+    // atmosphere AND brightness raised so the grid stays perceptible after
+    // the sRGB pipeline + tone mapping. Initial UX-13 dropped opacity to
+    // 0.30 which made the grid sub-perceptual against the dark base tile;
+    // bumped to 0.42 with a brighter color (0x8a9ab8 vs prev 0x6a7898).
     const gridMaterial = new THREE.LineBasicMaterial({
-      color: 0x6a7898,
+      color: 0x8a9ab8,
       transparent: true,
-      opacity: 0.30,
+      opacity: 0.42,
       linewidth: 1,
     });
     const lineSegments = new THREE.LineSegments(geometry, gridMaterial);
