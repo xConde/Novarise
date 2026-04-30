@@ -957,7 +957,15 @@ export class TowerCombatService {
     return tower.targetingMode;
   }
 
-  private findTarget(tower: PlacedTower, stats: TowerStats): Enemy | null {
+  /**
+   * Returns the highest-priority target for the given tower and stat snapshot,
+   * respecting the tower's current targeting mode and LOS rules.
+   *
+   * Side-effect-free: calling this method does NOT mutate enemy state, register
+   * hits, or advance any timers. It is safe to call every animation frame for
+   * aim preview purposes (see TargetPreviewService).
+   */
+  findTarget(tower: PlacedTower, stats: TowerStats): Enemy | null {
     const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
 
     let best: Enemy | null = null;

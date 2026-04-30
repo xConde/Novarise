@@ -393,6 +393,78 @@ describe('TowerCombatService', () => {
       expect(upgraded).toBeTrue();
       expect(service.getTower(key)!.targetingMode).toBe(TargetingMode.STRONGEST);
     });
+
+    describe('findTarget — side-effect-free contract', () => {
+      // findTarget is now public so the aim subsystem can call it every frame.
+      // These specs assert it is purely read-only: repeated calls must not
+      // mutate enemy state or change which enemy is returned.
+      //
+      // Setup pattern: call fireTurn once to populate the spatial grid, using
+      // enemies with high health so the initial fire doesn't kill them. Then
+      // call findTarget directly and assert idempotence.
+
+      it('calling findTarget three times with the same inputs returns the same enemy each time', () => {
+        service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+        const key = `${TOWER_ROW}-${TOWER_COL}`;
+        service.setTargetingMode(key, TargetingMode.NEAREST);
+
+        // Very high health so the initial fireTurn call does not kill the enemy
+        const enemy = createEnemy('e1', TOWER_WORLD_X + 1, TOWER_WORLD_Z, 100_000);
+        enemyMap.set('e1', enemy);
+
+        // fireTurn populates the spatial grid so findTarget can query it
+        service.fireTurn(mockScene, TURN_1);
+
+        const tower = service.getTower(key)!;
+        const stats = TOWER_CONFIGS[TowerType.BASIC];
+
+        const r1 = service.findTarget(tower, stats);
+        const r2 = service.findTarget(tower, stats);
+        const r3 = service.findTarget(tower, stats);
+
+        expect(r1).toBe(r2);
+        expect(r2).toBe(r3);
+        expect(r1?.id).toBe('e1');
+      });
+
+      it('calling findTarget does not mutate enemy health', () => {
+        service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+        const key = `${TOWER_ROW}-${TOWER_COL}`;
+
+        const enemy = createEnemy('e2', TOWER_WORLD_X + 0.5, TOWER_WORLD_Z, 100_000);
+        enemyMap.set('e2', enemy);
+
+        service.fireTurn(mockScene, TURN_1);
+
+        const healthAfterFire = enemy.health;
+
+        const tower = service.getTower(key)!;
+        const stats = TOWER_CONFIGS[TowerType.BASIC];
+
+        service.findTarget(tower, stats);
+        service.findTarget(tower, stats);
+        service.findTarget(tower, stats);
+
+        // Health must not have changed at all from the findTarget calls
+        expect(enemy.health).toBe(healthAfterFire);
+      });
+
+      it('calling findTarget with an out-of-range enemy returns null', () => {
+        service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+        const key = `${TOWER_ROW}-${TOWER_COL}`;
+
+        // BASIC range=3 world units; place enemy far outside range
+        const far = createEnemy('eFar', TOWER_WORLD_X + 50, TOWER_WORLD_Z, 100_000);
+        enemyMap.set('eFar', far);
+
+        service.fireTurn(mockScene, TURN_1);
+
+        const tower = service.getTower(key)!;
+        const stats = TOWER_CONFIGS[TowerType.BASIC];
+
+        expect(service.findTarget(tower, stats)).toBeNull();
+      });
+    });
   });
 
   // --- Fire Rate (turn-based: each fireTurn fires once per tower) ---
