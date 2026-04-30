@@ -141,8 +141,9 @@ export class GameRenderService {
       }
     }
 
-    // Animate tower idle effects and tile pulses
+    // Animate tower idle effects, recoil, and tile pulses
     this.towerAnimationService.updateTowerAnimations(this.meshRegistry.towerMeshes, time);
+    this.towerAnimationService.tickRecoilAnimations(this.meshRegistry.towerMeshes, performance.now() / 1000);
     this.towerAnimationService.updateTilePulse(this.meshRegistry.tileMeshes, time);
     this.towerAnimationService.updateMuzzleFlashes(this.towerCombatService.getPlacedTowers(), deltaTime);
 

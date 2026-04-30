@@ -1982,3 +1982,37 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 **Risk:** The JSDoc says "bespoke animations [registered via `idleTick`] take priority over the generic ones below." The code does NOT implement that priority. `idleTick` runs first, but the named-mesh traverse runs unconditionally afterward with no guard. If a Phase B BASIC tower's `idleTick` sets `crystal.position.y = 1.35` (rest pose) and then the `'crystal'` branch immediately overwrites it with `TOWER_ANIM_CONFIG.crystalBaseY + sin(...)`, the `idleTick` result is silently discarded every frame. The effective winner is always the traverse — the opposite of what the comment promises. Phase B developers will register an `idleTick` that appears to work in isolation (unit test with a spy) but does nothing in production because the traverse stomps it.
 
 **Fix (not yet applied — Phase B entry criterion before any BASIC redesign sprint):** Either (a) skip the named-mesh case for a given child if `idleTick` is registered on the group (opt-out flag on `userData['skipLegacyAnims']`), or (b) add a guard inside the `'crystal'` case: `if (typeof group.userData['idleTick'] === 'function') break;`. Option (b) is surgical and lower-risk. The test to add: registers both an `idleTick` spy and adds a named `crystal` child; asserts that after `updateTowerAnimations`, the crystal's `position.y` reflects only the `idleTick` output, not the legacy traverse formula.
+
+---
+
+## Red Team Critique — Phase B (BASIC silhouette) — 2026-04-30
+
+### Finding 4: `tickRecoilAnimations` is never called — barrel recoil is dead code (CRITICAL)
+
+**Location:** `tower-animation.service.ts:212` / `game-render.service.ts:144–147`
+
+**Risk:** `TowerAnimationService.tickRecoilAnimations()` is the sole driver of barrel-recoil animation for the BASIC tower. `fireTick` writes `userData['recoilStart']` / `userData['recoilDuration']` but nothing reads them — `game-render.service.ts` calls `updateTowerAnimations`, `updateTilePulse`, and `updateMuzzleFlashes` on every frame, but `tickRecoilAnimations` is absent from that list. The barrel position never changes. The feature is completely silent: no visual, no error. The new spec in `tower-animation.service.spec.ts` verifies the method's internal math in isolation but does NOT assert that it is wired into the render loop, so the tests pass while the feature is dead in production. The test spy in `tower.spies.ts` does not include `tickRecoilAnimations`, so it would not be caught by component-level tests either.
+
+**Fix:** Call `this.towerAnimationService.tickRecoilAnimations(this.meshRegistry.towerMeshes, performance.now() / 1000)` in `GameRenderService.renderFrame()` after `updateTowerAnimations`. Add `tickRecoilAnimations` to `createTowerAnimationServiceSpy()` in `tower.spies.ts`. Add a spec in `game-render.service.spec.ts` asserting that `tickRecoilAnimations` is called on every render frame.
+
+**Status:** Fixed in commit [pending — see refactor(towers) phase B red-team hardening]
+
+---
+
+### Finding 5: Tier-gated parts invisible after checkpoint save/resume — `revealTierParts` never called by the restore coordinator (HIGH)
+
+**Location:** `checkpoint-restore-coordinator.service.ts:212–228` / `tower-upgrade-visual.service.ts:191`
+
+**Risk:** The restore coordinator (Step 4) calls `towerMeshFactory.createTowerMesh()` for each saved tower, then calls `towerCombatService.restoreTowers()` to rehydrate combat state including `level`. However, the mesh is built at T1 defaults — `barrelCap` and `pauldron` children have `visible = false` as set at creation. Neither the coordinator nor `restoreTowers` calls `towerUpgradeVisualService.revealTierParts()` afterward. A BASIC tower that was at level 2 or 3 when saved will render all T2/T3 parts as invisible after resume, while combat state correctly reflects the higher level. The mismatch lasts until the player upgrades the tower again. No spec covers restore followed by tier-part visibility.
+
+**Fix:** After `towerCombatService.restoreTowers()` populates `placedTowers`, iterate the resulting map and call `towerUpgradeVisualService.revealTierParts(mesh, tower.level)` for each tower whose level is > 1. Alternatively, call `applyUpgradeVisuals(mesh, tower.level)` for consistent treatment with the non-restore path (scale + emissive boost also need restoring). Add a spec in `checkpoint-restore-coordinator.service.spec.ts`: restore a checkpoint with a level-2 tower and assert the `barrelCap` child is visible afterward.
+
+---
+
+### Finding 6: `reduce-motion` CSS class used to gate point lights — wrong signal, wrong scope (MEDIUM)
+
+**Location:** `tower-mesh-factory.service.ts:244–246`
+
+**Risk:** The accent `PointLight` is gated behind `document.body.classList.contains('reduce-motion')`. `reduce-motion` is a motion-accessibility preference (suppresses animation), not a performance-reduction flag. The plan doc explicitly says to check `runtime-mode.service.ts` for low-end detection. Checking `document.body` in a constructor-time factory method also couples the factory to DOM state at mesh-creation time — a tower placed after `reduce-motion` is toggled mid-session will behave differently than one placed before the toggle. `runtime-mode.service.ts` (or a `lowEndMode` injectable bool) is the correct signal: it's determined once at startup based on device capability, not per-frame DOM sniffing.
+
+**Fix (deferred — low production risk):** Inject `RuntimeModeService` (or a boolean token `IS_LOW_END`) into `TowerMeshFactoryService` and replace the `document.body` check with `this.runtimeMode.isLowEnd`. The deferred label is appropriate since (a) `reduce-motion` users likely appreciate the light skip, (b) the feature is cosmetic, and (c) `runtime-mode.service.ts` may not currently expose a `boolean` — wiring it requires an additional sprint. Track as Phase H (cohesion sprint 52) follow-up.

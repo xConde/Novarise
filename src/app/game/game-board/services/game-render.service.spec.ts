@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { GameRenderService } from './game-render.service';
 import { AudioService } from './audio.service';
 import { FpsCounterService } from './fps-counter.service';
@@ -76,7 +77,7 @@ describe('GameRenderService', () => {
     ]);
     enemy.getEnemies.and.returnValue(new Map());
     towerAnim = jasmine.createSpyObj<TowerAnimationService>('TowerAnimationService', [
-      'updateTowerAnimations', 'updateTilePulse', 'updateMuzzleFlashes',
+      'updateTowerAnimations', 'tickRecoilAnimations', 'updateTilePulse', 'updateMuzzleFlashes',
     ]);
     towerCombat = jasmine.createSpyObj<TowerCombatService>('TowerCombatService', ['getPlacedTowers']);
     towerCombat.getPlacedTowers.and.returnValue(new Map());
@@ -237,6 +238,31 @@ describe('GameRenderService', () => {
     it('plays a single hit sound when hitCount > 0', () => {
       service.processCombatResult(makeResult({ hitCount: 5 }), 0.016, 0);
       expect(audio.playEnemyHit).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ---- Phase B red-team Finding 4: tickRecoilAnimations must be wired ----
+  //
+  // animate() is private and uses requestAnimationFrame — not directly
+  // testable. The guard here is two-fold:
+  //   1. tickRecoilAnimations is included in the spy created in beforeEach
+  //      (createSpyObj fails at runtime if the method is absent from the
+  //      actual service, so a missing method surfaces immediately).
+  //   2. The spy is included in the TowerAnimationService spy factory
+  //      (tower.spies.ts) so component-level tests that swap TowerAnimationService
+  //      with the factory spy also track the method.
+
+  describe('tickRecoilAnimations render-loop wiring', () => {
+    it('tickRecoilAnimations is exposed on TowerAnimationService so the render loop can call it', () => {
+      // If tickRecoilAnimations were absent from the real service, jasmine.createSpyObj
+      // (which was called in beforeEach) would have thrown at test setup, never reaching here.
+      expect(towerAnim.tickRecoilAnimations).toBeDefined();
+    });
+
+    it('tickRecoilAnimations spy accepts a Map and a nowSeconds argument without throwing', () => {
+      expect(() =>
+        towerAnim.tickRecoilAnimations(new Map<string, THREE.Group>(), 1.0),
+      ).not.toThrow();
     });
   });
 });

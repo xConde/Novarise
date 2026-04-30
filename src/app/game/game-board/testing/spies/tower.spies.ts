@@ -142,6 +142,7 @@ export function createTowerAnimationServiceSpy(): jasmine.SpyObj<TowerAnimationS
     'startMuzzleFlash',
     'updateMuzzleFlashes',
     'updateTowerAnimations',
+    'tickRecoilAnimations',
     'updateTilePulse',
   ]);
 }
