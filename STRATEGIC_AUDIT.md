@@ -2330,7 +2330,7 @@ After 30 turns of two same-type towers: `0.4 × 1.5^30 ≈ 76 700×` baseline. R
 
 **Fix:** Added `child.name.startsWith('tube')` guard to both `snapshotEmissiveBaselines` and `startMuzzleFlash`'s save traverse, mirroring the `'tip'` / `'sphere'` exclusions. Tubes are per-instance cloned materials so the original ratchet bug cannot apply to them — they were unnecessary cargo in the snapshot.
 
-**New spec:** `tower-animation.service.spec.ts` — "SPLASH tube-emit animation survives concurrent muzzle-flash expiry" — asserts that after a flash expires, `tube1.emissiveIntensity` retains its mid-emit value rather than being zeroed.
+**New spec:** `tower-animation.service.spec.ts` — "SPLASH tube-emit animation survives concurrent muzzle-flash expiry" — asserts that after a flash expires, `tube1.emissiveIntensity` retains its mid-emit value rather than being zeroed. Fixed in commit `ef9c96c`.
 
 **Deferred findings (not fixed this pass):**
 
