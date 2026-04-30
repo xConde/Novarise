@@ -59,14 +59,6 @@ export class TowerAnimationService {
             }
             break;
 
-          case 'orb': {
-            const pulseScale = TOWER_ANIM_CONFIG.orbPulseMin
-              + (Math.sin(t * TOWER_ANIM_CONFIG.orbPulseSpeed) * 0.5 + 0.5)
-              * (TOWER_ANIM_CONFIG.orbPulseMax - TOWER_ANIM_CONFIG.orbPulseMin);
-            child.scale.setScalar(pulseScale);
-            break;
-          }
-
           case 'spark': {
             if (child.userData['baseY'] === undefined) child.userData['baseY'] = child.position.y;
             child.position.y = child.userData['baseY']
@@ -332,7 +324,7 @@ export class TowerAnimationService {
    *
    * Called once per animation frame alongside `tickRecoilAnimations` and
    * `tickTubeEmits`. Each SLOW tower stores `userData['emitterPulseStart']`
-   * and `userData['emitterPulseDuration']` when `fireTick` is called. This
+   * and `userData['emitterPulseStart']` when `fireTick` is called. This
    * method scales the 'emitter' dish from 1.0 → SLOW_EMITTER_PULSE_FIRE.scaleMax
    * (quick ease-out) → back to 1.0 over the pulse duration, then clears state.
    */

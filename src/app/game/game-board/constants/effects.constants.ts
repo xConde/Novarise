@@ -102,11 +102,6 @@ export const TOWER_ANIM_CONFIG = {
   slowCrystalBaseY: 0.82,
   slowCrystalBobAmplitude: 0.03,
 
-  /** Chain orb pulse: scale oscillation */
-  orbPulseSpeed: 3.0,
-  orbPulseMin: 0.9,
-  orbPulseMax: 1.15,
-
   /** Chain spark vertical bob speed (radians/sec) */
   sparkBobSpeed: 2.5,
   sparkPhaseScale: 10,

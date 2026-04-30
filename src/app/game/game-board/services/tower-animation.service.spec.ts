@@ -134,39 +134,6 @@ describe('TowerAnimationService', () => {
       });
     });
 
-    describe('orb pulse — SPLASH tower', () => {
-      it('scales orb within [orbPulseMin, orbPulseMax]', () => {
-        const { group, child } = makeTowerGroup(TowerType.SPLASH, 'orb');
-        const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
-        const time = 500;
-
-        service.updateTowerAnimations(towerMeshes, time);
-
-        expect(child.scale.x).toBeGreaterThanOrEqual(TOWER_ANIM_CONFIG.orbPulseMin);
-        expect(child.scale.x).toBeLessThanOrEqual(TOWER_ANIM_CONFIG.orbPulseMax);
-        expect(child.scale.x).toBeCloseTo(child.scale.y, 5);
-        expect(child.scale.x).toBeCloseTo(child.scale.z, 5);
-
-        disposeTowerGroup(group);
-      });
-
-      it('matches the expected pulse formula', () => {
-        const { group, child } = makeTowerGroup(TowerType.SPLASH, 'orb');
-        const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
-        const time = 1234;
-
-        service.updateTowerAnimations(towerMeshes, time);
-
-        const t = time * ANIMATION_CONFIG.msToSeconds;
-        const expectedScale = TOWER_ANIM_CONFIG.orbPulseMin
-          + (Math.sin(t * TOWER_ANIM_CONFIG.orbPulseSpeed) * 0.5 + 0.5)
-          * (TOWER_ANIM_CONFIG.orbPulseMax - TOWER_ANIM_CONFIG.orbPulseMin);
-        expect(child.scale.x).toBeCloseTo(expectedScale, 5);
-
-        disposeTowerGroup(group);
-      });
-    });
-
     describe('spark bob — CHAIN tower', () => {
       it('captures baseY on first call if not set', () => {
         const { group, child } = makeTowerGroup(TowerType.CHAIN, 'spark');
