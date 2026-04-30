@@ -1361,6 +1361,38 @@ describe('TowerMeshFactoryService', () => {
       // towerGroup itself must NOT have been rotated by idleTick
       expect(sniperGroup2.rotation.y).toBeCloseTo(0, 5);
     });
+
+    it('chargeTick does NOT write aimGroup.rotation.y (B-1 regression: aim-fight guard)', () => {
+      // tickAim runs as a pre-pass, writes aimGroup.rotation.y, then
+      // updateTowerAnimations runs chargeTick unconditionally (even when
+      // hasTarget=true and idleTick is suppressed). If chargeTick also wrote
+      // aimGroup.rotation.y it would overwrite tickAim's lerpYaw result every
+      // frame, neutralising aim for SNIPER entirely.
+      const chargeTick = sniperGroup2.userData['chargeTick'] as (g: THREE.Group, t: number) => void;
+      const ag = sniperGroup2.getObjectByName('aimGroup') as THREE.Group;
+
+      // Pre-set aimGroup to a non-zero yaw as if tickAim just wrote it.
+      const aimYaw = Math.PI / 4;
+      ag.rotation.y = aimYaw;
+
+      // Run chargeTick — must NOT change aimGroup.rotation.y.
+      chargeTick(sniperGroup2, Math.PI / 2);
+
+      expect(ag.rotation.y).toBeCloseTo(aimYaw, 5);
+    });
+
+    it('chargeTick still pulses scope lens emissiveIntensity (emissive pulse survives split)', () => {
+      const chargeTick = sniperGroup2.userData['chargeTick'] as (g: THREE.Group, t: number) => void;
+      const scope = sniperGroup2.getObjectByName('scope') as THREE.Mesh;
+
+      chargeTick(sniperGroup2, 0);
+      const atZero = (scope.material as THREE.MeshStandardMaterial).emissiveIntensity;
+      chargeTick(sniperGroup2, Math.PI / (2 * SNIPER_SCOPE_GLOW_CONFIG.speed));
+      const atPeak = (scope.material as THREE.MeshStandardMaterial).emissiveIntensity;
+
+      // Lens emissive must still modulate when chargeTick runs.
+      expect(atPeak).not.toBeCloseTo(atZero, 4);
+    });
   });
 
   describe('Phase B aim wiring — SPLASH', () => {

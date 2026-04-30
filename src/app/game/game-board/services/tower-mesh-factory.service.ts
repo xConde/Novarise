@@ -505,6 +505,19 @@ export class TowerMeshFactoryService {
           // Yaw is applied by tickAim (lerpYaw on the 'aimGroup' subgroup).
         };
 
+        // ── Scope lens emissive pulse (shared helper) ────────────────────────
+        // Extracted so chargeTick and idleTick can share the lens pulse without
+        // chargeTick also writing aimGroup.rotation.y (which would fight tickAim).
+        const pulseScopeLens = (group: THREE.Group, t: number): void => {
+          const lens = group.getObjectByName('scope') as THREE.Mesh | undefined;
+          if (lens && lens.material instanceof THREE.MeshStandardMaterial) {
+            const range = SNIPER_SCOPE_GLOW_CONFIG.max - SNIPER_SCOPE_GLOW_CONFIG.min;
+            lens.material.emissiveIntensity =
+              SNIPER_SCOPE_GLOW_CONFIG.min +
+              range * (0.5 + 0.5 * Math.sin(t * SNIPER_SCOPE_GLOW_CONFIG.speed));
+          }
+        };
+
         // ── Idle animation: scope lens emissive pulse + phantom-target tracking ──
         // The scope lens pulses continuously (active optic read). Layered on top
         // is a slow ±2° drift on aimGroup — the barrel appears to track an off-axis
@@ -513,13 +526,7 @@ export class TowerMeshFactoryService {
         // When a real target is in range, aimTick is registered so idleTick is
         // suspended by updateTowerAnimations; the phantom drift pauses automatically.
         towerGroup.userData['idleTick'] = (group: THREE.Group, t: number): void => {
-          const lens = group.getObjectByName('scope') as THREE.Mesh | undefined;
-          if (lens && lens.material instanceof THREE.MeshStandardMaterial) {
-            const range = SNIPER_SCOPE_GLOW_CONFIG.max - SNIPER_SCOPE_GLOW_CONFIG.min;
-            lens.material.emissiveIntensity =
-              SNIPER_SCOPE_GLOW_CONFIG.min +
-              range * (0.5 + 0.5 * Math.sin(t * SNIPER_SCOPE_GLOW_CONFIG.speed));
-          }
+          pulseScopeLens(group, t);
 
           // Phantom-target tracking: aimGroup slowly yaws ±2° so the barrel
           // drifts toward an off-axis target. aimGroup rotates only the optical
@@ -532,9 +539,14 @@ export class TowerMeshFactoryService {
           }
         };
 
-        // Charge-tick: same as idleTick — always pulses to indicate active optic.
-        // A future phase may wire this to real target-lock state.
-        towerGroup.userData['chargeTick'] = towerGroup.userData['idleTick'];
+        // Charge-tick: pulses the scope lens only. Does NOT write aimGroup.rotation.y
+        // because chargeTick runs unconditionally (even when hasTarget=true and
+        // idleTick is suppressed). If the drift were applied here, tickAim's yaw
+        // would be overwritten each frame by the phantom drift when a target is in
+        // range, neutralising the aim subsystem for SNIPER.
+        towerGroup.userData['chargeTick'] = (group: THREE.Group, t: number): void => {
+          pulseScopeLens(group, t);
+        };
 
         // ── Firing animation: sharp barrel recoil ────────────────────────────
         towerGroup.userData['fireTick'] = (group: THREE.Group, duration: number): void => {

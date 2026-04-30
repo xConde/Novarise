@@ -2375,3 +2375,37 @@ After 30 turns of two same-type towers: `0.4 × 1.5^30 ≈ 76 700×` baseline. R
 **Risk:** The perf spec spies `getPreviewTarget` to return a mock enemy immediately, bypassing `TowerCombatService.findTarget` and the `spatialGrid.queryRadius` call entirely. The 5ms budget covers 30 group iterations + `lerpYaw` math only. A slow spatial grid (e.g., after a Phase C real-service wire-in) would still pass the spec. The gate does not catch the performance bug it was designed to prevent.
 
 **No fix applied.** The perf contingency doc (`docs/towers/aim-perf-contingency.md`) already notes the round-robin fallback plan. Added a JSDoc comment to the perf gate spec clarifying the limitation. A meaningful perf gate needs `TowerCombatService` instantiated with a real spatial grid under load — suitable for Phase E's performance audit (sprint 37), not Phase A's unit scope.
+
+---
+
+## Red Team Critique — Phase B (Per-tower aim wiring) — 2026-04-30
+
+### Finding B-1: SNIPER `chargeTick = idleTick` — phantom drift overwrites `tickAim` yaw every frame (CRITICAL — FIXED)
+
+**Location:** `tower-mesh-factory.service.ts` — SNIPER case, `chargeTick` assignment (was `= towerGroup.userData['idleTick']`)
+
+**Risk:** `updateTowerAnimations` fires `chargeTick` unconditionally BEFORE checking `hasTarget`. The `hasTarget` guard only skips `idleTick`. When `hasTarget=true`, the call order per frame is:
+
+1. `tickAim` pre-pass (in `GameRenderService`) → writes `aimGroup.rotation.y = lerpYaw(...)`.
+2. `updateTowerAnimations → chargeTick` (= the old `idleTick`) → overwrites `aimGroup.rotation.y = sin(t) * amplitude` (the phantom drift).
+3. `idleTick` suppressed by `hasTarget` guard — but too late, the overwrite already happened at step 2.
+
+Result: when SNIPER has a target in range, `tickAim`'s lerpYaw result is immediately clobbered by the phantom drift on every frame. SNIPER appears to never aim. This is the primary aim mechanic broken for the most visually distinctive tower type. The bug was invisible to existing specs because the new Phase B specs only verified `idleTick` rotates `aimGroup` and `aimTick` doesn't throw — neither spec simulated the frame-order conflict.
+
+**Fix:** Split SNIPER `chargeTick` from `idleTick`. Extracted a `pulseScopeLens(group, t)` helper (the lens emissive pulse). `idleTick` calls `pulseScopeLens` + writes `aimGroup.rotation.y` (phantom drift). `chargeTick` calls `pulseScopeLens` only — no yaw write. Comment explains the reason.
+
+**Files changed:** `tower-mesh-factory.service.ts` (SNIPER case), `tower-mesh-factory.service.spec.ts` (+2 specs).
+
+**New specs:**
+- "chargeTick does NOT write aimGroup.rotation.y (B-1 regression: aim-fight guard)" — sets aimGroup.rotation.y to a known value, runs chargeTick, asserts value unchanged.
+- "chargeTick still pulses scope lens emissiveIntensity (emissive pulse survives split)" — asserts the lens emissive still modulates after the split.
+
+**Fixed in commit:** see Phase B hardening commit.
+
+**Deferred findings (not fixed this pass):**
+
+- **Finding B-2 (LOW):** No integration test exercises SNIPER tier-visibility through a real factory-built group. `revealTierParts` specs use synthetic flat groups; the tier-tag-preserved assertions in Phase B only check `getObjectByName` + `userData['minTier']`, not that `visible` is set correctly after calling `applyUpgradeVisuals` on the actual SNIPER mesh. `revealTierParts` uses `traverse` which walks into nested groups, so this is unlikely to fail — but a true integration spec (factory → applyUpgradeVisuals(group, 3) → stabilizer.visible === true) does not exist. Defer to Phase C QA.
+
+- **Finding B-3 (LOW):** `noTargetGraceTime` is still dead state (carried forward from Finding A-2). Towers stay at last yaw indefinitely when target leaves range rather than easing back to idle after 0.5s. Phase C sprint 30 "no-target fallback transition" is the correct fix location.
+
+- **Finding B-4 (LOW, cosmetic):** CHAIN orbiting spheres (orbitSphere2/3) are children of `chainYaw`. When `tickAim` yaws `chainYaw`, the orbital plane rotates with it. The orbit pattern is computed in `chainYaw`-local space, so the satellites orbit in a plane that is itself yawed toward the target. Cosmetically this means the orbit ring tilts to face the target side rather than being a fixed world-horizontal ring. The plan noted this as "orbit isn't truly their own" — cosmetic, acceptable, but should be evaluated in browser smoke test for Phase D visual review.
