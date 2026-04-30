@@ -49,6 +49,14 @@ import {
   CHAIN_CHARGE_CONFIG,
   CHAIN_ELECTRODE_CONFIG,
   CHAIN_ORBIT_CONFIG,
+  MORTAR_GEOM,
+  MORTAR_CHASSIS_TOP_Y,
+  MORTAR_HOUSING_Y,
+  MORTAR_BARREL_PIVOT_Y,
+  MORTAR_BARREL_ELEVATION_RAD,
+  MORTAR_ACCENT_Y,
+  MORTAR_RECOIL_CONFIG,
+  MORTAR_BARREL_NAMES,
 } from '../constants/tower-anim.constants';
 
 @Injectable()
@@ -1217,28 +1225,183 @@ export class TowerMeshFactoryService {
       }
 
       case TowerType.MORTAR: {
-        // Dark cannon — wide squat cylinder base with angled barrel
-        const mortarBase = this.cyl(0.42, 0.48, 0.3, 10);
-        const mortarRing = this.cyl(0.36, 0.4, 0.15, 10);
-        const mortarBarrel = this.cyl(0.1, 0.15, 0.5, 8);
-        const mortarMuzzle = this.cyl(0.12, 0.1, 0.12, 8);
+        // Heavy artillery cannon on armored chassis (slow-fire bruiser)
+        // Distinct silhouette: wide rectangular chassis + angled barrel at 45°
 
-        const moBase = new THREE.Mesh(mortarBase, mat);
-        moBase.position.y = 0.15;
+        // ── Wide armored chassis ────────────────────────────────────────────
+        const chassisGeom = this.geometryRegistry
+          ? this.geometryRegistry.getOrCreateCustom(
+              'mortar:chassis',
+              () => new THREE.BoxGeometry(
+                MORTAR_GEOM.chassisW, MORTAR_GEOM.chassisH, MORTAR_GEOM.chassisD,
+              ),
+            )
+          : new THREE.BoxGeometry(MORTAR_GEOM.chassisW, MORTAR_GEOM.chassisH, MORTAR_GEOM.chassisD);
+        const chassis = new THREE.Mesh(chassisGeom, mat);
+        chassis.position.y = MORTAR_GEOM.chassisH / 2;
+        towerGroup.add(chassis);
 
-        const moRing = new THREE.Mesh(mortarRing, mat);
-        moRing.position.y = 0.375;
+        // Tread strips along ±X sides
+        const treadGeom = this.geometryRegistry
+          ? this.geometryRegistry.getOrCreateCustom(
+              'mortar:tread',
+              () => new THREE.BoxGeometry(
+                MORTAR_GEOM.treadW, MORTAR_GEOM.treadH, MORTAR_GEOM.treadD,
+              ),
+            )
+          : new THREE.BoxGeometry(MORTAR_GEOM.treadW, MORTAR_GEOM.treadH, MORTAR_GEOM.treadD);
+        for (const side of [-1, 1] as const) {
+          const tread = new THREE.Mesh(treadGeom, mat);
+          tread.position.set(
+            side * MORTAR_GEOM.treadXOffset,
+            MORTAR_GEOM.treadH / 2,
+            0,
+          );
+          towerGroup.add(tread);
+        }
 
-        // Angled barrel tilted ~40 degrees
-        const moBarrel = new THREE.Mesh(mortarBarrel, mat);
-        moBarrel.position.set(0.1, 0.72, 0);
-        moBarrel.rotation.z = -Math.PI / 4.5;
+        // Vent slats on top of chassis (×2)
+        const ventGeom = this.geometryRegistry
+          ? this.geometryRegistry.getOrCreateCustom(
+              'mortar:vent',
+              () => new THREE.BoxGeometry(
+                MORTAR_GEOM.ventW, MORTAR_GEOM.ventH, MORTAR_GEOM.ventD,
+              ),
+            )
+          : new THREE.BoxGeometry(MORTAR_GEOM.ventW, MORTAR_GEOM.ventH, MORTAR_GEOM.ventD);
+        for (const side of [-1, 1] as const) {
+          const vent = new THREE.Mesh(ventGeom, mat);
+          vent.position.set(
+            side * MORTAR_GEOM.ventXOffset,
+            MORTAR_CHASSIS_TOP_Y + MORTAR_GEOM.ventH / 2,
+            0,
+          );
+          towerGroup.add(vent);
+        }
 
-        const moMuzzle = new THREE.Mesh(mortarMuzzle, mat);
-        moMuzzle.position.set(0.25, 0.98, 0);
-        moMuzzle.rotation.z = -Math.PI / 4.5;
+        // ── Swivel housing (named 'mortarBase') ────────────────────────────
+        const housingGeom = this.cyl(
+          MORTAR_GEOM.housingRadiusTop, MORTAR_GEOM.housingRadiusBottom,
+          MORTAR_GEOM.housingHeight, MORTAR_GEOM.housingSegments,
+        );
+        const housing = new THREE.Mesh(housingGeom, mat);
+        housing.name = 'mortarBase';
+        housing.position.y = MORTAR_HOUSING_Y;
+        towerGroup.add(housing);
 
-        towerGroup.add(moBase, moRing, moBarrel, moMuzzle);
+        // ── Barrel pivot group (rotates so barrel points up-and-forward) ───
+        // Pivot sits at the housing top face. The barrelPivot group is rotated
+        // MORTAR_BARREL_ELEVATION_RAD around local X, so its +Y axis becomes
+        // the barrel bore axis (pointing up-and-forward in world space).
+        // Recoil slides the barrel along group-local +Y (= along the bore).
+        const barrelPivot = new THREE.Group();
+        barrelPivot.name = 'barrelPivot';
+        barrelPivot.position.y = MORTAR_BARREL_PIVOT_Y;
+        barrelPivot.rotation.x = MORTAR_BARREL_ELEVATION_RAD;
+        towerGroup.add(barrelPivot);
+
+        // ── T1 barrel (named 'barrelT1') ────────────────────────────────────
+        const barrelT1Geom = this.cyl(
+          MORTAR_GEOM.barrelT1RadiusTop, MORTAR_GEOM.barrelT1RadiusBottom,
+          MORTAR_GEOM.barrelT1Length, MORTAR_GEOM.barrelT1Segments,
+        );
+        const barrelT1 = new THREE.Mesh(barrelT1Geom, mat);
+        barrelT1.name = 'barrelT1';
+        // Cylinder origin is at its centre. Position so base rests at pivot origin.
+        barrelT1.position.y = MORTAR_GEOM.barrelT1Length / 2;
+        barrelT1.userData['maxTier'] = 1;
+        barrelPivot.add(barrelT1);
+
+        // ── T2 barrel — reinforced, wider (named 'barrelT2') ───────────────
+        const barrelT2Geom = this.cyl(
+          MORTAR_GEOM.barrelT2RadiusTop, MORTAR_GEOM.barrelT2RadiusBottom,
+          MORTAR_GEOM.barrelT2Length, MORTAR_GEOM.barrelT2Segments,
+        );
+        const barrelT2 = new THREE.Mesh(barrelT2Geom, mat);
+        barrelT2.name = 'barrelT2';
+        barrelT2.position.y = MORTAR_GEOM.barrelT2Length / 2;
+        barrelT2.visible = false;
+        barrelT2.userData['minTier'] = 2;
+        barrelPivot.add(barrelT2);
+
+        // ── T3 dual barrel — second barrel above the first (named 'dualBarrel') ─
+        // Both barrelT2 and dualBarrel are visible at T3; they fire as one unit.
+        const dualBarrelGeom = barrelT2Geom; // same geometry as T2 barrel
+        const dualBarrel = new THREE.Mesh(dualBarrelGeom, mat);
+        dualBarrel.name = 'dualBarrel';
+        dualBarrel.position.set(0, MORTAR_GEOM.barrelT2Length / 2, MORTAR_GEOM.dualBarrelYOffset);
+        dualBarrel.visible = false;
+        dualBarrel.userData['minTier'] = 3;
+        barrelPivot.add(dualBarrel);
+
+        // ── Recoil cradle (collar at barrel base — static decoration) ───────
+        const cradleGeom = this.geometryRegistry
+          ? this.geometryRegistry.getOrCreateCustom(
+              'mortar:cradle',
+              () => new THREE.BoxGeometry(
+                MORTAR_GEOM.cradleW, MORTAR_GEOM.cradleH, MORTAR_GEOM.cradleD,
+              ),
+            )
+          : new THREE.BoxGeometry(MORTAR_GEOM.cradleW, MORTAR_GEOM.cradleH, MORTAR_GEOM.cradleD);
+        const cradle = new THREE.Mesh(cradleGeom, mat);
+        cradle.name = 'cradle';
+        // Sits at the base of the barrel (pivot origin), centred on housing top
+        cradle.position.y = MORTAR_GEOM.cradleH / 2;
+        barrelPivot.add(cradle);
+
+        // ── Ammo crate (left/+X side of chassis) ────────────────────────────
+        const crateGeom = this.geometryRegistry
+          ? this.geometryRegistry.getOrCreateCustom(
+              'mortar:ammoCrate',
+              () => new THREE.BoxGeometry(
+                MORTAR_GEOM.crateW, MORTAR_GEOM.crateH, MORTAR_GEOM.crateD,
+              ),
+            )
+          : new THREE.BoxGeometry(MORTAR_GEOM.crateW, MORTAR_GEOM.crateH, MORTAR_GEOM.crateD);
+        const ammoCrate = new THREE.Mesh(crateGeom, mat);
+        ammoCrate.position.set(
+          MORTAR_GEOM.crateXOffset,
+          MORTAR_GEOM.crateYOffset + MORTAR_GEOM.crateH / 2,
+          0,
+        );
+        towerGroup.add(ammoCrate);
+
+        // Shell decorations protruding from crate top (×2 spheres)
+        const shellGeom = this.sphere(
+          MORTAR_GEOM.shellRadius,
+          MORTAR_GEOM.shellSegments, MORTAR_GEOM.shellSegments,
+        );
+        for (const side of [-1, 1] as const) {
+          const shell = new THREE.Mesh(shellGeom, mat);
+          shell.position.set(
+            MORTAR_GEOM.crateXOffset,
+            MORTAR_GEOM.crateYOffset + MORTAR_GEOM.crateH + MORTAR_GEOM.shellYOffset,
+            side * MORTAR_GEOM.shellZSpacing,
+          );
+          towerGroup.add(shell);
+        }
+
+        // ── Firing animation: exaggerated recoil (3× BASIC) ─────────────────
+        // Barrel slides back along its local +Y axis (the bore axis after the
+        // pivot rotation). MORTAR_BARREL_NAMES lists all three barrel names;
+        // tickMortarRecoil in TowerAnimationService applies the offset to
+        // whichever barrels are currently visible.
+        towerGroup.userData['fireTick'] = (group: THREE.Group, duration: number): void => {
+          group.userData['recoilStart'] = performance.now() / 1000;
+          group.userData['recoilDuration'] = duration;
+          group.userData['recoilDistance'] = MORTAR_RECOIL_CONFIG.distance;
+          group.userData['mortarBarrelNames'] = MORTAR_BARREL_NAMES;
+        };
+
+        // ── Accent point light ───────────────────────────────────────────────
+        const isMortarLowEnd = typeof document !== 'undefined'
+          && document.body.classList.contains('reduce-motion');
+        this.attachAccentLight(towerGroup, TowerType.MORTAR, isMortarLowEnd);
+        const mortarLight = towerGroup.userData['accentLight'] as THREE.PointLight | undefined;
+        if (mortarLight) {
+          mortarLight.position.set(0, MORTAR_ACCENT_Y, 0);
+        }
+
         break;
       }
 

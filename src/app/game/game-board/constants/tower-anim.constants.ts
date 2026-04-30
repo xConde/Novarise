@@ -528,3 +528,108 @@ export const CHAIN_ORBIT_CONFIG = {
   /** Orbit angular speed for T3 sphere (radians per second). */
   t3SpeedRadPerSec: -0.8,
 } as const;
+
+// ─── MORTAR tower constants (Phase G) ─────────────────────────────────────────
+
+export const MORTAR_GEOM = {
+  // Wide armored chassis (rectangular footprint — long on X, narrow on Z)
+  chassisW: 0.95,
+  chassisH: 0.18,
+  chassisD: 0.70,
+
+  // Tread strips along ±X sides at chassis bottom
+  treadW:    0.06,
+  treadH:    0.08,
+  treadD:    0.60,
+  treadXOffset: 0.505, // centre of tread from group axis (chassisW/2 + treadW/2)
+
+  // Vent slat boxes on top of chassis (×2)
+  ventW:    0.22,
+  ventH:    0.04,
+  ventD:    0.08,
+  ventXOffset: 0.2,   // ±X offset of each vent from centre
+
+  // Swivel housing (sits on top of chassis, named 'mortarBase')
+  housingRadiusTop:    0.18,
+  housingRadiusBottom: 0.18,
+  housingHeight:       0.12,
+  housingSegments:     8,
+
+  // T1 barrel — standard tube
+  barrelT1RadiusTop:    0.085,
+  barrelT1RadiusBottom: 0.10,
+  barrelT1Length:       0.55,
+  barrelT1Segments:     8,
+
+  // T2 barrel — reinforced (wider)
+  barrelT2RadiusTop:    0.10,
+  barrelT2RadiusBottom: 0.12,
+  barrelT2Length:       0.55,
+  barrelT2Segments:     8,
+
+  // Dual barrel offset — T3 second barrel sits above the first
+  dualBarrelYOffset: 0.14,
+
+  // Recoil cradle (collar at barrel base)
+  cradleW: 0.28,
+  cradleH: 0.10,
+  cradleD: 0.22,
+
+  // Ammo crate on left side (+X face)
+  crateW:    0.18,
+  crateH:    0.14,
+  crateD:    0.22,
+  crateXOffset: 0.565,  // rests against chassis +X face (chassisW/2 + crateW/2)
+  crateYOffset: 0.06,   // above chassis centre-plane
+
+  // Ammo shells (×2 small spheres) sticking up from crate top
+  shellRadius:   0.04,
+  shellSegments: 6,
+  shellYOffset:  0.11,  // distance above crate top face
+  shellZSpacing: 0.09,  // ±Z between the two shells
+} as const;
+
+// ─── MORTAR Y positions relative to group origin ──────────────────────────────
+
+/** Top face of the chassis (where the swivel housing sits). */
+export const MORTAR_CHASSIS_TOP_Y = MORTAR_GEOM.chassisH;
+
+/** Y centre of the swivel housing above the chassis top. */
+export const MORTAR_HOUSING_Y = MORTAR_CHASSIS_TOP_Y + MORTAR_GEOM.housingHeight / 2;
+
+/** Y of the barrel pivot group origin (at the housing top face). */
+export const MORTAR_BARREL_PIVOT_Y = MORTAR_CHASSIS_TOP_Y + MORTAR_GEOM.housingHeight;
+
+/** Barrel elevation angle in degrees (tilts upward-and-forward from the pivot). */
+export const MORTAR_BARREL_ELEVATION_DEG = -45;
+
+/** Barrel elevation in radians (used for the barrelPivot group rotation). */
+export const MORTAR_BARREL_ELEVATION_RAD =
+  MORTAR_BARREL_ELEVATION_DEG * (Math.PI / 180);
+
+/** Y of the accent point-light (above barrel pivot). */
+export const MORTAR_ACCENT_Y = MORTAR_BARREL_PIVOT_Y + 0.4;
+
+// ─── MORTAR firing animation ──────────────────────────────────────────────────
+
+export const MORTAR_RECOIL_CONFIG = {
+  /**
+   * Barrel recoil distance in local units — 3× BASIC's 0.05u for heavy-artillery feel.
+   * The barrel slides along its local +Y axis (which is the bore axis after the pivot
+   * rotation). A negative offset = backward (into the chassis). See tickMortarRecoil().
+   */
+  distance: 0.15,
+  /** Easing profile identifier — "easeOutCubic" for natural deceleration. */
+  easing: 'easeOutCubic' as const,
+} as const;
+
+/**
+ * Names of the MORTAR barrel meshes at each tier.
+ *
+ * Recoil tick cannot use getObjectByName('barrel') because T1 and T2 barrels have
+ * different geometry and must be swappable via revealTierParts(). Both meshes are
+ * built at creation time; the recoil tick checks both names and targets whichever
+ * is currently visible. At T3 both barrelT2 and dualBarrel are visible and both
+ * recoil together (they fire as one unit visually).
+ */
+export const MORTAR_BARREL_NAMES = ['barrelT1', 'barrelT2', 'dualBarrel'] as const;

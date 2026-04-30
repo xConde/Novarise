@@ -5,7 +5,7 @@ import { PlacedTower, TowerType, TargetingMode } from '../models/tower.model';
 import { BlockType } from '../models/game-board-tile';
 import { MUZZLE_FLASH_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
 import { ANIMATION_CONFIG } from '../constants/rendering.constants';
-import { BASIC_RECOIL_CONFIG, SPLASH_TUBE_EMIT_CONFIG, SLOW_EMITTER_PULSE_FIRE } from '../constants/tower-anim.constants';
+import { BASIC_RECOIL_CONFIG, SPLASH_TUBE_EMIT_CONFIG, SLOW_EMITTER_PULSE_FIRE, MORTAR_RECOIL_CONFIG, MORTAR_BARREL_NAMES } from '../constants/tower-anim.constants';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1141,6 +1141,133 @@ describe('TowerAnimationService', () => {
       expect(barrel.position.y).toBeCloseTo(-BASIC_RECOIL_CONFIG.distance, 4);
 
       disposeRecoilGroup(group);
+    });
+
+    it('MORTAR multi-barrel: applies recoil to the visible barrel (T1)', () => {
+      // Build a group mimicking the MORTAR T1 state (barrelT1 visible, barrelT2 hidden)
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.MORTAR;
+
+      const barrelPivot = new THREE.Group();
+      barrelPivot.name = 'barrelPivot';
+      group.add(barrelPivot);
+
+      const geo = new THREE.BoxGeometry(0.1, 0.55, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+
+      const b1 = new THREE.Mesh(geo, mat);
+      b1.name = 'barrelT1';
+      b1.visible = true;
+      barrelPivot.add(b1);
+
+      const b2 = new THREE.Mesh(geo, mat);
+      b2.name = 'barrelT2';
+      b2.visible = false;
+      barrelPivot.add(b2);
+
+      const db = new THREE.Mesh(geo, mat);
+      db.name = 'dualBarrel';
+      db.visible = false;
+      barrelPivot.add(db);
+
+      const now = 100.0;
+      group.userData['recoilStart'] = now;
+      group.userData['recoilDuration'] = 0.15;
+      group.userData['recoilDistance'] = MORTAR_RECOIL_CONFIG.distance;
+      group.userData['mortarBarrelNames'] = MORTAR_BARREL_NAMES;
+
+      service.tickRecoilAnimations(new Map([['m', group]]), now);
+
+      // barrelT1 (visible) gets the recoil offset; others stay at 0
+      expect(b1.position.y).toBeCloseTo(-MORTAR_RECOIL_CONFIG.distance, 4);
+      expect(b2.position.y).toBeCloseTo(0, 5);
+      expect(db.position.y).toBeCloseTo(0, 5);
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('MORTAR multi-barrel: applies recoil to both visible barrels at T3', () => {
+      // T3: barrelT2 and dualBarrel both visible; barrelT1 hidden
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.MORTAR;
+
+      const barrelPivot = new THREE.Group();
+      barrelPivot.name = 'barrelPivot';
+      group.add(barrelPivot);
+
+      const geo = new THREE.BoxGeometry(0.1, 0.55, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+
+      const b1 = new THREE.Mesh(geo, mat);
+      b1.name = 'barrelT1';
+      b1.visible = false;
+      barrelPivot.add(b1);
+
+      const b2 = new THREE.Mesh(geo, mat);
+      b2.name = 'barrelT2';
+      b2.visible = true;
+      barrelPivot.add(b2);
+
+      const db = new THREE.Mesh(geo, mat);
+      db.name = 'dualBarrel';
+      db.visible = true;
+      barrelPivot.add(db);
+
+      const now = 200.0;
+      group.userData['recoilStart'] = now;
+      group.userData['recoilDuration'] = 0.15;
+      group.userData['recoilDistance'] = MORTAR_RECOIL_CONFIG.distance;
+      group.userData['mortarBarrelNames'] = MORTAR_BARREL_NAMES;
+
+      service.tickRecoilAnimations(new Map([['m', group]]), now);
+
+      // b2 and db (both visible) get offset; b1 (hidden) stays at 0
+      expect(b1.position.y).toBeCloseTo(0, 5);
+      expect(b2.position.y).toBeCloseTo(-MORTAR_RECOIL_CONFIG.distance, 4);
+      expect(db.position.y).toBeCloseTo(-MORTAR_RECOIL_CONFIG.distance, 4);
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('MORTAR multi-barrel: snaps all barrels to 0 when animation completes', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.MORTAR;
+
+      const barrelPivot = new THREE.Group();
+      barrelPivot.name = 'barrelPivot';
+      group.add(barrelPivot);
+
+      const geo = new THREE.BoxGeometry(0.1, 0.55, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+
+      const b1 = new THREE.Mesh(geo, mat);
+      b1.name = 'barrelT1';
+      b1.visible = true;
+      b1.position.y = -0.15;
+      barrelPivot.add(b1);
+
+      const b2 = new THREE.Mesh(geo, mat);
+      b2.name = 'barrelT2';
+      b2.visible = false;
+      barrelPivot.add(b2);
+
+      const now = 300.0;
+      const duration = 0.15;
+      group.userData['recoilStart'] = now;
+      group.userData['recoilDuration'] = duration;
+      group.userData['recoilDistance'] = MORTAR_RECOIL_CONFIG.distance;
+      group.userData['mortarBarrelNames'] = MORTAR_BARREL_NAMES;
+
+      // Advance past duration
+      service.tickRecoilAnimations(new Map([['m', group]]), now + duration + 0.01);
+
+      expect(b1.position.y).toBeCloseTo(0, 5);
+      expect(group.userData['recoilStart']).toBeUndefined();
+
+      geo.dispose();
+      mat.dispose();
     });
   });
 

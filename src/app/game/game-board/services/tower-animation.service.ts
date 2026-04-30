@@ -221,9 +221,17 @@ export class TowerAnimationService {
   /**
    * Drive barrel-recoil animations for towers that registered a recoil timer
    * via `userData['recoilStart']` and `userData['recoilDuration']`.
-   * Advances each active recoil, slides the 'barrel' child back along its
-   * local +Y axis by BASIC_RECOIL_CONFIG.distance (ease-out-cubic), then
-   * returns it to 0 once the duration elapses.
+   * Advances each active recoil, slides the barrel child(ren) back along their
+   * local +Y axis by the configured distance (ease-out-cubic), then returns
+   * them to 0 once the duration elapses.
+   *
+   * Standard towers (BASIC, SNIPER, CHAIN): the target is the single child
+   * named `'barrel'`.
+   *
+   * MORTAR: fireTick writes `userData['mortarBarrelNames']` with the full set
+   * of barrel names. This method applies the offset to every barrel in that
+   * list that is currently visible — covering the T1→T2 swap and T3 dual-barrel
+   * case without hard-coding MORTAR logic into the switch.
    *
    * Call once per animation frame with the current real-world time in seconds.
    */
@@ -233,11 +241,22 @@ export class TowerAnimationService {
       const recoilDuration = group.userData['recoilDuration'] as number | undefined;
       if (recoilStart === undefined || recoilDuration === undefined || recoilDuration <= 0) continue;
 
+      // Per-tower recoil distance: read from userData if set (SNIPER registers
+      // 0.08u; MORTAR registers 0.15u; BASIC does not set it, falling back to default).
+      const distance = (group.userData['recoilDistance'] as number | undefined)
+        ?? BASIC_RECOIL_CONFIG.distance;
+
+      // Barrel name list: MORTAR registers multiple names; others use ['barrel'].
+      const barrelNames = (group.userData['mortarBarrelNames'] as readonly string[] | undefined)
+        ?? ['barrel'];
+
       const elapsed = nowSeconds - recoilStart;
       if (elapsed >= recoilDuration) {
         // Animation complete — snap back to neutral and clear state
-        const barrel = group.getObjectByName('barrel') as THREE.Mesh | undefined;
-        if (barrel) barrel.position.y = 0;
+        for (const name of barrelNames) {
+          const b = group.getObjectByName(name) as THREE.Mesh | undefined;
+          if (b) b.position.y = 0;
+        }
         group.userData['recoilStart'] = undefined;
         group.userData['recoilDuration'] = undefined;
         continue;
@@ -247,17 +266,16 @@ export class TowerAnimationService {
       const raw = elapsed / recoilDuration;
       const eased = 1 - Math.pow(1 - raw, 3);
 
-      // Per-tower recoil distance: read from userData if set (SNIPER registers
-      // 0.08u; BASIC does not set it, so fall back to BASIC_RECOIL_CONFIG.distance).
-      const distance = (group.userData['recoilDistance'] as number | undefined)
-        ?? BASIC_RECOIL_CONFIG.distance;
-
-      // Slide back at the start, return toward neutral as eased approaches 1
-      // Peak recoil at t=0 (offset = -distance), returns to 0 at t=1
+      // Slide back at the start, return toward neutral as eased approaches 1.
+      // Peak recoil at t=0 (offset = -distance), returns to 0 at t=1.
       const offset = -distance * (1 - eased);
 
-      const barrel = group.getObjectByName('barrel') as THREE.Mesh | undefined;
-      if (barrel) barrel.position.y = offset;
+      for (const name of barrelNames) {
+        const b = group.getObjectByName(name) as THREE.Mesh | undefined;
+        // Apply recoil only to visible barrels (invisible barrels are tier-gated
+        // and should not accumulate a position offset that would appear on reveal).
+        if (b?.visible) b.position.y = offset;
+      }
     }
   }
 

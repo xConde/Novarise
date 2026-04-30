@@ -17,6 +17,8 @@ import {
   CHAIN_CHARGE_CONFIG,
   CHAIN_SPHERE_BOB_CONFIG,
   CHAIN_Y,
+  MORTAR_RECOIL_CONFIG,
+  MORTAR_BARREL_NAMES,
 } from '../constants/tower-anim.constants';
 
 function disposeGroupHelper(group: THREE.Group): void {
@@ -867,6 +869,185 @@ describe('TowerMeshFactoryService', () => {
       // Both should be at the same position (within floating-point tolerance)
       expect(pos1.x).toBeCloseTo(pos2.x, 4);
       expect(pos1.z).toBeCloseTo(pos2.z, 4);
+    });
+  });
+
+  // --- MORTAR tower redesign (Phase G) ---
+
+  describe('MORTAR tower Phase G redesign', () => {
+    let mortarGroup: THREE.Group;
+
+    beforeEach(() => {
+      mortarGroup = service.createTowerMesh(5, 5, TowerType.MORTAR, boardWidth, boardHeight);
+      createdGroups.push(mortarGroup);
+    });
+
+    it('has a child named "mortarBase" (swivel housing)', () => {
+      const housing = mortarGroup.getObjectByName('mortarBase');
+      expect(housing).toBeTruthy();
+    });
+
+    it('has a child named "barrelPivot" (barrel pivot group)', () => {
+      const pivot = mortarGroup.getObjectByName('barrelPivot');
+      expect(pivot).toBeTruthy();
+    });
+
+    it('barrelPivot is a THREE.Group', () => {
+      const pivot = mortarGroup.getObjectByName('barrelPivot');
+      expect(pivot instanceof THREE.Group).toBeTrue();
+    });
+
+    it('has a child named "barrelT1" (T1 barrel cylinder)', () => {
+      const b = mortarGroup.getObjectByName('barrelT1');
+      expect(b).toBeTruthy();
+    });
+
+    it('barrelT1 is visible at creation (maxTier=1 — T1 default)', () => {
+      const b = mortarGroup.getObjectByName('barrelT1') as THREE.Mesh | undefined;
+      expect(b).toBeTruthy();
+      expect(b!.visible).toBeTrue();
+      expect(b!.userData['maxTier']).toBe(1);
+    });
+
+    it('has a child named "barrelT2" (T2 reinforced barrel)', () => {
+      const b = mortarGroup.getObjectByName('barrelT2');
+      expect(b).toBeTruthy();
+    });
+
+    it('barrelT2 is hidden at creation (minTier=2)', () => {
+      const b = mortarGroup.getObjectByName('barrelT2') as THREE.Mesh | undefined;
+      expect(b).toBeTruthy();
+      expect(b!.visible).toBeFalse();
+      expect(b!.userData['minTier']).toBe(2);
+    });
+
+    it('has a child named "dualBarrel" (T3 second barrel)', () => {
+      const b = mortarGroup.getObjectByName('dualBarrel');
+      expect(b).toBeTruthy();
+    });
+
+    it('dualBarrel is hidden at creation (minTier=3)', () => {
+      const b = mortarGroup.getObjectByName('dualBarrel') as THREE.Mesh | undefined;
+      expect(b).toBeTruthy();
+      expect(b!.visible).toBeFalse();
+      expect(b!.userData['minTier']).toBe(3);
+    });
+
+    it('has a child named "cradle" (recoil cradle at barrel base)', () => {
+      const cradle = mortarGroup.getObjectByName('cradle');
+      expect(cradle).toBeTruthy();
+    });
+
+    it('barrelT1, barrelT2 and dualBarrel are children of barrelPivot', () => {
+      const pivot = mortarGroup.getObjectByName('barrelPivot')!;
+      for (const name of ['barrelT1', 'barrelT2', 'dualBarrel', 'cradle']) {
+        const obj = pivot.getObjectByName(name);
+        expect(obj).withContext(`${name} should be under barrelPivot`).toBeTruthy();
+      }
+    });
+
+    it('tier visibility — T1: barrelT1 visible, barrelT2 hidden, dualBarrel hidden', () => {
+      // Simulate revealTierParts at level 1
+      mortarGroup.traverse(obj => {
+        const minTier = obj.userData['minTier'] as number | undefined;
+        const maxTier = obj.userData['maxTier'] as number | undefined;
+        if (minTier !== undefined && maxTier !== undefined) {
+          obj.visible = minTier <= 1 && 1 <= maxTier;
+        } else if (minTier !== undefined) {
+          obj.visible = minTier <= 1;
+        } else if (maxTier !== undefined) {
+          obj.visible = 1 <= maxTier;
+        }
+      });
+
+      const b1 = mortarGroup.getObjectByName('barrelT1') as THREE.Mesh;
+      const b2 = mortarGroup.getObjectByName('barrelT2') as THREE.Mesh;
+      const db = mortarGroup.getObjectByName('dualBarrel') as THREE.Mesh;
+      expect(b1.visible).toBeTrue();
+      expect(b2.visible).toBeFalse();
+      expect(db.visible).toBeFalse();
+    });
+
+    it('tier visibility — T2: barrelT1 hidden, barrelT2 visible, dualBarrel hidden', () => {
+      mortarGroup.traverse(obj => {
+        const minTier = obj.userData['minTier'] as number | undefined;
+        const maxTier = obj.userData['maxTier'] as number | undefined;
+        if (minTier !== undefined && maxTier !== undefined) {
+          obj.visible = minTier <= 2 && 2 <= maxTier;
+        } else if (minTier !== undefined) {
+          obj.visible = minTier <= 2;
+        } else if (maxTier !== undefined) {
+          obj.visible = 2 <= maxTier;
+        }
+      });
+
+      const b1 = mortarGroup.getObjectByName('barrelT1') as THREE.Mesh;
+      const b2 = mortarGroup.getObjectByName('barrelT2') as THREE.Mesh;
+      const db = mortarGroup.getObjectByName('dualBarrel') as THREE.Mesh;
+      expect(b1.visible).toBeFalse();
+      expect(b2.visible).toBeTrue();
+      expect(db.visible).toBeFalse();
+    });
+
+    it('tier visibility — T3: barrelT2 and dualBarrel both visible', () => {
+      mortarGroup.traverse(obj => {
+        const minTier = obj.userData['minTier'] as number | undefined;
+        const maxTier = obj.userData['maxTier'] as number | undefined;
+        if (minTier !== undefined && maxTier !== undefined) {
+          obj.visible = minTier <= 3 && 3 <= maxTier;
+        } else if (minTier !== undefined) {
+          obj.visible = minTier <= 3;
+        } else if (maxTier !== undefined) {
+          obj.visible = 3 <= maxTier;
+        }
+      });
+
+      const b1 = mortarGroup.getObjectByName('barrelT1') as THREE.Mesh;
+      const b2 = mortarGroup.getObjectByName('barrelT2') as THREE.Mesh;
+      const db = mortarGroup.getObjectByName('dualBarrel') as THREE.Mesh;
+      expect(b1.visible).toBeFalse();
+      expect(b2.visible).toBeTrue();
+      expect(db.visible).toBeTrue();
+    });
+
+    it('registers a fireTick function on userData', () => {
+      expect(typeof mortarGroup.userData['fireTick']).toBe('function');
+    });
+
+    it('fireTick stores recoilStart, recoilDuration, recoilDistance, and mortarBarrelNames', () => {
+      const fire = mortarGroup.userData['fireTick'] as (g: THREE.Group, d: number) => void;
+      fire(mortarGroup, 0.15);
+
+      expect(mortarGroup.userData['recoilStart']).toBeDefined();
+      expect(mortarGroup.userData['recoilDuration']).toBeCloseTo(0.15, 5);
+      expect(mortarGroup.userData['recoilDistance']).toBeCloseTo(MORTAR_RECOIL_CONFIG.distance, 5);
+      expect(mortarGroup.userData['mortarBarrelNames']).toEqual(MORTAR_BARREL_NAMES);
+    });
+
+    it('recoilDistance is 3× BASIC distance (heavy-artillery feel)', () => {
+      const fire = mortarGroup.userData['fireTick'] as (g: THREE.Group, d: number) => void;
+      fire(mortarGroup, 0.15);
+      // BASIC = 0.05, MORTAR = 0.15 (3× heavier)
+      expect(mortarGroup.userData['recoilDistance']).toBeCloseTo(0.15, 5);
+      expect(mortarGroup.userData['recoilDistance']).toBeGreaterThan(0.05);
+    });
+
+    it('has no legacy MORTAR geometry (no child named "mortarBase" as cylinder + ring)', () => {
+      // The redesign replaces legacy cyl-stack with BoxGeometry chassis.
+      // Confirm there is no child with the old 4-geometry stack structure:
+      // the only "mortarBase" is the swivel housing (a cylinder), which is fine.
+      let legacyRingCount = 0;
+      mortarGroup.traverse(obj => {
+        if (obj.name === 'mortarRing') legacyRingCount++;
+      });
+      expect(legacyRingCount).toBe(0);
+    });
+
+    it('does NOT register an idleTick (no idle animation for MORTAR)', () => {
+      // MORTAR is static at idle — no turret swivel or sphere bob.
+      // Absence of idleTick lets the animation loop fall through to legacy traverse
+      // which has no named meshes to animate (confirming no accidental interference).
+      expect(mortarGroup.userData['idleTick']).toBeUndefined();
     });
   });
 
