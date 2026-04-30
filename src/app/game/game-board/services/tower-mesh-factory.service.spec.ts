@@ -5,6 +5,7 @@ import { TowerType } from '../models/tower.model';
 import { BOARD_CONFIG } from '../constants/board.constants';
 import { TOWER_ACCENT_LIGHT_CONFIG } from '../constants/lighting.constants';
 import { disposeGroup } from '../utils/three-utils';
+import { BASIC_IDLE_CONFIG } from '../constants/tower-anim.constants';
 
 function disposeGroupHelper(group: THREE.Group): void {
   disposeGroup(group);
@@ -118,6 +119,94 @@ describe('TowerMeshFactoryService', () => {
       expect(group.scale.x).toBeCloseTo(1.4);
       expect(group.scale.y).toBeCloseTo(1.4);
       expect(group.scale.z).toBeCloseTo(1.4);
+    });
+  });
+
+  // --- BASIC tower redesign (Phase B) ---
+
+  describe('BASIC tower Phase B redesign', () => {
+    let basicGroup: THREE.Group;
+
+    beforeEach(() => {
+      basicGroup = service.createTowerMesh(5, 5, TowerType.BASIC, boardWidth, boardHeight);
+      createdGroups.push(basicGroup);
+    });
+
+    it('has a child named "turret"', () => {
+      const turret = basicGroup.getObjectByName('turret');
+      expect(turret).toBeTruthy();
+    });
+
+    it('has a child named "barrel" (outermost barrel segment)', () => {
+      const barrel = basicGroup.getObjectByName('barrel');
+      expect(barrel).toBeTruthy();
+    });
+
+    it('has a child named "accent" (indicator sphere)', () => {
+      const accent = basicGroup.getObjectByName('accent');
+      expect(accent).toBeTruthy();
+    });
+
+    it('turret is a parent (or ancestor) of the barrel', () => {
+      const turret = basicGroup.getObjectByName('turret');
+      const barrel = basicGroup.getObjectByName('barrel');
+      expect(turret).toBeTruthy();
+      expect(barrel).toBeTruthy();
+      // Barrel must be a descendant of turret
+      let found = false;
+      turret!.traverse(obj => { if (obj === barrel) found = true; });
+      expect(found).toBeTrue();
+    });
+
+    it('registers an idleTick function on userData', () => {
+      expect(typeof basicGroup.userData['idleTick']).toBe('function');
+    });
+
+    it('idleTick rotates the turret child', () => {
+      const turret = basicGroup.getObjectByName('turret') as THREE.Object3D;
+      expect(turret).toBeTruthy();
+
+      const tick = basicGroup.userData['idleTick'] as (g: THREE.Group, t: number) => void;
+      const t = 1.0;
+      tick(basicGroup, t);
+
+      const expected = Math.sin(t * BASIC_IDLE_CONFIG.swivelSpeed) * BASIC_IDLE_CONFIG.swivelAmplitudeRad;
+      expect(turret.rotation.y).toBeCloseTo(expected, 5);
+    });
+
+    it('registers a fireTick function on userData', () => {
+      expect(typeof basicGroup.userData['fireTick']).toBe('function');
+    });
+
+    it('fireTick stores recoilStart and recoilDuration on the group', () => {
+      const fire = basicGroup.userData['fireTick'] as (g: THREE.Group, d: number) => void;
+      fire(basicGroup, 0.1);
+
+      expect(basicGroup.userData['recoilStart']).toBeDefined();
+      expect(basicGroup.userData['recoilDuration']).toBeCloseTo(0.1, 5);
+    });
+
+    it('T2 barrelCap part is hidden at creation (minTier=2)', () => {
+      const cap = basicGroup.getObjectByName('barrelCap') as THREE.Mesh | undefined;
+      expect(cap).toBeTruthy();
+      expect(cap!.visible).toBeFalse();
+      expect(cap!.userData['minTier']).toBe(2);
+    });
+
+    it('T3 pauldron parts are hidden at creation (minTier=3)', () => {
+      const pauldrons: THREE.Object3D[] = [];
+      basicGroup.traverse(obj => { if (obj.name === 'pauldron') pauldrons.push(obj); });
+      expect(pauldrons.length).toBeGreaterThanOrEqual(2);
+      pauldrons.forEach(p => {
+        expect(p.visible).toBeFalse();
+        expect(p.userData['minTier']).toBe(3);
+      });
+    });
+
+    it('no child is named "crystal" (old obelisk removed)', () => {
+      const crystal = basicGroup.getObjectByName('crystal');
+      // getObjectByName returns undefined when not found
+      expect(crystal).toBeUndefined();
     });
   });
 

@@ -151,6 +151,9 @@ export class TowerUpgradeVisualService {
    * Apply level-based scale AND emissive boost to a tower mesh group.
    * Skips 'tip' and 'orb' children whose emissive is driven per-frame by TowerAnimationService.
    * Call this after a successful upgrade (L1→L2 or L2→L3).
+   *
+   * Also reveals any tier-gated mesh children tagged with `userData['minTier']`
+   * so T2/T3 detail parts become visible at the correct level.
    */
   applyUpgradeVisuals(towerGroup: THREE.Group, newLevel: number, specialization?: TowerSpecialization): void {
     const scale = TOWER_VISUAL_CONFIG.scaleBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
@@ -168,9 +171,30 @@ export class TowerUpgradeVisualService {
       }
     });
 
+    this.revealTierParts(towerGroup, newLevel);
+
     if (specialization) {
       this.applySpecializationVisual(towerGroup, specialization);
     }
+  }
+
+  /**
+   * Walk a tower group and set each child's visibility based on its
+   * `userData['minTier']` tag.  Children tagged with `minTier = 2` are
+   * hidden at T1 and revealed at T2+; children tagged `minTier = 3` are
+   * revealed at T3 only.  Children with no `minTier` tag are unaffected.
+   *
+   * Build all tier parts at tower creation time but mark them `visible = false`
+   * — this keeps the disposal contract simple (one group, dispose once) while
+   * allowing progressive reveal through upgrades.
+   */
+  revealTierParts(towerGroup: THREE.Group, level: number): void {
+    towerGroup.traverse(child => {
+      const minTier = child.userData['minTier'] as number | undefined;
+      if (minTier !== undefined) {
+        child.visible = minTier <= level;
+      }
+    });
   }
 
   /**

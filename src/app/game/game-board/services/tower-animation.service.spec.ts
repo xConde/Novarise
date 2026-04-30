@@ -5,6 +5,7 @@ import { PlacedTower, TowerType, TargetingMode } from '../models/tower.model';
 import { BlockType } from '../models/game-board-tile';
 import { MUZZLE_FLASH_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
 import { ANIMATION_CONFIG } from '../constants/rendering.constants';
+import { BASIC_RECOIL_CONFIG } from '../constants/tower-anim.constants';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -695,6 +696,191 @@ describe('TowerAnimationService', () => {
       };
 
       expect(() => service.triggerFire(tower)).not.toThrow();
+    });
+
+    // ---- Phase A debt: Finding 2 — fireTick error isolation ----
+
+    it('does NOT throw when fireTick callback throws — exception is swallowed', () => {
+      const { tower } = makePlacedTower('base', 0.5);
+      tower.mesh!.userData['fireTick'] = (): void => { throw new Error('boom'); };
+
+      expect(() => service.triggerFire(tower)).not.toThrow();
+
+      disposePlacedTower(tower);
+    });
+
+    it('still calls startMuzzleFlash even when fireTick throws', () => {
+      const { tower } = makePlacedTower('base', 0.5);
+      tower.mesh!.userData['fireTick'] = (): void => { throw new Error('boom'); };
+
+      service.triggerFire(tower);
+
+      // startMuzzleFlash sets muzzleFlashTimer — verify it was called
+      expect(tower.muzzleFlashTimer).toBeCloseTo(MUZZLE_FLASH_CONFIG.duration, 5);
+
+      disposePlacedTower(tower);
+    });
+  });
+
+  // ---- Phase A debt: Finding 3 — idleTick precedence over legacy traverse ----
+
+  describe('idleTick precedence (Finding 3)', () => {
+    it('does NOT run the legacy crystal traverse when idleTick is registered', () => {
+      // Build a SLOW tower group (which has a 'crystal' legacy path) but also
+      // register an idleTick — the legacy traverse must be skipped entirely.
+      const { group, child } = makeTowerGroup(TowerType.SLOW, 'crystal');
+      const initialY = 0.82;
+      child.position.y = initialY;
+
+      const idleTickSpy = jasmine.createSpy('idleTick');
+      group.userData['idleTick'] = idleTickSpy;
+
+      const time = 2000;
+      service.updateTowerAnimations(new Map([['0-0', group]]), time);
+
+      // idleTick was called
+      expect(idleTickSpy).toHaveBeenCalledOnceWith(group, time * ANIMATION_CONFIG.msToSeconds);
+      // Legacy crystal handler was NOT called — position must remain unchanged
+      expect(child.position.y).toBeCloseTo(initialY, 5);
+
+      disposeTowerGroup(group);
+    });
+
+    it('falls through to legacy traverse when idleTick is absent', () => {
+      const { group, child } = makeTowerGroup(TowerType.SLOW, 'crystal');
+      child.position.y = 0.82;
+      // No idleTick registered
+
+      service.updateTowerAnimations(new Map([['0-0', group]]), 1000);
+
+      // Legacy path changed the crystal position
+      const t = 1000 * ANIMATION_CONFIG.msToSeconds;
+      const expectedY = TOWER_ANIM_CONFIG.slowCrystalBaseY
+        + Math.sin(t * TOWER_ANIM_CONFIG.crystalBobSpeed) * TOWER_ANIM_CONFIG.slowCrystalBobAmplitude;
+      expect(child.position.y).toBeCloseTo(expectedY, 5);
+
+      disposeTowerGroup(group);
+    });
+  });
+
+  // ---- BASIC idle animation ----
+
+  describe('BASIC tower idleTick (swivel)', () => {
+    it('rotates the turret child via the registered idleTick', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      const turret = new THREE.Group();
+      turret.name = 'turret';
+      group.add(turret);
+
+      // Register the same idleTick that TowerMeshFactoryService would register
+      const { BASIC_IDLE_CONFIG: cfg } = (() => {
+        const m = { BASIC_IDLE_CONFIG: { swivelAmplitudeRad: 5 * (Math.PI / 180), swivelSpeed: 0.6 } };
+        return m;
+      })();
+
+      group.userData['idleTick'] = (g: THREE.Group, t: number): void => {
+        const tGroup = g.getObjectByName('turret');
+        if (tGroup) {
+          tGroup.rotation.y = Math.sin(t * cfg.swivelSpeed) * cfg.swivelAmplitudeRad;
+        }
+      };
+
+      const time = 1500;
+      service.updateTowerAnimations(new Map([['0-0', group]]), time);
+
+      const t = time * ANIMATION_CONFIG.msToSeconds;
+      const expected = Math.sin(t * cfg.swivelSpeed) * cfg.swivelAmplitudeRad;
+      expect(turret.rotation.y).toBeCloseTo(expected, 5);
+    });
+  });
+
+  // ---- tickRecoilAnimations ----
+
+  describe('tickRecoilAnimations', () => {
+    function makeRecoilGroup(): { group: THREE.Group; barrel: THREE.Mesh } {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      const turret = new THREE.Group();
+      turret.name = 'turret';
+      group.add(turret);
+      const barrelGroup = new THREE.Group();
+      turret.add(barrelGroup);
+      const geo = new THREE.BoxGeometry(0.1, 0.2, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+      const barrel = new THREE.Mesh(geo, mat);
+      barrel.name = 'barrel';
+      barrelGroup.add(barrel);
+      return { group, barrel };
+    }
+
+    function disposeRecoilGroup(group: THREE.Group): void {
+      group.traverse(obj => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+          (obj.material as THREE.MeshStandardMaterial).dispose();
+        }
+      });
+    }
+
+    it('slides barrel back immediately after recoilStart is set', () => {
+      const { group, barrel } = makeRecoilGroup();
+      const now = 10.0;
+      group.userData['recoilStart'] = now;
+      group.userData['recoilDuration'] = 0.1;
+
+      // At t = now + 0 the eased value is 0, so offset = -distance
+      service.tickRecoilAnimations(new Map([['t', group]]), now);
+
+      expect(barrel.position.y).toBeCloseTo(-BASIC_RECOIL_CONFIG.distance, 4);
+
+      disposeRecoilGroup(group);
+    });
+
+    it('returns barrel to 0 after duration elapses', () => {
+      const { group, barrel } = makeRecoilGroup();
+      const now = 10.0;
+      const duration = 0.1;
+      group.userData['recoilStart'] = now;
+      group.userData['recoilDuration'] = duration;
+
+      // Advance past the full duration
+      service.tickRecoilAnimations(new Map([['t', group]]), now + duration + 0.01);
+
+      expect(barrel.position.y).toBeCloseTo(0, 5);
+      expect(group.userData['recoilStart']).toBeUndefined();
+
+      disposeRecoilGroup(group);
+    });
+
+    it('interpolates barrel position between 0 and full recoil', () => {
+      const { group, barrel } = makeRecoilGroup();
+      const now = 5.0;
+      const duration = 0.1;
+      group.userData['recoilStart'] = now;
+      group.userData['recoilDuration'] = duration;
+
+      // At 50% through the animation
+      const half = now + duration * 0.5;
+      service.tickRecoilAnimations(new Map([['t', group]]), half);
+
+      // easeOutCubic at t=0.5: 1 - (1 - 0.5)^3 = 1 - 0.125 = 0.875
+      // offset = -distance * (1 - 0.875) = -distance * 0.125
+      const expected = -BASIC_RECOIL_CONFIG.distance * (1 - (1 - Math.pow(1 - 0.5, 3)));
+      expect(barrel.position.y).toBeCloseTo(expected, 4);
+
+      disposeRecoilGroup(group);
+    });
+
+    it('skips groups without recoil state', () => {
+      const { group, barrel } = makeRecoilGroup();
+      barrel.position.y = 0;
+      // No recoilStart / recoilDuration
+
+      expect(() => service.tickRecoilAnimations(new Map([['t', group]]), 1.0)).not.toThrow();
+      expect(barrel.position.y).toBeCloseTo(0, 5);
+
+      disposeRecoilGroup(group);
     });
   });
 });

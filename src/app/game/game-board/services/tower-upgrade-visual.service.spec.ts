@@ -209,6 +209,73 @@ describe('TowerUpgradeVisualService', () => {
     });
   });
 
+  describe('revealTierParts', () => {
+    function makeTierGroup(): { group: THREE.Group; t2mesh: THREE.Mesh; t3mesh: THREE.Mesh; always: THREE.Mesh } {
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+
+      const group = new THREE.Group();
+
+      const always = new THREE.Mesh(geo, mat);
+      always.name = 'base';
+      group.add(always);
+
+      const t2mesh = new THREE.Mesh(geo, mat);
+      t2mesh.name = 'barrelCap';
+      t2mesh.visible = false;
+      t2mesh.userData['minTier'] = 2;
+      group.add(t2mesh);
+
+      const t3mesh = new THREE.Mesh(geo, mat);
+      t3mesh.name = 'pauldron';
+      t3mesh.visible = false;
+      t3mesh.userData['minTier'] = 3;
+      group.add(t3mesh);
+
+      return { group, t2mesh, t3mesh, always };
+    }
+
+    it('keeps T2 and T3 parts hidden at level 1', () => {
+      const { group, t2mesh, t3mesh } = makeTierGroup();
+      service.revealTierParts(group, 1);
+      expect(t2mesh.visible).toBeFalse();
+      expect(t3mesh.visible).toBeFalse();
+    });
+
+    it('reveals T2 part at level 2, keeps T3 hidden', () => {
+      const { group, t2mesh, t3mesh } = makeTierGroup();
+      service.revealTierParts(group, 2);
+      expect(t2mesh.visible).toBeTrue();
+      expect(t3mesh.visible).toBeFalse();
+    });
+
+    it('reveals both T2 and T3 parts at level 3', () => {
+      const { group, t2mesh, t3mesh } = makeTierGroup();
+      service.revealTierParts(group, 3);
+      expect(t2mesh.visible).toBeTrue();
+      expect(t3mesh.visible).toBeTrue();
+    });
+
+    it('does not affect children with no minTier tag', () => {
+      const { group, always } = makeTierGroup();
+      always.visible = true;
+      service.revealTierParts(group, 1);
+      expect(always.visible).toBeTrue();
+    });
+
+    it('applyUpgradeVisuals calls revealTierParts (T2 part visible after L2 upgrade)', () => {
+      const { group, t2mesh } = makeTierGroup();
+      service.applyUpgradeVisuals(group, 2);
+      expect(t2mesh.visible).toBeTrue();
+    });
+
+    it('applyUpgradeVisuals keeps T3 hidden at L2', () => {
+      const { group, t3mesh } = makeTierGroup();
+      service.applyUpgradeVisuals(group, 2);
+      expect(t3mesh.visible).toBeFalse();
+    });
+  });
+
   describe('applySpecializationVisual', () => {
     it('should apply ALPHA warm orange tint to MeshStandardMaterial children', () => {
       const geo = new THREE.BoxGeometry(1, 1, 1);

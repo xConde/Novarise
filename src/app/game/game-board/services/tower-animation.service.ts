@@ -5,17 +5,19 @@ import { BlockType } from '../models/game-board-tile';
 import { ANIMATION_CONFIG } from '../constants/rendering.constants';
 import { MUZZLE_FLASH_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
 import { getMaterials } from '../utils/three-utils';
+import { BASIC_RECOIL_CONFIG } from '../constants/tower-anim.constants';
 
 @Injectable()
 export class TowerAnimationService {
   /**
    * Animate tower idle effects. For each group:
-   *  1. If `group.userData['idleTick']` is a function, call it first so
-   *     per-tower redesigns (Phases B–G) can drive their own logic without
-   *     forking this service.
-   *  2. The existing named-mesh traverse runs unconditionally after that so
-   *     legacy animations (crystal bob, orb pulse, etc.) keep working until
-   *     each tower type migrates its named children in its own Phase sprint.
+   *  1. If `group.userData['idleTick']` is a function, call it and return —
+   *     the redesigned tower drives all its own animation; the legacy
+   *     named-mesh traverse must NOT run so stale named-mesh handlers
+   *     (e.g. 'crystal' for the old BASIC) do not interfere.
+   *  2. Otherwise, fall through to the legacy named-mesh traverse so existing
+   *     towers (SNIPER, SPLASH, SLOW, CHAIN, MORTAR) keep animating until
+   *     each type ships its own idleTick in later phases.
    */
   updateTowerAnimations(towerMeshes: Map<string, THREE.Group>, time: number): void {
     const t = time * ANIMATION_CONFIG.msToSeconds;
@@ -23,12 +25,12 @@ export class TowerAnimationService {
       const towerType = group.userData['towerType'] as TowerType | undefined;
       if (!towerType) continue;
 
-      // Per-tower idle hook — registered by Phases B–G when a tower's geometry
-      // ships. Runs before the named-mesh traverse so bespoke animations take
-      // priority over the generic ones below.
+      // Per-tower idle hook — when present, gives the redesigned tower full
+      // ownership of its animation and skips the legacy traverse entirely.
       const idleTick = group.userData['idleTick'] as ((g: THREE.Group, t: number) => void) | undefined;
       if (typeof idleTick === 'function') {
         idleTick(group, t);
+        continue;
       }
 
       group.traverse((child) => {
@@ -93,13 +95,19 @@ export class TowerAnimationService {
    * touching the combat service again.
    */
   triggerFire(tower: PlacedTower): void {
+    // startMuzzleFlash runs unconditionally — its behaviour is well-tested and
+    // must not be gated behind the fireTick try/catch block.
     this.startMuzzleFlash(tower);
 
     if (!tower.mesh) return;
     const fireTick = tower.mesh.userData['fireTick'] as
       ((group: THREE.Group, durationSeconds: number) => void) | undefined;
     if (typeof fireTick === 'function') {
-      fireTick(tower.mesh, MUZZLE_FLASH_CONFIG.duration);
+      try {
+        fireTick(tower.mesh, MUZZLE_FLASH_CONFIG.duration);
+      } catch (err) {
+        console.warn('triggerFire: fireTick threw', err);
+      }
     }
   }
 
@@ -189,6 +197,44 @@ export class TowerAnimationService {
         tower.muzzleFlashTimer = undefined;
         tower.originalEmissiveIntensity = undefined;
       }
+    }
+  }
+
+  /**
+   * Drive barrel-recoil animations for towers that registered a recoil timer
+   * via `userData['recoilStart']` and `userData['recoilDuration']`.
+   * Advances each active recoil, slides the 'barrel' child back along its
+   * local +Y axis by BASIC_RECOIL_CONFIG.distance (ease-out-cubic), then
+   * returns it to 0 once the duration elapses.
+   *
+   * Call once per animation frame with the current real-world time in seconds.
+   */
+  tickRecoilAnimations(towerMeshes: Map<string, THREE.Group>, nowSeconds: number): void {
+    for (const group of towerMeshes.values()) {
+      const recoilStart = group.userData['recoilStart'] as number | undefined;
+      const recoilDuration = group.userData['recoilDuration'] as number | undefined;
+      if (recoilStart === undefined || recoilDuration === undefined || recoilDuration <= 0) continue;
+
+      const elapsed = nowSeconds - recoilStart;
+      if (elapsed >= recoilDuration) {
+        // Animation complete — snap back to neutral and clear state
+        const barrel = group.getObjectByName('barrel') as THREE.Mesh | undefined;
+        if (barrel) barrel.position.y = 0;
+        group.userData['recoilStart'] = undefined;
+        group.userData['recoilDuration'] = undefined;
+        continue;
+      }
+
+      // Normalised time [0..1]; easeOutCubic = 1 - (1 - t)^3
+      const raw = elapsed / recoilDuration;
+      const eased = 1 - Math.pow(1 - raw, 3);
+
+      // Slide back at the start, return toward neutral as eased approaches 1
+      // Peak recoil at t=0 (offset = -distance), returns to 0 at t=1
+      const offset = -BASIC_RECOIL_CONFIG.distance * (1 - eased);
+
+      const barrel = group.getObjectByName('barrel') as THREE.Mesh | undefined;
+      if (barrel) barrel.position.y = offset;
     }
   }
 

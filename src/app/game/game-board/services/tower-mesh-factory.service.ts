@@ -11,6 +11,13 @@ import {
   DEFAULT_TOWER_MATERIAL_CONFIG,
   createTowerMaterial,
 } from './tower-material.factory';
+import {
+  BASIC_IDLE_CONFIG,
+  BASIC_GEOM,
+  BASIC_BARREL_Y,
+  BASIC_TURRET_Y,
+  BASIC_ACCENT_Y,
+} from '../constants/tower-anim.constants';
 
 @Injectable()
 export class TowerMeshFactoryService {
@@ -39,33 +46,211 @@ export class TowerMeshFactoryService {
 
     switch (towerType) {
       case TowerType.BASIC: {
-        // Ancient crystal obelisk - jagged and organic
-        const obeliskBase = this.cyl(0.35, 0.42, 0.25, 6);
-        const obeliskMid1 = this.cyl(0.32, 0.35, 0.35, 6);
-        const obeliskMid2 = this.cyl(0.28, 0.32, 0.3, 6);
-        const obeliskTop = this.cone(0.28, 0.4, 6);
-        const crystal = this.oct(0.15, 0);
+        // Squat hex base + swivel turret + segmented barrel (workhorse rifleman)
 
-        const oBase = new THREE.Mesh(obeliskBase, mat);
-        oBase.position.y = 0.125;
-        oBase.rotation.y = Math.PI / 6;
+        // ── Hex pad base ────────────────────────────────────────────────────
+        const padGeom = this.cyl(
+          BASIC_GEOM.baseRadiusTop, BASIC_GEOM.baseRadiusBottom,
+          BASIC_GEOM.baseHeight, BASIC_GEOM.baseSegments,
+        );
+        const pad = new THREE.Mesh(padGeom, mat);
+        pad.position.y = BASIC_GEOM.baseHeight / 2;
+        towerGroup.add(pad);
 
-        const oMid1 = new THREE.Mesh(obeliskMid1, mat);
-        oMid1.position.y = 0.425;
-        oMid1.rotation.y = -Math.PI / 6;
+        // Recessed bolt-heads at four cardinal positions on the pad top
+        const boltGeom = this.cyl(
+          BASIC_GEOM.boltRadius, BASIC_GEOM.boltRadius,
+          BASIC_GEOM.boltHeight, BASIC_GEOM.boltSegments,
+        );
+        const boltOffsets: [number, number][] = [
+          [ BASIC_GEOM.boltInset, 0],
+          [-BASIC_GEOM.boltInset, 0],
+          [0,  BASIC_GEOM.boltInset],
+          [0, -BASIC_GEOM.boltInset],
+        ];
+        for (const [bx, bz] of boltOffsets) {
+          const bolt = new THREE.Mesh(boltGeom, mat);
+          bolt.position.set(
+            bx,
+            BASIC_GEOM.baseHeight - BASIC_GEOM.boltSinkDepth + BASIC_GEOM.boltHeight / 2,
+            bz,
+          );
+          towerGroup.add(bolt);
+        }
 
-        const oMid2 = new THREE.Mesh(obeliskMid2, mat);
-        oMid2.position.y = 0.75;
+        // ── Turret swivel housing ───────────────────────────────────────────
+        const turretGroup = new THREE.Group();
+        turretGroup.name = 'turret';
+        turretGroup.position.y = BASIC_TURRET_Y;
+        towerGroup.add(turretGroup);
 
-        const oTop = new THREE.Mesh(obeliskTop, mat);
-        oTop.position.y = 1.1;
-        oTop.rotation.y = Math.PI / 6;
+        const turretGeom = this.cyl(
+          BASIC_GEOM.turretRadius, BASIC_GEOM.turretRadius,
+          BASIC_GEOM.turretHeight, BASIC_GEOM.turretSegments,
+        );
+        const turretBody = new THREE.Mesh(turretGeom, mat);
+        turretGroup.add(turretBody);
 
-        const oCrystal = new THREE.Mesh(crystal, mat);
-        oCrystal.name = 'crystal';
-        oCrystal.position.y = 1.35;
+        // Side vents around the turret (4 boxes, evenly spaced radially)
+        const ventGeom = this.geometryRegistry
+          ? this.geometryRegistry.getOrCreateCustom(
+              'basic:turretVent',
+              () => new THREE.BoxGeometry(BASIC_GEOM.ventW, BASIC_GEOM.ventH, BASIC_GEOM.ventD),
+            )
+          : new THREE.BoxGeometry(BASIC_GEOM.ventW, BASIC_GEOM.ventH, BASIC_GEOM.ventD);
 
-        towerGroup.add(oBase, oMid1, oMid2, oTop, oCrystal);
+        for (let i = 0; i < 4; i++) {
+          const angle = (i / 4) * Math.PI * 2;
+          const vent = new THREE.Mesh(ventGeom, mat);
+          vent.position.set(
+            Math.cos(angle) * BASIC_GEOM.ventRadial,
+            0,
+            Math.sin(angle) * BASIC_GEOM.ventRadial,
+          );
+          vent.rotation.y = -angle;
+          turretGroup.add(vent);
+        }
+
+        // ── Segmented barrel sub-group ──────────────────────────────────────
+        // Sub-group sits at the front face of the turret, rotated so its +Y
+        // points forward (+Z in turret space) — this lets recoil slide along Y.
+        const barrelGroup = new THREE.Group();
+        // Position at the front edge of the turret (z = turretRadius), at turret midplane
+        barrelGroup.position.set(0, 0, BASIC_GEOM.turretRadius);
+        // Rotate -90° around X so group-local +Y points along world +Z (forward)
+        barrelGroup.rotation.x = -Math.PI / 2;
+        turretGroup.add(barrelGroup);
+
+        const seg1Geom = this.cyl(
+          BASIC_GEOM.barrel1Radius, BASIC_GEOM.barrel1Radius,
+          BASIC_GEOM.barrel1Length, 8,
+        );
+        const seg2Geom = this.cyl(
+          BASIC_GEOM.barrel2Radius, BASIC_GEOM.barrel2Radius,
+          BASIC_GEOM.barrel2Length, 8,
+        );
+        const seg3Geom = this.cyl(
+          BASIC_GEOM.barrel3Radius, BASIC_GEOM.barrel3Radius,
+          BASIC_GEOM.barrel3Length, 8,
+        );
+        const finGeom = this.geometryRegistry
+          ? this.geometryRegistry.getOrCreateCustom(
+              'basic:coolingFin',
+              () => new THREE.CylinderGeometry(
+                BASIC_GEOM.finRadiusOuter, BASIC_GEOM.finRadiusOuter,
+                BASIC_GEOM.finHeight, BASIC_GEOM.finSegments,
+              ),
+            )
+          : new THREE.CylinderGeometry(
+              BASIC_GEOM.finRadiusOuter, BASIC_GEOM.finRadiusOuter,
+              BASIC_GEOM.finHeight, BASIC_GEOM.finSegments,
+            );
+
+        const bSeg1 = new THREE.Mesh(seg1Geom, mat);
+        bSeg1.position.y = BASIC_BARREL_Y.seg1;
+        barrelGroup.add(bSeg1);
+
+        const bSeg2 = new THREE.Mesh(seg2Geom, mat);
+        bSeg2.position.y = BASIC_BARREL_Y.seg2;
+        barrelGroup.add(bSeg2);
+
+        const bFin = new THREE.Mesh(finGeom, mat);
+        bFin.position.y = BASIC_BARREL_Y.fin;
+        barrelGroup.add(bFin);
+
+        const bSeg3 = new THREE.Mesh(seg3Geom, mat);
+        bSeg3.name = 'barrel';
+        bSeg3.position.y = BASIC_BARREL_Y.seg3;
+        barrelGroup.add(bSeg3);
+
+        // ── Accent indicator light (rear of turret) ─────────────────────────
+        const accentGeom = this.sphere(
+          BASIC_GEOM.accentRadius,
+          BASIC_GEOM.accentSegments, BASIC_GEOM.accentSegments,
+        );
+        const accentMat = this.materialRegistry
+          ? this.materialRegistry.getOrCreate(
+              'basic:accentSphere',
+              () => {
+                const cfg = TOWER_MATERIAL_CONFIGS[TowerType.BASIC];
+                return new THREE.MeshStandardMaterial({
+                  color: cfg.emissive,
+                  emissive: cfg.emissive,
+                  emissiveIntensity: 1.2,
+                });
+              },
+            )
+          : (() => {
+              const cfg = TOWER_MATERIAL_CONFIGS[TowerType.BASIC];
+              return new THREE.MeshStandardMaterial({
+                color: cfg.emissive,
+                emissive: cfg.emissive,
+                emissiveIntensity: 1.2,
+              });
+            })();
+        const accentMesh = new THREE.Mesh(accentGeom, accentMat);
+        accentMesh.name = 'accent';
+        accentMesh.position.set(0, 0, BASIC_GEOM.accentZOffset);
+        turretGroup.add(accentMesh);
+
+        // ── T2: barrel cap (built at creation, hidden until T2) ─────────────
+        const capGeom = this.cyl(
+          BASIC_GEOM.capRadius, BASIC_GEOM.capRadius,
+          BASIC_GEOM.capHeight, BASIC_GEOM.capSegments,
+        );
+        const barrelCap = new THREE.Mesh(capGeom, mat);
+        barrelCap.name = 'barrelCap';
+        barrelCap.position.y = BASIC_BARREL_Y.cap + BASIC_GEOM.capHeight / 2;
+        barrelCap.visible = false;
+        barrelCap.userData['minTier'] = 2;
+        barrelGroup.add(barrelCap);
+
+        // ── T3: shoulder pauldrons (built at creation, hidden until T3) ─────
+        const pauldronGeom = this.geometryRegistry
+          ? this.geometryRegistry.getOrCreateCustom(
+              'basic:pauldron',
+              () => new THREE.BoxGeometry(
+                BASIC_GEOM.pauldronW, BASIC_GEOM.pauldronH, BASIC_GEOM.pauldronD,
+              ),
+            )
+          : new THREE.BoxGeometry(
+              BASIC_GEOM.pauldronW, BASIC_GEOM.pauldronH, BASIC_GEOM.pauldronD,
+            );
+
+        for (const side of [-1, 1] as const) {
+          const pauldron = new THREE.Mesh(pauldronGeom, mat);
+          pauldron.name = 'pauldron';
+          pauldron.position.set(side * BASIC_GEOM.pauldronX, 0, 0);
+          pauldron.visible = false;
+          pauldron.userData['minTier'] = 3;
+          turretGroup.add(pauldron);
+        }
+
+        // ── Idle animation: turret swivel ────────────────────────────────────
+        towerGroup.userData['idleTick'] = (group: THREE.Group, t: number): void => {
+          const tGroup = group.getObjectByName('turret');
+          if (tGroup) {
+            tGroup.rotation.y =
+              Math.sin(t * BASIC_IDLE_CONFIG.swivelSpeed) * BASIC_IDLE_CONFIG.swivelAmplitudeRad;
+          }
+        };
+
+        // ── Firing animation: barrel recoil ──────────────────────────────────
+        towerGroup.userData['fireTick'] = (group: THREE.Group, duration: number): void => {
+          group.userData['recoilStart'] = performance.now() / 1000;
+          group.userData['recoilDuration'] = duration;
+        };
+
+        // ── Accent point light ───────────────────────────────────────────────
+        const isLowEnd = typeof document !== 'undefined'
+          && document.body.classList.contains('reduce-motion');
+        this.attachAccentLight(towerGroup, TowerType.BASIC, isLowEnd);
+        // Override light position to sit at the accent sphere location
+        const accentLight = towerGroup.userData['accentLight'] as THREE.PointLight | undefined;
+        if (accentLight) {
+          accentLight.position.set(0, BASIC_ACCENT_Y, 0);
+        }
+
         break;
       }
 
