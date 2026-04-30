@@ -882,5 +882,39 @@ describe('TowerAnimationService', () => {
 
       disposeRecoilGroup(group);
     });
+
+    it('uses userData[recoilDistance] when set (SNIPER override)', () => {
+      // SNIPER's fireTick writes recoilDistance = 0.08; verify tickRecoilAnimations
+      // honours it rather than falling back to BASIC_RECOIL_CONFIG.distance (0.05).
+      const { group, barrel } = makeRecoilGroup();
+      const sniperDistance = 0.08;
+      const now = 20.0;
+      group.userData['recoilStart'] = now;
+      group.userData['recoilDuration'] = 0.1;
+      group.userData['recoilDistance'] = sniperDistance;
+
+      // At t=now, elapsed=0, eased=0, offset = -distance * (1 - 0) = -distance
+      service.tickRecoilAnimations(new Map([['t', group]]), now);
+
+      expect(barrel.position.y).toBeCloseTo(-sniperDistance, 4);
+      // Confirm BASIC distance would have been different
+      expect(sniperDistance).not.toBeCloseTo(BASIC_RECOIL_CONFIG.distance, 4);
+
+      disposeRecoilGroup(group);
+    });
+
+    it('falls back to BASIC_RECOIL_CONFIG.distance when recoilDistance is absent', () => {
+      const { group, barrel } = makeRecoilGroup();
+      const now = 30.0;
+      group.userData['recoilStart'] = now;
+      group.userData['recoilDuration'] = 0.1;
+      // No recoilDistance set
+
+      service.tickRecoilAnimations(new Map([['t', group]]), now);
+
+      expect(barrel.position.y).toBeCloseTo(-BASIC_RECOIL_CONFIG.distance, 4);
+
+      disposeRecoilGroup(group);
+    });
   });
 });

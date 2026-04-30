@@ -2018,3 +2018,35 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 **Risk:** The accent `PointLight` is gated behind `document.body.classList.contains('reduce-motion')`. `reduce-motion` is a motion-accessibility preference (suppresses animation), not a performance-reduction flag. The plan doc explicitly says to check `runtime-mode.service.ts` for low-end detection. Checking `document.body` in a constructor-time factory method also couples the factory to DOM state at mesh-creation time — a tower placed after `reduce-motion` is toggled mid-session will behave differently than one placed before the toggle. `runtime-mode.service.ts` (or a `lowEndMode` injectable bool) is the correct signal: it's determined once at startup based on device capability, not per-frame DOM sniffing.
 
 **Fix (deferred — low production risk):** Inject `RuntimeModeService` (or a boolean token `IS_LOW_END`) into `TowerMeshFactoryService` and replace the `document.body` check with `this.runtimeMode.isLowEnd`. The deferred label is appropriate since (a) `reduce-motion` users likely appreciate the light skip, (b) the feature is cosmetic, and (c) `runtime-mode.service.ts` may not currently expose a `boolean` — wiring it requires an additional sprint. Track as Phase H (cohesion sprint 52) follow-up.
+
+---
+
+## Red Team Critique — Phase C (SNIPER silhouette) — 2026-04-30
+
+### Finding 7: `chargeTick` registered but never invoked — dead callback channel (MEDIUM)
+
+**Location:** `tower-mesh-factory.service.ts` SNIPER case / `tower-animation.service.ts:updateTowerAnimations`
+
+**Risk:** The SNIPER mesh registers `chargeTick` on `userData` (aliased to `idleTick` — scope lens pulse). `updateTowerAnimations` only checks `idleTick`; there is no callsite for `chargeTick`. Since `chargeTick` is currently aliased to `idleTick`, the lens still pulses in idle — so there is no visible regression. But the channel exists as an intentional API surface (the comment says "a future phase may wire this to real target-lock state"). Any future CHAIN/SLOW tower that registers `chargeTick` for a distinct animation (distinct from `idleTick`) will be silently ignored. The contract is undocumented and has no spec coverage.
+
+**Fix (deferred):** Either remove `chargeTick` from this commit (it doesn't do distinct work yet) or add a `chargeTick` callsite to `updateTowerAnimations` analogous to the `idleTick` block, and document the intended ordering. A spec asserting the charge callback is invoked when `chargeTick` is set should land before any Phase D/E tower uses it distinctly.
+
+---
+
+### Finding 8: `tickRecoilAnimations` ignores `userData['recoilDistance']` — SNIPER recoil always fires at BASIC distance (CRITICAL)
+
+**Location:** `tower-animation.service.ts:234`
+
+**Risk:** The SNIPER `fireTick` writes `recoilDistance = 0.08` to `userData`. `tickRecoilAnimations` hardcodes `BASIC_RECOIL_CONFIG.distance` (0.05u) and never reads `recoilDistance`. All SNIPER shots recoil at BASIC distance — the per-tower differentiation is silent. The three existing recoil specs only test the BASIC case and assert against `BASIC_RECOIL_CONFIG.distance`, so they cannot detect this.
+
+**Fix applied (this commit):** `tickRecoilAnimations` now reads `group.userData['recoilDistance'] ?? BASIC_RECOIL_CONFIG.distance`. Two new specs in `tower-animation.service.spec.ts`: (1) SNIPER override path uses 0.08u at t=0; (2) absent `recoilDistance` falls back to `BASIC_RECOIL_CONFIG.distance`.
+
+---
+
+### Finding 9: Scope lens mesh (`name='scope'`) missing `maxTier=1` — floats detached at T2+ (MEDIUM)
+
+**Location:** `tower-mesh-factory.service.ts` SNIPER case (lens mesh construction)
+
+**Risk:** The scope housing (`scopeMesh`) correctly carries `userData['maxTier'] = 1`, so `revealTierParts` hides it at T2. The lens disk (`lensMesh`, named `'scope'`) has no `maxTier` tag — `revealTierParts` leaves it visible. At T2+ the invisible housing is gone but the glowing lens disk remains floating in space. No spec tested the lens's `maxTier` because the spec only checked the housing. The upgrade-visual spec for `maxTier` behaviour validates the service logic correctly, but the factory spec didn't assert this field on the lens.
+
+**Fix applied (this commit):** Added `lensMesh.userData['maxTier'] = 1` immediately after lens mesh construction. Added a factory spec asserting `getObjectByName('scope').userData['maxTier'] === 1`.

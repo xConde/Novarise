@@ -344,6 +344,8 @@ export class TowerMeshFactoryService {
         // Lens faces forward (+Z direction from the scope housing)
         lensMesh.rotation.x = Math.PI / 2;
         lensMesh.position.set(0, SNIPER_SCOPE_Y, SNIPER_LENS_Z);
+        // T1 lens disappears at T2 together with the scope housing (maxTier=1 mirrors scopeMesh)
+        lensMesh.userData['maxTier'] = 1;
         towerGroup.add(lensMesh);
 
         // ── T2: longer scope (hidden until T2; T1 scope hidden above T1) ────

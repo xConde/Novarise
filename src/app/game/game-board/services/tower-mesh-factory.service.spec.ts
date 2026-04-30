@@ -326,6 +326,14 @@ describe('TowerMeshFactoryService', () => {
       fire(sniperGroup, 0.05);
       expect(sniperGroup.userData['recoilDistance']).toBeGreaterThan(0.05);
     });
+
+    it('scope lens (name="scope") has maxTier=1 so it hides at T2+ with the housing', () => {
+      // The lens disk must carry the same maxTier=1 tag as the scope housing cylinder.
+      // Without it, revealTierParts hides the housing but the lens disk floats detached.
+      const lens = sniperGroup.getObjectByName('scope') as THREE.Object3D | undefined;
+      expect(lens).toBeTruthy();
+      expect((lens!.userData as Record<string, unknown>)['maxTier']).toBe(1);
+    });
   });
 
   // --- Default/fallback case ---

@@ -229,9 +229,14 @@ export class TowerAnimationService {
       const raw = elapsed / recoilDuration;
       const eased = 1 - Math.pow(1 - raw, 3);
 
+      // Per-tower recoil distance: read from userData if set (SNIPER registers
+      // 0.08u; BASIC does not set it, so fall back to BASIC_RECOIL_CONFIG.distance).
+      const distance = (group.userData['recoilDistance'] as number | undefined)
+        ?? BASIC_RECOIL_CONFIG.distance;
+
       // Slide back at the start, return toward neutral as eased approaches 1
       // Peak recoil at t=0 (offset = -distance), returns to 0 at t=1
-      const offset = -BASIC_RECOIL_CONFIG.distance * (1 - eased);
+      const offset = -distance * (1 - eased);
 
       const barrel = group.getObjectByName('barrel') as THREE.Mesh | undefined;
       if (barrel) barrel.position.y = offset;
