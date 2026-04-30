@@ -1203,6 +1203,11 @@ export class TowerMeshFactoryService {
 
           // T2 / T3 orbiting spheres — use wall-clock `t` directly so orbit
           // speed is frame-rate-independent. Angle = speed (rad/s) × t (s).
+          // The `?.visible` guard checks the Mesh directly. If a parent group
+          // were ever hidden instead of the mesh itself, `orbit2.visible` would
+          // still be true and the orbit would advance while invisible. Not a
+          // current bug (the CHAIN towerGroup is always visible when placed) —
+          // revisit if group-level hide ever becomes a feature.
           const orbit2 = group.getObjectByName('orbitSphere2') as THREE.Mesh | undefined;
           if (orbit2?.visible) {
             const angle = CHAIN_GEOM.orbitSphere2InitPhase
