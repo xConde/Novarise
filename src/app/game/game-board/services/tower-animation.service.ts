@@ -353,6 +353,15 @@ export class TowerAnimationService {
       const animStart = group.userData['scaleAnimStart'] as number | undefined;
       if (animStart === undefined) continue;
 
+      // If a sell animation has taken ownership of this group's transform, cede
+      // control immediately rather than fighting tickSellAnimations for scale
+      // ownership. tickSellAnimations will drive scale to 0 and dispose the group.
+      if (group.userData['selling']) {
+        group.userData['scaleAnimStart'] = undefined;
+        group.userData['scaleAnimBaseScale'] = undefined;
+        continue;
+      }
+
       const elapsed = nowSeconds - animStart;
       const baseScale = (group.userData['scaleAnimBaseScale'] as number | undefined) ?? 1.0;
 

@@ -1240,6 +1240,25 @@ describe('TowerAnimationService', () => {
       expect(group.scale.x).toBeGreaterThan(base);
       expect(group.scale.x).toBeLessThanOrEqual(TIER_UP_BOUNCE_CONFIG.peakScale * base + 0.01);
     });
+
+    it('cedes scale ownership when group is selling — I-5 race guard', () => {
+      // Simulate the race: upgrade fires scaleAnimStart, then sell fires immediately.
+      // tickTierUpScale should yield to tickSellAnimations instead of fighting for scale.
+      const group = new THREE.Group();
+      const base = 1.2;
+      group.scale.setScalar(TIER_UP_BOUNCE_CONFIG.peakScale * base);
+      group.userData['scaleAnimStart'] = performance.now() / 1000;
+      group.userData['scaleAnimBaseScale'] = base;
+      group.userData['selling'] = true; // sell animation wins ownership
+
+      service.tickTierUpScale(new Map([['t', group]]), performance.now() / 1000);
+
+      // Scale state cleared — tickSellAnimations is now in full control
+      expect(group.userData['scaleAnimStart']).toBeUndefined();
+      expect(group.userData['scaleAnimBaseScale']).toBeUndefined();
+      // Scale itself should be untouched — tickSellAnimations drives it from here
+      expect(group.scale.x).toBeCloseTo(TIER_UP_BOUNCE_CONFIG.peakScale * base, 4);
+    });
   });
 
   // ---- tickSellAnimations (Phase I Sprint 61) ----
