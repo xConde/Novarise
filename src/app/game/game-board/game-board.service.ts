@@ -318,7 +318,7 @@ export class GameBoardService {
     const material = new THREE.MeshBasicMaterial({
       color: 0xd6e2ff,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.32,
       depthWrite: false,
     });
 

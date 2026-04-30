@@ -27,16 +27,16 @@ export const TILE_VISUAL_CONFIG = {
    */
   geometryGapFactor: 0.93,
   /**
-   * Walls keep a much tighter gap than buildable tiles. Connected
-   * walls should still read as one impassable structure, not as a
-   * grid of individual blocks the player can place on — so the gap
-   * is small enough that the trim plane shows through as a hairline
-   * hint of cell structure, roughly half the visible width of the
-   * BASE-tile trim. Anything wider starts to read as gridded UI on
-   * the wall surface; anything tighter reverts to a featureless
-   * black slab.
+   * Walls need a wider gap than the geometry alone would suggest:
+   * any horizontal seam (Z direction) is blocked from the camera's
+   * sightline by the front face of the wall in front of it. With
+   * wall tops at the same height as buildable tiles, only gaps wide
+   * enough for the camera to see down past the front face register
+   * as visible cell structure. Tuned so both vertical AND horizontal
+   * seams show at the default game camera angle without the wall
+   * surface losing its connected-structure read.
    */
-  wallGapFactor: 0.985,
+  wallGapFactor: 0.95,
   base: {
     emissiveIntensity: 0.35,
     /** Slight metalness pairs with the lower roughness to let the top
