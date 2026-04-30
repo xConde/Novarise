@@ -615,6 +615,21 @@ describe('TowerMeshFactoryService', () => {
       expect(mat.emissiveIntensity).toBeCloseTo(SLOW_EMITTER_PULSE_CONFIG.min, 4);
     });
 
+    it('each SLOW tower instance gets its own emitter material (no shared-material cross-contamination)', () => {
+      // Two SLOW towers must not share their emitter material — muzzle-flash
+      // save/restore uses (mesh.uuid + mat.uuid) as the key; a shared material
+      // means tower B's save captures tower A's already-spiked emissiveIntensity.
+      const slowGroup2 = service.createTowerMesh(6, 6, TowerType.SLOW, boardWidth, boardHeight);
+      createdGroups.push(slowGroup2);
+
+      const emitter1 = slowGroup.getObjectByName('emitter') as THREE.Mesh;
+      const emitter2 = slowGroup2.getObjectByName('emitter') as THREE.Mesh;
+
+      expect(emitter1).toBeTruthy();
+      expect(emitter2).toBeTruthy();
+      expect(emitter1.material).not.toBe(emitter2.material);
+    });
+
     it('T2 coil2 part is hidden at creation with minTier=2', () => {
       const coil2 = slowGroup.getObjectByName('coil2') as THREE.Object3D | undefined;
       expect(coil2).toBeTruthy();
@@ -668,7 +683,7 @@ describe('TowerMeshFactoryService', () => {
 
       tick(slowGroup, 0);
       const y0 = crystal.position.y;
-      tick(slowGroup, Math.PI / 2.4); // quarter-period of 1.2 rad/s sine
+      tick(slowGroup, Math.PI / (2 * SLOW_EMITTER_PULSE_CONFIG.crystalBobSpeed));
       const y1 = crystal.position.y;
 
       // Y must have changed from the base position

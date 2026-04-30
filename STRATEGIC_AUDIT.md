@@ -2079,3 +2079,33 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 
 - **Finding D-a (MEDIUM):** `heatVent` material (`emissiveIntensity: 0.9`) is NOT in `applyUpgradeVisuals`'s skip-set (`['tip', 'orb', 'scope']`). On T3 upgrade the ratchet overwrites the vent's intentional glow to `emissiveBase + 2 * emissiveIncrement`. Needs `'heatVent'` added to `animatedNames` in `tower-upgrade-visual.service.ts`. **Status:** Fixed in Phase E — `'heatVent'` and `'emitter'` (SLOW idle-driven mesh) both added to skip-set.
 - **Finding D-b (LOW):** `drumPrevT` uses the `t` parameter (from `time * msToSeconds`) while `drumSpinBoostUntil` uses `performance.now() / 1000` directly. Both are the same clock, so no current bug — but if `updateTowerAnimations` is ever called with a synthetic `time` in tests, boost detection will use wall clock vs test clock and produce wrong results. Track for Phase H cohesion sprint.
+
+---
+
+## Red Team Critique — Phase E (SLOW silhouette) — 2026-04-30
+
+### Finding 12: Shared emitter material across SLOW tower instances — muzzle-flash save/restore cross-contamination (CRITICAL)
+
+**Location:** `tower-mesh-factory.service.ts` SLOW case, `emitterMat` via `materialRegistry.getOrCreate('slow:emitter', ...)`
+
+**Risk:** `materialRegistry.getOrCreate` returns a singleton `MeshStandardMaterial` shared across every placed SLOW tower. `startMuzzleFlash` saves/restores `emissiveIntensity` using a `child.uuid + '_' + mat.uuid` key. Since all SLOW emitter meshes share the same `mat.uuid`, the emissive save from tower A captures a valid value, but if tower B fires before A's flash expires, B's save captures A's already-spiked intensity. When B's flash timer expires and it restores the shared material, `emissiveIntensity` is set to the spiked value, leaving the emitter permanently over-bright until the `idleTick` overwrites it on the next frame. With the `idleTick` running at 60 fps this is a one-frame glitch — but the contract violation is real and becomes a multi-frame artifact if `idleTick` is ever paused (e.g., when the game is paused mid-flash). Exact same class as Finding 10 (SPLASH tubes).
+
+**Fix applied:** Each SLOW tower instance gets a cloned material: `emitterMatBase` is still registered (reuses GPU shader), and `emitterMat = emitterMatBase.clone()` produces a unique instance per tower. Clone is lightweight — same textures/shader, independent uniform state. Regression spec: `'each SLOW tower instance gets its own emitter material'` asserts `emitter1.material !== emitter2.material`. Fixed in commit `[see below]`.
+
+---
+
+### Finding 13: Magic number `1.2` (crystal bob speed) in idleTick closure (MEDIUM)
+
+**Location:** `tower-mesh-factory.service.ts` SLOW `idleTick`, line `Math.sin(t * 1.2) * 0.04`
+
+**Risk:** Violates the no-magic-numbers convention. The `0.04` amplitude and `1.2` rad/s frequency are tuning values that may need adjusting in Phase H animation-cohesion work. A designer who searches `SLOW_EMITTER_PULSE_CONFIG` in the constants file will not find the bob parameters, so the animation becomes untunable without reading the factory implementation.
+
+**Fix applied:** Added `crystalBobSpeed: 1.2` and `crystalBobAmplitude: 0.04` to `SLOW_EMITTER_PULSE_CONFIG`. Updated `idleTick` closure and spec comment to use the named constants. Fixed in same commit as Finding 12.
+
+---
+
+### Deferred Phase E Findings (no fix this commit)
+
+- **Finding E-a (LOW):** `tickEmitterPulses` reads `pulseDuration` from `userData` (validates `> 0`) but then ignores it — all timing comparisons use `SLOW_EMITTER_PULSE_FIRE.durationSec` directly. The stored value is a dead variable. No current bug since `fireTick` always passes `SLOW_EMITTER_PULSE_FIRE.durationSec`. Would become a silent regression if any caller sets a different duration. Track for Phase H cleanup: either remove the `pulseDuration` userData write, or use it in the timing comparisons.
+- **Finding E-b (LOW):** The `idleTick` `traverse` for T3 crystal bob runs every frame even when the `crystalCore` is hidden at T1/T2 — traverses the full group scene graph to find and skip the invisible node. Low cost with 5–6 children, but the pattern should be `getObjectByName('crystalCore')` (O(N) linear scan, same cost, cleaner intent) rather than `traverse` with an early-exit. Deferred to Phase H.
+- **Finding E-c (LOW):** The legacy `crystal` bob specs in `tower-animation.service.spec.ts` (lines 99–127) still test the legacy SLOW traverse path via synthetic groups with no `idleTick`. These remain valid (the legacy path still exists for unredesigned towers) but read confusingly alongside the new Phase E specs. Consider moving them to a dedicated `'legacy traverse — SLOW (pre-Phase-E)'` describe block with a comment explaining they test the fallback path, not the live mesh.

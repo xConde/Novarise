@@ -380,6 +380,10 @@ export const SLOW_EMITTER_PULSE_CONFIG = {
   periodSec: 2.0,
   /** Coil ring idle rotation speed (radians per second around its local Y axis). */
   coilRotSpeed: 0.5,
+  /** T3 crystal core vertical-bob frequency (radians per second). */
+  crystalBobSpeed: 1.2,
+  /** T3 crystal core vertical-bob amplitude (world units). */
+  crystalBobAmplitude: 0.04,
 } as const;
 
 // ─── SLOW fire animation (emitter scale pulse) ─────────────────────────────────

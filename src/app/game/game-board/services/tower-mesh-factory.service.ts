@@ -833,7 +833,14 @@ export class TowerMeshFactoryService {
               SLOW_GEOM.emitterThetaStart,
               SLOW_GEOM.emitterThetaLen,
             );
-        const emitterMat = this.materialRegistry
+        // Per-instance material: the emitter's emissiveIntensity is mutated
+        // every frame by idleTick (breathing) and saved/restored by
+        // startMuzzleFlash per-tower. A shared registry material would cause
+        // cross-tower contamination when two SLOW towers fire in the same
+        // frame — tower B's muzzle-flash save captures tower A's already-spiked
+        // intensity, and the restore sets the shared material to the wrong value.
+        // Use the registry as a prototype and clone for each instance.
+        const emitterMatBase = this.materialRegistry
           ? this.materialRegistry.getOrCreate(
               'slow:emitter',
               () => new THREE.MeshStandardMaterial({
@@ -855,6 +862,7 @@ export class TowerMeshFactoryService {
               transparent:       slowCfg.transparent,
               opacity:           slowCfg.opacity,
             });
+        const emitterMat = emitterMatBase.clone();
         const emitterMesh = new THREE.Mesh(emitterGeom, emitterMat);
         emitterMesh.name = 'emitter';
         // Flip 180° around X so the open bowl faces upward
@@ -898,7 +906,9 @@ export class TowerMeshFactoryService {
               if (child.userData['floatBobBaseY'] === undefined) {
                 child.userData['floatBobBaseY'] = baseY;
               }
-              child.position.y = baseY + Math.sin(t * 1.2) * 0.04;
+              child.position.y = baseY
+                + Math.sin(t * SLOW_EMITTER_PULSE_CONFIG.crystalBobSpeed)
+                * SLOW_EMITTER_PULSE_CONFIG.crystalBobAmplitude;
             }
           });
         };
