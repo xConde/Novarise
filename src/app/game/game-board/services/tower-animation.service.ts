@@ -39,6 +39,12 @@ export class TowerAnimationService {
       const towerType = group.userData['towerType'] as TowerType | undefined;
       if (!towerType) continue;
 
+      // Groups currently animating a sell shrink must not have their emissive
+      // overwritten by chargeTick/idleTick — the sell fade owns those uniforms
+      // for the duration of the animation. Skip them here; tickSellAnimations
+      // drives all visual state until onExpire fires and disposes the group.
+      if (group.userData['selling']) continue;
+
       // chargeTick runs BEFORE idleTick so charge-up emissive changes land first.
       const chargeTick = group.userData['chargeTick'] as ((g: THREE.Group, t: number) => void) | undefined;
       if (typeof chargeTick === 'function') {
@@ -394,12 +400,33 @@ export class TowerAnimationService {
       const sellStart = group.userData['sellingStart'] as number | undefined;
       if (sellStart === undefined) continue;
 
+      // Snapshot original emissive intensities once on the first sell frame so
+      // the fade uses absolute assignment rather than multiplicative decay.
+      // Multiplicative decay is incorrect: each frame compounds the reduction,
+      // and idleTick/chargeTick (now blocked by the 'selling' guard in
+      // updateTowerAnimations) would previously re-inflate the value between frames,
+      // producing a noisy flicker rather than a smooth fade.
+      if (!group.userData['sellEmissiveOrigins']) {
+        const origins = new Map<string, number>();
+        group.traverse(child => {
+          if (!(child instanceof THREE.Mesh)) return;
+          const mats = getMaterials(child) as THREE.MeshStandardMaterial[];
+          for (const mat of mats) {
+            if (mat.emissiveIntensity !== undefined) {
+              origins.set(child.uuid + '_' + mat.uuid, mat.emissiveIntensity);
+            }
+          }
+        });
+        group.userData['sellEmissiveOrigins'] = origins;
+      }
+
       const elapsed = nowSeconds - sellStart;
 
       if (elapsed >= SELL_ANIM_CONFIG.durationSec) {
-        // Animation complete — signal caller to dispose the group.
+        // Animation complete — clear snapshot and signal caller to dispose the group.
         group.userData['selling'] = false;
         group.userData['sellingStart'] = undefined;
+        group.userData['sellEmissiveOrigins'] = undefined;
         onExpire(key);
         continue;
       }
@@ -410,14 +437,18 @@ export class TowerAnimationService {
       const scale = 1.0 - eased * (1.0 - SELL_ANIM_CONFIG.finalScale);
       group.scale.setScalar(scale);
 
-      // Fade out emissive on all standard materials
+      // Fade out emissive using absolute assignment from the snapshotted originals
+      // so the value is deterministic regardless of frame rate.
       const emissiveFade = 1.0 - eased;
+      const origins = group.userData['sellEmissiveOrigins'] as Map<string, number>;
       group.traverse(child => {
         if (!(child instanceof THREE.Mesh)) return;
         const mats = getMaterials(child) as THREE.MeshStandardMaterial[];
         for (const mat of mats) {
-          if (mat.emissiveIntensity !== undefined) {
-            mat.emissiveIntensity *= emissiveFade;
+          const key2 = child.uuid + '_' + mat.uuid;
+          const base = origins.get(key2);
+          if (base !== undefined) {
+            mat.emissiveIntensity = base * emissiveFade;
           }
         }
       });

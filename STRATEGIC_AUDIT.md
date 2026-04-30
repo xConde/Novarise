@@ -2229,3 +2229,70 @@ Priority order for Phase H cleanup:
 
 1. **H-1 residual (LOW):** Remove `case 'crystal'`, `case 'spark'`, `case 'spore'`, `case 'tip'` from legacy traverse switch — all are dead code post Phase-D. Full sweep deferred to Phase I closure sprint.
 2. **D-b (LOW):** Clock-source annotation for `drumSpinBoostUntil` vs `t` — annotation applied in Phase H, unification deferred.
+
+---
+
+## Red Team Critique — Phase I (animation polish) — 2026-04-30
+
+### Finding I-1: `tickSellAnimations` emissive fade is multiplicative — corrupts under concurrent idle/charge ticks (CRITICAL — FIXED)
+
+**Location:** `tower-animation.service.ts:tickSellAnimations` (emissive fade loop); `tower-animation.service.ts:updateTowerAnimations` (idle/charge dispatch)
+
+**Risk:** Two compounding bugs caused corrupted emissive during sell animation:
+1. The fade used `mat.emissiveIntensity *= emissiveFade` — multiplicative decay. Each frame compounds the reduction, so the result is frame-rate-dependent (60fps tower fades faster than 30fps tower). At 60fps over 400ms the value approaches 0 via `(1-eased)^N` not `(1-eased)` — the tower flickers dark almost immediately instead of fading smoothly.
+2. `updateTowerAnimations` invoked `idleTick`/`chargeTick` on selling groups BEFORE `tickSellAnimations` ran its decay. For CHAIN, `chargeTick` re-sets `sphere.emissiveIntensity` every frame via a sine wave. This exactly cancels the emissive fade on the sphere — the CHAIN sell animation was an indefinite emissive loop that never dimmed, broken at the GL level.
+
+**Fix applied (two changes):**
+- `updateTowerAnimations` now checks `group.userData['selling']` early and skips the group entirely, preventing idle/charge ticks from fighting the sell animation.
+- `tickSellAnimations` snapshots original emissiveIntensity values into `userData['sellEmissiveOrigins']` on the first sell frame and uses absolute assignment (`base * emissiveFade`) on every subsequent frame — deterministic, frame-rate-independent.
+
+**Tests added:** `'fade uses absolute emissive assignment — same result at two different frames (Finding I-1)'`, `'emissive reaches ~0 at animation end without compound undershoot'`, `'updateTowerAnimations skips selling groups — does not invoke idleTick'`.
+
+---
+
+### Finding I-2: CHAIN fireTick writes `recoilStart` but CHAIN has no 'barrel' mesh — recoil is a silent no-op (MEDIUM — FIXED)
+
+**Location:** `tower-mesh-factory.service.ts` CHAIN `fireTick`; `tower-animation.service.ts:tickRecoilAnimations`
+
+**Risk:** `tickRecoilAnimations` defaults the barrel name list to `['barrel']` when no `mortarBarrelNames` userData key is set. CHAIN has no child mesh named `'barrel'` — the geometry consists of a central post (unnamed), coil tori, floating sphere, and electrodes. The CHAIN fireTick set `recoilStart`, `recoilDuration`, and `recoilDistance` — documenting a "0.03u spark-kick recoil" that silently did nothing. Every fire event left stale `recoilStart` in userData with no visible effect.
+
+**Fix applied:** Replaced the CHAIN fireTick body with a no-op. The comment records the intent and defers CHAIN-specific recoil to Phase J when `CHAIN_BARREL_NAMES` can be defined pointing to the post or sphere as the recoil target. The muzzle-flash emissive spike from `startMuzzleFlash` remains the sole visual fire-signal for CHAIN.
+
+---
+
+### Finding I-3: `applyUpgradeVisuals` skip-set missing 'sphere' — CHAIN upgrade stomps chargeTick emissive (MEDIUM — FIXED)
+
+**Location:** `tower-upgrade-visual.service.ts:applyUpgradeVisuals` (animatedNames set)
+
+**Risk:** The skip-set was `['tip', 'scope', 'heatVent', 'emitter']`. The CHAIN `'sphere'` mesh is driven every frame by `chargeTick` (sine wave between `CHAIN_CHARGE_CONFIG.emissiveMin` and `emissiveMax`). When a CHAIN tower upgrades, `applyUpgradeVisuals` traverses the group and sets `sphere.material.emissiveIntensity = emissiveBase + (level-1) * emissiveIncrement` — a level-scaling constant overwriting the animated value. The chargeTick restores control on the next frame, but the snapshot taken by `startMuzzleFlash` (which fires on upgrade flash) could have captured the ratcheted value, causing a one-frame emissive spike on the sphere at each upgrade level. Same class as Finding 12/14 (save/restore cross-contamination).
+
+**Fix applied:** Added `'sphere'` to `animatedNames` in `applyUpgradeVisuals`. The sphere emissive is left exclusively to `chargeTick` throughout the tower lifetime.
+
+---
+
+### Finding I-4: SNIPER phantom yaw rotates the whole tower group, not a dedicated housing sub-group (LOW — deferred to Phase J)
+
+**Location:** `tower-mesh-factory.service.ts` SNIPER `idleTick`; `group.rotation.y` write
+
+**Risk:** The `±2° phantom-target tracking` rotates `group.rotation.y` — the entire tower including the tripod legs. For the current geometry (tripod + central post + scope-on-top), a whole-group yaw reads plausibly as "the whole tower rotates to track". However, the architectural intent was "scope tracks target" — the scope should rotate on its own sub-group while the tripod legs stay planted. As delivered, all three tripod struts swing in unison with the scope, which looks mechanical rather than precision-rifle. No crash; purely aesthetic.
+
+**Deferral justification:** Fixing requires extracting the scope + barrel + lens into a named `scopeGroup` child and rotating that instead of the root group. This is a geometry refactor touching `SNIPER_GEOM`, the factory, and potentially the bipod attachment — wider than a red-team fix. Phase J should scope the housing extraction alongside Sprint 62 (hover lift) when the SNIPER silhouette is revisited.
+
+---
+
+### Finding I-5: `tickTierUpScale` + sell-shrink racing on the same group — no conflict guard (LOW — deferred to Phase J)
+
+**Location:** `tower-animation.service.ts:tickTierUpScale`; `tower-animation.service.ts:tickSellAnimations`
+
+**Risk:** If a tower upgrades and is sold within `TIER_UP_BOUNCE_CONFIG.durationSec` (300ms), both ticks run on the same group simultaneously. `tickTierUpScale` writes `group.scale.setScalar(bounceScale)`. `tickSellAnimations` writes `group.scale.setScalar(shrinkScale)`. Whichever runs last in the animate loop wins — the result is a flickering scale that can flash unexpectedly large during shrink. No crash; cosmetic glitch only, and 300ms is an extremely narrow window.
+
+**Deferral justification:** Real play sessions rarely produce this race (sell a tower within 300ms of upgrading it). Fix: `tickTierUpScale` should check `group.userData['selling']` and clear `scaleAnimStart` early, deferring ownership to the sell animation. One-line fix for Phase J.
+
+---
+
+### Deferred to Phase J
+
+1. **I-4 (LOW):** SNIPER whole-group yaw — extract scope+barrel into `scopeGroup` sub-group for proper tracking motion.
+2. **I-5 (LOW):** `tickTierUpScale` + sell race — add `if (group.userData['selling']) { group.userData['scaleAnimStart'] = undefined; continue; }` guard.
+3. **H-1 residual (LOW):** Remove dead legacy traverse cases (`'crystal'`, `'spark'`, `'spore'`, `'tip'`).
+4. **D-b (LOW):** Unify `drumSpinBoostUntil` and `t` clock sources in SPLASH idleTick.

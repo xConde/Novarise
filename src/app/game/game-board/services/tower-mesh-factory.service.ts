@@ -1254,15 +1254,17 @@ export class TowerMeshFactoryService {
           }
         };
 
-        // ── Firing animation: small spark-kick recoil ────────────────────────
-        // CHAIN_RECOIL_CONFIG.distance (0.03u) — smaller than BASIC's 0.05u to
-        // reinforce the electric-discharge read without a full ballistic recoil.
-        // The 'sphere' mesh is excluded from startMuzzleFlash's skip-set (Finding 14
-        // fix) so chargeTick drives sphere emissive independently without contamination.
-        towerGroup.userData['fireTick'] = (group: THREE.Group, duration: number): void => {
-          group.userData['recoilStart'] = performance.now() / 1000;
-          group.userData['recoilDuration'] = duration;
-          group.userData['recoilDistance'] = CHAIN_RECOIL_CONFIG.distance;
+        // ── Firing animation: muzzle flash only (no barrel recoil) ─────────
+        // CHAIN has no mesh named 'barrel' — the central post and floating sphere
+        // are not physical barrel geometries. tickRecoilAnimations defaults to
+        // searching for 'barrel', which silently no-ops for CHAIN, so wiring
+        // recoilStart here would document a "spark-kick" that never renders.
+        // The muzzle-flash emissive spike from startMuzzleFlash is the sole
+        // fire-animation signal. Recoil on the sphere/post is deferred to Phase J
+        // once a dedicated CHAIN_BARREL_NAMES list is defined in the constants.
+        // (Phase I red-team Finding I-4 — CHAIN recoil no-op.)
+        towerGroup.userData['fireTick'] = (_group: THREE.Group, _duration: number): void => {
+          // No-op: CHAIN fire animation is handled entirely by startMuzzleFlash.
         };
 
         // ── Accent point light at sphere height ─────────────────────────────

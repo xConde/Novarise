@@ -1308,6 +1308,64 @@ describe('TowerAnimationService', () => {
       expect(group.userData['selling']).toBeFalse();
       disposeSellingGroup(group);
     });
+
+    it('fade uses absolute emissive assignment — same result at two different frames (Finding I-1)', () => {
+      // Two groups with the same start time and same original emissive.
+      // Both are driven to the exact same elapsed time via a single call
+      // (one group in the map). We call twice at the same elapsed time and
+      // verify the final emissiveIntensity is identical — proving the result
+      // is not compounded by repeated multiplicative decay.
+      const group = makeSellingGroup();
+      const start = group.userData['sellingStart'] as number;
+      const halfWay = start + SELL_ANIM_CONFIG.durationSec * 0.5;
+
+      const spy = jasmine.createSpy('onExpire');
+      const map = new Map([['t', group]]);
+
+      // First call at 50%
+      service.tickSellAnimations(map, halfWay, spy);
+      const intensityAfterFirstCall = (group.children[0] as THREE.Mesh)
+        ? ((group.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity
+        : 0;
+
+      // Second call at the SAME elapsed time (same frame, no progress)
+      service.tickSellAnimations(map, halfWay, spy);
+      const intensityAfterSecondCall = ((group.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity;
+
+      // Absolute assignment: identical result; multiplicative would have halved again.
+      expect(intensityAfterSecondCall).toBeCloseTo(intensityAfterFirstCall, 5);
+      disposeSellingGroup(group);
+    });
+
+    it('emissive reaches ~0 at animation end without compound undershoot (Finding I-1)', () => {
+      const group = makeSellingGroup();
+      const start = group.userData['sellingStart'] as number;
+      const spy = jasmine.createSpy('onExpire');
+
+      // Drive to 99.9% of duration — should be near zero but group not yet expired
+      service.tickSellAnimations(
+        new Map([['t', group]]),
+        start + SELL_ANIM_CONFIG.durationSec * 0.999,
+        spy,
+      );
+
+      const intensity = ((group.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity;
+      expect(intensity).toBeGreaterThanOrEqual(0);
+      expect(intensity).toBeLessThan(0.01); // effectively zero
+      disposeSellingGroup(group);
+    });
+
+    it('updateTowerAnimations skips selling groups — does not invoke idleTick (Finding I-1)', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      group.userData['selling'] = true;
+      const idleSpy = jasmine.createSpy('idleTick');
+      group.userData['idleTick'] = idleSpy;
+
+      service.updateTowerAnimations(new Map([['t', group]]), 1000);
+
+      expect(idleSpy).not.toHaveBeenCalled();
+    });
   });
 
   // ---- tickSelectionPulse (Phase I Sprint 63 infra) ----

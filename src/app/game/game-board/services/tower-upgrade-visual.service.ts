@@ -166,12 +166,16 @@ export class TowerUpgradeVisualService {
     const scale = TOWER_VISUAL_CONFIG.scaleBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
     towerGroup.scale.set(scale, scale, scale);
 
-    // 'tip', 'scope', 'heatVent', 'emitter' are driven per-frame by
+    // 'tip', 'scope', 'heatVent', 'emitter', 'sphere' are driven per-frame by
     // animation ticks — skip them here so the emissive boost doesn't override
     // their per-frame values.  heatVent (SPLASH T3) and emitter (SLOW idle)
     // both have intentional emissive intensities that must not be ratcheted.
+    // 'sphere' (CHAIN charge-up mesh) is driven every frame by chargeTick;
+    // snapshotting the current animated value as the "base" would restore the
+    // sphere to a random charge phase instead of a stable baseline — same
+    // class as the save/restore contamination in startMuzzleFlash (Finding 12/14).
     // Note: 'orb' removed from skip-set — no current tower uses that name.
-    const animatedNames = new Set(['tip', 'scope', 'heatVent', 'emitter']);
+    const animatedNames = new Set(['tip', 'scope', 'heatVent', 'emitter', 'sphere']);
     towerGroup.traverse(child => {
       if (
         child instanceof THREE.Mesh &&

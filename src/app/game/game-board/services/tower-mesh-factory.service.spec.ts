@@ -815,11 +815,14 @@ describe('TowerMeshFactoryService', () => {
       expect(typeof chainGroup.userData['fireTick']).toBe('function');
     });
 
-    it('fireTick stores recoilStart and recoilDuration', () => {
+    it('fireTick is a no-op — does not write recoilStart (Finding I-2: CHAIN has no barrel mesh)', () => {
+      // CHAIN has no mesh named 'barrel'; the former recoilStart wiring was a silent
+      // no-op in tickRecoilAnimations. The fireTick is intentionally a no-op so the
+      // documented "spark-kick" is not falsely implied in the source.
       const fire = chainGroup.userData['fireTick'] as (g: THREE.Group, d: number) => void;
       fire(chainGroup, 0.1);
-      expect(chainGroup.userData['recoilStart']).toBeDefined();
-      expect(chainGroup.userData['recoilDuration']).toBeCloseTo(0.1, 5);
+      expect(chainGroup.userData['recoilStart']).toBeUndefined();
+      expect(chainGroup.userData['recoilDuration']).toBeUndefined();
     });
 
     it('T2 orbitSphere2 is hidden at creation with minTier=2', () => {
