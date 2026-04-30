@@ -220,9 +220,9 @@ export class GameBoardService {
    * tints via `layer.setColorAt`.
    */
   buildTileInstanceLayer(targetType: BlockType): TileInstanceLayer | null {
-    // UX-41: WALL layer uses wallGapFactor (>1) so connected impassable tiles
-    // merge into a continuous structure. Other types keep the standard 0.97
-    // gap factor — path/build tiles need their grid lines for readability.
+    // WALL layer uses an overlap factor so connected impassable tiles
+    // merge into a continuous structure; every other type uses the
+    // standard gap so adjacent tiles read as discrete cells.
     const gapFactor = targetType === BlockType.WALL
       ? TILE_VISUAL_CONFIG.wallGapFactor
       : TILE_VISUAL_CONFIG.geometryGapFactor;

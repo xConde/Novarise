@@ -15,60 +15,49 @@ export const BOARD_CONFIG: BoardConfig = {
 /**
  * Visual configuration shared across tile mesh creation. Lives next to
  * BOARD_CONFIG because every value here is a render-side detail of how
- * a single tile is presented (geometry, materials, ambient). Values were
- * tuned by eye — group changes here, not in game-board.service.
+ * a single tile is presented (geometry, materials, ambient).
  */
 export const TILE_VISUAL_CONFIG = {
   /**
-   * Fraction of a tile's footprint that the box geometry occupies, leaving a
-   * thin grid gap. UX-12: tightened 0.95 → 0.97 for a more cohesive board
-   * surface. Original 0.95 left a visible 5% gap that read as "gridded UI"
-   * rather than "continuous terrain"; 0.97 keeps a 3% gap for grid-line
-   * legibility without the gridded-UI feel.
+   * Fraction of a tile's footprint that the box geometry occupies. The
+   * leftover slice is the dark void between tiles — that void is what
+   * draws the visible grout line that separates adjacent tiles. Tuned
+   * so the line reads cleanly at the default game camera angle without
+   * looking like a gridded UI overlay.
    */
-  geometryGapFactor: 0.97,
+  geometryGapFactor: 0.93,
   /**
-   * UX-41: walls use a slight overlap (>1) instead of a gap so neighbouring
-   * impassable tiles read as a continuous structure. The 0.5% overhang is
-   * imperceptible at game-camera distance but eliminates the visible seam
-   * lines between connected walls. Top faces share Y so there is no
-   * z-fight; side faces only overlap where two walls touch — exactly the
-   * faces that would be hidden anyway.
+   * Walls use a slight overlap (>1) so neighbouring impassable tiles
+   * read as a continuous structure rather than a row of boxes. Top
+   * faces share Y so the overlap can never z-fight; side faces only
+   * intersect where two walls touch — exactly the faces that would be
+   * hidden anyway.
    */
   wallGapFactor: 1.005,
   base: {
     emissiveIntensity: 0.35,
-    /** UX-41: 0.1 → 0.2 — pairs with reduced roughness so BASE tile edges
-     *  pick up enough rim/key specular for the dark-to-lighter border
-     *  treatment. Tile face brightness is unchanged (driven by emissive). */
+    /** Slight metalness pairs with the lower roughness to let the top
+     *  edges catch a touch of rim/key specular without making the face
+     *  read as metal. */
     metalness: 0.2,
-    /** UX-41: 0.7 → 0.55 — at 0.7 the BASE faces were too rough to catch
-     *  any specular, so neighbouring tiles read as a continuous purple
-     *  sheet. 0.55 keeps a matte feel on the face but lets the top edge
-     *  catch the key light, drawing visible borders between tiles. */
+    /** Low enough roughness that grazing key/rim light produces a
+     *  visible highlight along tile edges; high enough that the face
+     *  itself stays matte. */
     roughness: 0.55,
   },
   wall: {
-    /** UX-36: emissive 0x0a0810 → 0x18121e (slightly more depth, matches
-     *  the cool palette). Walls were reading as visual voids on the new
-     *  dark board; subtle emissive lift makes them feel like solid
-     *  impassable structures, not holes. */
+    /** Cool-tinted dark emissive — keeps walls reading as solid
+     *  impassable structures rather than visual voids on the dark
+     *  board, without competing with BASE's buildable glow. */
     emissive: 0x18121e,
-    /** UX-36: intensity 0.05 → 0.10. Tiny bump — still reads as inert
-     *  vs. BASE's 0.35 buildable glow.
-     *  UX-41: 0.10 → 0.13 — pairs with reduced roughness so wall faces
-     *  catch a touch more rim/key light, giving connected walls the
-     *  subtle dark-to-light border treatment without distracting glow. */
+    /** Subtle uniform lift; still inert next to BASE's 0.35. */
     emissiveIntensity: 0.13,
-    /** UX-41: 0.5 → 0.55 — slight bump amplifies specular highlights along
-     *  the top edge where the key light grazes, producing the darker-to-
-     *  lighter border without requiring an emissive boost that would read
-     *  as "wall is lit from within". */
+    /** Paired with the lower roughness to amplify the top-edge
+     *  specular into a soft border highlight. */
     metalness: 0.55,
-    /** UX-41: 0.95 → 0.78 — high roughness (0.95) killed all specular,
-     *  leaving walls as flat dark prisms. 0.78 is still rough (no mirror
-     *  highlights) but lets the edges pick up enough specular from the
-     *  key/rim lights to create the subtle border lift the user asked for. */
+    /** Lower than BASE — walls are intentionally more reflective at
+     *  the edges so grazing light produces the dark-to-lighter
+     *  border that separates adjacent walls visually. */
     roughness: 0.78,
   },
   /** Spawner / Exit / unmarked tile material settings. */
@@ -78,7 +67,6 @@ export const TILE_VISUAL_CONFIG = {
     roughness: 0.7,
   },
   /** Emissive color for buildable BASE tiles (dim hint they accept towers). */
-  // Small bump from 0x303848 to compensate for Phase A sRGB pipeline change.
   baseEmissive: 0x363f53,
   envMapIntensity: 0.3,
 } as const;
