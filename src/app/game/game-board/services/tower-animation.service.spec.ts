@@ -1465,4 +1465,148 @@ describe('TowerAnimationService', () => {
       expect(light.intensity).toBeCloseTo(0.8, 4);
     });
   });
+
+  // ---- Emissive ratchet regression (Sprint 1 canary) ----
+  //
+  // Two towers that share a body material fire in the same batch every cycle.
+  // Without the baseline-snapshot fix, the second tower's save captures the
+  // already-spiked value, and its restore writes the spiked value back —
+  // ratcheting the shared material upward on every round.
+  //
+  // This describe block contains the canary spec that MUST FAIL before the
+  // fix lands and MUST PASS afterwards.
+
+  describe('emissive ratchet — shared-material multi-fire', () => {
+    const BASELINE = 0.4;
+
+    function makeSharedMatTower(
+      id: string,
+      sharedMat: THREE.MeshStandardMaterial,
+    ): PlacedTower {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+
+      const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+      const body = new THREE.Mesh(geo, sharedMat);
+      body.name = 'body';
+      group.add(body);
+
+      // Record the canonical emissive baseline so startMuzzleFlash can use
+      // it instead of the current (possibly spiked) material value.
+      const baselines = new Map<string, number>();
+      group.traverse(child => {
+        if (!(child instanceof THREE.Mesh)) return;
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        for (const m of mats) {
+          if ((m as THREE.MeshStandardMaterial).emissiveIntensity !== undefined) {
+            baselines.set(child.uuid + '_' + m.uuid,
+              (m as THREE.MeshStandardMaterial).emissiveIntensity);
+          }
+        }
+      });
+      group.userData['emissiveBaselines'] = baselines;
+
+      return {
+        id,
+        type: TowerType.BASIC,
+        level: 1,
+        row: 0,
+        col: 0,
+        kills: 0,
+        totalInvested: 50,
+        targetingMode: TargetingMode.NEAREST,
+        mesh: group,
+      };
+    }
+
+    it('body material returns to baseline after 30 fire cycles with two shared-material towers', () => {
+      const sharedMat = new THREE.MeshStandardMaterial({ emissiveIntensity: BASELINE });
+      const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+
+      const towerA = makeSharedMatTower('0-0', sharedMat);
+      const towerB = makeSharedMatTower('0-1', sharedMat);
+      // towerB body mesh also needs its own geo instance but shares sharedMat
+      const bodyB = new THREE.Mesh(geo, sharedMat);
+      bodyB.name = 'body';
+      towerB.mesh!.add(bodyB);
+
+      const towersMap = new Map<string, PlacedTower>([
+        ['0-0', towerA],
+        ['0-1', towerB],
+      ]);
+
+      for (let cycle = 0; cycle < 30; cycle++) {
+        // Both towers fire in the same batch (same turn)
+        service.startMuzzleFlash(towerA);
+        service.startMuzzleFlash(towerB);
+
+        // Advance past flash duration to expire both timers
+        service.updateMuzzleFlashes(towersMap, MUZZLE_FLASH_CONFIG.duration + 0.001);
+      }
+
+      const tolerance = BASELINE * 0.05; // ±5%
+      expect(sharedMat.emissiveIntensity).toBeGreaterThanOrEqual(BASELINE - tolerance);
+      expect(sharedMat.emissiveIntensity).toBeLessThanOrEqual(BASELINE + tolerance);
+
+      sharedMat.dispose();
+      geo.dispose();
+      towerA.mesh?.traverse(obj => {
+        if (obj instanceof THREE.Mesh && obj.geometry !== geo) obj.geometry.dispose();
+      });
+      towerB.mesh?.traverse(obj => {
+        if (obj instanceof THREE.Mesh && obj.geometry !== geo) obj.geometry.dispose();
+      });
+    });
+
+    it('single MORTAR body material returns to baseline after 30 fire cycles', () => {
+      const mortarMat = new THREE.MeshStandardMaterial({ emissiveIntensity: 0.3 });
+      const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.MORTAR;
+      for (const name of ['chassis', 'barrelT1', 'cradle']) {
+        const m = new THREE.Mesh(geo, mortarMat);
+        m.name = name;
+        group.add(m);
+      }
+
+      const baselines = new Map<string, number>();
+      group.traverse(child => {
+        if (!(child instanceof THREE.Mesh)) return;
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        for (const mat of mats) {
+          baselines.set(child.uuid + '_' + mat.uuid,
+            (mat as THREE.MeshStandardMaterial).emissiveIntensity);
+        }
+      });
+      group.userData['emissiveBaselines'] = baselines;
+
+      const tower: PlacedTower = {
+        id: '1-1',
+        type: TowerType.MORTAR,
+        level: 1,
+        row: 1,
+        col: 1,
+        kills: 0,
+        totalInvested: 120,
+        targetingMode: TargetingMode.NEAREST,
+        mesh: group,
+      };
+
+      const towersMap = new Map<string, PlacedTower>([['1-1', tower]]);
+
+      for (let cycle = 0; cycle < 30; cycle++) {
+        service.startMuzzleFlash(tower);
+        service.updateMuzzleFlashes(towersMap, MUZZLE_FLASH_CONFIG.duration + 0.001);
+      }
+
+      const baseline = 0.3;
+      const tolerance = baseline * 0.05;
+      expect(mortarMat.emissiveIntensity).toBeGreaterThanOrEqual(baseline - tolerance);
+      expect(mortarMat.emissiveIntensity).toBeLessThanOrEqual(baseline + tolerance);
+
+      mortarMat.dispose();
+      geo.dispose();
+    });
+  });
 });
