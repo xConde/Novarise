@@ -5,7 +5,11 @@ import { TowerType } from '../models/tower.model';
 import { BOARD_CONFIG } from '../constants/board.constants';
 import { TOWER_ACCENT_LIGHT_CONFIG } from '../constants/lighting.constants';
 import { disposeGroup } from '../utils/three-utils';
-import { BASIC_IDLE_CONFIG } from '../constants/tower-anim.constants';
+import {
+  BASIC_IDLE_CONFIG,
+  SNIPER_SCOPE_GLOW_CONFIG,
+  SNIPER_RECOIL_CONFIG,
+} from '../constants/tower-anim.constants';
 
 function disposeGroupHelper(group: THREE.Group): void {
   disposeGroup(group);
@@ -207,6 +211,120 @@ describe('TowerMeshFactoryService', () => {
       const crystal = basicGroup.getObjectByName('crystal');
       // getObjectByName returns undefined when not found
       expect(crystal).toBeUndefined();
+    });
+  });
+
+  // --- SNIPER tower redesign (Phase C) ---
+
+  describe('SNIPER tower Phase C redesign', () => {
+    let sniperGroup: THREE.Group;
+
+    beforeEach(() => {
+      sniperGroup = service.createTowerMesh(5, 5, TowerType.SNIPER, boardWidth, boardHeight);
+      createdGroups.push(sniperGroup);
+    });
+
+    it('has no child named "tip" (old crystalline spike removed)', () => {
+      const tip = sniperGroup.getObjectByName('tip');
+      expect(tip).toBeUndefined();
+    });
+
+    it('has a child named "barrel" (long barrel cylinder)', () => {
+      const barrel = sniperGroup.getObjectByName('barrel');
+      expect(barrel).toBeTruthy();
+    });
+
+    it('has a child named "scope" (lens disk — the active optic)', () => {
+      const scope = sniperGroup.getObjectByName('scope');
+      expect(scope).toBeTruthy();
+    });
+
+    it('has a child named "muzzle" (muzzle brake)', () => {
+      const muzzle = sniperGroup.getObjectByName('muzzle');
+      expect(muzzle).toBeTruthy();
+    });
+
+    it('scope lens uses a separate material with higher initial emissiveIntensity', () => {
+      const scope = sniperGroup.getObjectByName('scope') as THREE.Mesh | undefined;
+      expect(scope).toBeTruthy();
+      expect(scope!.material).toBeInstanceOf(THREE.MeshStandardMaterial);
+      const mat = scope!.material as THREE.MeshStandardMaterial;
+      expect(mat.emissiveIntensity).toBeCloseTo(SNIPER_SCOPE_GLOW_CONFIG.min, 4);
+    });
+
+    it('T1 scope has maxTier=1 (hidden at T2+)', () => {
+      // Walk the group for a mesh with maxTier=1
+      let found: THREE.Object3D | undefined;
+      sniperGroup.traverse(obj => {
+        if ((obj.userData as Record<string, unknown>)['maxTier'] === 1) { found = obj; }
+      });
+      expect(found).toBeTruthy();
+      expect(found!.visible).toBeTrue();
+    });
+
+    it('T2 longer scope part is hidden at creation (minTier=2)', () => {
+      const scopeLong = sniperGroup.getObjectByName('scopeLong') as THREE.Object3D | undefined;
+      expect(scopeLong).toBeTruthy();
+      expect(scopeLong!.visible).toBeFalse();
+      expect((scopeLong!.userData as Record<string, unknown>)['minTier']).toBe(2);
+    });
+
+    it('bipod parts are visible at creation (no tier tag — present at T1/T2)', () => {
+      const bipods: THREE.Object3D[] = [];
+      sniperGroup.traverse(obj => { if (obj.name === 'bipod') bipods.push(obj); });
+      expect(bipods.length).toBeGreaterThanOrEqual(2);
+      bipods.forEach(b => {
+        expect((b.userData as Record<string, unknown>)['maxTier']).toBe(2);
+        expect(b.visible).toBeTrue();
+      });
+    });
+
+    it('T3 stabilizer part is hidden at creation (minTier=3)', () => {
+      const stab = sniperGroup.getObjectByName('stabilizer') as THREE.Object3D | undefined;
+      expect(stab).toBeTruthy();
+      expect(stab!.visible).toBeFalse();
+      expect((stab!.userData as Record<string, unknown>)['minTier']).toBe(3);
+    });
+
+    it('registers an idleTick function on userData (scope lens pulse)', () => {
+      expect(typeof sniperGroup.userData['idleTick']).toBe('function');
+    });
+
+    it('idleTick modulates scope lens emissiveIntensity within SNIPER_SCOPE_GLOW_CONFIG bounds', () => {
+      const tick = sniperGroup.userData['idleTick'] as (g: THREE.Group, t: number) => void;
+      const scope = sniperGroup.getObjectByName('scope') as THREE.Mesh;
+      const mat = scope.material as THREE.MeshStandardMaterial;
+
+      tick(sniperGroup, 0);
+      const atZero = mat.emissiveIntensity;
+
+      tick(sniperGroup, Math.PI / (2 * SNIPER_SCOPE_GLOW_CONFIG.speed));
+      const atPeak = mat.emissiveIntensity;
+
+      expect(atZero).toBeGreaterThanOrEqual(SNIPER_SCOPE_GLOW_CONFIG.min - 0.01);
+      expect(atPeak).toBeLessThanOrEqual(SNIPER_SCOPE_GLOW_CONFIG.max + 0.01);
+    });
+
+    it('registers a chargeTick function on userData', () => {
+      expect(typeof sniperGroup.userData['chargeTick']).toBe('function');
+    });
+
+    it('registers a fireTick function on userData', () => {
+      expect(typeof sniperGroup.userData['fireTick']).toBe('function');
+    });
+
+    it('fireTick stores recoilStart, recoilDuration, and recoilDistance matching SNIPER_RECOIL_CONFIG', () => {
+      const fire = sniperGroup.userData['fireTick'] as (g: THREE.Group, d: number) => void;
+      fire(sniperGroup, 0.05);
+      expect(sniperGroup.userData['recoilStart']).toBeDefined();
+      expect(sniperGroup.userData['recoilDuration']).toBeCloseTo(0.05, 5);
+      expect(sniperGroup.userData['recoilDistance']).toBeCloseTo(SNIPER_RECOIL_CONFIG.distance, 5);
+    });
+
+    it('recoilDistance is larger than BASIC (0.05) — sharper recoil', () => {
+      const fire = sniperGroup.userData['fireTick'] as (g: THREE.Group, d: number) => void;
+      fire(sniperGroup, 0.05);
+      expect(sniperGroup.userData['recoilDistance']).toBeGreaterThan(0.05);
     });
   });
 

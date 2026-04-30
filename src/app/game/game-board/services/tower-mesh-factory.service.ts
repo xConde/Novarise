@@ -17,6 +17,15 @@ import {
   BASIC_BARREL_Y,
   BASIC_TURRET_Y,
   BASIC_ACCENT_Y,
+  SNIPER_GEOM,
+  SNIPER_SCOPE_Y,
+  SNIPER_LENS_Z,
+  SNIPER_BARREL_Y,
+  SNIPER_BARREL_MID_Y,
+  SNIPER_MUZZLE_Z,
+  SNIPER_ACCENT_Y,
+  SNIPER_SCOPE_GLOW_CONFIG,
+  SNIPER_RECOIL_CONFIG,
 } from '../constants/tower-anim.constants';
 
 @Injectable()
@@ -255,32 +264,215 @@ export class TowerMeshFactoryService {
       }
 
       case TowerType.SNIPER: {
-        // Tall crystalline spike - elegant and sharp
-        const spikeBase = this.dod(0.3, 0);
-        const spikeShaft1 = this.cyl(0.22, 0.26, 0.5, 8);
-        const spikeShaft2 = this.cyl(0.18, 0.22, 0.5, 7);
-        const spikeTip = this.cone(0.18, 0.7, 6);
-        const spikePoint = this.cone(0.08, 0.3, 4);
+        // Tripod base + optical scope + long barrel + muzzle brake (precision long-range)
+        const strutTiltRad = THREE.MathUtils.degToRad(SNIPER_GEOM.strutTiltDeg);
 
-        const snBase = new THREE.Mesh(spikeBase, mat);
-        snBase.position.y = 0.2;
-        snBase.rotation.y = Math.PI / 5;
+        // ── Central post ────────────────────────────────────────────────────
+        const postGeom = this.cyl(
+          SNIPER_GEOM.postRadiusTop, SNIPER_GEOM.postRadiusBottom,
+          SNIPER_GEOM.postHeight, SNIPER_GEOM.postSegments,
+        );
+        const post = new THREE.Mesh(postGeom, mat);
+        post.position.y = SNIPER_GEOM.postHeight / 2;
+        towerGroup.add(post);
 
-        const snShaft1 = new THREE.Mesh(spikeShaft1, mat);
-        snShaft1.position.y = 0.55;
+        // ── Tripod struts (×3, 120° apart, splayed outward) ─────────────────
+        const strutGeom = this.cyl(
+          SNIPER_GEOM.strutRadiusTop, SNIPER_GEOM.strutRadiusBottom,
+          SNIPER_GEOM.strutHeight, SNIPER_GEOM.strutSegments,
+        );
+        for (let i = 0; i < 3; i++) {
+          const angle = (i / 3) * Math.PI * 2;
+          const strut = new THREE.Mesh(strutGeom, mat);
+          // Position strut origin at the base of the post, then tilt outward.
+          // Rotation order: tilt around X (outward), then spin around Y (angular spread).
+          strut.rotation.order = 'YXZ';
+          strut.rotation.y = angle;
+          strut.rotation.x = strutTiltRad;
+          // Offset so struts radiate from the post base centre
+          strut.position.set(
+            Math.sin(angle) * SNIPER_GEOM.strutHeight * 0.18,
+            SNIPER_GEOM.strutHeight / 2 * Math.cos(strutTiltRad),
+            Math.cos(angle) * SNIPER_GEOM.strutHeight * 0.18,
+          );
+          towerGroup.add(strut);
+        }
 
-        const snShaft2 = new THREE.Mesh(spikeShaft2, mat);
-        snShaft2.position.y = 1.05;
-        snShaft2.rotation.y = Math.PI / 7;
+        // ── Scope housing (horizontal cylinder, lies along +Z) ──────────────
+        const scopeGeom = this.cyl(
+          SNIPER_GEOM.scopeRadiusTop, SNIPER_GEOM.scopeRadiusBottom,
+          SNIPER_GEOM.scopeLength, SNIPER_GEOM.scopeSegments,
+        );
+        const scopeMesh = new THREE.Mesh(scopeGeom, mat);
+        // Rotate 90° around X so local +Y points along world +Z (horizontal)
+        scopeMesh.rotation.x = Math.PI / 2;
+        scopeMesh.position.set(0, SNIPER_SCOPE_Y, 0);
+        scopeMesh.userData['maxTier'] = 1;
+        towerGroup.add(scopeMesh);
 
-        const snTip = new THREE.Mesh(spikeTip, mat);
-        snTip.position.y = 1.55;
+        // Scope lens disk — slightly higher emissive so it reads as an active optic
+        const lensGeom = this.cyl(
+          SNIPER_GEOM.lensRadius, SNIPER_GEOM.lensRadius,
+          SNIPER_GEOM.lensDepth, SNIPER_GEOM.lensSegments,
+        );
+        const lensMat = this.materialRegistry
+          ? this.materialRegistry.getOrCreate(
+              'sniper:scopeLens',
+              () => {
+                const cfg = TOWER_MATERIAL_CONFIGS[TowerType.SNIPER];
+                return new THREE.MeshStandardMaterial({
+                  color:             cfg.color,
+                  emissive:          new THREE.Color(cfg.emissive),
+                  emissiveIntensity: SNIPER_SCOPE_GLOW_CONFIG.min,
+                  metalness:         cfg.metalness,
+                  roughness:         cfg.roughness,
+                });
+              },
+            )
+          : (() => {
+              const cfg = TOWER_MATERIAL_CONFIGS[TowerType.SNIPER];
+              return new THREE.MeshStandardMaterial({
+                color:             cfg.color,
+                emissive:          new THREE.Color(cfg.emissive),
+                emissiveIntensity: SNIPER_SCOPE_GLOW_CONFIG.min,
+                metalness:         cfg.metalness,
+                roughness:         cfg.roughness,
+              });
+            })();
+        const lensMesh = new THREE.Mesh(lensGeom, lensMat);
+        lensMesh.name = 'scope';
+        // Lens faces forward (+Z direction from the scope housing)
+        lensMesh.rotation.x = Math.PI / 2;
+        lensMesh.position.set(0, SNIPER_SCOPE_Y, SNIPER_LENS_Z);
+        towerGroup.add(lensMesh);
 
-        const snPoint = new THREE.Mesh(spikePoint, mat);
-        snPoint.name = 'tip';
-        snPoint.position.y = 2.0;
+        // ── T2: longer scope (hidden until T2; T1 scope hidden above T1) ────
+        const scopeLongGeom = this.cyl(
+          SNIPER_GEOM.scopeRadiusTop, SNIPER_GEOM.scopeRadiusBottom,
+          SNIPER_GEOM.scopeLongLength, SNIPER_GEOM.scopeSegments,
+        );
+        const scopeLongMesh = new THREE.Mesh(scopeLongGeom, mat);
+        scopeLongMesh.name = 'scopeLong';
+        scopeLongMesh.rotation.x = Math.PI / 2;
+        scopeLongMesh.position.set(0, SNIPER_SCOPE_Y, 0);
+        scopeLongMesh.visible = false;
+        scopeLongMesh.userData['minTier'] = 2;
+        towerGroup.add(scopeLongMesh);
 
-        towerGroup.add(snBase, snShaft1, snShaft2, snTip, snPoint);
+        // ── Long barrel ──────────────────────────────────────────────────────
+        const barrelGeom = this.cyl(
+          SNIPER_GEOM.barrelRadius, SNIPER_GEOM.barrelRadius,
+          SNIPER_GEOM.barrelLength, SNIPER_GEOM.barrelSegments,
+        );
+        const barrelMesh = new THREE.Mesh(barrelGeom, mat);
+        barrelMesh.name = 'barrel';
+        // Barrel lies along +Z (horizontal) like the scope
+        barrelMesh.rotation.x = Math.PI / 2;
+        barrelMesh.position.set(0, SNIPER_BARREL_Y, 0);
+        towerGroup.add(barrelMesh);
+
+        // ── Bipod (×2 struts flanking the barrel mid-point) ─────────────────
+        const bipodTiltRad = THREE.MathUtils.degToRad(SNIPER_GEOM.bipodTiltDeg);
+        const bipodGeom = this.cyl(
+          SNIPER_GEOM.bipodRadius, SNIPER_GEOM.bipodRadius,
+          SNIPER_GEOM.bipodLength, SNIPER_GEOM.bipodSegments,
+        );
+        for (const side of [-1, 1] as const) {
+          const bipod = new THREE.Mesh(bipodGeom, mat);
+          bipod.name = 'bipod';
+          // Splay forward (along +Z) and outward (±X)
+          bipod.rotation.order = 'YXZ';
+          bipod.rotation.z = side * bipodTiltRad;
+          bipod.position.set(
+            side * SNIPER_GEOM.bipodXOffset,
+            SNIPER_BARREL_MID_Y - SNIPER_GEOM.bipodLength * 0.3,
+            SNIPER_GEOM.barrelLength * 0.15,
+          );
+          bipod.userData['maxTier'] = 2;
+          towerGroup.add(bipod);
+        }
+
+        // ── Muzzle brake ─────────────────────────────────────────────────────
+        const muzzleGeom = this.cyl(
+          SNIPER_GEOM.muzzleRadius, SNIPER_GEOM.muzzleRadius,
+          SNIPER_GEOM.muzzleLength, SNIPER_GEOM.muzzleSegments,
+        );
+        const muzzleMesh = new THREE.Mesh(muzzleGeom, mat);
+        muzzleMesh.name = 'muzzle';
+        muzzleMesh.rotation.x = Math.PI / 2;
+        muzzleMesh.position.set(0, SNIPER_BARREL_Y, SNIPER_MUZZLE_Z);
+        towerGroup.add(muzzleMesh);
+
+        // Vent slits on the muzzle brake (×2 radial)
+        const ventGeom = this.materialRegistry
+          ? this.geometryRegistry?.getOrCreateCustom(
+              'sniper:muzzleVent',
+              () => new THREE.BoxGeometry(
+                SNIPER_GEOM.muzzleVentW, SNIPER_GEOM.muzzleVentH, SNIPER_GEOM.muzzleVentD,
+              ),
+            ) ?? new THREE.BoxGeometry(
+              SNIPER_GEOM.muzzleVentW, SNIPER_GEOM.muzzleVentH, SNIPER_GEOM.muzzleVentD,
+            )
+          : new THREE.BoxGeometry(
+              SNIPER_GEOM.muzzleVentW, SNIPER_GEOM.muzzleVentH, SNIPER_GEOM.muzzleVentD,
+            );
+        for (const side of [-1, 1] as const) {
+          const vent = new THREE.Mesh(ventGeom, mat);
+          vent.position.set(
+            side * SNIPER_GEOM.muzzleVentOffset,
+            SNIPER_BARREL_Y,
+            SNIPER_MUZZLE_Z,
+          );
+          towerGroup.add(vent);
+        }
+
+        // ── T3: hover stabilizer disk (hidden until T3; bipods hidden above T2) ──
+        const stabGeom = this.cyl(
+          SNIPER_GEOM.stabilizerRadius, SNIPER_GEOM.stabilizerRadius,
+          SNIPER_GEOM.stabilizerHeight, SNIPER_GEOM.stabilizerSegments,
+        );
+        const stabMesh = new THREE.Mesh(stabGeom, mat);
+        stabMesh.name = 'stabilizer';
+        stabMesh.position.set(
+          0,
+          SNIPER_BARREL_MID_Y + SNIPER_GEOM.stabilizerYOffset,
+          SNIPER_GEOM.barrelLength * 0.15,
+        );
+        stabMesh.visible = false;
+        stabMesh.userData['minTier'] = 3;
+        towerGroup.add(stabMesh);
+
+        // ── Idle animation: scope lens emissive pulse ────────────────────────
+        towerGroup.userData['idleTick'] = (group: THREE.Group, t: number): void => {
+          const lens = group.getObjectByName('scope') as THREE.Mesh | undefined;
+          if (lens && lens.material instanceof THREE.MeshStandardMaterial) {
+            const range = SNIPER_SCOPE_GLOW_CONFIG.max - SNIPER_SCOPE_GLOW_CONFIG.min;
+            lens.material.emissiveIntensity =
+              SNIPER_SCOPE_GLOW_CONFIG.min +
+              range * (0.5 + 0.5 * Math.sin(t * SNIPER_SCOPE_GLOW_CONFIG.speed));
+          }
+        };
+
+        // Charge-tick: same as idleTick — always pulses to indicate active optic.
+        // A future phase may wire this to real target-lock state.
+        towerGroup.userData['chargeTick'] = towerGroup.userData['idleTick'];
+
+        // ── Firing animation: sharp barrel recoil ────────────────────────────
+        towerGroup.userData['fireTick'] = (group: THREE.Group, duration: number): void => {
+          group.userData['recoilStart'] = performance.now() / 1000;
+          group.userData['recoilDuration'] = duration;
+          group.userData['recoilDistance'] = SNIPER_RECOIL_CONFIG.distance;
+        };
+
+        // ── Accent point light at scope height ───────────────────────────────
+        const isSniperLowEnd = typeof document !== 'undefined'
+          && document.body.classList.contains('reduce-motion');
+        this.attachAccentLight(towerGroup, TowerType.SNIPER, isSniperLowEnd);
+        const sniperLight = towerGroup.userData['accentLight'] as THREE.PointLight | undefined;
+        if (sniperLight) {
+          sniperLight.position.set(0, SNIPER_ACCENT_Y, 0);
+        }
+
         break;
       }
 

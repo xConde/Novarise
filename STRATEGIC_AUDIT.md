@@ -2001,11 +2001,13 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 
 ### Finding 5: Tier-gated parts invisible after checkpoint save/resume — `revealTierParts` never called by the restore coordinator (HIGH)
 
-**Location:** `checkpoint-restore-coordinator.service.ts:212–228` / `tower-upgrade-visual.service.ts:191`
+**Status:** Fixed in Phase C commit (feat/threejs-polish).
 
-**Risk:** The restore coordinator (Step 4) calls `towerMeshFactory.createTowerMesh()` for each saved tower, then calls `towerCombatService.restoreTowers()` to rehydrate combat state including `level`. However, the mesh is built at T1 defaults — `barrelCap` and `pauldron` children have `visible = false` as set at creation. Neither the coordinator nor `restoreTowers` calls `towerUpgradeVisualService.revealTierParts()` afterward. A BASIC tower that was at level 2 or 3 when saved will render all T2/T3 parts as invisible after resume, while combat state correctly reflects the higher level. The mismatch lasts until the player upgrades the tower again. No spec covers restore followed by tier-part visibility.
+**Location:** `checkpoint-restore-coordinator.service.ts` / `tower-upgrade-visual.service.ts`
 
-**Fix:** After `towerCombatService.restoreTowers()` populates `placedTowers`, iterate the resulting map and call `towerUpgradeVisualService.revealTierParts(mesh, tower.level)` for each tower whose level is > 1. Alternatively, call `applyUpgradeVisuals(mesh, tower.level)` for consistent treatment with the non-restore path (scale + emissive boost also need restoring). Add a spec in `checkpoint-restore-coordinator.service.spec.ts`: restore a checkpoint with a level-2 tower and assert the `barrelCap` child is visible afterward.
+**Risk:** The restore coordinator (Step 4) calls `towerMeshFactory.createTowerMesh()` for each saved tower, then calls `towerCombatService.restoreTowers()` to rehydrate combat state including `level`. However, the mesh is built at T1 defaults — `barrelCap` and `pauldron` children have `visible = false` as set at creation. Neither the coordinator nor `restoreTowers` calls `towerUpgradeVisualService.revealTierParts()` afterward. A BASIC tower that was at level 2 or 3 when saved will render all T2/T3 parts as invisible after resume, while combat state correctly reflects the higher level. The mismatch lasts until the player upgrades the tower again.
+
+**Fix applied:** `CheckpointRestoreCoordinatorService` now injects `TowerUpgradeVisualService` and calls `applyUpgradeVisuals(mesh, tower.level, tower.specialization)` for each restored tower with `level > 1`. Applies scale + emissive boost + `revealTierParts` in one call, consistent with the live upgrade path. Also extended `revealTierParts` to honor `userData['maxTier']` (parts that should disappear at higher tiers). Three specs in `checkpoint-restore-coordinator.service.spec.ts` cover: level-2 restore (barrelCap visible), level-3 restore (call made), level-1 restore (no call).
 
 ---
 

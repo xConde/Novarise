@@ -274,6 +274,83 @@ describe('TowerUpgradeVisualService', () => {
       service.applyUpgradeVisuals(group, 2);
       expect(t3mesh.visible).toBeFalse();
     });
+
+    // --- maxTier support ---
+
+    it('hides a maxTier=1 child when level advances to 2', () => {
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+      const group = new THREE.Group();
+      const t1onlyMesh = new THREE.Mesh(geo, mat);
+      t1onlyMesh.name = 'scopeT1';
+      t1onlyMesh.visible = true;
+      t1onlyMesh.userData['maxTier'] = 1;
+      group.add(t1onlyMesh);
+
+      service.revealTierParts(group, 2);
+
+      expect(t1onlyMesh.visible).toBeFalse();
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('keeps a maxTier=1 child visible at level 1', () => {
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+      const group = new THREE.Group();
+      const t1onlyMesh = new THREE.Mesh(geo, mat);
+      t1onlyMesh.name = 'scopeT1';
+      t1onlyMesh.visible = true;
+      t1onlyMesh.userData['maxTier'] = 1;
+      group.add(t1onlyMesh);
+
+      service.revealTierParts(group, 1);
+
+      expect(t1onlyMesh.visible).toBeTrue();
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('hides a part with both minTier=2 and maxTier=2 when level is 1 or 3', () => {
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+      const group = new THREE.Group();
+      const t2onlyMesh = new THREE.Mesh(geo, mat);
+      t2onlyMesh.name = 'scopeMid';
+      t2onlyMesh.visible = false;
+      t2onlyMesh.userData['minTier'] = 2;
+      t2onlyMesh.userData['maxTier'] = 2;
+      group.add(t2onlyMesh);
+
+      service.revealTierParts(group, 1);
+      expect(t2onlyMesh.visible).toBeFalse();
+
+      service.revealTierParts(group, 2);
+      expect(t2onlyMesh.visible).toBeTrue();
+
+      service.revealTierParts(group, 3);
+      expect(t2onlyMesh.visible).toBeFalse();
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('bipod parts with maxTier=2 are hidden at level 3', () => {
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+      const group = new THREE.Group();
+      const bipod = new THREE.Mesh(geo, mat);
+      bipod.name = 'bipod';
+      bipod.visible = true;
+      bipod.userData['maxTier'] = 2;
+      group.add(bipod);
+
+      service.revealTierParts(group, 3);
+
+      expect(bipod.visible).toBeFalse();
+      geo.dispose();
+      mat.dispose();
+    });
   });
 
   describe('applySpecializationVisual', () => {

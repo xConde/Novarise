@@ -159,7 +159,9 @@ export class TowerUpgradeVisualService {
     const scale = TOWER_VISUAL_CONFIG.scaleBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
     towerGroup.scale.set(scale, scale, scale);
 
-    const animatedNames = new Set(['tip', 'orb']);
+    // 'tip', 'orb', 'scope' are driven per-frame by animation ticks — skip them
+    // here so the emissive boost doesn't override their per-frame values.
+    const animatedNames = new Set(['tip', 'orb', 'scope']);
     towerGroup.traverse(child => {
       if (
         child instanceof THREE.Mesh &&
@@ -180,19 +182,32 @@ export class TowerUpgradeVisualService {
 
   /**
    * Walk a tower group and set each child's visibility based on its
-   * `userData['minTier']` tag.  Children tagged with `minTier = 2` are
-   * hidden at T1 and revealed at T2+; children tagged `minTier = 3` are
-   * revealed at T3 only.  Children with no `minTier` tag are unaffected.
+   * `userData['minTier']` and `userData['maxTier']` tags.
    *
-   * Build all tier parts at tower creation time but mark them `visible = false`
-   * — this keeps the disposal contract simple (one group, dispose once) while
-   * allowing progressive reveal through upgrades.
+   * - `minTier`: child is hidden below this level and revealed at or above it.
+   *   e.g. `minTier = 2` → hidden at T1, visible at T2+.
+   * - `maxTier`: child is visible up to and including this level, then hidden
+   *   above it. e.g. `maxTier = 1` → visible at T1, hidden at T2+.
+   *   This supports "replaced by a better part" patterns where a T1 mesh
+   *   should disappear once its T2 counterpart is revealed.
+   *
+   * Children with neither tag are unaffected.
+   *
+   * Build all tier parts at tower creation time — this keeps the disposal
+   * contract simple (one group, dispose once) while allowing progressive
+   * reveal through upgrades.
    */
   revealTierParts(towerGroup: THREE.Group, level: number): void {
     towerGroup.traverse(child => {
       const minTier = child.userData['minTier'] as number | undefined;
-      if (minTier !== undefined) {
+      const maxTier = child.userData['maxTier'] as number | undefined;
+
+      if (minTier !== undefined && maxTier !== undefined) {
+        child.visible = minTier <= level && level <= maxTier;
+      } else if (minTier !== undefined) {
         child.visible = minTier <= level;
+      } else if (maxTier !== undefined) {
+        child.visible = level <= maxTier;
       }
     });
   }

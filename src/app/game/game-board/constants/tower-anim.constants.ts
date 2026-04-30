@@ -1,6 +1,6 @@
 /**
- * Animation constants for the BASIC tower idle and firing animations.
- * Consumed by TowerMeshFactoryService when building the BASIC mesh group.
+ * Animation and geometry constants for tower mesh construction and animation.
+ * Consumed by TowerMeshFactoryService and TowerAnimationService.
  */
 
 export const BASIC_IDLE_CONFIG = {
@@ -100,3 +100,109 @@ export const BASIC_ACCENT_Y = BASIC_TURRET_Y;
 // Total barrel length used for accent light positioning
 export const BASIC_BARREL_TOTAL_LENGTH =
   BASIC_GEOM.barrel1Length + BASIC_GEOM.barrel2Length + BASIC_GEOM.barrel3Length;
+
+// ─── SNIPER tower constants ────────────────────────────────────────────────────
+
+export const SNIPER_GEOM = {
+  // Central post cylinder (where tripod legs meet)
+  postRadiusTop:    0.18,
+  postRadiusBottom: 0.22,
+  postHeight:       0.18,
+  postSegments:     8,
+
+  // Tripod strut cylinders (×3, evenly distributed at 120°)
+  strutRadiusTop:    0.06,
+  strutRadiusBottom: 0.08,
+  strutHeight:       0.5,
+  strutSegments:     6,
+  /** Outward tilt of each tripod strut in degrees. */
+  strutTiltDeg:      25,
+
+  // Horizontal scope housing cylinder (lies on its side along +Z)
+  scopeRadiusTop:    0.14,
+  scopeRadiusBottom: 0.14,
+  scopeLength:       0.4,
+  scopeSegments:     8,
+
+  // T2 longer scope (built at creation, hidden until T2)
+  scopeLongLength:   0.56,
+
+  // Scope lens disk (front face of scope)
+  lensRadius:        0.12,
+  lensDepth:         0.02,
+  lensSegments:      12,
+
+  // Long barrel cylinder (named 'barrel')
+  barrelRadius:      0.06,
+  barrelLength:      0.7,
+  barrelSegments:    8,
+
+  // Bipod struts (×2 flanking mid-barrel, splayed forward)
+  bipodRadius:       0.04,
+  bipodLength:       0.18,
+  bipodSegments:     6,
+  /** Forward splay angle of each bipod strut in degrees. */
+  bipodTiltDeg:      20,
+  /** Lateral offset (±X) of each bipod strut. */
+  bipodXOffset:      0.07,
+
+  // Muzzle brake (slightly wider cap at barrel end)
+  muzzleRadius:      0.08,
+  muzzleLength:      0.12,
+  muzzleSegments:    8,
+
+  // Muzzle vent slits (×2 radial box geometries on the brake)
+  muzzleVentW:       0.02,
+  muzzleVentH:       0.08,
+  muzzleVentD:       0.09,
+  muzzleVentOffset:  0.06,
+
+  // T3 hover stabilizer disk (replaces bipod at T3)
+  stabilizerRadius:  0.16,
+  stabilizerHeight:  0.03,
+  stabilizerSegments: 16,
+  stabilizerYOffset: -0.05,
+} as const;
+
+// Y positions relative to the SNIPER group origin
+
+/** Top of the central post (where scope + barrel attach). */
+export const SNIPER_POST_TOP_Y = SNIPER_GEOM.postHeight;
+
+/** Y centre of the scope housing (sits immediately above the post). */
+export const SNIPER_SCOPE_Y = SNIPER_POST_TOP_Y + SNIPER_GEOM.scopeRadiusTop;
+
+/** Z offset of the lens disk from the scope centre (front face). */
+export const SNIPER_LENS_Z = SNIPER_GEOM.scopeLength / 2 + SNIPER_GEOM.lensDepth / 2;
+
+/** Y position of the barrel (same height as scope centre so it extends from beneath). */
+export const SNIPER_BARREL_Y = SNIPER_SCOPE_Y;
+
+/** Approximate Y of the barrel mid-point (used for bipod attachment). */
+export const SNIPER_BARREL_MID_Y = SNIPER_BARREL_Y;
+
+/** Z at the muzzle tip (barrel extends forward along +Z). */
+export const SNIPER_MUZZLE_Z = SNIPER_GEOM.barrelLength / 2 + SNIPER_GEOM.muzzleLength / 2;
+
+/** Y of the accent light (scope height). */
+export const SNIPER_ACCENT_Y = SNIPER_SCOPE_Y;
+
+// ─── SNIPER idle (scope lens pulse) ───────────────────────────────────────────
+
+export const SNIPER_SCOPE_GLOW_CONFIG = {
+  /** Minimum emissive intensity for the scope lens pulse. */
+  min:   0.45,
+  /** Maximum emissive intensity for the scope lens pulse. */
+  max:   0.95,
+  /** Speed of the sine wave driving the pulse (cycles per second). */
+  speed: 1.4,
+} as const;
+
+// ─── SNIPER firing animation ───────────────────────────────────────────────────
+
+export const SNIPER_RECOIL_CONFIG = {
+  /** Barrel recoil distance in local units — sharper and slightly larger than BASIC. */
+  distance: 0.08,
+  /** Easing profile identifier. */
+  easing: 'easeOutCubic' as const,
+} as const;
