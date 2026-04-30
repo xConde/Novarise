@@ -292,12 +292,14 @@ export class GameBoardService {
 
   /**
    * Cool-tinted plane sitting just above the floor so the grout between
-   * tiles reads as designed trim. Tiles cover their share of the plane
-   * from above; the gap between adjacent tiles exposes a thin line of
-   * the plane color at every cell boundary. Walls overlap the plane
-   * fully (their slight cell-overlap factor erases internal seams), so
-   * the trim only appears on the buildable interior — exactly where
-   * cell-level borders belong.
+   * non-wall tiles reads as designed trim. Tiles cover their share of
+   * the plane from above; the gap between adjacent buildable tiles
+   * exposes a thin line of the plane color at every cell boundary.
+   *
+   * The plane is sized to the bounding box of NON-WALL tiles only.
+   * Walls (and tile-less cells outside the buildable region) leave the
+   * plane absent, so wall column gaps and tile-less cells stay dark
+   * instead of leaking the bright trim color through.
    *
    * Implemented as a plane (not LineSegments) because WebGL clamps line
    * width to 1 device pixel regardless of `linewidth`; on a dark tile
@@ -311,8 +313,29 @@ export class GameBoardService {
 
     if (this.gameBoardWidth <= 0 || this.gameBoardHeight <= 0) return gridGroup;
 
-    const planeWidth = this.gameBoardWidth * this.tileSize;
-    const planeHeight = this.gameBoardHeight * this.tileSize;
+    let minRow = Number.POSITIVE_INFINITY;
+    let maxRow = Number.NEGATIVE_INFINITY;
+    let minCol = Number.POSITIVE_INFINITY;
+    let maxCol = Number.NEGATIVE_INFINITY;
+    let hasNonWall = false;
+    for (let row = 0; row < this.gameBoard.length; row++) {
+      const rowTiles = this.gameBoard[row];
+      for (let col = 0; col < rowTiles.length; col++) {
+        const tile = rowTiles[col];
+        if (!tile || tile.type === BlockType.WALL) continue;
+        hasNonWall = true;
+        if (row < minRow) minRow = row;
+        if (row > maxRow) maxRow = row;
+        if (col < minCol) minCol = col;
+        if (col > maxCol) maxCol = col;
+      }
+    }
+    if (!hasNonWall) return gridGroup;
+
+    const planeWidth = (maxCol - minCol + 1) * this.tileSize;
+    const planeHeight = (maxRow - minRow + 1) * this.tileSize;
+    const centerX = ((minCol + maxCol) / 2 - this.gameBoardWidth / 2) * this.tileSize;
+    const centerZ = ((minRow + maxRow) / 2 - this.gameBoardHeight / 2) * this.tileSize;
 
     const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
     const material = new THREE.MeshBasicMaterial({
@@ -326,11 +349,7 @@ export class GameBoardService {
     grout.rotation.x = -Math.PI / 2;
     // Just above the floor so it sits inside the tile's vertical extent;
     // tiles occlude it from above where they exist, gaps expose it.
-    grout.position.set(
-      -this.tileSize / 2,
-      0.005,
-      -this.tileSize / 2,
-    );
+    grout.position.set(centerX, 0.005, centerZ);
     grout.renderOrder = -1;
 
     gridGroup.add(grout);

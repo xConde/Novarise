@@ -27,16 +27,16 @@ export const TILE_VISUAL_CONFIG = {
    */
   geometryGapFactor: 0.93,
   /**
-   * Walls need a wider gap than the geometry alone would suggest:
-   * any horizontal seam (Z direction) is blocked from the camera's
-   * sightline by the front face of the wall in front of it. With
-   * wall tops at the same height as buildable tiles, only gaps wide
-   * enough for the camera to see down past the front face register
-   * as visible cell structure. Tuned so both vertical AND horizontal
-   * seams show at the default game camera angle without the wall
-   * surface losing its connected-structure read.
+   * Walls render as a continuous solid surface; the slight overlap
+   * eliminates per-cell seams that would otherwise read as "tiles
+   * you can see between" rather than impassable structure. The
+   * trim plane is constrained to the non-wall bounding box so this
+   * overlap is also what guarantees no bright trim leaks through
+   * any wall column gap. Visible cell structure on walls comes
+   * from the front-face lighting shadow plus the wall emissive
+   * accent, not from gap-based plane bleed.
    */
-  wallGapFactor: 0.95,
+  wallGapFactor: 1.005,
   base: {
     emissiveIntensity: 0.35,
     /** Slight metalness pairs with the lower roughness to let the top
@@ -49,12 +49,16 @@ export const TILE_VISUAL_CONFIG = {
     roughness: 0.55,
   },
   wall: {
-    /** Cool-tinted dark emissive — keeps walls reading as solid
-     *  impassable structures rather than visual voids on the dark
-     *  board, without competing with BASE's buildable glow. */
-    emissive: 0x18121e,
-    /** Subtle uniform lift; still inert next to BASE's 0.35. */
-    emissiveIntensity: 0.13,
+    /** Cool-purple emissive bright enough that the shadowed wall
+     *  front faces (the visible "horizontal lines" between wall rows
+     *  at the default camera angle) read as tinted structure rather
+     *  than pure black void. Without this lift the front-face strips
+     *  drop to absolute black and the wall block looks featureless
+     *  except for the column seams. */
+    emissive: 0x2a2238,
+    /** Inert next to BASE's 0.35, but high enough that the front-
+     *  face shadows pick up a perceptible accent tint. */
+    emissiveIntensity: 0.22,
     /** Paired with the lower roughness to amplify the top-edge
      *  specular into a soft border highlight. */
     metalness: 0.55,
