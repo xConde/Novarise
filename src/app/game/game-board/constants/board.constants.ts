@@ -27,15 +27,16 @@ export const TILE_VISUAL_CONFIG = {
    */
   geometryGapFactor: 0.93,
   /**
-   * Walls render as a continuous solid surface — never as a grid of
-   * individual cells. Internal cell seams make a wall read as
-   * "tiles you can see between" instead of impassable structure, so
-   * the geometry slightly overlaps to erase those seams. Side faces
-   * only intersect where two walls touch (faces that would be hidden
-   * anyway); top faces share Y so the overlap cannot z-fight.
-   * Cell-level borders belong on the buildable interior, not here.
+   * Walls keep a much tighter gap than buildable tiles. Connected
+   * walls should still read as one impassable structure, not as a
+   * grid of individual blocks the player can place on — so the gap
+   * is small enough that the trim plane shows through as a hairline
+   * hint of cell structure, roughly half the visible width of the
+   * BASE-tile trim. Anything wider starts to read as gridded UI on
+   * the wall surface; anything tighter reverts to a featureless
+   * black slab.
    */
-  wallGapFactor: 1.005,
+  wallGapFactor: 0.985,
   base: {
     emissiveIntensity: 0.35,
     /** Slight metalness pairs with the lower roughness to let the top
