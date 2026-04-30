@@ -96,33 +96,41 @@ describe('TowerAnimationService', () => {
       });
     });
 
-    describe('crystal bob — SLOW tower', () => {
-      it('sets child.position.y to a value derived from slowCrystalBaseY', () => {
-        const { group, child } = makeTowerGroup(TowerType.SLOW, 'crystal');
-        const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
-        const time = 1500;
+    // These specs exercise the legacy named-mesh traverse path for SLOW towers
+    // that have not yet been rebuilt with an idleTick hook (i.e., bare groups
+    // created in unit tests). The redesigned SLOW tower registers idleTick and
+    // skips this traverse entirely — see TowerMeshFactoryService SLOW case.
+    // Keep these specs: they ensure the fallback path stays correct for any
+    // future tower type that reuses the 'crystal' naming convention without idleTick.
+    describe('legacy SLOW crystal handler — pre-Phase-E fallback path', () => {
+      describe('crystal bob — SLOW tower', () => {
+        it('sets child.position.y to a value derived from slowCrystalBaseY', () => {
+          const { group, child } = makeTowerGroup(TowerType.SLOW, 'crystal');
+          const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
+          const time = 1500;
 
-        service.updateTowerAnimations(towerMeshes, time);
+          service.updateTowerAnimations(towerMeshes, time);
 
-        const t = time * ANIMATION_CONFIG.msToSeconds;
-        const expectedY = TOWER_ANIM_CONFIG.slowCrystalBaseY
-          + Math.sin(t * TOWER_ANIM_CONFIG.crystalBobSpeed) * TOWER_ANIM_CONFIG.slowCrystalBobAmplitude;
-        expect(child.position.y).toBeCloseTo(expectedY, 5);
+          const t = time * ANIMATION_CONFIG.msToSeconds;
+          const expectedY = TOWER_ANIM_CONFIG.slowCrystalBaseY
+            + Math.sin(t * TOWER_ANIM_CONFIG.crystalBobSpeed) * TOWER_ANIM_CONFIG.slowCrystalBobAmplitude;
+          expect(child.position.y).toBeCloseTo(expectedY, 5);
 
-        disposeTowerGroup(group);
-      });
+          disposeTowerGroup(group);
+        });
 
-      it('rotates SLOW crystal at slowCrystalRotSpeed', () => {
-        const { group, child } = makeTowerGroup(TowerType.SLOW, 'crystal');
-        const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
-        const time = 1000;
+        it('rotates SLOW crystal at slowCrystalRotSpeed', () => {
+          const { group, child } = makeTowerGroup(TowerType.SLOW, 'crystal');
+          const towerMeshes = new Map<string, THREE.Group>([['0-0', group]]);
+          const time = 1000;
 
-        service.updateTowerAnimations(towerMeshes, time);
+          service.updateTowerAnimations(towerMeshes, time);
 
-        const t = time * ANIMATION_CONFIG.msToSeconds;
-        expect(child.rotation.y).toBeCloseTo(t * TOWER_ANIM_CONFIG.slowCrystalRotSpeed, 5);
+          const t = time * ANIMATION_CONFIG.msToSeconds;
+          expect(child.rotation.y).toBeCloseTo(t * TOWER_ANIM_CONFIG.slowCrystalRotSpeed, 5);
 
-        disposeTowerGroup(group);
+          disposeTowerGroup(group);
+        });
       });
     });
 
@@ -1344,7 +1352,6 @@ describe('TowerAnimationService', () => {
       const { group, emitter } = makeEmitterGroup();
       const now = performance.now() / 1000;
       group.userData['emitterPulseStart'] = now;
-      group.userData['emitterPulseDuration'] = SLOW_EMITTER_PULSE_FIRE.durationSec;
 
       // Very small elapsed — emitter should be near peak scale
       service.tickEmitterPulses(new Map([['s', group]]), now + 0.001);
@@ -1360,7 +1367,6 @@ describe('TowerAnimationService', () => {
       const { group, emitter } = makeEmitterGroup();
       const now = performance.now() / 1000;
       group.userData['emitterPulseStart'] = now;
-      group.userData['emitterPulseDuration'] = SLOW_EMITTER_PULSE_FIRE.durationSec;
       emitter.scale.setScalar(1.1);
 
       service.tickEmitterPulses(
@@ -1370,7 +1376,6 @@ describe('TowerAnimationService', () => {
 
       expect(emitter.scale.x).toBeCloseTo(1.0, 4);
       expect(group.userData['emitterPulseStart']).toBeUndefined();
-      expect(group.userData['emitterPulseDuration']).toBeUndefined();
 
       emitter.geometry.dispose();
       (emitter.material as THREE.Material).dispose();
@@ -1381,7 +1386,6 @@ describe('TowerAnimationService', () => {
       group.userData['towerType'] = TowerType.SLOW;
       const now = performance.now() / 1000;
       group.userData['emitterPulseStart'] = now;
-      group.userData['emitterPulseDuration'] = 0.3;
 
       expect(() => service.tickEmitterPulses(new Map([['s', group]]), now + 0.001)).not.toThrow();
     });

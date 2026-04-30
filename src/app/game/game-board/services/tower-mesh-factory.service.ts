@@ -697,6 +697,13 @@ export class TowerMeshFactoryService {
           const drum = group.getObjectByName('drum');
           if (!drum) return;
 
+          // NOTE: `t` comes from `time * msToSeconds` in updateTowerAnimations —
+          // it is the same wall-clock source as `performance.now() / 1000` when the
+          // game runs in real time. `drumSpinBoostUntil` is written by fireTick using
+          // `performance.now() / 1000` for the same reason (fireTick does not receive
+          // `t`). Both clocks track wall time and stay in sync during normal gameplay.
+          // If updateTowerAnimations is ever driven by a synthetic clock in tests,
+          // the boost-window check will drift; unify clocks at that point.
           const now = performance.now() / 1000;
           const prevT = group.userData['drumPrevT'] as number | undefined;
           const deltaT = prevT !== undefined ? Math.min(t - prevT, 0.1) : 0;
@@ -913,25 +920,30 @@ export class TowerMeshFactoryService {
             coil.rotation.z = t * SLOW_EMITTER_PULSE_CONFIG.coilRotSpeed;
           }
 
-          // T3 crystal core — slow Y bob
-          group.traverse(child => {
-            if (child.userData['floatBob'] && child instanceof THREE.Mesh) {
-              const baseY = child.userData['floatBobBaseY'] as number | undefined
-                ?? SLOW_CRYSTAL_Y;
-              if (child.userData['floatBobBaseY'] === undefined) {
-                child.userData['floatBobBaseY'] = baseY;
-              }
-              child.position.y = baseY
-                + Math.sin(t * SLOW_EMITTER_PULSE_CONFIG.crystalBobSpeed)
-                * SLOW_EMITTER_PULSE_CONFIG.crystalBobAmplitude;
+          // T3 crystal core — slow Y bob.
+          // Use getObjectByName (O(N) linear scan, same cost as traverse with
+          // early-exit) so intent is explicit and the full scene-graph walk is
+          // avoided when the crystal is absent (T1/T2 have no 'crystalCore' child).
+          const crystal = group.getObjectByName('crystalCore') as THREE.Mesh | undefined;
+          if (crystal) {
+            const baseY = (crystal.userData['floatBobBaseY'] as number | undefined)
+              ?? SLOW_CRYSTAL_Y;
+            if (crystal.userData['floatBobBaseY'] === undefined) {
+              crystal.userData['floatBobBaseY'] = baseY;
             }
-          });
+            crystal.position.y = baseY
+              + Math.sin(t * SLOW_EMITTER_PULSE_CONFIG.crystalBobSpeed)
+              * SLOW_EMITTER_PULSE_CONFIG.crystalBobAmplitude;
+          }
         };
 
         // ── Firing animation: emitter scale pulse ────────────────────────────
-        towerGroup.userData['fireTick'] = (group: THREE.Group, duration: number): void => {
+        // tickEmitterPulses reads emitterPulseStart to compute elapsed time and
+        // compares against SLOW_EMITTER_PULSE_FIRE.durationSec directly — the
+        // duration is not a per-fire variable, so storing it in userData is dead
+        // weight. Only the start timestamp is needed.
+        towerGroup.userData['fireTick'] = (group: THREE.Group, _duration: number): void => {
           group.userData['emitterPulseStart'] = performance.now() / 1000;
-          group.userData['emitterPulseDuration'] = duration;
         };
 
         // ── Accent point light at emitter height ─────────────────────────────
@@ -1072,6 +1084,12 @@ export class TowerMeshFactoryService {
 
         // ── Idle arc cylinder (thin flicker between post top and sphere) ─────
         // A thin emissive cylinder that toggles opacity to mimic an electric arc.
+        // arcMat is intentionally NOT registered with materialRegistry: the arc's
+        // opacity is mutated every frame by idleTick (per-instance animation state).
+        // Pushing it through the registry would share one material across all CHAIN
+        // towers, causing every arc to flicker in sync. disposeGroup's full-traverse
+        // dispose handles it correctly because the protect predicate only skips
+        // registry-owned resources; arcMat is unregistered and therefore disposed.
         const arcGeom = this.cyl(
           CHAIN_GEOM.arcRadius, CHAIN_GEOM.arcRadius,
           CHAIN_Y.arcLength, CHAIN_GEOM.arcSegments,
@@ -1178,7 +1196,7 @@ export class TowerMeshFactoryService {
             if (child.name !== 'electrode' || !(child instanceof THREE.Mesh)) return;
             if (!(child.material instanceof THREE.MeshStandardMaterial)) return;
             // Phase-offset per electrode using its world X position
-            const phase = Math.sin(t * shimmerOmega + child.position.x * 4.0);
+            const phase = Math.sin(t * shimmerOmega + child.position.x * CHAIN_ELECTRODE_CONFIG.shimmerPhaseScale);
             child.material.emissiveIntensity =
               CHAIN_ELECTRODE_CONFIG.emissiveBase + shimmerRange * (0.5 + 0.5 * phase);
           });
@@ -1228,6 +1246,13 @@ export class TowerMeshFactoryService {
         // Heavy artillery cannon on armored chassis (slow-fire bruiser)
         // Distinct silhouette: wide rectangular chassis + angled barrel at 45°
 
+        // Per-instance material clone: startMuzzleFlash mutates emissiveIntensity on
+        // every mesh in the group. Since chassis, treads, vents, housing, and barrel
+        // meshes all share the same MeshStandardMaterial by default, firing MORTAR-A
+        // would spike MORTAR-B's body simultaneously. Clone so each instance owns its
+        // own uniform slot and the save/restore path in startMuzzleFlash is isolated.
+        const mortarMat = mat.clone();
+
         // ── Wide armored chassis ────────────────────────────────────────────
         const chassisGeom = this.geometryRegistry
           ? this.geometryRegistry.getOrCreateCustom(
@@ -1237,7 +1262,7 @@ export class TowerMeshFactoryService {
               ),
             )
           : new THREE.BoxGeometry(MORTAR_GEOM.chassisW, MORTAR_GEOM.chassisH, MORTAR_GEOM.chassisD);
-        const chassis = new THREE.Mesh(chassisGeom, mat);
+        const chassis = new THREE.Mesh(chassisGeom, mortarMat);
         chassis.position.y = MORTAR_GEOM.chassisH / 2;
         towerGroup.add(chassis);
 
@@ -1251,7 +1276,7 @@ export class TowerMeshFactoryService {
             )
           : new THREE.BoxGeometry(MORTAR_GEOM.treadW, MORTAR_GEOM.treadH, MORTAR_GEOM.treadD);
         for (const side of [-1, 1] as const) {
-          const tread = new THREE.Mesh(treadGeom, mat);
+          const tread = new THREE.Mesh(treadGeom, mortarMat);
           tread.position.set(
             side * MORTAR_GEOM.treadXOffset,
             MORTAR_GEOM.treadH / 2,
@@ -1270,7 +1295,7 @@ export class TowerMeshFactoryService {
             )
           : new THREE.BoxGeometry(MORTAR_GEOM.ventW, MORTAR_GEOM.ventH, MORTAR_GEOM.ventD);
         for (const side of [-1, 1] as const) {
-          const vent = new THREE.Mesh(ventGeom, mat);
+          const vent = new THREE.Mesh(ventGeom, mortarMat);
           vent.position.set(
             side * MORTAR_GEOM.ventXOffset,
             MORTAR_CHASSIS_TOP_Y + MORTAR_GEOM.ventH / 2,
@@ -1284,7 +1309,7 @@ export class TowerMeshFactoryService {
           MORTAR_GEOM.housingRadiusTop, MORTAR_GEOM.housingRadiusBottom,
           MORTAR_GEOM.housingHeight, MORTAR_GEOM.housingSegments,
         );
-        const housing = new THREE.Mesh(housingGeom, mat);
+        const housing = new THREE.Mesh(housingGeom, mortarMat);
         housing.name = 'mortarBase';
         housing.position.y = MORTAR_HOUSING_Y;
         towerGroup.add(housing);
@@ -1305,7 +1330,7 @@ export class TowerMeshFactoryService {
           MORTAR_GEOM.barrelT1RadiusTop, MORTAR_GEOM.barrelT1RadiusBottom,
           MORTAR_GEOM.barrelT1Length, MORTAR_GEOM.barrelT1Segments,
         );
-        const barrelT1 = new THREE.Mesh(barrelT1Geom, mat);
+        const barrelT1 = new THREE.Mesh(barrelT1Geom, mortarMat);
         barrelT1.name = 'barrelT1';
         // Cylinder origin is at its centre. Position so base rests at pivot origin.
         barrelT1.position.y = MORTAR_GEOM.barrelT1Length / 2;
@@ -1320,7 +1345,7 @@ export class TowerMeshFactoryService {
           MORTAR_GEOM.barrelT2RadiusTop, MORTAR_GEOM.barrelT2RadiusBottom,
           MORTAR_GEOM.barrelT2Length, MORTAR_GEOM.barrelT2Segments,
         );
-        const barrelT2 = new THREE.Mesh(barrelT2Geom, mat);
+        const barrelT2 = new THREE.Mesh(barrelT2Geom, mortarMat);
         barrelT2.name = 'barrelT2';
         barrelT2.position.y = MORTAR_GEOM.barrelT2Length / 2;
         barrelT2.userData['recoilBaseY'] = MORTAR_GEOM.barrelT2Length / 2;
@@ -1328,12 +1353,14 @@ export class TowerMeshFactoryService {
         barrelT2.userData['minTier'] = 2;
         barrelPivot.add(barrelT2);
 
-        // ── T3 dual barrel — second barrel above the first (named 'dualBarrel') ─
+        // ── T3 dual barrel — second barrel beside the first (named 'dualBarrel') ─
         // Both barrelT2 and dualBarrel are visible at T3; they fire as one unit.
+        // Offset along barrelPivot local X so the two barrels appear side-by-side
+        // (X = left/right across the chassis front) rather than stacking in depth (Z).
         const dualBarrelGeom = barrelT2Geom; // same geometry as T2 barrel
-        const dualBarrel = new THREE.Mesh(dualBarrelGeom, mat);
+        const dualBarrel = new THREE.Mesh(dualBarrelGeom, mortarMat);
         dualBarrel.name = 'dualBarrel';
-        dualBarrel.position.set(0, MORTAR_GEOM.barrelT2Length / 2, MORTAR_GEOM.dualBarrelYOffset);
+        dualBarrel.position.set(MORTAR_GEOM.dualBarrelXOffset, MORTAR_GEOM.barrelT2Length / 2, 0);
         dualBarrel.userData['recoilBaseY'] = MORTAR_GEOM.barrelT2Length / 2;
         dualBarrel.visible = false;
         dualBarrel.userData['minTier'] = 3;
@@ -1348,7 +1375,7 @@ export class TowerMeshFactoryService {
               ),
             )
           : new THREE.BoxGeometry(MORTAR_GEOM.cradleW, MORTAR_GEOM.cradleH, MORTAR_GEOM.cradleD);
-        const cradle = new THREE.Mesh(cradleGeom, mat);
+        const cradle = new THREE.Mesh(cradleGeom, mortarMat);
         cradle.name = 'cradle';
         // Sits at the base of the barrel (pivot origin), centred on housing top
         cradle.position.y = MORTAR_GEOM.cradleH / 2;
@@ -1363,7 +1390,7 @@ export class TowerMeshFactoryService {
               ),
             )
           : new THREE.BoxGeometry(MORTAR_GEOM.crateW, MORTAR_GEOM.crateH, MORTAR_GEOM.crateD);
-        const ammoCrate = new THREE.Mesh(crateGeom, mat);
+        const ammoCrate = new THREE.Mesh(crateGeom, mortarMat);
         ammoCrate.position.set(
           MORTAR_GEOM.crateXOffset,
           MORTAR_GEOM.crateYOffset + MORTAR_GEOM.crateH / 2,
@@ -1377,7 +1404,7 @@ export class TowerMeshFactoryService {
           MORTAR_GEOM.shellSegments, MORTAR_GEOM.shellSegments,
         );
         for (const side of [-1, 1] as const) {
-          const shell = new THREE.Mesh(shellGeom, mat);
+          const shell = new THREE.Mesh(shellGeom, mortarMat);
           shell.position.set(
             MORTAR_GEOM.crateXOffset,
             MORTAR_GEOM.crateYOffset + MORTAR_GEOM.crateH + MORTAR_GEOM.shellYOffset,

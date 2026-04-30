@@ -518,6 +518,12 @@ export const CHAIN_ELECTRODE_CONFIG = {
   emissivePeak: 1.2,
   /** Shimmer cycle period in seconds. */
   shimmerPeriod: 0.8,
+  /**
+   * Phase-offset scale applied to each electrode's X position so adjacent
+   * electrodes shimmer with a slight time offset, giving a "live wire" look.
+   * Units: radians per world-unit of X offset.
+   */
+  shimmerPhaseScale: 4.0,
 } as const;
 
 // ─── CHAIN T2/T3 orbit config ─────────────────────────────────────────────────
@@ -567,8 +573,10 @@ export const MORTAR_GEOM = {
   barrelT2Length:       0.55,
   barrelT2Segments:     8,
 
-  // Dual barrel offset — T3 second barrel sits above the first
-  dualBarrelYOffset: 0.14,
+  // Dual barrel offset — T3 second barrel sits to the side of the first (along X in
+  // barrelPivot local space, so the two barrels appear side-by-side when viewed
+  // from the front rather than stacking along Z which reads as depth, not width).
+  dualBarrelXOffset: 0.14,
 
   // Recoil cradle (collar at barrel base)
   cradleW: 0.28,

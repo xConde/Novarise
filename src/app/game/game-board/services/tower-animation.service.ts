@@ -339,8 +339,7 @@ export class TowerAnimationService {
   tickEmitterPulses(towerMeshes: Map<string, THREE.Group>, nowSeconds: number): void {
     for (const group of towerMeshes.values()) {
       const pulseStart = group.userData['emitterPulseStart'] as number | undefined;
-      const pulseDuration = group.userData['emitterPulseDuration'] as number | undefined;
-      if (pulseStart === undefined || pulseDuration === undefined || pulseDuration <= 0) continue;
+      if (pulseStart === undefined) continue;
 
       const elapsed = nowSeconds - pulseStart;
       const emitter = group.getObjectByName('emitter') as THREE.Mesh | undefined;
@@ -349,7 +348,6 @@ export class TowerAnimationService {
         // Pulse complete — restore neutral scale and clear state
         if (emitter) emitter.scale.setScalar(1.0);
         group.userData['emitterPulseStart'] = undefined;
-        group.userData['emitterPulseDuration'] = undefined;
         continue;
       }
 

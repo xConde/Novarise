@@ -701,13 +701,14 @@ describe('TowerMeshFactoryService', () => {
       expect(typeof slowGroup.userData['fireTick']).toBe('function');
     });
 
-    it('fireTick stores emitterPulseStart and emitterPulseDuration on the group', () => {
+    it('fireTick stores emitterPulseStart on the group', () => {
+      // emitterPulseDuration is no longer written by fireTick — tickEmitterPulses
+      // compares against SLOW_EMITTER_PULSE_FIRE.durationSec directly (E-a fix).
       const fire = slowGroup.userData['fireTick'] as (g: THREE.Group, d: number) => void;
       fire(slowGroup, SLOW_EMITTER_PULSE_FIRE.durationSec);
 
       expect(slowGroup.userData['emitterPulseStart']).toBeDefined();
-      expect(slowGroup.userData['emitterPulseDuration'])
-        .toBeCloseTo(SLOW_EMITTER_PULSE_FIRE.durationSec, 5);
+      expect(slowGroup.userData['emitterPulseDuration']).toBeUndefined();
     });
   });
 
@@ -958,12 +959,14 @@ describe('TowerMeshFactoryService', () => {
       expect(b!.userData['recoilBaseY']).toBeCloseTo(0.55 / 2, 5);
     });
 
-    it('dualBarrel stores recoilBaseY = barrelT2Length/2 (position.z offset preserved through recoil)', () => {
+    it('dualBarrel stores recoilBaseY = barrelT2Length/2 (X offset places barrel side-by-side)', () => {
       const b = mortarGroup.getObjectByName('dualBarrel') as THREE.Mesh | undefined;
       expect(b).toBeTruthy();
       expect(b!.userData['recoilBaseY']).toBeCloseTo(0.55 / 2, 5);
-      // Z offset (dualBarrelYOffset) must still be present after recoil snap
-      expect(b!.position.z).toBeCloseTo(0.14, 4);
+      // X offset (dualBarrelXOffset) places the second barrel beside the first so
+      // both barrels read as side-by-side when viewed from the front. Z must be 0.
+      expect(b!.position.x).toBeCloseTo(0.14, 4);
+      expect(b!.position.z).toBeCloseTo(0.0, 4);
     });
 
     it('tier visibility — T1: barrelT1 visible, barrelT2 hidden, dualBarrel hidden', () => {
@@ -1068,6 +1071,28 @@ describe('TowerMeshFactoryService', () => {
       // Absence of idleTick lets the animation loop fall through to legacy traverse
       // which has no named meshes to animate (confirming no accidental interference).
       expect(mortarGroup.userData['idleTick']).toBeUndefined();
+    });
+
+    it('body meshes use per-instance materials so muzzle-flash does not cross-contaminate', () => {
+      // G-1 regression: body mat must be a per-instance clone, not the registry singleton.
+      // If two MORTAR towers share the same material UUID, startMuzzleFlash's
+      // save/restore keyed on (child.uuid + mat.uuid) would let MORTAR-A's flash
+      // overwrite MORTAR-B's emissive state.
+      const mortarGroup2 = service.createTowerMesh(3, 3, TowerType.MORTAR, boardWidth, boardHeight);
+      createdGroups.push(mortarGroup2);
+
+      const chassis1 = mortarGroup.children.find(
+        c => c instanceof THREE.Mesh && !(c instanceof THREE.PointLight)
+      ) as THREE.Mesh | undefined;
+      const chassis2 = mortarGroup2.children.find(
+        c => c instanceof THREE.Mesh && !(c instanceof THREE.PointLight)
+      ) as THREE.Mesh | undefined;
+
+      expect(chassis1).toBeTruthy();
+      expect(chassis2).toBeTruthy();
+      // Different instances must have different material UUIDs.
+      expect((chassis1!.material as THREE.Material).uuid)
+        .not.toBe((chassis2!.material as THREE.Material).uuid);
     });
   });
 
