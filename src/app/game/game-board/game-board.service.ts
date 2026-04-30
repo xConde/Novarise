@@ -343,9 +343,9 @@ export class GameBoardService {
     // surface, the cell-level border belongs only on the buildable
     // interior).
     const gridMaterial = new THREE.LineBasicMaterial({
-      color: 0xa8baff,
+      color: 0xd6e2ff,
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.95,
       linewidth: 1,
     });
     const lineSegments = new THREE.LineSegments(geometry, gridMaterial);
