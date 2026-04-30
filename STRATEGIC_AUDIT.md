@@ -2296,3 +2296,26 @@ Priority order for Phase H cleanup:
 2. **I-5 (LOW):** `tickTierUpScale` + sell race — add `if (group.userData['selling']) { group.userData['scaleAnimStart'] = undefined; continue; }` guard.
 3. **H-1 residual (LOW):** Remove dead legacy traverse cases (`'crystal'`, `'spark'`, `'spore'`, `'tip'`).
 4. **D-b (LOW):** Unify `drumSpinBoostUntil` and `t` clock sources in SPLASH idleTick.
+
+---
+
+## Bug 1: Emissive Ratchet — 2026-04-30 (feat/threejs-polish)
+
+**Severity:** HIGH — visible to player in production. Turn 17 MORTAR appeared fully blown-out white. User report: "the more they fire the more brighter they're getting."
+
+**Root cause:** `TowerAnimationService.startMuzzleFlash` saved `mat.emissiveIntensity` at fire time rather than from a canonical baseline snapshot. Towers of the same type share a single body material via `MaterialRegistryService`. When two same-type towers fire in the same combat turn, the sequence is:
+
+1. Tower-A fires → saves `mat = 0.4`, spikes shared mat to `0.6`.
+2. Tower-B fires → saves `mat = 0.6` (already spiked by A!), spikes to `0.9`.
+3. Tower-A expires → restores mat to `0.4`.
+4. Tower-B expires → restores mat to `0.6` (elevated baseline — ratchet!).
+
+After 30 turns of two same-type towers: `0.4 × 1.5^30 ≈ 76 700×` baseline. Reproduction spec confirmed `Expected 76700 ≤ 0.42`.
+
+**Fix:** `TowerMeshFactoryService.snapshotEmissiveBaselines(group)` records `emissiveIntensity` per-mesh immediately at construction into `group.userData['emissiveBaselines']`. `startMuzzleFlash` reads from this snapshot instead of the current material value. All four `applyUpgradeVisuals` call sites re-snapshot after upgrade.
+
+**Files changed:** `tower.model.ts` (new `emissiveBaselines` field), `tower-mesh-factory.service.ts` (static `snapshotEmissiveBaselines`), `tower-animation.service.ts` (`startMuzzleFlash` fix), `game-board.component.ts` (2 upgrade paths), `card-play.service.ts` (RAZE spell path), `checkpoint-restore-coordinator.service.ts` (restore path).
+
+**New specs:** +11 across Sprint 1 canary, Sprint 4 per-type baseline invariant (6 towers × 10 cycles), Sprint 7 re-flash correctness, Sprint 8 sell-mid-flash, Sprint 9 sustained 50-turn simulation.
+
+**Lesson:** Any future code path that modifies shared material `emissiveIntensity` must either (a) use the snapshot from `emissiveBaselines` as source of truth, or (b) call `snapshotEmissiveBaselines` immediately after to update the stored baseline.
