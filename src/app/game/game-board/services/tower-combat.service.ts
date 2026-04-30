@@ -10,7 +10,9 @@ import { StatusEffectType } from '../constants/status-effect.constants';
 import { StatusEffectService } from './status-effect.service';
 import { SpatialGrid } from '../utils/spatial-grid';
 import { dist2d, gridToWorld } from '../utils/coordinate-utils';
-import { disposeGroup } from '../utils/three-utils';
+import { buildDisposeProtect, disposeGroup } from '../utils/three-utils';
+import { GeometryRegistryService } from './geometry-registry.service';
+import { MaterialRegistryService } from './material-registry.service';
 import { CombatVFXService } from './combat-vfx.service';
 import { GameStateService } from './game-state.service';
 import { TowerAnimationService } from './tower-animation.service';
@@ -166,6 +168,10 @@ export class TowerCombatService {
     // @Optional() — HARMONIC needs seeded RNG for passenger selection.
     // Absent → no passenger fires; test beds without a live run stay unchanged.
     @Optional() private runService?: RunService,
+    // @Optional() — Phase B sprint 14. Used to protect registry-shared
+    // geometries/materials when disposing tower groups (sell, restart).
+    @Optional() private geometryRegistry?: GeometryRegistryService,
+    @Optional() private materialRegistry?: MaterialRegistryService,
   ) {}
 
   /**
@@ -1160,7 +1166,8 @@ export class TowerCombatService {
     // Dispose and remove all tower meshes from scene
     this.placedTowers.forEach(tower => {
       if (tower.mesh) {
-        disposeGroup(tower.mesh, scene);
+        disposeGroup(tower.mesh, scene,
+          buildDisposeProtect(this.geometryRegistry, this.materialRegistry));
       }
     });
     this.placedTowers.clear();

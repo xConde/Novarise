@@ -16,6 +16,7 @@ import {
 } from './elevation.types';
 import { SceneService } from './scene.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
+import { GeometryRegistryService } from './geometry-registry.service';
 import { gridToWorld } from '../utils/coordinate-utils';
 
 /**
@@ -55,6 +56,11 @@ export class ElevationService {
      * When absent, cliff mesh creation is skipped (no material → no mesh).
      */
     @Optional() private readonly terraformPool?: TerraformMaterialPoolService,
+    /**
+     * @Optional() — GeometryRegistryService is not registered in all test beds.
+     * Production wires it via GameBoardComponent.providers (sprint 12).
+     */
+    @Optional() private readonly geometryRegistry?: GeometryRegistryService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -212,7 +218,14 @@ export class ElevationService {
     // spy-only BoardMeshRegistryService without the cliff map property.
     this.registry.cliffMeshes?.forEach(cliffMesh => {
       scene?.remove(cliffMesh);
-      cliffMesh.geometry.dispose();
+      // Skip dispose if geometry is registry-owned (Phase C sprint 12) —
+      // tiles at the same elevation tier share it. Pre-fix, this path
+      // disposed registry geometry on checkpoint-restore-failure fallback,
+      // poisoning subsequent encounters with disposed BoxGeometry from the
+      // shared cache.
+      if (!this.geometryRegistry?.isRegisteredGeometry(cliffMesh.geometry)) {
+        cliffMesh.geometry.dispose();
+      }
       // Material is pool-owned — DO NOT dispose here.
     });
     this.registry.cliffMeshes?.clear();
@@ -478,12 +491,20 @@ export class ElevationService {
 
     if (existingCliff) {
       // ── Resize existing cliff (elevation changed while remaining > 0) ───────
-      existingCliff.geometry.dispose();
-      existingCliff.geometry = new THREE.BoxGeometry(tileSize, cliffHeight, tileSize);
+      // Skip dispose if old geometry is registry-owned (sprint 12) — tiles
+      // at the same elevation tier share it.
+      if (!this.geometryRegistry?.isRegisteredGeometry(existingCliff.geometry)) {
+        existingCliff.geometry.dispose();
+      }
+      existingCliff.geometry = this.geometryRegistry
+        ? this.geometryRegistry.getBox(tileSize, cliffHeight, tileSize)
+        : new THREE.BoxGeometry(tileSize, cliffHeight, tileSize);
       existingCliff.position.y = cliffHeight / 2;
     } else {
       // ── Create new cliff ─────────────────────────────────────────────────────
-      const cliffGeometry = new THREE.BoxGeometry(tileSize, cliffHeight, tileSize);
+      const cliffGeometry = this.geometryRegistry
+        ? this.geometryRegistry.getBox(tileSize, cliffHeight, tileSize)
+        : new THREE.BoxGeometry(tileSize, cliffHeight, tileSize);
       const cliffMesh = new THREE.Mesh(cliffGeometry, cliffMaterial);
 
       // Position at tile world XZ center; Y centered at half the cliff height.

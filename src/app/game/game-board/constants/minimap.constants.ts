@@ -9,8 +9,9 @@ export const MINIMAP_CONFIG = {
     path: '#1a1a2e',
     tower: '#8a5cf6',
     enemy: '#ff4444',
-    spawn: '#00ff88',
-    exit: '#ff6600',
+    /** UX-27: synced with in-board spawner/exit colors after UX-11 tone-down. */
+    spawn: '#2db8c4',
+    exit: '#c234a8',
   },
   entityDotSize: 3,
   towerDotSize: 4,

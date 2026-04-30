@@ -5,8 +5,9 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
-import { disposeMaterial, disposeMesh } from '../utils/three-utils';
-import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG, ANIMATION_CONFIG } from '../constants/rendering.constants';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass';
+import { applyRendererPolicy, clampPixelRatio, disposeMaterial, disposeMesh } from '../utils/three-utils';
+import { GAME_RENDERER_POLICY, POST_PROCESSING_CONFIG, SCENE_CONFIG, SKYBOX_CONFIG, ANIMATION_CONFIG } from '../constants/rendering.constants';
 import { KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from '../constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from '../constants/camera.constants';
 import { BOARD_CONFIG } from '../constants/board.constants';
@@ -62,29 +63,68 @@ const SKYBOX_FRAGMENT_SHADER = `
   }
 
   void main() {
-    vec3 deepPurple = vec3(0.04, 0.02, 0.08);
-    vec3 darkBlue = vec3(0.06, 0.04, 0.12);
+    // Cumulative reductions vs. the original (broken-pipeline-tuned) values.
+    // Total ~75% dim across base + nebula + stars + bio, restoring the
+    // "deep space backdrop, not nebula scatter" mood the player wants.
+    // The pre-Phase-A pipeline mis-rendered low values dimmer than they
+    // should be; correcting the pipeline made these values too prominent.
+    vec3 deepPurple = vec3(0.008, 0.004, 0.018);
+    vec3 darkBlue = vec3(0.014, 0.008, 0.028);
     vec3 color = mix(deepPurple, darkBlue, vUv.y * 0.5);
 
-    // Stars with twinkle
-    vec2 starPos = vUv * 150.0;
-    float star = random(floor(starPos));
-    if (star > 0.992) {
-      float baseBright = random(floor(starPos) + 1.0) * 0.5;
-      float twinkle = 0.6 + 0.4 * sin(time * (1.0 + random(floor(starPos) + 2.0) * 3.0));
-      float brightness = baseBright * twinkle;
-      color += vec3(brightness * 0.4, brightness * 0.3, brightness * 0.5);
+    // Stars — organic point sources (soft circular falloff, not pixel squares),
+    // power-law brightness so most read dim with rare brighter pops, and
+    // per-star twinkle parameters (amplitude / phase / speed) so the field
+    // doesn't pulse in unison.
+    vec2 starGrid = vUv * 150.0;
+    vec2 cell = floor(starGrid);
+    vec2 cellPos = fract(starGrid);
+    float starSeed = random(cell);
+    if (starSeed > 0.992) {
+      // Place star inside cell with random offset — breaks the grid pattern
+      // visually so the field reads as natural distribution.
+      vec2 starCenter = vec2(
+        0.3 + 0.4 * random(cell + vec2(7.0, 1.0)),
+        0.3 + 0.4 * random(cell + vec2(2.0, 13.0))
+      );
+      float dist = length(cellPos - starCenter);
+      // Soft circular point — fades smoothly to 0 outside ~0.16 cell-units.
+      float falloff = smoothstep(0.16, 0.0, dist);
+
+      // Power-law brightness: pow(x, 3) skews heavily toward dim values so
+      // the eye perceives "many faint dots, occasional bright stand-out."
+      float rawBright = random(cell + vec2(1.0, 0.0));
+      float brightness = pow(rawBright, 3.0);
+
+      // Per-star twinkle — randomised amp/phase/speed prevents synchronous pulse.
+      float twinkleAmp = 0.2 + 0.5 * random(cell + vec2(3.0, 0.0));
+      float twinklePhase = random(cell + vec2(5.0, 0.0)) * 6.2831853;
+      float twinkleSpeed = 0.5 + 1.5 * random(cell + vec2(2.0, 0.0));
+      float twinkleNorm = 0.5 + 0.5 * sin(time * twinkleSpeed + twinklePhase);
+      float twinkle = (1.0 - twinkleAmp) + twinkleAmp * twinkleNorm;
+
+      // Subtle hue variation — mostly cool white, occasional warm tint
+      // (mimics the spectral variety of real stars without being garish).
+      float colorRoll = random(cell + vec2(9.0, 0.0));
+      vec3 starColor = mix(
+        vec3(0.85, 0.85, 1.0),
+        vec3(1.0, 0.92, 0.78),
+        smoothstep(0.85, 0.97, colorRoll)
+      );
+
+      color += starColor * brightness * twinkle * falloff * 0.4;
     }
 
-    // Drifting nebula veins
+    // Drifting nebula veins — threshold raised to 0.985 (was 0.97/0.975)
+    // for far fewer purple squares, and color dimmed another ~50%.
     float drift = time * 0.02;
     float vein1 = random(floor(vUv * 40.0 + vec2(drift, vUv.x * 10.0 + drift * 0.5)));
-    if (vein1 > 0.97) {
-      color += vec3(0.25, 0.15, 0.3) * vein1;
+    if (vein1 > 0.985) {
+      color += vec3(0.08, 0.05, 0.10) * vein1;
     }
 
-    // Slow-shifting bioluminescence
-    float bio = random(floor(vUv * 25.0 + vec2(drift * 0.3))) * 0.12;
+    // Slow-shifting bioluminescence (further dim)
+    float bio = random(floor(vUv * 25.0 + vec2(drift * 0.3))) * 0.05;
     color += vec3(bio * 0.3, bio * 0.5, bio * 0.7);
 
     gl_FragColor = vec4(color, 1.0);
@@ -110,6 +150,7 @@ export class SceneService {
   // Post-processing passes
   private bloomPass?: UnrealBloomPass;
   private vignettePass?: ShaderPass;
+  private outputPass?: OutputPass;
   private renderPass?: RenderPass;
 
   // Scene objects
@@ -124,6 +165,7 @@ export class SceneService {
 
   // Renderer event handlers — stored for removal on dispose
   private contextLostHandler: ((event: Event) => void) | null = null;
+  private onControlsChange: (() => void) | null = null;
   private contextRestoredHandler: (() => void) | null = null;
 
   // Called by the component to restart the animation loop on context restore
@@ -177,13 +219,13 @@ export class SceneService {
     this.onContextRestored = onContextRestored;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    this.renderer.setPixelRatio(window.devicePixelRatio);
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.localClippingEnabled = true;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = SCENE_CONFIG.toneMappingExposure;
+    applyRendererPolicy(
+      this.renderer,
+      window.innerWidth,
+      window.innerHeight,
+      window.devicePixelRatio,
+      GAME_RENDERER_POLICY
+    );
 
     const rendererCanvas = this.renderer.domElement;
 
@@ -227,6 +269,13 @@ export class SceneService {
 
     this.vignettePass = new ShaderPass(vignetteShader);
     this.composer.addPass(this.vignettePass);
+
+    // OutputPass MUST be last. It applies the renderer's tone mapping +
+    // outputColorSpace to composer-rendered frames, which the EffectComposer
+    // otherwise bypasses. Without this, ACESFilmicToneMapping +
+    // SRGBColorSpace are silently dropped when composing.
+    this.outputPass = new OutputPass();
+    this.composer.addPass(this.outputPass);
   }
 
   initLights(): void {
@@ -283,14 +332,17 @@ export class SceneService {
     this.controls.target.set(0, 0, 0);
     this.controls.update();
 
-    // Clamp orbit target to prevent wandering off the map
-    this.controls.addEventListener('change', () => {
+    // Clamp orbit target to prevent wandering off the map.
+    // Stored as a named field so dispose() can detach it — OrbitControls.dispose()
+    // does NOT remove user-added 'change' listeners attached via addEventListener.
+    this.onControlsChange = () => {
       const target = this.controls.target;
       const boardHalf = this.boardSize * CONTROLS_CONFIG.panBoundaryMargin;
       target.x = Math.max(-boardHalf, Math.min(boardHalf, target.x));
       target.z = Math.max(-boardHalf, Math.min(boardHalf, target.z));
-      target.y = Math.max(0, Math.min(5, target.y)); // Keep y reasonable
-    });
+      target.y = Math.max(0, Math.min(5, target.y));
+    };
+    this.controls.addEventListener('change', this.onControlsChange);
   }
 
   initParticles(): void {
@@ -373,6 +425,9 @@ export class SceneService {
       this.camera.updateProjectionMatrix();
     }
     if (this.renderer) {
+      // Re-apply pixel ratio: display switch / browser zoom can change
+      // window.devicePixelRatio without recreating the renderer.
+      this.renderer.setPixelRatio(clampPixelRatio(window.devicePixelRatio, SCENE_CONFIG.maxPixelRatio));
       this.renderer.setSize(width, height);
     }
     if (this.composer) {
@@ -448,6 +503,10 @@ export class SceneService {
     this.disposeSkybox();
 
     // Post-processing
+    if (this.outputPass) {
+      this.outputPass.dispose();
+      this.outputPass = undefined;
+    }
     if (this.vignettePass) {
       this.vignettePass.dispose();
       this.vignettePass = undefined;
@@ -478,8 +537,12 @@ export class SceneService {
     this.onContextLost = null;
     this.onContextRestored = null;
 
-    // Controls
+    // Controls — detach user-added 'change' listener BEFORE dispose
     if (this.controls) {
+      if (this.onControlsChange) {
+        this.controls.removeEventListener('change', this.onControlsChange);
+        this.onControlsChange = null;
+      }
       this.controls.dispose();
     }
 

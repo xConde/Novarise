@@ -36,7 +36,13 @@ export class TowerPlacementService {
   /** Raycaster + mouse vector are owned by the component; injected at drag-start time. */
   private raycaster: THREE.Raycaster | null = null;
   private mouse: THREE.Vector2 | null = null;
-  private tileMeshArrayRef: () => THREE.Mesh[] = () => [];
+  /**
+   * Returns the current set of tile pickables (instanced + individual).
+   * Sprint 22: was Mesh[]; widened to Object3D[] to include InstancedMesh.
+   */
+  private tilePickablesRef: () => readonly THREE.Object3D[] = () => [];
+  /** Resolves a raycast intersection to (row, col) regardless of surface. */
+  private resolveTileHit: (i: THREE.Intersection) => { row: number; col: number } | null = () => null;
 
   /** Called by the component to enter PLACE mode and show tile highlights. */
   onEnterPlaceMode: ((type: TowerType) => void) | null = null;
@@ -59,7 +65,8 @@ export class TowerPlacementService {
   init(
     raycaster: THREE.Raycaster,
     mouse: THREE.Vector2,
-    tileMeshArrayRef: () => THREE.Mesh[],
+    tilePickablesRef: () => readonly THREE.Object3D[],
+    resolveTileHit: (i: THREE.Intersection) => { row: number; col: number } | null,
     callbacks: {
       onEnterPlaceMode: (type: TowerType) => void;
       onPlaceAttempt: (row: number, col: number) => void;
@@ -71,7 +78,8 @@ export class TowerPlacementService {
     this.cleanup();
     this.raycaster = raycaster;
     this.mouse = mouse;
-    this.tileMeshArrayRef = tileMeshArrayRef;
+    this.tilePickablesRef = tilePickablesRef;
+    this.resolveTileHit = resolveTileHit;
     this.onEnterPlaceMode = callbacks.onEnterPlaceMode;
     this.onPlaceAttempt = callbacks.onPlaceAttempt;
     this.onDeselectTower = callbacks.onDeselectTower;
@@ -151,12 +159,15 @@ export class TowerPlacementService {
     this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
     this.raycaster.setFromCamera(this.mouse, this.sceneService.getCamera());
-    const intersects = this.raycaster.intersectObjects(this.tileMeshArrayRef());
+    const intersects = this.raycaster.intersectObjects(this.tilePickablesRef() as THREE.Object3D[]);
 
     if (intersects.length > 0) {
-      const mesh = intersects[0].object as THREE.Mesh;
-      const row = mesh.userData['row'] as number;
-      const col = mesh.userData['col'] as number;
+      const coord = this.resolveTileHit(intersects[0]);
+      if (!coord) {
+        this.towerPreviewService.hidePreview(this.sceneService.getScene());
+        return;
+      }
+      const { row, col } = coord;
       const tileCost = this.gameStateService.getEffectiveTowerCost(this.dragTowerType!);
       const canPlace = this.gameBoardService.canPlaceTower(row, col)
         && this.gameStateService.canAfford(tileCost);
@@ -185,13 +196,13 @@ export class TowerPlacementService {
       this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
       this.raycaster.setFromCamera(this.mouse, this.sceneService.getCamera());
-      const intersects = this.raycaster.intersectObjects(this.tileMeshArrayRef());
+      const intersects = this.raycaster.intersectObjects(this.tilePickablesRef() as THREE.Object3D[]);
 
       if (intersects.length > 0) {
-        const mesh = intersects[0].object as THREE.Mesh;
-        const row = mesh.userData['row'] as number;
-        const col = mesh.userData['col'] as number;
-        this.onPlaceAttempt?.(row, col);
+        const coord = this.resolveTileHit(intersects[0]);
+        if (coord) {
+          this.onPlaceAttempt?.(coord.row, coord.col);
+        }
       }
     }
 
@@ -235,7 +246,8 @@ export class TowerPlacementService {
     this.removeDragListeners();
     this.raycaster = null;
     this.mouse = null;
-    this.tileMeshArrayRef = () => [];
+    this.tilePickablesRef = () => [];
+    this.resolveTileHit = () => null;
     this.onEnterPlaceMode = null;
     this.onPlaceAttempt = null;
     this.onDeselectTower = null;

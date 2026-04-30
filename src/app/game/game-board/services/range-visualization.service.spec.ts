@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { RangeVisualizationService } from './range-visualization.service';
-import { PlacedTower, TowerType, TargetingMode } from '../models/tower.model';
+import { PlacedTower, TowerType, TargetingMode, getEffectiveStats, TOWER_CONFIGS } from '../models/tower.model';
+import { ElevationService } from './elevation.service';
 import { RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG } from '../constants/ui.constants';
 
 // ---------------------------------------------------------------------------
@@ -269,6 +270,79 @@ describe('RangeVisualizationService', () => {
 
     it('is safe to call when nothing exists', () => {
       expect(() => service.cleanup(scene)).not.toThrow();
+    });
+  });
+
+  // Per-tower range coverage migrated from tower-preview.service.spec when
+  // sprint UX-1 removed the inline ring. RangeVisualizationService is now
+  // the sole owner of placement-preview range rings.
+  describe('showForPosition — range matches tower stats', () => {
+    const towerTypes = [
+      TowerType.BASIC,
+      TowerType.SNIPER,
+      TowerType.SPLASH,
+      TowerType.SLOW,
+      TowerType.CHAIN,
+      TowerType.MORTAR,
+    ];
+
+    towerTypes.forEach((type) => {
+      it(`range ring for ${type} uses level-1 range`, () => {
+        service.showForPosition(type, 5, 5, BOARD_WIDTH, BOARD_HEIGHT, TILE_SIZE, scene);
+        const ring = scene.children[0] as THREE.Mesh;
+        const geo = ring.geometry as THREE.RingGeometry;
+        const expectedRange = getEffectiveStats(type, 1).range;
+        expect(geo.parameters.outerRadius).toBeCloseTo(expectedRange);
+        service.hideHoverRange(scene);
+      });
+    });
+  });
+
+  describe('UX-2 — hover ring desaturation + elevation-aware Y', () => {
+    it('hover color is desaturated toward white (UX-2)', () => {
+      service.showForPosition(TowerType.SPLASH, 5, 5, BOARD_WIDTH, BOARD_HEIGHT, TILE_SIZE, scene);
+      const ring = scene.children[0] as THREE.Mesh;
+      const mat = ring.material as THREE.MeshBasicMaterial;
+      const splashColor = TOWER_CONFIGS[TowerType.SPLASH].color;
+      // Hover color should NOT be the pure tower color (it lerps toward white).
+      expect(mat.color.getHex()).not.toBe(splashColor);
+      // White-mixed result has all channels brighter than the saturated source.
+      const towerC = new THREE.Color(splashColor);
+      expect(mat.color.r).toBeGreaterThan(towerC.r);
+      expect(mat.color.g).toBeGreaterThanOrEqual(towerC.g);
+      expect(mat.color.b).toBeGreaterThan(towerC.b);
+    });
+
+    it('hover ring Y respects elevation when ElevationService is provided', () => {
+      // Build a fake ElevationService that reports elevation 2 at (4,4).
+      const fakeElev = {
+        getElevation: (r: number, c: number) => (r === 4 && c === 4 ? 2 : 0),
+      } as unknown as { getElevation(r: number, c: number): number };
+      const localScene = new THREE.Scene();
+      const localSvc = new RangeVisualizationService(fakeElev as unknown as ElevationService);
+
+      localSvc.showForPosition(TowerType.BASIC, 4, 4, BOARD_WIDTH, BOARD_HEIGHT, TILE_SIZE, localScene);
+      const ring = localScene.children[0] as THREE.Mesh;
+      // yPosition (0.22) + elevation (2) = 2.22
+      expect(ring.position.y).toBeCloseTo(0.22 + 2, 5);
+      localSvc.hideHoverRange(localScene);
+    });
+
+    it('selected-tower selection ring also respects elevation', () => {
+      const fakeElev = {
+        getElevation: () => 1,
+      } as unknown as { getElevation(r: number, c: number): number };
+      const localScene = new THREE.Scene();
+      const localSvc = new RangeVisualizationService(fakeElev as unknown as ElevationService);
+      const tower = makePlacedTower(3, 3);
+      localSvc.showForTower(tower, BOARD_WIDTH, BOARD_HEIGHT, TILE_SIZE, localScene);
+
+      const [rangeRing, selectionRing] = localScene.children.map(c => c as THREE.Mesh);
+      // Range ring Y = yPosition (0.22) + elevation (1) = 1.22
+      expect(rangeRing.position.y).toBeCloseTo(1.22, 5);
+      // Selection ring Y = yPosition (0.22) + yOffset (0.01) + elevation (1) = 1.23
+      expect(selectionRing.position.y).toBeCloseTo(1.23, 5);
+      localSvc.removePreview(localScene);
     });
   });
 });

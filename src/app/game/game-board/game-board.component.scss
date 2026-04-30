@@ -373,13 +373,16 @@
   }
 
   @keyframes end-turn-stuck-pulse {
+    /* UX-40: pure-cyan neon (0,255,255) was a debug-alert scream against
+     * the new dark moody board. Replaced with the project's theme purple
+     * tones — same "pulsing nudge" semantics, harmonised with palette. */
     0%, 100% {
-      box-shadow: 0 0 1.25rem rgba(0, 255, 255, 0.4);
-      border-color: var(--theme-cyan);
+      box-shadow: 0 0 1.25rem rgba(138, 92, 246, 0.35);
+      border-color: var(--theme-purple, #8a5cf6);
     }
     50% {
-      box-shadow: 0 0 1.75rem rgba(0, 255, 255, 0.7);
-      border-color: #88ffff;
+      box-shadow: 0 0 1.75rem rgba(173, 130, 255, 0.55);
+      border-color: var(--theme-purple-lighter, #ad82ff);
     }
   }
 

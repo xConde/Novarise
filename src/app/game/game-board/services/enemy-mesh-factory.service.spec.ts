@@ -520,4 +520,74 @@ describe('EnemyMeshFactoryService', () => {
       expect(() => testGeom.dispose()).not.toThrow();
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Phase B sprint 20 red-team — per-instance material guarantees
+  // ─────────────────────────────────────────────────────────────────────────
+  describe('per-instance material isolation (Phase B aliasing guard)', () => {
+    const createdMeshes: THREE.Mesh[] = [];
+    afterEach(() => {
+      while (createdMeshes.length > 0) {
+        disposeMesh(createdMeshes.pop()!);
+      }
+    });
+
+    it('two enemies of the same type get DIFFERENT body material instances', () => {
+      const a = service.createEnemyMesh(makeEnemy(EnemyType.BASIC));
+      const b = service.createEnemyMesh(makeEnemy(EnemyType.BASIC));
+      createdMeshes.push(a, b);
+      expect(a.material).not.toBe(b.material);
+    });
+
+    it('two enemies of the same type get DIFFERENT health-bar FG material instances', () => {
+      const a = service.createEnemyMesh(makeEnemy(EnemyType.BASIC));
+      const b = service.createEnemyMesh(makeEnemy(EnemyType.BASIC));
+      createdMeshes.push(a, b);
+      const aFg = (a.userData['healthBarFg'] as THREE.Mesh).material;
+      const bFg = (b.userData['healthBarFg'] as THREE.Mesh).material;
+      expect(aFg).not.toBe(bFg);
+    });
+
+    it('mutating enemy A body emissive does not affect enemy B', () => {
+      const a = service.createEnemyMesh(makeEnemy(EnemyType.BASIC));
+      const b = service.createEnemyMesh(makeEnemy(EnemyType.BASIC));
+      createdMeshes.push(a, b);
+      const aMat = a.material as THREE.MeshStandardMaterial;
+      const bMat = b.material as THREE.MeshStandardMaterial;
+      const bOriginalEmissive = bMat.emissive.getHex();
+      aMat.emissive.setHex(0xffffff);
+      expect(bMat.emissive.getHex()).toBe(bOriginalEmissive);
+    });
+
+    it('mutating enemy A body opacity does not affect enemy B', () => {
+      const a = service.createEnemyMesh(makeEnemy(EnemyType.BASIC));
+      const b = service.createEnemyMesh(makeEnemy(EnemyType.BASIC));
+      createdMeshes.push(a, b);
+      const aMat = a.material as THREE.MeshStandardMaterial;
+      const bMat = b.material as THREE.MeshStandardMaterial;
+      aMat.transparent = true;
+      aMat.opacity = 0.3;
+      expect(bMat.transparent).toBeFalse();
+      expect(bMat.opacity).toBe(1);
+    });
+
+    it('two SHIELDED enemies get DIFFERENT shield dome material + geometry instances', () => {
+      const a = service.createEnemyMesh(makeEnemy(EnemyType.SHIELDED, { shield: 50, maxShield: 50 }));
+      const b = service.createEnemyMesh(makeEnemy(EnemyType.SHIELDED, { shield: 50, maxShield: 50 }));
+      createdMeshes.push(a, b);
+      const aDome = a.userData['shieldMesh'] as THREE.Mesh;
+      const bDome = b.userData['shieldMesh'] as THREE.Mesh;
+      expect(aDome.material).not.toBe(bDome.material);
+      expect(aDome.geometry).not.toBe(bDome.geometry);
+    });
+
+    it('two BOSS enemies get DIFFERENT crown material instances', () => {
+      const a = service.createEnemyMesh(makeEnemy(EnemyType.BOSS));
+      const b = service.createEnemyMesh(makeEnemy(EnemyType.BOSS));
+      createdMeshes.push(a, b);
+      const aCrown = a.userData['bossCrown'] as THREE.Mesh;
+      const bCrown = b.userData['bossCrown'] as THREE.Mesh;
+      expect(aCrown.material).not.toBe(bCrown.material);
+    });
+  });
 });

@@ -186,7 +186,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     speed: 2.0,
     tilesPerTurn: 1,
     value: 5,
-    color: 0xff0000, // Red
+    color: 0xc83838, // UX-40: muted warm red (was 0xff0000 neon — clashed with new dark palette)
     size: 0.3,
     leakDamage: 1
   },
@@ -195,7 +195,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     speed: 4.0,
     tilesPerTurn: 2,
     value: 8,
-    color: 0xffff00, // Yellow
+    color: 0xd6c844, // UX-40: warm gold (was 0xffff00 neon)
     size: 0.25,
     leakDamage: 1
   },
@@ -204,7 +204,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     speed: 1.0,
     tilesPerTurn: 1,
     value: 15,
-    color: 0x0000ff, // Blue
+    color: 0x3a55c8, // UX-40: deep blue (was 0x0000ff pure)
     size: 0.4,
     leakDamage: 2
   },
@@ -213,7 +213,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     speed: 3.0,
     tilesPerTurn: 2,
     value: 10,
-    color: 0x00ffff, // Cyan
+    color: 0x4cd0d0, // UX-40: muted cyan (was 0x00ffff neon)
     size: 0.3,
     leakDamage: 1
   },
@@ -222,7 +222,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     speed: 0.5,
     tilesPerTurn: 1,
     value: 50,
-    color: 0xff00ff, // Magenta
+    color: 0xc848b8, // UX-40: rich magenta (was 0xff00ff neon)
     size: 0.6,
     leakDamage: 3
   },

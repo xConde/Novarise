@@ -18,6 +18,9 @@ import { ElevationService } from './elevation.service';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { BlockType } from '../models/game-board-tile';
 import { shuffleInPlace } from '../utils/coordinate-utils';
+import { buildDisposeProtect, disposeGroup } from '../utils/three-utils';
+import { GeometryRegistryService } from './geometry-registry.service';
+import { MaterialRegistryService } from './material-registry.service';
 
 export { DamageResult } from '../models/enemy.model';
 
@@ -57,6 +60,12 @@ export class EnemyService {
      * which safely returns 0 (no bonus) in those contexts.
      */
     @Optional() private elevationService: ElevationService | null,
+    /**
+     * @Optional() — Phase B sprint 14. Used to protect registry-shared
+     * enemy geometries/materials when disposing enemy meshes on death.
+     */
+    @Optional() private geometryRegistry?: GeometryRegistryService,
+    @Optional() private materialRegistry?: MaterialRegistryService,
   ) {}
 
   /**
@@ -431,24 +440,12 @@ export class EnemyService {
       this.enemyVisual.removeStatusParticles(enemy, scene);
 
       if (enemy.mesh) {
-        // Dispose health bar and shield children before removing
-        enemy.mesh.children.forEach(child => {
-          if (child instanceof THREE.Mesh) {
-            child.geometry.dispose();
-            if (Array.isArray(child.material)) {
-              child.material.forEach(mat => mat.dispose());
-            } else {
-              child.material.dispose();
-            }
-          }
-        });
-        scene.remove(enemy.mesh);
-        enemy.mesh.geometry.dispose();
-        if (Array.isArray(enemy.mesh.material)) {
-          enemy.mesh.material.forEach(mat => mat.dispose());
-        } else {
-          enemy.mesh.material.dispose();
-        }
+        // disposeGroup traverses children + root, deduplicates shared
+        // resources, and skips registry-owned ones (Phase B sprint 14).
+        // The enemy mesh itself isn't a Group but Three.js's traverse
+        // visits the root + children alike.
+        disposeGroup(enemy.mesh, scene,
+          buildDisposeProtect(this.geometryRegistry, this.materialRegistry));
       }
       this.enemies.delete(enemyId);
     }

@@ -328,8 +328,18 @@ describe('CheckpointRestoreCoordinatorService', () => {
         pathMutations: { mutations: [makeMutation('build', 2, 3)], nextId: 1 } as unknown as EncounterCheckpoint['pathMutations'],
       }));
       service.restore({ onFallback: () => {} });
-      // swapMesh receives the SAME targetType derived from op (build → BASE).
-      expect(pathMutationSpy.swapMesh).toHaveBeenCalledWith(2, 3, BLOCK_BASE, jasmine.any(Object));
+      // swapMesh receives the SAME targetType derived from op (build → BASE)
+      // AND the mutation.op as the 5th arg so the mesh routes through
+      // TerraformMaterialPoolService for the correct tint (Phase C sprint 30 fix).
+      expect(pathMutationSpy.swapMesh).toHaveBeenCalledWith(2, 3, BLOCK_BASE, jasmine.any(Object), 'build');
+    });
+
+    it('passes mutation.op to swapMesh for non-BASE target types too', () => {
+      encounterCheckpointSpy.loadCheckpoint.and.returnValue(makeCheckpoint({
+        pathMutations: { mutations: [makeMutation('block', 4, 5)], nextId: 1 } as unknown as EncounterCheckpoint['pathMutations'],
+      }));
+      service.restore({ onFallback: () => {} });
+      expect(pathMutationSpy.swapMesh).toHaveBeenCalledWith(4, 5, BLOCK_WALL, jasmine.any(Object), 'block');
     });
 
     it('replays mutations in the order stored in the journal', () => {

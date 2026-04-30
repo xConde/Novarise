@@ -1,9 +1,9 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, Subscription } from 'rxjs';
-import * as THREE from 'three';
 import { GameBoardService } from './game-board.service';
 import { disposeGroup } from './utils/three-utils';
+import { BlockType } from './models/game-board-tile';
 import { SceneService } from './services/scene.service';
 import { EnemyService } from './services/enemy.service';
 import { MapBridgeService } from '../../core/services/map-bridge.service';
@@ -87,6 +87,10 @@ import { PathMutationService } from './services/path-mutation.service';
 import { ElevationService } from './services/elevation.service';
 import { LineOfSightService } from './services/line-of-sight.service';
 import { TerraformMaterialPoolService } from './services/terraform-material-pool.service';
+import { GeometryRegistryService } from './services/geometry-registry.service';
+import { MaterialRegistryService } from './services/material-registry.service';
+import { TextSpritePoolService } from './services/text-sprite-pool.service';
+import { VfxPoolService } from './services/vfx-pool.service';
 import { TowerGraphService } from './services/tower-graph.service';
 import { LinkMeshService } from './services/link-mesh.service';
 
@@ -153,7 +157,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, PathBlockedWarningService, ItemCallbacksWiringService, SpawnPreviewViewService, EncounterBootstrapService, CheckpointRestoreCoordinatorService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, TowerGraphService, LinkMeshService]
+  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, PathBlockedWarningService, ItemCallbacksWiringService, SpawnPreviewViewService, EncounterBootstrapService, CheckpointRestoreCoordinatorService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, GeometryRegistryService, MaterialRegistryService, TextSpritePoolService, VfxPoolService, TowerGraphService, LinkMeshService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -251,6 +255,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Animation
   private resizeHandler: () => void = () => {};
+  private resizeViewport: VisualViewport | null = null;
   private stateSubscription: Subscription | null = null;
   private hotkeySubscription: Subscription | null = null;
 
@@ -596,6 +601,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.sceneService.resize(width, height);
     };
     window.addEventListener('resize', this.resizeHandler);
+    // Editor parity (editor-scene.service.ts:187): mobile address-bar
+    // show/hide changes layout viewport without firing 'resize'. Store
+    // the viewport reference so dispose can detach even if
+    // window.visualViewport later goes null (some Android WebViews).
+    if (window.visualViewport) {
+      this.resizeViewport = window.visualViewport;
+      this.resizeViewport.addEventListener('resize', this.resizeHandler);
+    }
 
     const canvas = this.sceneService.getRenderer().domElement;
     this.boardPointer.init(canvas, {
@@ -619,11 +632,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     });
     this.touchInteraction.init(canvas, (x, y) => this.boardPointer.handleInteraction(x, y));
 
-    this.towerPlacementService.init(this.boardPointer.raycaster, this.boardPointer.mouse, () => this.meshRegistry.getTileMeshArray() as THREE.Mesh[], {
-      onEnterPlaceMode: (type) => { this.selectedTowerType = type; this.updateTileHighlights(); },
-      onPlaceAttempt: (row, col) => this.tryPlaceTower(row, col),
-      onDeselectTower: () => this.deselectTower(),
-    });
+    this.towerPlacementService.init(
+      this.boardPointer.raycaster,
+      this.boardPointer.mouse,
+      () => this.meshRegistry.getTilePickables(),
+      (intersection) => this.meshRegistry.resolveTileHit(intersection),
+      {
+        onEnterPlaceMode: (type) => { this.selectedTowerType = type; this.updateTileHighlights(); },
+        onPlaceAttempt: (row, col) => this.tryPlaceTower(row, col),
+        onDeselectTower: () => this.deselectTower(),
+      },
+    );
 
     this.gameInput.init();
     const hotkeyActions: HotkeyActions = {
@@ -777,10 +796,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.cardPlayService.cancelTileTarget();
     this.selectedTowerType = null;
     this.boardPointer.clearSelectedTile();
+    // UX-7 red-team fix: reset cursor so a stale 'not-allowed' from
+    // hovering an invalid tile in PLACE mode doesn't bleed through into
+    // INSPECT mode until the next mousemove fires.
+    this.boardPointer.resetCursor();
     this.clearTileHighlights();
     if (this.sceneService.getScene()) {
       this.towerPreviewService.hidePreview(this.sceneService.getScene());
     }
+    // Also hide the hover-range ring left over from PLACE mode
+    // (RangeVisualizationService.showForPosition).
+    this.rangeVisualizationService.hideHoverRange(this.sceneService.getScene());
   }
 
   /** Whether a tower type is selected for placement (PLACE mode).
@@ -823,22 +849,20 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   updateTileHighlights(): void {
     if (!this.isPlaceMode) {
-      this.tileHighlightService.clearHighlights(this.meshRegistry.tileMeshes, this.sceneService.getScene());
+      this.tileHighlightService.clearHighlights();
       return;
     }
     const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
     this.tileHighlightService.updateHighlights(
       this.selectedTowerType!,
-      this.meshRegistry.tileMeshes,
       this.boardPointer.getSelectedTile(),
-      this.sceneService.getScene(),
-      costMult
+      costMult,
     );
   }
 
   /** Remove placement highlights from all tiles, restoring their original emissive. */
   private clearTileHighlights(): void {
-    this.tileHighlightService.clearHighlights(this.meshRegistry.tileMeshes, this.sceneService.getScene());
+    this.tileHighlightService.clearHighlights();
   }
 
   upgradeTower(spec?: TowerSpecialization): void {
@@ -1126,13 +1150,33 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private renderGameBoard(): void {
     const boardTiles = this.gameBoardService.getGameBoard();
+    const scene = this.sceneService.getScene();
+
+    // Phase C sprint 23: BASE / WALL / SPAWNER / EXIT tiles all render via
+    // their own InstancedMesh layer. Mutated tiles (any BlockType with an
+    // active mutationOp) still render as individual TerraformPool meshes.
+    // Sprint 24 refines mutation overlay handling.
+    const instancedTypes: ReadonlyArray<BlockType> = [
+      BlockType.BASE, BlockType.WALL, BlockType.SPAWNER, BlockType.EXIT,
+    ];
+    for (const t of instancedTypes) {
+      const layer = this.gameBoardService.buildTileInstanceLayer(t);
+      if (layer) {
+        this.meshRegistry.tileInstanceLayers.set(t, layer);
+        scene.add(layer.mesh);
+      }
+    }
 
     boardTiles.forEach((row, rowIndex) => {
       row.forEach((tile, colIndex) => {
+        // Skip tiles already represented in an instance layer (any non-mutated
+        // BASE/WALL/SPAWNER/EXIT). Mutated tiles or unsupported BlockTypes
+        // fall through to per-mesh rendering.
+        if (tile.mutationOp === undefined && instancedTypes.includes(tile.type)) return;
         const mesh = this.gameBoardService.createTileMesh(rowIndex, colIndex, tile.type);
         mesh.userData = { row: rowIndex, col: colIndex, tile: tile };
         this.meshRegistry.tileMeshes.set(`${rowIndex}-${colIndex}`, mesh);
-        this.sceneService.getScene().add(mesh);
+        scene.add(mesh);
       });
     });
 
@@ -1475,13 +1519,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gameInput.cleanup();
     this.gamePauseService.cleanup();
     window.removeEventListener('resize', this.resizeHandler);
+    if (this.resizeViewport) {
+      this.resizeViewport.removeEventListener('resize', this.resizeHandler);
+      this.resizeViewport = null;
+    }
     this.towerPlacementService.cleanup();
     this.boardPointer.cleanup();
     this.touchInteraction.cleanup();
 
-    if (this.sceneService.getControls()) {
-      this.sceneService.getControls().dispose();
-    }
+    // Controls disposal owned by sceneService.dispose() below — calling
+    // it here too would skip removeEventListener('change', ...) on the
+    // user-added listener (Phase A sprint 7 fix lives in sceneService).
 
     if (this.sceneService.getScene()) {
       this.cleanupGameObjects();

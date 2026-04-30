@@ -22,10 +22,15 @@ export const HEALTH_BAR_CONFIG = {
   width: 0.5,
   height: 0.06,
   yOffset: 0.2,
-  bgColor: 0x333333,
-  colorGreen: 0x00ff00,
-  colorYellow: 0xffff00,
-  colorRed: 0xff0000,
+  /**
+   * UX-14: bg darkened from 0x333333 → 0x14181f so the colored FG pops
+   * against it on the new darker board. FG colors slightly softened
+   * (less neon, still alarming for low HP).
+   */
+  bgColor: 0x14181f,
+  colorGreen: 0x4cd66c,    // softer than 0x00ff00
+  colorYellow: 0xf0c845,   // warm gold vs harsh 0xffff00
+  colorRed: 0xe04a3a,      // alarming but less neon than 0xff0000
   thresholdHigh: 0.6,
   thresholdLow: 0.3
 };
@@ -61,20 +66,47 @@ export const TOWER_VISUAL_CONFIG = {
 };
 
 export const RANGE_PREVIEW_CONFIG = {
+  /** Opacity for the SELECTED-tower range ring (showForTower). */
   opacity: 0.35,
-  yPosition: 0.35,
+  /**
+   * Y height of the ring above world Y=0. Tile top is ~tileHeight (0.2),
+   * so 0.22 sits just above the tile surface with minimal floating.
+   * UX-2: lowered from 0.35 to reduce the visible gap between ring and tile.
+   */
+  yPosition: 0.22,
   ringThickness: 0.05,
-  segments: 64,
+  /** Higher segment count for a smoother circle now that the ring is solo. */
+  segments: 96,
   allRangesColor: 0x00ff88,
   allRangesOpacityScale: 0.5,
+  /**
+   * Placement-preview ring (showForPosition) opacity multiplier on top of
+   * `opacity`. Slightly higher than the pre-UX-1 0.6 because the inline
+   * duplicate ring was removed — this is now the sole hover-range visual.
+   */
+  hoverOpacityScale: 0.7,
+  /**
+   * Mix factor toward white when previewing placement (0 = pure tower
+   * color, 1 = pure white). Soft desaturation reads as "potential / not
+   * yet committed" vs. the saturated SELECTED-tower ring.
+   */
+  hoverDesaturation: 0.35,
 };
 
 /** Selection ring shown around the currently selected placed tower. */
 export const SELECTION_RING_CONFIG = {
   radius: 0.55,
-  thickness: 0.04,
-  segments: 32,
-  color: 0xffffff,
+  /** Slightly thicker for the cool dark atmosphere — was 0.04 (UX-8). */
+  thickness: 0.05,
+  /** Smoother circle — was 32 (UX-8). */
+  segments: 64,
+  /**
+   * Cool off-white instead of pure 0xffffff (UX-8). Subtle cyan-blue tint
+   * harmonises with the board's cool palette without losing "selected"
+   * affordance. Pure white was visually loud against the new dark
+   * atmosphere.
+   */
+  color: 0xddeaff,
   opacity: 0.6,
   yOffset: 0.01,
 } as const;
@@ -83,22 +115,36 @@ export const TILE_EMISSIVE = {
   base: 0.35,
   wall: 0.05,
   special: 0.4,
-  hover: 0.5,
-  selected: 0.8,
-  /** Default emissive color for BASE tiles (used as fallback in highlight restoration). */
-  defaultColor: 0x303848,
+  /**
+   * Hover bump intensity. Bumped from 0.5 → 0.7 in UX-5 because the
+   * Three.js r152+ sRGB→linear conversion of `defaultColor` (0x303848)
+   * makes the resulting instanceColor tint quite subtle on the now
+   * properly-rendered dark tiles.
+   */
+  hover: 0.7,
+  /** Selected tile bump. Bumped from 0.8 → 1.1 in UX-5 (same reason as hover). */
+  selected: 1.1,
+  /**
+   * Default emissive color for BASE tiles (used as fallback in highlight
+   * restoration AND as the hover/selected tint color). Bumped from
+   * 0x303848 → 0x6080a0 in UX-5 — brighter source color produces a
+   * meaningful instanceColor tint after the linear conversion.
+   */
+  defaultColor: 0x6080a0,
   /** Highlight intensity for tiles valid for tower placement (PLACE mode). */
-  validPlacement: 0.35,
+  validPlacement: 0.5,
   /** Emissive color override for valid placement tiles (soft cyan glow). */
   validPlacementColor: 0x00ccaa,
   /** Dimming factor for unaffordable-but-valid tiles in PLACE mode (0-1, lower = dimmer). */
-  unaffordableDimming: 0.35,
+  unaffordableDimming: 0.4,
   /**
    * Intensity for tiles that *would* block the enemy path if a tower were
-   * placed there. Same magnitude as validPlacement so the eye picks them up
-   * at a glance — the color (red) does the disambiguation.
+   * placed there. Must outshine hover (0.7) AND validPlacement (0.5) so
+   * the path-block warning is the most prominent placement feedback —
+   * it's the error state. Brand red-team caught the inverted hierarchy
+   * where 0.6 < 0.7 hover.
    */
-  blockedPlacement: 0.45,
+  blockedPlacement: 0.85,
   /** Emissive color override for path-blocking tiles (warm red). */
   blockedPlacementColor: 0xcc3322,
 } as const;

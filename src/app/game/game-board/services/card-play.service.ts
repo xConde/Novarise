@@ -37,7 +37,9 @@ import { MutationOp } from './path-mutation.types';
 import { ElevationOp } from './elevation.types';
 import { getCardDefinition, getEffectiveEnergyCost } from '../../../run/constants/card-definitions';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
-import { disposeGroup } from '../utils/three-utils';
+import { buildDisposeProtect, disposeGroup } from '../utils/three-utils';
+import { GeometryRegistryService } from './geometry-registry.service';
+import { MaterialRegistryService } from './material-registry.service';
 
 /**
  * Upgraded CARTOGRAPHER_SEAL refunds this many energy on the first terraform
@@ -144,6 +146,10 @@ export class CardPlayService {
      * @Optional() — when absent, bridge_towers is a no-op (energy still consumed).
      */
     @Optional() private towerGraphService?: TowerGraphService,
+    // @Optional() — Phase B sprint 14. Used to protect registry-shared
+    // resources when card effects dispose tower meshes.
+    @Optional() private geometryRegistry?: GeometryRegistryService,
+    @Optional() private materialRegistry?: MaterialRegistryService,
   ) {}
 
   /**
@@ -835,7 +841,8 @@ export class CardPlayService {
     // Dispose and remove mesh
     const towerMesh = this.meshRegistry.towerMeshes.get(key);
     if (towerMesh) {
-      disposeGroup(towerMesh, this.sceneService.getScene());
+      disposeGroup(towerMesh, this.sceneService.getScene(),
+        buildDisposeProtect(this.geometryRegistry, this.materialRegistry));
       this.meshRegistry.towerMeshes.delete(key);
       this.meshRegistry.rebuildTowerChildrenArray();
     }
