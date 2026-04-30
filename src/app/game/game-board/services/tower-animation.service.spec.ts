@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { TowerAnimationService } from './tower-animation.service';
+import { TowerMeshFactoryService } from './tower-mesh-factory.service';
 import { PlacedTower, TowerType, TargetingMode } from '../models/tower.model';
 import { BlockType } from '../models/game-board-tile';
 import { MUZZLE_FLASH_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
@@ -1839,6 +1840,74 @@ describe('TowerAnimationService', () => {
       for (const { bodyMat } of towerSetups) {
         (bodyMat as THREE.MeshStandardMaterial).dispose();
       }
+    });
+  });
+
+  // ---- Red-team Finding 1: tube emissive not clobbered by muzzle-flash restore ----
+  //
+  // SPLASH towers animate per-tube emissive via tickTubeEmits (runs before
+  // updateMuzzleFlashes in the same frame). If tube meshes are included in the
+  // flash snapshot/restore, an expiring flash would zero the tube emissive on
+  // the same frame, cutting the animation short.
+  //
+  // The fix adds 'tubeN' meshes to the skip-set in both snapshotEmissiveBaselines
+  // and startMuzzleFlash so that restore never touches tube materials.
+
+  describe('SPLASH tube-emit animation survives concurrent muzzle-flash expiry', () => {
+    it('tube emissive is not zeroed when a muzzle flash expires in the same frame', () => {
+      const bodyMat = new THREE.MeshStandardMaterial({ emissiveIntensity: 0.4 });
+      const tubeMat = new THREE.MeshStandardMaterial({ emissiveIntensity: 0 });
+      const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.SPLASH;
+
+      const body = new THREE.Mesh(geo, bodyMat);
+      body.name = 'body';
+      group.add(body);
+
+      // Wrap tubes in a drum group (mirrors production SPLASH mesh structure).
+      const drum = new THREE.Group();
+      drum.name = 'drum';
+      const tube1 = new THREE.Mesh(geo, tubeMat);
+      tube1.name = 'tube1';
+      drum.add(tube1);
+      group.add(drum);
+
+      // Snapshot baselines using the production helper — tube1 must be excluded.
+      TowerMeshFactoryService.snapshotEmissiveBaselines(group);
+      const baselines = group.userData['emissiveBaselines'] as Map<string, number>;
+      const tubeKey = tube1.uuid + '_' + tubeMat.uuid;
+      expect(baselines.has(tubeKey)).toBeFalse(); // tube excluded from snapshot
+
+      const tower: PlacedTower = {
+        id: '0-0', type: TowerType.SPLASH, level: 1,
+        row: 0, col: 0, kills: 0, totalInvested: 60,
+        targetingMode: TargetingMode.NEAREST, mesh: group,
+      };
+      const towersMap = new Map<string, PlacedTower>([['0-0', tower]]);
+
+      // Start a muzzle flash on the SPLASH tower.
+      service.startMuzzleFlash(tower);
+      expect(bodyMat.emissiveIntensity).toBeCloseTo(0.4 * MUZZLE_FLASH_CONFIG.intensityMultiplier, 4);
+      // tube1 was NOT saved — startMuzzleFlash skips it — so flash spike must not apply to tube1.
+      expect(tubeMat.emissiveIntensity).toBeCloseTo(0, 4);
+
+      // Simulate tickTubeEmits raising tube1 emissive mid-way (e.g. 50% of emit done).
+      const midEmit = 0.5 * SPLASH_TUBE_EMIT_CONFIG.emissiveMultiplier;
+      tubeMat.emissiveIntensity = midEmit;
+
+      // Now expire the flash in the same frame (updateMuzzleFlashes runs AFTER tickTubeEmits).
+      service.updateMuzzleFlashes(towersMap, MUZZLE_FLASH_CONFIG.duration + 0.001);
+
+      // body must be restored to baseline.
+      expect(bodyMat.emissiveIntensity).toBeCloseTo(0.4, 4);
+      // tube1 must NOT have been zeroed by the flash restore — it keeps its mid-emit value.
+      expect(tubeMat.emissiveIntensity).toBeCloseTo(midEmit, 4);
+
+      bodyMat.dispose();
+      tubeMat.dispose();
+      geo.dispose();
     });
   });
 });

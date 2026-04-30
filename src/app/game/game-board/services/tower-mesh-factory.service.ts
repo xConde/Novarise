@@ -1545,15 +1545,19 @@ export class TowerMeshFactoryService {
    * `applyUpgradeVisuals` so the stored baselines reflect the post-upgrade
    * material state.
    *
-   * The skip-set mirrors `startMuzzleFlash`: 'tip' and 'sphere' are excluded
-   * because their emissive is driven by per-frame animation ticks and must
-   * not be locked to a snapshot.
+   * The skip-set mirrors `startMuzzleFlash`: 'tip', 'sphere', and any mesh
+   * whose name starts with 'tube' are excluded because their emissive is
+   * driven by per-frame animation ticks (chargeTick / tickTubeEmits) and
+   * must not be locked to a snapshot. Including 'tubeN' meshes would cause
+   * muzzle-flash restore to zero out an in-progress SPLASH tube-emit on the
+   * same frame that the flash expires.
    */
   static snapshotEmissiveBaselines(group: THREE.Group): void {
     const baselines = new Map<string, number>();
     group.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
       if (child.name === 'tip' || child.name === 'sphere') return;
+      if (child.name.startsWith('tube')) return;
       const mats = Array.isArray(child.material) ? child.material : [child.material];
       for (const m of mats) {
         const mat = m as THREE.MeshStandardMaterial;

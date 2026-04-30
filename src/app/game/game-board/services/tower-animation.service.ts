@@ -126,9 +126,11 @@ export class TowerAnimationService {
 
       tower.mesh.traverse((child) => {
         if (!(child instanceof THREE.Mesh)) return;
-        // 'tip' — constant glow; 'sphere' — CHAIN charge-up driven by chargeTick.
-        // Both must be excluded so snapshot → restore does not corrupt animated state.
+        // 'tip' — constant glow; 'sphere' — CHAIN charge-up driven by chargeTick;
+        // 'tubeN' — SPLASH per-tube emit driven by tickTubeEmits.
+        // All must be excluded so snapshot → restore does not corrupt animated state.
         if (child.name === 'tip' || child.name === 'sphere') return;
+        if (child.name.startsWith('tube')) return;
 
         const materials = getMaterials(child) as THREE.MeshStandardMaterial[];
 

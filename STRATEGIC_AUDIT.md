@@ -2318,4 +2318,24 @@ After 30 turns of two same-type towers: `0.4 × 1.5^30 ≈ 76 700×` baseline. R
 
 **New specs:** +11 across Sprint 1 canary, Sprint 4 per-type baseline invariant (6 towers × 10 cycles), Sprint 7 re-flash correctness, Sprint 8 sell-mid-flash, Sprint 9 sustained 50-turn simulation.
 
+---
+
+## Red Team Critique — Phase 0 (Emissive Ratchet) — 2026-04-30
+
+### Finding 1: SPLASH tube-emit animation cut short by muzzle-flash restore (MEDIUM)
+
+**Location:** `tower-mesh-factory.service.ts` — `snapshotEmissiveBaselines`; `tower-animation.service.ts` — `startMuzzleFlash` save traverse
+
+**Risk:** SPLASH tower `tube1`/`tube2`/… meshes were NOT excluded from `snapshotEmissiveBaselines` or from `startMuzzleFlash`'s save traverse. Each tube starts at `emissiveIntensity = 0` at construction; the snapshot records 0. `tickTubeEmits` (runs at frame line 150) raises a tube's emissive during a per-fire emit animation. `updateMuzzleFlashes` (runs at frame line 159, AFTER `tickTubeEmits`) restores the saved 0, zeroing the tube's emissive in the same frame the flash expires. Result: SPLASH tube-emit flickers are cut short whenever a muzzle flash and a tube-emit animation expire concurrently. Not a correctness regression on the ratchet fix itself, but a latent visual glitch introduced by the incomplete skip-set.
+
+**Fix:** Added `child.name.startsWith('tube')` guard to both `snapshotEmissiveBaselines` and `startMuzzleFlash`'s save traverse, mirroring the `'tip'` / `'sphere'` exclusions. Tubes are per-instance cloned materials so the original ratchet bug cannot apply to them — they were unnecessary cargo in the snapshot.
+
+**New spec:** `tower-animation.service.spec.ts` — "SPLASH tube-emit animation survives concurrent muzzle-flash expiry" — asserts that after a flash expires, `tube1.emissiveIntensity` retains its mid-emit value rather than being zeroed.
+
+**Deferred findings (not fixed this pass):**
+
+- **Finding 2 (LOW):** `emissiveBaselines` has dual storage: `PlacedTower.emissiveBaselines` field AND `group.userData['emissiveBaselines']`. After an upgrade, the code clears the PlacedTower field and refreshes userData. The PlacedTower field is checked first in `startMuzzleFlash` (`tower.emissiveBaselines ?? userData[...]`). If any future code path sets `PlacedTower.emissiveBaselines` without also refreshing userData, it becomes a stale stale-wins scenario. Risk is low today since the only writer clears both. No fix applied — document only.
+
+- **Finding 3 (LOW):** `applyUpgradeVisuals` internal skip-set (`tip`, `scope`, `heatVent`, `emitter`, `sphere`) is wider than `snapshotEmissiveBaselines` skip-set (`tip`, `sphere`, `tube*`). `scope`, `heatVent`, and `emitter` ARE captured in the snapshot. At snapshot time (immediately after construction or immediately after upgrade), these meshes are at their initial/stable values — not yet animated — so the snapshot is correct. This asymmetry is benign but creates a maintenance trap: if a future animation tick begins driving `scope` emissive before the snapshot is taken, the snapshot becomes stale. No fix applied — document only.
+
 **Lesson:** Any future code path that modifies shared material `emissiveIntensity` must either (a) use the snapshot from `emissiveBaselines` as source of truth, or (b) call `snapshotEmissiveBaselines` immediately after to update the stored baseline.
