@@ -297,7 +297,7 @@ export class GameBoardService {
       // front-face occlusion makes inconsistent across axes).
       params.emissive = 0xffffff;
       params.emissiveMap = this.getWallEdgeTexture();
-      params.emissiveIntensity = 0.4;
+      params.emissiveIntensity = 0.32;
     }
     return new THREE.MeshStandardMaterial(params);
   }
@@ -322,7 +322,7 @@ export class GameBoardService {
     // bright, so the rim reads as an extension of the background
     // palette. The contrast against the navy wall fill is what makes
     // it perceptually lighter without being a saturated UI line.
-    ctx.fillStyle = 'rgb(58, 48, 80)';
+    ctx.fillStyle = 'rgb(44, 36, 64)';
     ctx.fillRect(0, 0, size, edge);
     ctx.fillRect(0, size - edge, size, edge);
     ctx.fillRect(0, 0, edge, size);
@@ -362,10 +362,12 @@ export class GameBoardService {
     // the trim reads as a natural extension of the background; the
     // contrast against the lighter buildable tile faces is what
     // makes the border perceptually visible without saturation.
-    const TRIM_ACCENT = 0x3a3050;
+    // Fully opaque so the gap between buildable tiles reads as a
+    // solid grout line instead of letting the void show through.
+    const TRIM_ACCENT = 0x2c2440;
     const nonWallBB = this.computeTileBoundingBox(t => t.type !== BlockType.WALL);
     if (nonWallBB) {
-      gridGroup.add(this.buildTrimPlane(nonWallBB, TRIM_ACCENT, 0.6, 0.005));
+      gridGroup.add(this.buildTrimPlane(nonWallBB, TRIM_ACCENT, 1.0, 0.005));
     }
 
     return gridGroup;
