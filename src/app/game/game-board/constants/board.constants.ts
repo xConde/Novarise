@@ -38,8 +38,15 @@ export const TILE_VISUAL_CONFIG = {
   wallGapFactor: 1.005,
   base: {
     emissiveIntensity: 0.35,
-    metalness: 0.1,
-    roughness: 0.7,
+    /** UX-41: 0.1 → 0.2 — pairs with reduced roughness so BASE tile edges
+     *  pick up enough rim/key specular for the dark-to-lighter border
+     *  treatment. Tile face brightness is unchanged (driven by emissive). */
+    metalness: 0.2,
+    /** UX-41: 0.7 → 0.55 — at 0.7 the BASE faces were too rough to catch
+     *  any specular, so neighbouring tiles read as a continuous purple
+     *  sheet. 0.55 keeps a matte feel on the face but lets the top edge
+     *  catch the key light, drawing visible borders between tiles. */
+    roughness: 0.55,
   },
   wall: {
     /** UX-36: emissive 0x0a0810 → 0x18121e (slightly more depth, matches
