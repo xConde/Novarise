@@ -10,20 +10,30 @@ import { BASIC_RECOIL_CONFIG, SPLASH_TUBE_EMIT_CONFIG, SLOW_EMITTER_PULSE_FIRE }
 @Injectable()
 export class TowerAnimationService {
   /**
-   * Animate tower idle effects. For each group:
-   *  1. If `group.userData['idleTick']` is a function, call it and return —
-   *     the redesigned tower drives all its own animation; the legacy
-   *     named-mesh traverse must NOT run so stale named-mesh handlers
-   *     (e.g. 'crystal' for the old BASIC) do not interfere.
-   *  2. Otherwise, fall through to the legacy named-mesh traverse so existing
-   *     towers (SNIPER, SPLASH, SLOW, CHAIN, MORTAR) keep animating until
-   *     each type ships its own idleTick in later phases.
+   * Animate tower idle and charge effects. For each group, the call order is:
+   *
+   *  1. `chargeTick(group, t)` — fires FIRST when registered. Handles charge-up
+   *     emissive animations (e.g. CHAIN sphere intensity) that should update
+   *     before the idle positional changes so any intensity written by chargeTick
+   *     is not overwritten by idleTick in the same frame.
+   *  2. `idleTick(group, t)` — fires SECOND when registered. Gives the redesigned
+   *     tower full ownership of idle animation (position, rotation, opacity).
+   *     When present, the legacy named-mesh traverse is skipped entirely so stale
+   *     handlers (e.g. 'crystal' for old BASIC) do not interfere.
+   *  3. Legacy named-mesh traverse — runs only when idleTick is absent, keeping
+   *     old towers (MORTAR) animated until each type ships its own hook.
    */
   updateTowerAnimations(towerMeshes: Map<string, THREE.Group>, time: number): void {
     const t = time * ANIMATION_CONFIG.msToSeconds;
     for (const group of towerMeshes.values()) {
       const towerType = group.userData['towerType'] as TowerType | undefined;
       if (!towerType) continue;
+
+      // chargeTick runs BEFORE idleTick so charge-up emissive changes land first.
+      const chargeTick = group.userData['chargeTick'] as ((g: THREE.Group, t: number) => void) | undefined;
+      if (typeof chargeTick === 'function') {
+        chargeTick(group, t);
+      }
 
       // Per-tower idle hook — when present, gives the redesigned tower full
       // ownership of its animation and skips the legacy traverse entirely.

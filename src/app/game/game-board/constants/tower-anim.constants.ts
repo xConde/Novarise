@@ -405,3 +405,126 @@ export const SLOW_FROST_CONFIG = {
   /** Downward drift speed per frame. */
   fallSpeed: 0.02,
 } as const;
+
+// ─── CHAIN tower constants (Phase F) ──────────────────────────────────────────
+
+export const CHAIN_GEOM = {
+  // Central post cylinder (runs through all three coil tori)
+  postRadius:   0.06,
+  postHeight:   0.7,
+  postSegments: 6,
+
+  // Tesla coil tori (3 horizontal rings, largest at bottom, tapering up)
+  coil1Radius: 0.32,
+  coil1Tube:   0.05,
+  coil2Radius: 0.26,
+  coil2Tube:   0.045,
+  coil3Radius: 0.20,
+  coil3Tube:   0.04,
+  coilRadSeg:  6,
+  coilTubSeg:  16,
+
+  // Floating sphere at the top (named 'sphere')
+  sphereRadius:   0.18,
+  sphereWidSeg:   12,
+  sphereHeiSeg:   10,
+
+  // Radial electrode cones around the sphere (×4, named 'electrode')
+  electrodeRadius: 0.025,
+  electrodeHeight: 0.12,
+  electrodeSegs:   4,
+  electrodeRadial: 0.19,  // radial distance from sphere centre to electrode midpoint
+
+  // Idle arc — thin cylinder flicker between post top and sphere bottom
+  arcRadius:   0.01,
+  arcSegments: 4,
+
+  // T2 second orbiting sphere
+  orbitSphere2Radius:   0.1,
+  orbitSphere2WidSeg:   8,
+  orbitSphere2HeiSeg:   6,
+  orbitSphere2Radial:   0.32, // orbit radius from group centre
+  orbitSphere2InitPhase: 0.0,
+
+  // T3 third orbiting sphere
+  orbitSphere3Radius:   0.08,
+  orbitSphere3WidSeg:   8,
+  orbitSphere3HeiSeg:   6,
+  orbitSphere3Radial:   0.38,
+  orbitSphere3InitPhase: Math.PI, // opposite phase from T2
+} as const;
+
+// Y positions relative to the CHAIN group origin
+export const CHAIN_Y = {
+  /** Centre of the lowest (largest) coil ring. */
+  coil1: 0.12,
+  /** Centre of the second coil ring. */
+  coil2: 0.32,
+  /** Centre of the third (topmost) coil ring. */
+  coil3: 0.52,
+  /** Centre of the central post (midpoint of postHeight). */
+  postCentre: 0.35,
+  /** Centre of the floating sphere. */
+  sphere: 0.86,
+  /** Y for the 4 radial electrode cones. */
+  electrodes: 0.86,
+  /** Y for the idle arc flicker cylinder (midpoint between post top and sphere bottom). */
+  arc: 0.74,
+  /** Arc length (distance between post top and sphere bottom). */
+  arcLength: 0.1,
+  /** Accent point-light position. */
+  accentLight: 0.9,
+  /** Y of orbiting T2/T3 spheres (slightly above main sphere centre). */
+  orbitSpheres: 0.9,
+} as const;
+
+// ─── CHAIN idle animation ──────────────────────────────────────────────────────
+
+export const CHAIN_IDLE_ARC_CONFIG = {
+  /** Arc flicker frequency in Hz — toggles visibility this many times per second. */
+  flickerHz: 3.0,
+  /** Minimum opacity of the arc cylinder material when visible. */
+  opacityMin: 0.4,
+  /** Maximum opacity of the arc cylinder material when fully visible. */
+  opacityMax: 0.9,
+} as const;
+
+// ─── CHAIN sphere animation ────────────────────────────────────────────────────
+
+export const CHAIN_SPHERE_BOB_CONFIG = {
+  /** Peak Y displacement of the floating sphere from its rest position (world units). */
+  amplitude: 0.04,
+  /** Full period of one bob cycle in seconds. */
+  periodSec: 1.6,
+} as const;
+
+// ─── CHAIN charge-up animation (sphere emissive) ──────────────────────────────
+
+export const CHAIN_CHARGE_CONFIG = {
+  /** Minimum sphere emissiveIntensity at rest. */
+  emissiveMin: 0.4,
+  /** Peak sphere emissiveIntensity when "fully charged". */
+  emissiveMax: 1.4,
+  /** Period of the charge-discharge sine in seconds. */
+  periodSec: 2.4,
+} as const;
+
+// ─── CHAIN electrode idle config ───────────────────────────────────────────────
+
+export const CHAIN_ELECTRODE_CONFIG = {
+  /** Base emissiveIntensity of electrode cone tips at idle. */
+  emissiveBase: 0.6,
+  /** Peak emissiveIntensity shimmer on electrode tips. */
+  emissivePeak: 1.2,
+  /** Shimmer cycle period in seconds. */
+  shimmerPeriod: 0.8,
+} as const;
+
+// ─── CHAIN T2/T3 orbit config ─────────────────────────────────────────────────
+
+export const CHAIN_ORBIT_CONFIG = {
+  /** Orbit angular speed for T2 sphere (radians per second). */
+  t2SpeedRadPerSec: 1.2,
+  /** Orbit angular speed for T3 sphere (radians per second). */
+  t3SpeedRadPerSec: -0.8,
+} as const;

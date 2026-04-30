@@ -14,6 +14,9 @@ import {
   SLOW_EMITTER_PULSE_CONFIG,
   SLOW_EMITTER_PULSE_FIRE,
   SLOW_CRYSTAL_Y,
+  CHAIN_CHARGE_CONFIG,
+  CHAIN_SPHERE_BOB_CONFIG,
+  CHAIN_Y,
 } from '../constants/tower-anim.constants';
 
 function disposeGroupHelper(group: THREE.Group): void {
@@ -703,6 +706,140 @@ describe('TowerMeshFactoryService', () => {
       expect(slowGroup.userData['emitterPulseStart']).toBeDefined();
       expect(slowGroup.userData['emitterPulseDuration'])
         .toBeCloseTo(SLOW_EMITTER_PULSE_FIRE.durationSec, 5);
+    });
+  });
+
+  // --- CHAIN tower redesign (Phase F) ---
+
+  describe('CHAIN tower Phase F redesign', () => {
+    let chainGroup: THREE.Group;
+
+    beforeEach(() => {
+      chainGroup = service.createTowerMesh(5, 5, TowerType.CHAIN, boardWidth, boardHeight);
+      createdGroups.push(chainGroup);
+    });
+
+    it('has no child named "orb" (legacy antenna orb removed)', () => {
+      const orb = chainGroup.getObjectByName('orb');
+      expect(orb).toBeUndefined();
+    });
+
+    it('has no child named "spark" (legacy spark spheres removed)', () => {
+      const spark = chainGroup.getObjectByName('spark');
+      expect(spark).toBeUndefined();
+    });
+
+    it('has a child named "sphere" (new Tesla coil top sphere)', () => {
+      const sphere = chainGroup.getObjectByName('sphere');
+      expect(sphere).toBeTruthy();
+    });
+
+    it('has at least 3 children named "electrode"', () => {
+      const electrodes: THREE.Object3D[] = [];
+      chainGroup.traverse(obj => { if (obj.name === 'electrode') electrodes.push(obj); });
+      expect(electrodes.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('has a child named "arc" (idle arc cylinder)', () => {
+      const arc = chainGroup.getObjectByName('arc');
+      expect(arc).toBeTruthy();
+    });
+
+    it('sphere mesh uses a MeshStandardMaterial with emissiveIntensity set', () => {
+      const sphere = chainGroup.getObjectByName('sphere') as THREE.Mesh | undefined;
+      expect(sphere).toBeTruthy();
+      expect(sphere!.material).toBeInstanceOf(THREE.MeshStandardMaterial);
+      const mat = sphere!.material as THREE.MeshStandardMaterial;
+      expect(mat.emissiveIntensity).toBeGreaterThan(0);
+    });
+
+    it('each CHAIN tower gets its own sphere material instance (no shared-material cross-contamination)', () => {
+      const chainGroup2 = service.createTowerMesh(6, 6, TowerType.CHAIN, boardWidth, boardHeight);
+      createdGroups.push(chainGroup2);
+
+      const sphere1 = chainGroup.getObjectByName('sphere') as THREE.Mesh;
+      const sphere2 = chainGroup2.getObjectByName('sphere') as THREE.Mesh;
+
+      expect(sphere1).toBeTruthy();
+      expect(sphere2).toBeTruthy();
+      expect(sphere1.material).not.toBe(sphere2.material);
+    });
+
+    it('sphere emissiveIntensity starts at CHAIN_CHARGE_CONFIG.emissiveMin', () => {
+      const sphere = chainGroup.getObjectByName('sphere') as THREE.Mesh | undefined;
+      expect(sphere).toBeTruthy();
+      const mat = sphere!.material as THREE.MeshStandardMaterial;
+      expect(mat.emissiveIntensity).toBeCloseTo(CHAIN_CHARGE_CONFIG.emissiveMin, 4);
+    });
+
+    it('registers a chargeTick function on userData', () => {
+      expect(typeof chainGroup.userData['chargeTick']).toBe('function');
+    });
+
+    it('chargeTick modulates sphere emissiveIntensity within CHAIN_CHARGE_CONFIG bounds', () => {
+      const charge = chainGroup.userData['chargeTick'] as (g: THREE.Group, t: number) => void;
+      const sphere = chainGroup.getObjectByName('sphere') as THREE.Mesh;
+      const mat = sphere.material as THREE.MeshStandardMaterial;
+
+      charge(chainGroup, 0);
+      const atZero = mat.emissiveIntensity;
+
+      charge(chainGroup, CHAIN_CHARGE_CONFIG.periodSec / 4);
+      const atQuarter = mat.emissiveIntensity;
+
+      expect(atZero).toBeGreaterThanOrEqual(CHAIN_CHARGE_CONFIG.emissiveMin - 0.01);
+      expect(atQuarter).toBeLessThanOrEqual(CHAIN_CHARGE_CONFIG.emissiveMax + 0.01);
+    });
+
+    it('registers an idleTick function on userData', () => {
+      expect(typeof chainGroup.userData['idleTick']).toBe('function');
+    });
+
+    it('idleTick bobs the sphere from CHAIN_Y.sphere by CHAIN_SPHERE_BOB_CONFIG.amplitude', () => {
+      const tick = chainGroup.userData['idleTick'] as (g: THREE.Group, t: number) => void;
+      const sphere = chainGroup.getObjectByName('sphere') as THREE.Mesh;
+
+      tick(chainGroup, 0);
+      const y0 = sphere.position.y;
+      tick(chainGroup, CHAIN_SPHERE_BOB_CONFIG.periodSec / 4);
+      const y1 = sphere.position.y;
+
+      expect(Math.abs(y0 - CHAIN_Y.sphere)).toBeLessThanOrEqual(CHAIN_SPHERE_BOB_CONFIG.amplitude + 0.001);
+      expect(y0).not.toBeCloseTo(y1, 3);
+    });
+
+    it('registers a fireTick function on userData', () => {
+      expect(typeof chainGroup.userData['fireTick']).toBe('function');
+    });
+
+    it('fireTick stores recoilStart and recoilDuration', () => {
+      const fire = chainGroup.userData['fireTick'] as (g: THREE.Group, d: number) => void;
+      fire(chainGroup, 0.1);
+      expect(chainGroup.userData['recoilStart']).toBeDefined();
+      expect(chainGroup.userData['recoilDuration']).toBeCloseTo(0.1, 5);
+    });
+
+    it('T2 orbitSphere2 is hidden at creation with minTier=2', () => {
+      const orbit2 = chainGroup.getObjectByName('orbitSphere2') as THREE.Object3D | undefined;
+      expect(orbit2).toBeTruthy();
+      expect(orbit2!.visible).toBeFalse();
+      expect(orbit2!.userData['minTier']).toBe(2);
+    });
+
+    it('T3 orbitSphere3 is hidden at creation with minTier=3', () => {
+      const orbit3 = chainGroup.getObjectByName('orbitSphere3') as THREE.Object3D | undefined;
+      expect(orbit3).toBeTruthy();
+      expect(orbit3!.visible).toBeFalse();
+      expect(orbit3!.userData['minTier']).toBe(3);
+    });
+
+    it('arc mesh has transparent material with opacity within arc config bounds', () => {
+      const arc = chainGroup.getObjectByName('arc') as THREE.Mesh | undefined;
+      expect(arc).toBeTruthy();
+      const mat = arc!.material as THREE.MeshStandardMaterial;
+      expect(mat.transparent).toBeTrue();
+      expect(mat.opacity).toBeGreaterThan(0);
+      expect(mat.opacity).toBeLessThanOrEqual(1.0);
     });
   });
 

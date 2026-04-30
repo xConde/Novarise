@@ -682,6 +682,69 @@ describe('TowerAnimationService', () => {
     });
   });
 
+  // ---- chargeTick hook (Finding 7 fix — Phase F) ----
+
+  describe('chargeTick hook', () => {
+    it('calls userData.chargeTick before idleTick when both are registered', () => {
+      const callOrder: string[] = [];
+      const { group } = makeTowerGroup(TowerType.CHAIN, 'sphere');
+
+      group.userData['chargeTick'] = (): void => { callOrder.push('charge'); };
+      group.userData['idleTick']   = (): void => { callOrder.push('idle'); };
+
+      service.updateTowerAnimations(new Map([['0-0', group]]), 1000);
+
+      expect(callOrder).toEqual(['charge', 'idle']);
+
+      disposeTowerGroup(group);
+    });
+
+    it('calls chargeTick with the group and converted time value', () => {
+      const chargeSpy = jasmine.createSpy('chargeTick');
+      const { group } = makeTowerGroup(TowerType.CHAIN, 'sphere');
+      group.userData['chargeTick'] = chargeSpy;
+
+      const time = 2000;
+      service.updateTowerAnimations(new Map([['0-0', group]]), time);
+
+      const expectedT = time * ANIMATION_CONFIG.msToSeconds;
+      expect(chargeSpy).toHaveBeenCalledOnceWith(group, expectedT);
+
+      disposeTowerGroup(group);
+    });
+
+    it('calls chargeTick even when idleTick is absent', () => {
+      const chargeSpy = jasmine.createSpy('chargeTick');
+      const { group } = makeTowerGroup(TowerType.CHAIN, 'sphere');
+      group.userData['chargeTick'] = chargeSpy;
+      // No idleTick registered
+
+      service.updateTowerAnimations(new Map([['0-0', group]]), 500);
+
+      expect(chargeSpy).toHaveBeenCalledTimes(1);
+
+      disposeTowerGroup(group);
+    });
+
+    it('does not error when chargeTick is absent', () => {
+      const { group } = makeTowerGroup(TowerType.CHAIN, 'sphere');
+      // No chargeTick registered
+
+      expect(() => service.updateTowerAnimations(new Map([['0-0', group]]), 1000)).not.toThrow();
+
+      disposeTowerGroup(group);
+    });
+
+    it('does not call chargeTick if it is not a function', () => {
+      const { group } = makeTowerGroup(TowerType.CHAIN, 'sphere');
+      group.userData['chargeTick'] = 'not-a-function';
+
+      expect(() => service.updateTowerAnimations(new Map([['0-0', group]]), 500)).not.toThrow();
+
+      disposeTowerGroup(group);
+    });
+  });
+
   // ---- idleTick hook (Sprint 6) ----
 
   describe('idleTick hook', () => {

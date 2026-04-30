@@ -2029,7 +2029,7 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 
 **Risk:** The SNIPER mesh registers `chargeTick` on `userData` (aliased to `idleTick` — scope lens pulse). `updateTowerAnimations` only checks `idleTick`; there is no callsite for `chargeTick`. Since `chargeTick` is currently aliased to `idleTick`, the lens still pulses in idle — so there is no visible regression. But the channel exists as an intentional API surface (the comment says "a future phase may wire this to real target-lock state"). Any future CHAIN/SLOW tower that registers `chargeTick` for a distinct animation (distinct from `idleTick`) will be silently ignored. The contract is undocumented and has no spec coverage.
 
-**Fix (deferred):** Either remove `chargeTick` from this commit (it doesn't do distinct work yet) or add a `chargeTick` callsite to `updateTowerAnimations` analogous to the `idleTick` block, and document the intended ordering. A spec asserting the charge callback is invoked when `chargeTick` is set should land before any Phase D/E tower uses it distinctly.
+**Status:** Fixed in Phase F (CHAIN silhouette). `updateTowerAnimations` now invokes `chargeTick(group, t)` BEFORE `idleTick` for every tower group that registers it. CHAIN uses `chargeTick` for its sphere charge-discharge sine. Spec coverage added in `tower-animation.service.spec.ts`.
 
 ---
 

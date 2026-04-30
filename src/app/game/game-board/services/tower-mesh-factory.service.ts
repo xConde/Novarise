@@ -42,6 +42,13 @@ import {
   SLOW_CRYSTAL_Y,
   SLOW_ACCENT_Y,
   SLOW_EMITTER_PULSE_CONFIG,
+  CHAIN_GEOM,
+  CHAIN_Y,
+  CHAIN_IDLE_ARC_CONFIG,
+  CHAIN_SPHERE_BOB_CONFIG,
+  CHAIN_CHARGE_CONFIG,
+  CHAIN_ELECTRODE_CONFIG,
+  CHAIN_ORBIT_CONFIG,
 } from '../constants/tower-anim.constants';
 
 @Injectable()
@@ -932,32 +939,283 @@ export class TowerMeshFactoryService {
       }
 
       case TowerType.CHAIN: {
-        // Electric antenna — thin tall cylinder with sphere on top
-        const chainBase = this.cyl(0.3, 0.38, 0.2, 8);
-        const chainShaft = this.cyl(0.1, 0.14, 0.8, 6);
-        const chainOrb = this.sphere(0.18, 10, 8);
-        const chainSpark1 = this.sphere(0.06, 6, 6);
-        const chainSpark2 = this.sphere(0.05, 6, 6);
+        // Tesla coil base + floating top sphere with arcing electrodes (spectacle tower)
+        const chainCfg = TOWER_MATERIAL_CONFIGS[TowerType.CHAIN];
 
-        const chBase = new THREE.Mesh(chainBase, mat);
-        chBase.position.y = 0.1;
+        // ── Central post (runs through all three coil rings) ────────────────
+        const postGeom = this.cyl(
+          CHAIN_GEOM.postRadius, CHAIN_GEOM.postRadius,
+          CHAIN_GEOM.postHeight, CHAIN_GEOM.postSegments,
+        );
+        const post = new THREE.Mesh(postGeom, mat);
+        post.position.y = CHAIN_Y.postCentre;
+        towerGroup.add(post);
 
-        const chShaft = new THREE.Mesh(chainShaft, mat);
-        chShaft.position.y = 0.6;
+        // ── Three tapering horizontal coil tori (largest at bottom) ─────────
+        const coil1Geom = this.geometryRegistry
+          ? this.geometryRegistry.getTorus(
+              CHAIN_GEOM.coil1Radius, CHAIN_GEOM.coil1Tube,
+              CHAIN_GEOM.coilRadSeg, CHAIN_GEOM.coilTubSeg,
+            )
+          : new THREE.TorusGeometry(
+              CHAIN_GEOM.coil1Radius, CHAIN_GEOM.coil1Tube,
+              CHAIN_GEOM.coilRadSeg, CHAIN_GEOM.coilTubSeg,
+            );
+        const coil2Geom = this.geometryRegistry
+          ? this.geometryRegistry.getTorus(
+              CHAIN_GEOM.coil2Radius, CHAIN_GEOM.coil2Tube,
+              CHAIN_GEOM.coilRadSeg, CHAIN_GEOM.coilTubSeg,
+            )
+          : new THREE.TorusGeometry(
+              CHAIN_GEOM.coil2Radius, CHAIN_GEOM.coil2Tube,
+              CHAIN_GEOM.coilRadSeg, CHAIN_GEOM.coilTubSeg,
+            );
+        const coil3Geom = this.geometryRegistry
+          ? this.geometryRegistry.getTorus(
+              CHAIN_GEOM.coil3Radius, CHAIN_GEOM.coil3Tube,
+              CHAIN_GEOM.coilRadSeg, CHAIN_GEOM.coilTubSeg,
+            )
+          : new THREE.TorusGeometry(
+              CHAIN_GEOM.coil3Radius, CHAIN_GEOM.coil3Tube,
+              CHAIN_GEOM.coilRadSeg, CHAIN_GEOM.coilTubSeg,
+            );
 
-        const chOrb = new THREE.Mesh(chainOrb, mat);
-        chOrb.name = 'orb';
-        chOrb.position.y = 1.18;
+        for (const [geom, y] of [
+          [coil1Geom, CHAIN_Y.coil1],
+          [coil2Geom, CHAIN_Y.coil2],
+          [coil3Geom, CHAIN_Y.coil3],
+        ] as [THREE.TorusGeometry, number][]) {
+          const coil = new THREE.Mesh(geom, mat);
+          coil.rotation.x = -Math.PI / 2; // lie horizontal
+          coil.position.y = y;
+          towerGroup.add(coil);
+        }
 
-        const chSpark1 = new THREE.Mesh(chainSpark1, mat);
-        chSpark1.name = 'spark';
-        chSpark1.position.set(0.22, 1.25, 0);
+        // ── Floating sphere at top (named 'sphere') ──────────────────────────
+        // Per-instance material: chargeTick and startMuzzleFlash both mutate
+        // emissiveIntensity per-frame. A shared registry material would cause
+        // cross-tower contamination when multiple CHAIN towers charge simultaneously.
+        const sphereMatBase = this.materialRegistry
+          ? this.materialRegistry.getOrCreate(
+              'chain:sphere',
+              () => new THREE.MeshStandardMaterial({
+                color:             chainCfg.color,
+                emissive:          new THREE.Color(chainCfg.emissive),
+                emissiveIntensity: CHAIN_CHARGE_CONFIG.emissiveMin,
+                metalness:         chainCfg.metalness,
+                roughness:         chainCfg.roughness,
+              }),
+            )
+          : new THREE.MeshStandardMaterial({
+              color:             chainCfg.color,
+              emissive:          new THREE.Color(chainCfg.emissive),
+              emissiveIntensity: CHAIN_CHARGE_CONFIG.emissiveMin,
+              metalness:         chainCfg.metalness,
+              roughness:         chainCfg.roughness,
+            });
+        const sphereMat = sphereMatBase.clone(); // per-instance clone
 
-        const chSpark2 = new THREE.Mesh(chainSpark2, mat);
-        chSpark2.name = 'spark';
-        chSpark2.position.set(-0.18, 1.3, 0.14);
+        const sphereGeom = this.sphere(
+          CHAIN_GEOM.sphereRadius, CHAIN_GEOM.sphereWidSeg, CHAIN_GEOM.sphereHeiSeg,
+        );
+        const sphereMesh = new THREE.Mesh(sphereGeom, sphereMat);
+        sphereMesh.name = 'sphere';
+        sphereMesh.position.y = CHAIN_Y.sphere;
+        towerGroup.add(sphereMesh);
 
-        towerGroup.add(chBase, chShaft, chOrb, chSpark1, chSpark2);
+        // ── Four radial electrode cones around the sphere ────────────────────
+        const electrodeGeom = this.cone(
+          CHAIN_GEOM.electrodeRadius, CHAIN_GEOM.electrodeHeight, CHAIN_GEOM.electrodeSegs,
+        );
+        // Each electrode gets its own material clone so shimmer is independent
+        for (let i = 0; i < 4; i++) {
+          const angle = (i / 4) * Math.PI * 2;
+          const elMat = this.materialRegistry
+            ? this.materialRegistry.getOrCreate(
+                'chain:electrode',
+                () => new THREE.MeshStandardMaterial({
+                  color:             chainCfg.color,
+                  emissive:          new THREE.Color(chainCfg.emissive),
+                  emissiveIntensity: CHAIN_ELECTRODE_CONFIG.emissiveBase,
+                  metalness:         chainCfg.metalness,
+                  roughness:         chainCfg.roughness,
+                }),
+              ).clone()
+            : new THREE.MeshStandardMaterial({
+                color:             chainCfg.color,
+                emissive:          new THREE.Color(chainCfg.emissive),
+                emissiveIntensity: CHAIN_ELECTRODE_CONFIG.emissiveBase,
+                metalness:         chainCfg.metalness,
+                roughness:         chainCfg.roughness,
+              });
+          const electrode = new THREE.Mesh(electrodeGeom, elMat);
+          electrode.name = 'electrode';
+          // Point outward: cone +Y axis points away from sphere centre.
+          // Tilt the cone 90° and position at the equator of the sphere.
+          electrode.rotation.z = Math.PI / 2;
+          electrode.position.set(
+            Math.cos(angle) * CHAIN_GEOM.electrodeRadial,
+            CHAIN_Y.electrodes,
+            Math.sin(angle) * CHAIN_GEOM.electrodeRadial,
+          );
+          electrode.rotation.y = -angle;
+          towerGroup.add(electrode);
+        }
+
+        // ── Idle arc cylinder (thin flicker between post top and sphere) ─────
+        // A thin emissive cylinder that toggles opacity to mimic an electric arc.
+        const arcGeom = this.cyl(
+          CHAIN_GEOM.arcRadius, CHAIN_GEOM.arcRadius,
+          CHAIN_Y.arcLength, CHAIN_GEOM.arcSegments,
+        );
+        const arcMat = new THREE.MeshStandardMaterial({
+          color:             chainCfg.color,
+          emissive:          new THREE.Color(chainCfg.emissive),
+          emissiveIntensity: 1.0,
+          transparent:       true,
+          opacity:           CHAIN_IDLE_ARC_CONFIG.opacityMax,
+          metalness:         0.0,
+          roughness:         1.0,
+        });
+        const arcMesh = new THREE.Mesh(arcGeom, arcMat);
+        arcMesh.name = 'arc';
+        arcMesh.position.y = CHAIN_Y.arc;
+        towerGroup.add(arcMesh);
+
+        // ── T2: second orbiting sphere (hidden until T2) ─────────────────────
+        // Per-instance material clone so its charge state is independent.
+        const orbitMat2Base = this.materialRegistry
+          ? this.materialRegistry.getOrCreate(
+              'chain:orbitSphere',
+              () => new THREE.MeshStandardMaterial({
+                color:             chainCfg.color,
+                emissive:          new THREE.Color(chainCfg.emissive),
+                emissiveIntensity: CHAIN_CHARGE_CONFIG.emissiveMin,
+                metalness:         chainCfg.metalness,
+                roughness:         chainCfg.roughness,
+              }),
+            )
+          : new THREE.MeshStandardMaterial({
+              color:             chainCfg.color,
+              emissive:          new THREE.Color(chainCfg.emissive),
+              emissiveIntensity: CHAIN_CHARGE_CONFIG.emissiveMin,
+              metalness:         chainCfg.metalness,
+              roughness:         chainCfg.roughness,
+            });
+        const orbitGeom2 = this.sphere(
+          CHAIN_GEOM.orbitSphere2Radius,
+          CHAIN_GEOM.orbitSphere2WidSeg,
+          CHAIN_GEOM.orbitSphere2HeiSeg,
+        );
+        const orbitMesh2 = new THREE.Mesh(orbitGeom2, orbitMat2Base.clone());
+        orbitMesh2.name = 'orbitSphere2';
+        orbitMesh2.position.set(CHAIN_GEOM.orbitSphere2Radial, CHAIN_Y.orbitSpheres, 0);
+        orbitMesh2.visible = false;
+        orbitMesh2.userData['minTier'] = 2;
+        orbitMesh2.userData['orbitAngle'] = CHAIN_GEOM.orbitSphere2InitPhase;
+        orbitMesh2.userData['orbitRadius'] = CHAIN_GEOM.orbitSphere2Radial;
+        orbitMesh2.userData['orbitY'] = CHAIN_Y.orbitSpheres;
+        towerGroup.add(orbitMesh2);
+
+        // ── T3: third orbiting sphere (hidden until T3) ──────────────────────
+        const orbitGeom3 = this.sphere(
+          CHAIN_GEOM.orbitSphere3Radius,
+          CHAIN_GEOM.orbitSphere3WidSeg,
+          CHAIN_GEOM.orbitSphere3HeiSeg,
+        );
+        const orbitMesh3 = new THREE.Mesh(orbitGeom3, orbitMat2Base.clone());
+        orbitMesh3.name = 'orbitSphere3';
+        orbitMesh3.position.set(CHAIN_GEOM.orbitSphere3Radial, CHAIN_Y.orbitSpheres, 0);
+        orbitMesh3.visible = false;
+        orbitMesh3.userData['minTier'] = 3;
+        orbitMesh3.userData['orbitAngle'] = CHAIN_GEOM.orbitSphere3InitPhase;
+        orbitMesh3.userData['orbitRadius'] = CHAIN_GEOM.orbitSphere3Radial;
+        orbitMesh3.userData['orbitY'] = CHAIN_Y.orbitSpheres;
+        towerGroup.add(orbitMesh3);
+
+        // ── Charge-up animation (chargeTick) ─────────────────────────────────
+        // Pulses the main sphere's emissiveIntensity on a slow sine that mimics
+        // charge-discharge: peaks at "fire-ready" then dips after discharge.
+        towerGroup.userData['chargeTick'] = (group: THREE.Group, t: number): void => {
+          const sphere = group.getObjectByName('sphere') as THREE.Mesh | undefined;
+          if (sphere && sphere.material instanceof THREE.MeshStandardMaterial) {
+            const omega = (Math.PI * 2) / CHAIN_CHARGE_CONFIG.periodSec;
+            const range = CHAIN_CHARGE_CONFIG.emissiveMax - CHAIN_CHARGE_CONFIG.emissiveMin;
+            sphere.material.emissiveIntensity =
+              CHAIN_CHARGE_CONFIG.emissiveMin + range * (0.5 + 0.5 * Math.sin(t * omega));
+          }
+        };
+
+        // ── Idle animation: sphere bob + arc flicker + electrode shimmer ──────
+        towerGroup.userData['idleTick'] = (group: THREE.Group, t: number): void => {
+          // Sphere Y bob
+          const sphereObj = group.getObjectByName('sphere') as THREE.Mesh | undefined;
+          if (sphereObj) {
+            const omega = (Math.PI * 2) / CHAIN_SPHERE_BOB_CONFIG.periodSec;
+            sphereObj.position.y = CHAIN_Y.sphere
+              + Math.sin(t * omega) * CHAIN_SPHERE_BOB_CONFIG.amplitude;
+          }
+
+          // Arc cylinder flicker: step opacity based on sine-driven threshold
+          const arc = group.getObjectByName('arc') as THREE.Mesh | undefined;
+          if (arc && arc.material instanceof THREE.MeshStandardMaterial) {
+            const phase = Math.sin(t * CHAIN_IDLE_ARC_CONFIG.flickerHz * Math.PI * 2);
+            const range = CHAIN_IDLE_ARC_CONFIG.opacityMax - CHAIN_IDLE_ARC_CONFIG.opacityMin;
+            arc.material.opacity =
+              CHAIN_IDLE_ARC_CONFIG.opacityMin + range * (0.5 + 0.5 * phase);
+          }
+
+          // Electrode shimmer — cycle emissiveIntensity for "live-wire" feel
+          const shimmerOmega = (Math.PI * 2) / CHAIN_ELECTRODE_CONFIG.shimmerPeriod;
+          const shimmerRange = CHAIN_ELECTRODE_CONFIG.emissivePeak - CHAIN_ELECTRODE_CONFIG.emissiveBase;
+          group.traverse(child => {
+            if (child.name !== 'electrode' || !(child instanceof THREE.Mesh)) return;
+            if (!(child.material instanceof THREE.MeshStandardMaterial)) return;
+            // Phase-offset per electrode using its world X position
+            const phase = Math.sin(t * shimmerOmega + child.position.x * 4.0);
+            child.material.emissiveIntensity =
+              CHAIN_ELECTRODE_CONFIG.emissiveBase + shimmerRange * (0.5 + 0.5 * phase);
+          });
+
+          // T2 / T3 orbiting spheres
+          const orbit2 = group.getObjectByName('orbitSphere2') as THREE.Mesh | undefined;
+          if (orbit2?.visible) {
+            const angle = (orbit2.userData['orbitAngle'] as number)
+              + CHAIN_ORBIT_CONFIG.t2SpeedRadPerSec / 60;
+            orbit2.userData['orbitAngle'] = angle;
+            const r = orbit2.userData['orbitRadius'] as number;
+            const y = orbit2.userData['orbitY'] as number;
+            orbit2.position.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
+          }
+
+          const orbit3 = group.getObjectByName('orbitSphere3') as THREE.Mesh | undefined;
+          if (orbit3?.visible) {
+            const angle = (orbit3.userData['orbitAngle'] as number)
+              + CHAIN_ORBIT_CONFIG.t3SpeedRadPerSec / 60;
+            orbit3.userData['orbitAngle'] = angle;
+            const r = orbit3.userData['orbitRadius'] as number;
+            const y = orbit3.userData['orbitY'] as number;
+            orbit3.position.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
+          }
+        };
+
+        // ── Firing animation: fireTick stores a brief charge spike marker ─────
+        // The 'sphere' mesh is NOT in the 'tip' skip-set, so startMuzzleFlash
+        // will spike its emissiveIntensity naturally via the existing contract.
+        towerGroup.userData['fireTick'] = (group: THREE.Group, duration: number): void => {
+          group.userData['recoilStart'] = performance.now() / 1000;
+          group.userData['recoilDuration'] = duration;
+        };
+
+        // ── Accent point light at sphere height ─────────────────────────────
+        const isChainLowEnd = typeof document !== 'undefined'
+          && document.body.classList.contains('reduce-motion');
+        this.attachAccentLight(towerGroup, TowerType.CHAIN, isChainLowEnd);
+        const chainLight = towerGroup.userData['accentLight'] as THREE.PointLight | undefined;
+        if (chainLight) {
+          chainLight.position.set(0, CHAIN_Y.accentLight, 0);
+        }
+
         break;
       }
 
