@@ -334,16 +334,18 @@ export class GameBoardService {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
-    // Subtle bioluminescent veins.
-    // UX-13 + red-team: grid line color tinted cooler to match the dark
-    // atmosphere AND brightness raised so the grid stays perceptible after
-    // the sRGB pipeline + tone mapping. Initial UX-13 dropped opacity to
-    // 0.30 which made the grid sub-perceptual against the dark base tile;
-    // bumped to 0.42 with a brighter color (0x8a9ab8 vs prev 0x6a7898).
+    // Cool-tinted grid line — reads as designed sci-fi trim between
+    // buildable cells, not as accidental seam aliasing. Color stays in
+    // the cool atmosphere palette; opacity is high enough that the line
+    // registers clearly at the default game camera angle without
+    // overpowering the tile faces. Walls hide their portion of the
+    // grid by sitting on top of it (intentional — walls are a solid
+    // surface, the cell-level border belongs only on the buildable
+    // interior).
     const gridMaterial = new THREE.LineBasicMaterial({
-      color: 0x8a9ab8,
+      color: 0xa8baff,
       transparent: true,
-      opacity: 0.42,
+      opacity: 0.7,
       linewidth: 1,
     });
     const lineSegments = new THREE.LineSegments(geometry, gridMaterial);
