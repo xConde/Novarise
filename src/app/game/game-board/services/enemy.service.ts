@@ -1,5 +1,6 @@
 import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
+import { Subject, Observable } from 'rxjs';
 import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, DamageResult, GridNode, MINER_DIG_INTERVAL_TURNS, VEINSEEKER_SPEED_BOOST_WINDOW, VEINSEEKER_BOOSTED_TILES_PER_TURN } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
@@ -33,6 +34,19 @@ export class EnemyService {
   /** Scratch world-position objects reused each frame to avoid per-enemy allocation. */
   private scratchCurrentWorld = { x: 0, z: 0 };
   private scratchNextWorld = { x: 0, z: 0 };
+
+  /**
+   * Emits whenever the enemy roster changes in a way that may shift aim
+   * targets: spawn, batch movement, or removal. The string payload is a hint
+   * about the change class ('spawn' | 'move' | 'remove') but consumers that
+   * invalidate all towers (e.g. TargetPreviewService) may ignore it.
+   */
+  private readonly enemiesChanged = new Subject<'spawn' | 'move' | 'remove'>();
+
+  /** Observable that fires on enemy roster changes (spawn / move / remove). */
+  getEnemiesChanged(): Observable<'spawn' | 'move' | 'remove'> {
+    return this.enemiesChanged.asObservable();
+  }
 
   constructor(
     private gameBoardService: GameBoardService,
@@ -293,6 +307,7 @@ export class EnemyService {
     scene.add(enemy.mesh);
 
     this.enemies.set(enemy.id, enemy);
+    this.enemiesChanged.next('spawn');
     return enemy;
   }
 
@@ -421,6 +436,7 @@ export class EnemyService {
       }
     });
 
+    this.enemiesChanged.next('move');
     return reachedExit;
   }
 
@@ -448,6 +464,7 @@ export class EnemyService {
           buildDisposeProtect(this.geometryRegistry, this.materialRegistry));
       }
       this.enemies.delete(enemyId);
+      this.enemiesChanged.next('remove');
     }
   }
 

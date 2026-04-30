@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
+import { Subject } from 'rxjs';
 import { TargetPreviewService } from './target-preview.service';
 import { TowerCombatService } from './tower-combat.service';
+import { EnemyService } from './enemy.service';
 import { TowerType, TOWER_CONFIGS, TowerSpecialization, getEffectiveStats, MAX_TOWER_LEVEL, TargetingMode, PlacedTower } from '../models/tower.model';
 import { Enemy } from '../models/enemy.model';
 import { createTestEnemy } from '../testing';
@@ -124,14 +126,158 @@ describe('TargetPreviewService', () => {
       expect(service.getPreviewTarget(tower)).toBeNull();
       expect(combatServiceSpy.findTarget).toHaveBeenCalled();
     });
+
+    it('returns cached result on second call (no second findTarget invocation)', () => {
+      const tower = makeTower(5, 5);
+      const enemy = createTestEnemy('e1', 1, 1);
+      combatServiceSpy.findTarget.and.returnValue(enemy);
+
+      service.getPreviewTarget(tower);
+      service.getPreviewTarget(tower);
+
+      expect(combatServiceSpy.findTarget).toHaveBeenCalledTimes(1);
+    });
+
+    it('recomputes after invalidate(key) marks that tower dirty', () => {
+      const tower = makeTower(5, 5);
+      combatServiceSpy.findTarget.and.returnValue(null);
+      service.getPreviewTarget(tower); // primes cache
+
+      service.invalidate('5-5');
+      service.getPreviewTarget(tower); // must recompute
+
+      expect(combatServiceSpy.findTarget).toHaveBeenCalledTimes(2);
+    });
+
+    it('recomputes after invalidate() (no key) bulk-dirties all towers', () => {
+      const tower = makeTower(5, 5);
+      combatServiceSpy.findTarget.and.returnValue(null);
+      service.getPreviewTarget(tower); // primes cache
+
+      service.invalidate(); // bulk dirty
+      service.getPreviewTarget(tower); // must recompute
+
+      expect(combatServiceSpy.findTarget).toHaveBeenCalledTimes(2);
+    });
+
+    it('does NOT recompute for a clean tower when a different tower is dirtied', () => {
+      const towerA = makeTower(1, 1);
+      const towerB = makeTower(2, 2);
+      combatServiceSpy.findTarget.and.returnValue(null);
+
+      service.getPreviewTarget(towerA);
+      service.getPreviewTarget(towerB);
+      // Both cached now; only dirty A
+      service.invalidate('1-1');
+
+      // Only towerA triggers recompute; towerB is still clean
+      service.getPreviewTarget(towerA);
+      service.getPreviewTarget(towerB);
+
+      expect(combatServiceSpy.findTarget).toHaveBeenCalledTimes(3); // 2 initial + 1 recompute for A
+    });
   });
 
   describe('without TowerCombatService', () => {
     it('returns null when TowerCombatService is not provided', () => {
-      const standalone = new TargetPreviewService(undefined);
+      const standalone = new TargetPreviewService(undefined, undefined);
       const tower = makeTower(1, 1);
 
       expect(standalone.getPreviewTarget(tower)).toBeNull();
+    });
+  });
+
+  describe('dirty-set mechanics (Sprint 36)', () => {
+    it('getDirtyCount() returns -1 after invalidate() (DIRTY_ALL)', () => {
+      service.invalidate();
+      expect(service.getDirtyCount()).toBe(-1);
+    });
+
+    it('getDirtyCount() returns 1 after invalidate(key)', () => {
+      service.invalidate('3-3');
+      expect(service.getDirtyCount()).toBe(1);
+    });
+
+    it('tickPreviewCache() clears the DIRTY_ALL sentinel', () => {
+      service.invalidate();
+      service.tickPreviewCache();
+      expect(service.getDirtyCount()).toBe(0);
+    });
+
+    it('tickPreviewCache() does not remove specific-key dirty entries', () => {
+      service.invalidate('5-5');
+      service.tickPreviewCache(); // only removes DIRTY_ALL
+      expect(service.getDirtyCount()).toBe(1);
+    });
+  });
+
+  describe('enemy-event subscriptions (Sprint 36)', () => {
+    let enemyChangedSubject: Subject<'spawn' | 'move' | 'remove'>;
+    let enemyServiceStub: jasmine.SpyObj<EnemyService>;
+    let serviceWithEnemy: TargetPreviewService;
+
+    beforeEach(() => {
+      enemyChangedSubject = new Subject<'spawn' | 'move' | 'remove'>();
+      enemyServiceStub = jasmine.createSpyObj<EnemyService>(
+        'EnemyService',
+        ['getEnemiesChanged'],
+      );
+      enemyServiceStub.getEnemiesChanged.and.returnValue(enemyChangedSubject.asObservable());
+
+      serviceWithEnemy = new TargetPreviewService(combatServiceSpy, enemyServiceStub);
+    });
+
+    afterEach(() => {
+      serviceWithEnemy.ngOnDestroy();
+    });
+
+    it('enemy spawn fires bulk invalidation (getDirtyCount === -1)', () => {
+      enemyChangedSubject.next('spawn');
+      expect(serviceWithEnemy.getDirtyCount()).toBe(-1);
+    });
+
+    it('enemy move fires bulk invalidation', () => {
+      enemyChangedSubject.next('move');
+      expect(serviceWithEnemy.getDirtyCount()).toBe(-1);
+    });
+
+    it('enemy remove fires bulk invalidation', () => {
+      enemyChangedSubject.next('remove');
+      expect(serviceWithEnemy.getDirtyCount()).toBe(-1);
+    });
+
+    it('after enemy spawn, next getPreviewTarget recomputes (findTarget called)', () => {
+      const tower = makeTower(5, 5);
+      combatServiceSpy.findTarget.and.returnValue(null);
+      serviceWithEnemy.getPreviewTarget(tower); // prime cache (1 call)
+
+      enemyChangedSubject.next('spawn');
+      serviceWithEnemy.getPreviewTarget(tower); // must recompute (2nd call)
+
+      expect(combatServiceSpy.findTarget).toHaveBeenCalledTimes(2);
+    });
+
+    it('after enemy death (remove), next getPreviewTarget recomputes', () => {
+      const tower = makeTower(5, 5);
+      combatServiceSpy.findTarget.and.returnValue(null);
+      serviceWithEnemy.getPreviewTarget(tower); // prime
+
+      enemyChangedSubject.next('remove');
+      serviceWithEnemy.getPreviewTarget(tower); // must recompute
+
+      expect(combatServiceSpy.findTarget).toHaveBeenCalledTimes(2);
+    });
+
+    it('ngOnDestroy unsubscribes — no invalidation after destroy', () => {
+      const tower = makeTower(5, 5);
+      combatServiceSpy.findTarget.and.returnValue(null);
+      serviceWithEnemy.getPreviewTarget(tower); // prime
+
+      serviceWithEnemy.ngOnDestroy();
+      enemyChangedSubject.next('spawn'); // should be ignored after unsubscribe
+      serviceWithEnemy.getPreviewTarget(tower); // must use cache, not recompute
+
+      expect(combatServiceSpy.findTarget).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -152,13 +298,17 @@ describe('TargetPreviewService', () => {
   });
 
   describe('clearAll', () => {
-    it('does not throw after multiple getPreviewTarget calls', () => {
+    it('clears cache and dirty set', () => {
       const tower = makeTower(5, 5);
       combatServiceSpy.findTarget.and.returnValue(null);
       service.getPreviewTarget(tower);
-      service.getPreviewTarget(tower);
+      service.invalidate('5-5');
 
-      expect(() => service.clearAll()).not.toThrow();
+      service.clearAll();
+
+      // After clearAll, getPreviewTarget calls findTarget again (cache empty)
+      service.getPreviewTarget(tower);
+      expect(combatServiceSpy.findTarget).toHaveBeenCalledTimes(2);
     });
   });
 });
