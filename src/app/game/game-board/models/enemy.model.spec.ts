@@ -95,7 +95,7 @@ describe('Enemy Model', () => {
         expect(basic.health).toBe(100);
         expect(basic.speed).toBe(2.0);
         expect(basic.value).toBe(5);
-        expect(basic.color).toBe(0xff0000); // Red
+        expect(basic.color).toBe(0xc83838); // UX-40 muted warm red
         expect(basic.size).toBe(0.3);
       });
     });
@@ -115,7 +115,7 @@ describe('Enemy Model', () => {
         expect(fast.health).toBe(50);
         expect(fast.speed).toBe(4.0);
         expect(fast.value).toBe(8);
-        expect(fast.color).toBe(0xffff00); // Yellow
+        expect(fast.color).toBe(0xd6c844); // UX-40 warm gold
       });
     });
 
@@ -134,7 +134,7 @@ describe('Enemy Model', () => {
         expect(heavy.health).toBe(300);
         expect(heavy.speed).toBe(1.0);
         expect(heavy.value).toBe(15);
-        expect(heavy.color).toBe(0x0000ff); // Blue
+        expect(heavy.color).toBe(0x3a55c8); // UX-40 deep blue
         expect(heavy.size).toBe(0.4); // Larger
       });
     });
@@ -153,7 +153,7 @@ describe('Enemy Model', () => {
         expect(swift.health).toBe(80);
         expect(swift.speed).toBe(3.0);
         expect(swift.value).toBe(10);
-        expect(swift.color).toBe(0x00ffff); // Cyan
+        expect(swift.color).toBe(0x4cd0d0); // UX-40 muted cyan
       });
     });
 
@@ -180,7 +180,7 @@ describe('Enemy Model', () => {
         expect(boss.health).toBe(1000);
         expect(boss.speed).toBe(0.5);
         expect(boss.value).toBe(50);
-        expect(boss.color).toBe(0xff00ff); // Magenta
+        expect(boss.color).toBe(0xc848b8); // UX-40 rich magenta
         expect(boss.size).toBe(0.6); // Largest
       });
     });

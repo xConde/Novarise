@@ -21,7 +21,7 @@ const TOWER_MATERIAL_CONFIGS: Readonly<Record<TowerType, TowerMaterialConfig>> =
   [TowerType.SNIPER]: { color: 0x7a5ac4, emissive: 0x6a4a9a, emissiveIntensity: 0.8, metalness: 0.4, roughness: 0.4 },
   [TowerType.SPLASH]: { color: 0x4ac47a, emissive: 0x4a9a6a, emissiveIntensity: 0.7, metalness: 0.25, roughness: 0.7 },
   [TowerType.SLOW]:   { color: 0x4488ff, emissive: 0x2255cc, emissiveIntensity: 0.8, metalness: 0.5, roughness: 0.3, transparent: true, opacity: 0.9 },
-  [TowerType.CHAIN]:  { color: 0xffdd00, emissive: 0xddaa00, emissiveIntensity: 1.0, metalness: 0.6, roughness: 0.2 },
+  [TowerType.CHAIN]:  { color: 0xe6c440, emissive: 0xc89000, emissiveIntensity: 0.7, metalness: 0.6, roughness: 0.2 },  // UX-40: desaturated from 0xffdd00 / 0xddaa00 / 1.0 — matches other tower mute levels
   [TowerType.MORTAR]: { color: 0x664422, emissive: 0x442200, emissiveIntensity: 0.4, metalness: 0.7, roughness: 0.5 },
 };
 

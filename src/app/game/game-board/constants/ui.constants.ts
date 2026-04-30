@@ -139,10 +139,12 @@ export const TILE_EMISSIVE = {
   unaffordableDimming: 0.4,
   /**
    * Intensity for tiles that *would* block the enemy path if a tower were
-   * placed there. Higher than validPlacement so the eye picks them up
-   * at a glance — the color (red) does the disambiguation.
+   * placed there. Must outshine hover (0.7) AND validPlacement (0.5) so
+   * the path-block warning is the most prominent placement feedback —
+   * it's the error state. Brand red-team caught the inverted hierarchy
+   * where 0.6 < 0.7 hover.
    */
-  blockedPlacement: 0.6,
+  blockedPlacement: 0.85,
   /** Emissive color override for path-blocking tiles (warm red). */
   blockedPlacementColor: 0xcc3322,
 } as const;

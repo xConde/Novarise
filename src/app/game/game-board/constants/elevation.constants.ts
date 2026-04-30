@@ -67,9 +67,10 @@ export const ELEVATION_CONFIG = {
    * Chosen to evoke granite/basalt without competing with the tile color above.
    * Consumed by TerraformMaterialPoolService cliff material entry.
    */
-  /** UX-31: bumped from 0x3a3a42 → 0x4a4855 (warmer stone with subtle
-   *  rose tint, ties cliffs into the cool dark palette while staying
-   *  distinct from BASE/WALL tiles). */
+  /** UX-31: bumped from 0x3a3a42 → 0x4a4855 (cool blue-grey that ties
+   *  cliffs into the board's cool dark palette while staying distinct
+   *  from BASE/WALL tiles). Brand red-team caught the prior
+   *  "warmer/rose tint" comment as factually wrong about the hex. */
   CLIFF_MATERIAL_COLOR: 0x4a4855,
 
   // ── Sprint 39: WYRM_ASCENDANT boss counter (documentary) ───────────────────
