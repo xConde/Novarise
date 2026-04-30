@@ -19,6 +19,8 @@ export class GameBoardService {
     @Optional() private readonly materialRegistry?: MaterialRegistryService,
   ) {}
 
+  private wallEdgeTexture: THREE.CanvasTexture | null = null;
+
   // Board configuration
   private gameBoardWidth = BOARD_CONFIG.width;
   private gameBoardHeight = BOARD_CONFIG.height;
@@ -280,14 +282,56 @@ export class GameBoardService {
     const isBase = type === BlockType.BASE;
     const isWall = type === BlockType.WALL;
     const v = TILE_VISUAL_CONFIG;
-    return new THREE.MeshStandardMaterial({
+    const params: THREE.MeshStandardMaterialParameters = {
       color: color,
       emissive: isWall ? v.wall.emissive : isBase ? v.baseEmissive : color,
       emissiveIntensity: isBase ? v.base.emissiveIntensity : isWall ? v.wall.emissiveIntensity : v.other.emissiveIntensity,
       metalness: isWall ? v.wall.metalness : v.base.metalness,
       roughness: isBase ? v.base.roughness : isWall ? v.wall.roughness : v.other.roughness,
       envMapIntensity: v.envMapIntensity,
-    });
+    };
+    if (isWall) {
+      // Walls bake the cell-edge accent into an emissive texture so the
+      // border shows on every cell at any camera angle, instead of
+      // depending on a trim-plane being visible through a gap (which
+      // front-face occlusion makes inconsistent across axes).
+      params.emissive = 0xffffff;
+      params.emissiveMap = this.getWallEdgeTexture();
+      params.emissiveIntensity = 0.55;
+    }
+    return new THREE.MeshStandardMaterial(params);
+  }
+
+  private getWallEdgeTexture(): THREE.CanvasTexture {
+    if (this.wallEdgeTexture) return this.wallEdgeTexture;
+
+    const size = 64;
+    const edge = 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Failed to acquire 2d canvas context for wall edge texture');
+    }
+    // Black center → no emissive contribution → wall material color
+    // shows through unchanged on the cell interior.
+    ctx.fillStyle = 'rgb(0, 0, 0)';
+    ctx.fillRect(0, 0, size, size);
+    // Cool purple-grey accent (matches the trim plane color) on every
+    // cell edge → consistent border visible regardless of axis or
+    // camera angle.
+    ctx.fillStyle = 'rgb(106, 88, 120)';
+    ctx.fillRect(0, 0, size, edge);
+    ctx.fillRect(0, size - edge, size, edge);
+    ctx.fillRect(0, 0, edge, size);
+    ctx.fillRect(size - edge, 0, edge, size);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    this.wallEdgeTexture = tex;
+    return tex;
   }
 
   /**
@@ -312,21 +356,16 @@ export class GameBoardService {
 
     if (this.gameBoardWidth <= 0 || this.gameBoardHeight <= 0) return gridGroup;
 
-    // Both planes use the same cool purple-grey accent so trim across
-    // the whole board reads as the deep-space palette extended, not
-    // as bright sci-fi UI. Walls get a touch more opacity since the
-    // gap they expose is tighter than the buildable gap.
-    const TRIM_ACCENT = 0x7a6a98;
+    // Cool purple-grey accent extending the deep-space palette. Only
+    // the buildable area uses a trim plane; walls bake the same
+    // accent color into an emissive edge texture on their material so
+    // the border shows consistently on every wall cell at any camera
+    // angle (a plane-based wall trim was inconsistent — front-face
+    // occlusion hid horizontal seams while verticals showed through).
+    const TRIM_ACCENT = 0x6a5878;
     const nonWallBB = this.computeTileBoundingBox(t => t.type !== BlockType.WALL);
     if (nonWallBB) {
-      gridGroup.add(this.buildTrimPlane(nonWallBB, TRIM_ACCENT, 0.55, 0.005));
-    }
-
-    const wallBB = this.computeTileBoundingBox(t => t.type === BlockType.WALL);
-    if (wallBB) {
-      // Y offset slightly below the buildable plane so any bounding-
-      // box overlap renders deterministically.
-      gridGroup.add(this.buildTrimPlane(wallBB, TRIM_ACCENT, 0.7, 0.004));
+      gridGroup.add(this.buildTrimPlane(nonWallBB, TRIM_ACCENT, 0.45, 0.005));
     }
 
     return gridGroup;
