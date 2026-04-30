@@ -841,6 +841,33 @@ describe('TowerMeshFactoryService', () => {
       expect(mat.opacity).toBeGreaterThan(0);
       expect(mat.opacity).toBeLessThanOrEqual(1.0);
     });
+
+    // Finding 15 — frame-rate-independent orbit (fix: use wall-clock t, not / 60)
+    it('orbiting spheres produce frame-rate-independent positions (same angle from t=0 regardless of call count)', () => {
+      const tick = chainGroup.userData['idleTick'] as (g: THREE.Group, t: number) => void;
+      const orbit2 = chainGroup.getObjectByName('orbitSphere2') as THREE.Mesh;
+      orbit2.visible = true; // make visible so idleTick processes it
+
+      // Call once with t = 2.0 (simulates 2s elapsed, arrived in one big step)
+      tick(chainGroup, 2.0);
+      const pos1 = orbit2.position.clone();
+
+      // Call 120 times with t stepping from 0 to 2 in 1/60 increments
+      // (simulates 120 60fps frames accumulating to t=2)
+      const chainGroup2 = service.createTowerMesh(7, 7, TowerType.CHAIN, boardWidth, boardHeight);
+      createdGroups.push(chainGroup2);
+      const tick2 = chainGroup2.userData['idleTick'] as (g: THREE.Group, t: number) => void;
+      const orbit2b = chainGroup2.getObjectByName('orbitSphere2') as THREE.Mesh;
+      orbit2b.visible = true;
+      for (let i = 0; i <= 120; i++) {
+        tick2(chainGroup2, i / 60);
+      }
+      const pos2 = orbit2b.position.clone();
+
+      // Both should be at the same position (within floating-point tolerance)
+      expect(pos1.x).toBeCloseTo(pos2.x, 4);
+      expect(pos1.z).toBeCloseTo(pos2.z, 4);
+    });
   });
 
   // --- Default/fallback case ---

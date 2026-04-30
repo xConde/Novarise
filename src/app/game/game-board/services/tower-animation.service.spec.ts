@@ -443,6 +443,63 @@ describe('TowerAnimationService', () => {
         disposePlacedTower(tower);
       });
 
+      // Finding 14 — sphere emissive cross-talk (CHAIN charge-up)
+      it('does NOT spike or snapshot the sphere mesh (CHAIN charge-up exemption)', () => {
+        // Simulate a chargeTick-spiked sphere at a mid-charge value (not the rest minimum)
+        const chargePhaseIntensity = 1.1; // somewhere between emissiveMin (0.4) and emissiveMax (1.4)
+        const { tower, child } = makePlacedTower('sphere', chargePhaseIntensity);
+
+        service.startMuzzleFlash(tower);
+
+        const mat = child.material as THREE.MeshStandardMaterial;
+        // Intensity must be unchanged — sphere is exempt from the flash spike
+        expect(mat.emissiveIntensity).toBeCloseTo(chargePhaseIntensity, 5);
+        // The snapshot map must NOT contain the sphere's material uuid
+        const key = child.uuid + '_' + mat.uuid;
+        expect(tower.originalEmissiveIntensity?.has(key)).toBeFalse();
+
+        disposePlacedTower(tower);
+      });
+
+      it('restores non-sphere mesh correctly even when a sphere sibling is present (no key pollution)', () => {
+        // Group with both a body mesh and a sphere mesh — only body should be snapshotted
+        const group = new THREE.Group();
+        const bodyGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+        const bodyMat = new THREE.MeshStandardMaterial({ emissiveIntensity: 0.3 });
+        const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+        bodyMesh.name = 'body';
+        group.add(bodyMesh);
+
+        const sphereGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+        const sphereMat = new THREE.MeshStandardMaterial({ emissiveIntensity: 1.1 });
+        const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
+        sphereMesh.name = 'sphere';
+        group.add(sphereMesh);
+
+        const tower: PlacedTower = {
+          id: '0-0', type: TowerType.CHAIN, level: 1, row: 0, col: 0,
+          kills: 0, totalInvested: 100, targetingMode: TargetingMode.NEAREST, mesh: group,
+        };
+
+        service.startMuzzleFlash(tower);
+
+        // Body spiked correctly
+        expect(bodyMat.emissiveIntensity)
+          .toBeCloseTo(0.3 * MUZZLE_FLASH_CONFIG.intensityMultiplier, 5);
+        // Sphere unchanged
+        expect(sphereMat.emissiveIntensity).toBeCloseTo(1.1, 5);
+
+        // Restore
+        service.updateMuzzleFlashes(new Map([['0-0', tower]]), MUZZLE_FLASH_CONFIG.duration + 0.01);
+        // Body restored to original
+        expect(bodyMat.emissiveIntensity).toBeCloseTo(0.3, 5);
+        // Sphere still unchanged
+        expect(sphereMat.emissiveIntensity).toBeCloseTo(1.1, 5);
+
+        bodyGeo.dispose(); bodyMat.dispose();
+        sphereGeo.dispose(); sphereMat.dispose();
+      });
+
       it('re-triggers correctly while a flash is already active (rapid fire)', () => {
         const initial = 0.5;
         const { tower, child } = makePlacedTower('base', initial);

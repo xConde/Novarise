@@ -125,6 +125,12 @@ export class TowerAnimationService {
    * Spikes emissive intensity on all non-tip meshes in the tower's group when it fires.
    * Saves the current intensity per mesh so `updateMuzzleFlashes` can restore it exactly.
    * Calling again while a flash is already active resets the timer (re-trigger on rapid fire).
+   *
+   * Skip-set: `'tip'` (constant glow — must not be capped) and `'sphere'` (CHAIN tower
+   * charge-up mesh — its emissiveIntensity is driven every frame by `chargeTick`.
+   * Snapshotting the current animated value as the "original" would restore the sphere
+   * to a random charge phase instead of a stable baseline, matching the Finding 12/14
+   * class of save/restore cross-contamination).
    */
   startMuzzleFlash(tower: PlacedTower): void {
     if (!tower.mesh) return;
@@ -139,7 +145,9 @@ export class TowerAnimationService {
 
       tower.mesh.traverse((child) => {
         if (!(child instanceof THREE.Mesh)) return;
-        if (child.name === 'tip') return;
+        // 'tip' — constant glow; 'sphere' — CHAIN charge-up driven by chargeTick.
+        // Both must be excluded so snapshot → restore does not corrupt animated state.
+        if (child.name === 'tip' || child.name === 'sphere') return;
 
         const materials = getMaterials(child) as THREE.MeshStandardMaterial[];
 
@@ -157,7 +165,7 @@ export class TowerAnimationService {
     if (originals) {
       tower.mesh.traverse((child) => {
         if (!(child instanceof THREE.Mesh)) return;
-        if (child.name === 'tip') return;
+        if (child.name === 'tip' || child.name === 'sphere') return;
 
         const materials = getMaterials(child) as THREE.MeshStandardMaterial[];
 

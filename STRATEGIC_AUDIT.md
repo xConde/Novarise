@@ -2109,3 +2109,34 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 - **Finding E-a (LOW):** `tickEmitterPulses` reads `pulseDuration` from `userData` (validates `> 0`) but then ignores it — all timing comparisons use `SLOW_EMITTER_PULSE_FIRE.durationSec` directly. The stored value is a dead variable. No current bug since `fireTick` always passes `SLOW_EMITTER_PULSE_FIRE.durationSec`. Would become a silent regression if any caller sets a different duration. Track for Phase H cleanup: either remove the `pulseDuration` userData write, or use it in the timing comparisons.
 - **Finding E-b (LOW):** The `idleTick` `traverse` for T3 crystal bob runs every frame even when the `crystalCore` is hidden at T1/T2 — traverses the full group scene graph to find and skip the invisible node. Low cost with 5–6 children, but the pattern should be `getObjectByName('crystalCore')` (O(N) linear scan, same cost, cleaner intent) rather than `traverse` with an early-exit. Deferred to Phase H.
 - **Finding E-c (LOW):** The legacy `crystal` bob specs in `tower-animation.service.spec.ts` (lines 99–127) still test the legacy SLOW traverse path via synthetic groups with no `idleTick`. These remain valid (the legacy path still exists for unredesigned towers) but read confusingly alongside the new Phase E specs. Consider moving them to a dedicated `'legacy traverse — SLOW (pre-Phase-E)'` describe block with a comment explaining they test the fallback path, not the live mesh.
+
+---
+
+## Red Team Critique — Phase F (CHAIN silhouette) — 2026-04-30
+
+### Finding 14: Sphere emissive cross-talk — `startMuzzleFlash` snapshots a charge-phase value as "original" (CRITICAL)
+
+**Location:** `tower-animation.service.ts:startMuzzleFlash`, `tower-mesh-factory.service.ts` CHAIN `chargeTick`
+
+**Risk:** `chargeTick` drives `sphere.material.emissiveIntensity` every render frame between `CHAIN_CHARGE_CONFIG.emissiveMin` (0.4) and `emissiveMax` (1.4). `startMuzzleFlash` runs at combat resolution time (asynchronous from the render loop), traverses the group, and on first-flash saves the CURRENT `emissiveIntensity` of every mesh as the "original" to restore. Since the sphere's intensity is animated, the snapshot captures whatever charge phase happened to be active at fire time — anywhere from 0.4 to 1.4. When the flash timer expires, `updateMuzzleFlashes` restores that snapshot value, leaving the sphere stuck at a random charge intensity until `chargeTick` overwrites it on the next frame (one-frame glitch at 60fps; multi-frame if animation is paused mid-flash). Exact same class as Finding 12 (SLOW emitter). The comment in the original `fireTick` even said "The 'sphere' mesh is NOT in the 'tip' skip-set" without recognising this was a bug, not a feature.
+
+**Fix applied:** Added `'sphere'` to the skip-set in `startMuzzleFlash` alongside `'tip'`. `chargeTick` owns the sphere's emissive entirely; the muzzle flash must not snapshot or spike it. Regression specs: `'does NOT spike or snapshot the sphere mesh (CHAIN charge-up exemption)'` and `'restores non-sphere mesh correctly even when a sphere sibling is present (no key pollution)'`. Fixed in commit `TBD`.
+
+---
+
+### Finding 15: Frame-rate-dependent orbit — `/ 60` hardcoded instead of real time (HIGH)
+
+**Location:** `tower-mesh-factory.service.ts` CHAIN `idleTick`, orbit angle update: `+ CHAIN_ORBIT_CONFIG.t2SpeedRadPerSec / 60`
+
+**Risk:** The `/ 60` assumes exactly 60fps. At 30fps the orbiting spheres rotate at half speed; at 144fps they rotate 2.4× faster. Every other animation in the codebase (recoil, tube-emit, emitter-pulse) uses real-time delta seconds. Agents flagged this themselves in the commit message but shipped it unresolved, suggesting they intended to fix it "later" — which is never a safe deferral for a frame-rate regression.
+
+**Fix applied:** Replaced accumulation math with direct wall-clock derivation: `angle = initPhase + speed * t` (where `t` is the accumulated seconds from `updateTowerAnimations`). This is idempotent, never drifts, and produces the same angle at `t=2.0` regardless of how many frames elapsed. Removed the now-stale `orbitAngle` mutable userData field from both orbit meshes. Regression spec: `'orbiting spheres produce frame-rate-independent positions'` — two groups arrive at `t=2.0` via different call patterns and assert identical XZ position. Fixed in same commit as Finding 14.
+
+---
+
+### Deferred Phase F Findings (no fix this commit)
+
+- **Finding F-a (LOW):** The legacy `'orb'` case in `tower-animation.service.ts:updateTowerAnimations` traverse (lines 62–68) is now dormant — no CHAIN tower has a child named `'orb'` after Phase F. It remains valid for any tower that still uses the old naming (none currently). Should be removed in Phase H cleanup to eliminate dead traverse work and confusion about which towers still use legacy hooks.
+- **Finding F-b (LOW):** `idleTick` electrode shimmer uses `child.position.x * 4.0` as a phase offset — `4.0` is a magic number. Should be named `CHAIN_ELECTRODE_CONFIG.shimmerPhaseScale` for tuning consistency. Deferred to Phase H.
+- **Finding F-c (LOW):** T2/T3 orbiting spheres advance their position in `idleTick` even when hidden (`orbit2?.visible` guard is present, correct). But the `visible = false` test is on the Mesh directly, not on the group parent — if a parent group were hidden instead, `orbit2.visible` would still be true. Not a current bug; the CHAIN group is always visible when placed. Note for Phase H if group-level visibility ever becomes a feature.
+- **Finding F-d (LOW):** `arcMat` (the idle arc cylinder material) is allocated raw without going through `materialRegistry`. It is per-instance and mutable (opacity changes per frame), so registry sharing would be incorrect. However, it is also not registered with the geometry registry for its `arcGeom`. Both are disposed correctly by `disposeGroup`'s full traverse (the protect predicate only skips registry-owned resources; `arcMat` is not registered, so it is disposed). No bug, but the comment in the factory should clarify this intentional pattern so future reviewers don't "fix" it by pushing `arcMat` through the registry.

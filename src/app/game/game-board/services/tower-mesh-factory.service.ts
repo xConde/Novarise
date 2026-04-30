@@ -1112,7 +1112,6 @@ export class TowerMeshFactoryService {
         orbitMesh2.position.set(CHAIN_GEOM.orbitSphere2Radial, CHAIN_Y.orbitSpheres, 0);
         orbitMesh2.visible = false;
         orbitMesh2.userData['minTier'] = 2;
-        orbitMesh2.userData['orbitAngle'] = CHAIN_GEOM.orbitSphere2InitPhase;
         orbitMesh2.userData['orbitRadius'] = CHAIN_GEOM.orbitSphere2Radial;
         orbitMesh2.userData['orbitY'] = CHAIN_Y.orbitSpheres;
         towerGroup.add(orbitMesh2);
@@ -1128,7 +1127,6 @@ export class TowerMeshFactoryService {
         orbitMesh3.position.set(CHAIN_GEOM.orbitSphere3Radial, CHAIN_Y.orbitSpheres, 0);
         orbitMesh3.visible = false;
         orbitMesh3.userData['minTier'] = 3;
-        orbitMesh3.userData['orbitAngle'] = CHAIN_GEOM.orbitSphere3InitPhase;
         orbitMesh3.userData['orbitRadius'] = CHAIN_GEOM.orbitSphere3Radial;
         orbitMesh3.userData['orbitY'] = CHAIN_Y.orbitSpheres;
         towerGroup.add(orbitMesh3);
@@ -1177,12 +1175,12 @@ export class TowerMeshFactoryService {
               CHAIN_ELECTRODE_CONFIG.emissiveBase + shimmerRange * (0.5 + 0.5 * phase);
           });
 
-          // T2 / T3 orbiting spheres
+          // T2 / T3 orbiting spheres — use wall-clock `t` directly so orbit
+          // speed is frame-rate-independent. Angle = speed (rad/s) × t (s).
           const orbit2 = group.getObjectByName('orbitSphere2') as THREE.Mesh | undefined;
           if (orbit2?.visible) {
-            const angle = (orbit2.userData['orbitAngle'] as number)
-              + CHAIN_ORBIT_CONFIG.t2SpeedRadPerSec / 60;
-            orbit2.userData['orbitAngle'] = angle;
+            const angle = CHAIN_GEOM.orbitSphere2InitPhase
+              + CHAIN_ORBIT_CONFIG.t2SpeedRadPerSec * t;
             const r = orbit2.userData['orbitRadius'] as number;
             const y = orbit2.userData['orbitY'] as number;
             orbit2.position.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
@@ -1190,9 +1188,8 @@ export class TowerMeshFactoryService {
 
           const orbit3 = group.getObjectByName('orbitSphere3') as THREE.Mesh | undefined;
           if (orbit3?.visible) {
-            const angle = (orbit3.userData['orbitAngle'] as number)
-              + CHAIN_ORBIT_CONFIG.t3SpeedRadPerSec / 60;
-            orbit3.userData['orbitAngle'] = angle;
+            const angle = CHAIN_GEOM.orbitSphere3InitPhase
+              + CHAIN_ORBIT_CONFIG.t3SpeedRadPerSec * t;
             const r = orbit3.userData['orbitRadius'] as number;
             const y = orbit3.userData['orbitY'] as number;
             orbit3.position.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
@@ -1200,8 +1197,8 @@ export class TowerMeshFactoryService {
         };
 
         // ── Firing animation: fireTick stores a brief charge spike marker ─────
-        // The 'sphere' mesh is NOT in the 'tip' skip-set, so startMuzzleFlash
-        // will spike its emissiveIntensity naturally via the existing contract.
+        // The 'sphere' mesh is excluded from startMuzzleFlash's skip-set (Finding 14
+        // fix) so chargeTick drives sphere emissive independently without contamination.
         towerGroup.userData['fireTick'] = (group: THREE.Group, duration: number): void => {
           group.userData['recoilStart'] = performance.now() / 1000;
           group.userData['recoilDuration'] = duration;
