@@ -2424,7 +2424,7 @@ Result: when SNIPER has a target in range, `tickAim`'s lerpYaw result is immedia
 - "emits exactly ONE remove event for N enemies during cleanup (Phase C Finding C-1)"
 - "emits no remove event when cleanup is called with no enemies"
 
-**Fixed in commit:** see Phase C hardening commit below.
+**Fixed in commit:** `2dd5a17`.
 
 ---
 
@@ -2439,7 +2439,7 @@ Result: when SNIPER has a target in range, `tickAim`'s lerpYaw result is immedia
 **New spec** (`target-preview-integration.spec.ts`):
 - "tickPreviewCache() clears DIRTY_ALL so a subsequent call uses cache (not recompute)" — full lifecycle: prime → bulk invalidation → recompute → `tickPreviewCache()` → cache hit on next read.
 
-**Fixed in commit:** see Phase C hardening commit below.
+**Fixed in commit:** `2dd5a17`.
 
 ---
 
