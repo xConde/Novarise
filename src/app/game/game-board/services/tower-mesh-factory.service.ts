@@ -269,7 +269,18 @@ export class TowerMeshFactoryService {
           turretGroup.add(pauldron);
         }
 
+        // ── Aim wiring: tag turret as the yaw subgroup ───────────────────────
+        // tickAim reads aimYawSubgroupName to find the group it should rotate.
+        // aimTick's presence is the opt-in signal; the callback itself is a
+        // no-op because tickAim applies the yaw before aimTick runs.
+        towerGroup.userData['aimYawSubgroupName'] = 'turret';
+        towerGroup.userData['aimTick'] = (_g: THREE.Group, _t: number, _hasTarget: boolean): void => {
+          // Yaw is applied by tickAim (lerpYaw on the 'turret' subgroup).
+        };
+
         // ── Idle animation: turret swivel ────────────────────────────────────
+        // Suspended automatically when aimTick is registered AND hasTarget is
+        // true — updateTowerAnimations skips idleTick in that case.
         towerGroup.userData['idleTick'] = (group: THREE.Group, t: number): void => {
           const tGroup = group.getObjectByName('turret');
           if (tGroup) {
@@ -332,6 +343,14 @@ export class TowerMeshFactoryService {
           towerGroup.add(strut);
         }
 
+        // ── Aim subgroup: wraps all aiming parts (scope, barrel, bipods, muzzle,
+        //    stabilizer). The tripod base (post + struts) stays on towerGroup so
+        //    it never rotates with aim. This also fixes the I-4 finding where the
+        //    phantom-drift idle was yawing the whole tower (legs included).
+        const aimGroup = new THREE.Group();
+        aimGroup.name = 'aimGroup';
+        towerGroup.add(aimGroup);
+
         // ── Scope housing (horizontal cylinder, lies along +Z) ──────────────
         const scopeGeom = this.cyl(
           SNIPER_GEOM.scopeRadiusTop, SNIPER_GEOM.scopeRadiusBottom,
@@ -342,7 +361,7 @@ export class TowerMeshFactoryService {
         scopeMesh.rotation.x = Math.PI / 2;
         scopeMesh.position.set(0, SNIPER_SCOPE_Y, 0);
         scopeMesh.userData['maxTier'] = 1;
-        towerGroup.add(scopeMesh);
+        aimGroup.add(scopeMesh);
 
         // Scope lens disk — slightly higher emissive so it reads as an active optic
         const lensGeom = this.cyl(
@@ -380,7 +399,7 @@ export class TowerMeshFactoryService {
         lensMesh.position.set(0, SNIPER_SCOPE_Y, SNIPER_LENS_Z);
         // T1 lens disappears at T2 together with the scope housing (maxTier=1 mirrors scopeMesh)
         lensMesh.userData['maxTier'] = 1;
-        towerGroup.add(lensMesh);
+        aimGroup.add(lensMesh);
 
         // ── T2: longer scope (hidden until T2; T1 scope hidden above T1) ────
         const scopeLongGeom = this.cyl(
@@ -393,7 +412,7 @@ export class TowerMeshFactoryService {
         scopeLongMesh.position.set(0, SNIPER_SCOPE_Y, 0);
         scopeLongMesh.visible = false;
         scopeLongMesh.userData['minTier'] = 2;
-        towerGroup.add(scopeLongMesh);
+        aimGroup.add(scopeLongMesh);
 
         // ── Long barrel ──────────────────────────────────────────────────────
         const barrelGeom = this.cyl(
@@ -405,7 +424,7 @@ export class TowerMeshFactoryService {
         // Barrel lies along +Z (horizontal) like the scope
         barrelMesh.rotation.x = Math.PI / 2;
         barrelMesh.position.set(0, SNIPER_BARREL_Y, 0);
-        towerGroup.add(barrelMesh);
+        aimGroup.add(barrelMesh);
 
         // ── Bipod (×2 struts flanking the barrel mid-point) ─────────────────
         const bipodTiltRad = THREE.MathUtils.degToRad(SNIPER_GEOM.bipodTiltDeg);
@@ -425,7 +444,7 @@ export class TowerMeshFactoryService {
             SNIPER_GEOM.barrelLength * 0.15,
           );
           bipod.userData['maxTier'] = 2;
-          towerGroup.add(bipod);
+          aimGroup.add(bipod);
         }
 
         // ── Muzzle brake ─────────────────────────────────────────────────────
@@ -437,7 +456,7 @@ export class TowerMeshFactoryService {
         muzzleMesh.name = 'muzzle';
         muzzleMesh.rotation.x = Math.PI / 2;
         muzzleMesh.position.set(0, SNIPER_BARREL_Y, SNIPER_MUZZLE_Z);
-        towerGroup.add(muzzleMesh);
+        aimGroup.add(muzzleMesh);
 
         // Vent slits on the muzzle brake (×2 radial)
         const ventGeom = this.materialRegistry
@@ -459,7 +478,7 @@ export class TowerMeshFactoryService {
             SNIPER_BARREL_Y,
             SNIPER_MUZZLE_Z,
           );
-          towerGroup.add(vent);
+          aimGroup.add(vent);
         }
 
         // ── T3: hover stabilizer disk (hidden until T3; bipods hidden above T2) ──
@@ -476,13 +495,23 @@ export class TowerMeshFactoryService {
         );
         stabMesh.visible = false;
         stabMesh.userData['minTier'] = 3;
-        towerGroup.add(stabMesh);
+        aimGroup.add(stabMesh);
+
+        // ── Aim wiring: aimGroup is the yaw subgroup ────────────────────────
+        // tickAim rotates aimGroup (scope + barrel + bipods + muzzle + stabilizer).
+        // The tripod base (post + struts) stays fixed on towerGroup — fixes I-4.
+        towerGroup.userData['aimYawSubgroupName'] = 'aimGroup';
+        towerGroup.userData['aimTick'] = (_g: THREE.Group, _t: number, _hasTarget: boolean): void => {
+          // Yaw is applied by tickAim (lerpYaw on the 'aimGroup' subgroup).
+        };
 
         // ── Idle animation: scope lens emissive pulse + phantom-target tracking ──
         // The scope lens pulses continuously (active optic read). Layered on top
-        // is a slow ±2° barrel rotation drift — the sniper "tracking" a phantom
-        // target off to one side. The drift is intentionally slower than the lens
-        // pulse so the two gestures feel independent.
+        // is a slow ±2° drift on aimGroup — the barrel appears to track an off-axis
+        // target. The drift is applied to aimGroup (not the whole tower) so the
+        // tripod legs never move — this closes the I-4 finding.
+        // When a real target is in range, aimTick is registered so idleTick is
+        // suspended by updateTowerAnimations; the phantom drift pauses automatically.
         towerGroup.userData['idleTick'] = (group: THREE.Group, t: number): void => {
           const lens = group.getObjectByName('scope') as THREE.Mesh | undefined;
           if (lens && lens.material instanceof THREE.MeshStandardMaterial) {
@@ -492,13 +521,15 @@ export class TowerMeshFactoryService {
               range * (0.5 + 0.5 * Math.sin(t * SNIPER_SCOPE_GLOW_CONFIG.speed));
           }
 
-          // Phantom-target tracking: whole tower group slowly yaws ±2° so the
-          // barrel appears to drift toward an off-axis target. Uses group.rotation.y
-          // directly so the drift is independent from fireTick (which slides the
-          // barrel along local Y, not the group Y axis).
-          group.rotation.y =
-            Math.sin(t * SNIPER_TRACK_CONFIG.speedHz * Math.PI * 2)
-            * SNIPER_TRACK_CONFIG.amplitudeRad;
+          // Phantom-target tracking: aimGroup slowly yaws ±2° so the barrel
+          // drifts toward an off-axis target. aimGroup rotates only the optical
+          // assembly; the tripod base (towerGroup children) stays fixed.
+          const ag = group.getObjectByName('aimGroup') as THREE.Group | undefined;
+          if (ag) {
+            ag.rotation.y =
+              Math.sin(t * SNIPER_TRACK_CONFIG.speedHz * Math.PI * 2)
+              * SNIPER_TRACK_CONFIG.amplitudeRad;
+          }
         };
 
         // Charge-tick: same as idleTick — always pulses to indicate active optic.
@@ -560,6 +591,14 @@ export class TowerMeshFactoryService {
           towerGroup.add(fin);
         }
 
+        // ── Yaw subgroup for aim ─────────────────────────────────────────────
+        // splashYaw carries the drum + all its children. The chassis, fins,
+        // belt, and ammo rounds stay on towerGroup (static). Only the weapon
+        // head (drum cluster) yaws to track a target.
+        const splashYaw = new THREE.Group();
+        splashYaw.name = 'splashYaw';
+        towerGroup.add(splashYaw);
+
         // ── Rotating drum housing ────────────────────────────────────────────
         // Drum is a horizontal cylinder lying along +Z (faces forward).
         // It lives in a sub-group so rotation.z drives the barrel-roll spin
@@ -567,7 +606,7 @@ export class TowerMeshFactoryService {
         const drumGroup = new THREE.Group();
         drumGroup.name = 'drum';
         drumGroup.position.set(0, SPLASH_Y.drumCentre, 0);
-        towerGroup.add(drumGroup);
+        splashYaw.add(drumGroup);
 
         const drumGeom = this.cyl(
           SPLASH_GEOM.drumRadius, SPLASH_GEOM.drumRadius,
@@ -778,6 +817,16 @@ export class TowerMeshFactoryService {
           }
         };
 
+        // ── Aim wiring: splashYaw is the yaw subgroup ────────────────────────
+        // tickAim rotates splashYaw so the drum cluster (+ all its tube children)
+        // tracks the primary target. The chassis fins and belt stay static on
+        // towerGroup. The drum's own forward-axis roll (rotation.z) composes
+        // correctly with the parent yaw — the cluster spins while tracking.
+        towerGroup.userData['aimYawSubgroupName'] = 'splashYaw';
+        towerGroup.userData['aimTick'] = (_g: THREE.Group, _t: number, _hasTarget: boolean): void => {
+          // Yaw is applied by tickAim (lerpYaw on the 'splashYaw' subgroup).
+        };
+
         // ── Accent point light ───────────────────────────────────────────────
         const isSplashLowEnd = typeof document !== 'undefined'
           && document.body.classList.contains('reduce-motion');
@@ -911,12 +960,19 @@ export class TowerMeshFactoryService {
               opacity:           slowCfg.opacity,
             });
         const emitterMat = emitterMatBase.clone();
+        // ── Yaw subgroup for aim ─────────────────────────────────────────────
+        // slowYaw carries only the emitter dish. The coil rings and crystal core
+        // stay on towerGroup (static). Only the dish face tracks the target.
+        const slowYaw = new THREE.Group();
+        slowYaw.name = 'slowYaw';
+        towerGroup.add(slowYaw);
+
         const emitterMesh = new THREE.Mesh(emitterGeom, emitterMat);
         emitterMesh.name = 'emitter';
         // Flip 180° around X so the open bowl faces upward
         emitterMesh.rotation.x = Math.PI;
         emitterMesh.position.y = SLOW_EMITTER_Y;
-        towerGroup.add(emitterMesh);
+        slowYaw.add(emitterMesh);
 
         // ── T3: floating crystal core (small octahedron, named 'crystalCore') ─
         const crystalGeom = this.oct(SLOW_GEOM.crystalRadius, SLOW_GEOM.crystalDetail);
@@ -970,6 +1026,15 @@ export class TowerMeshFactoryService {
         // weight. Only the start timestamp is needed.
         towerGroup.userData['fireTick'] = (group: THREE.Group, _duration: number): void => {
           group.userData['emitterPulseStart'] = performance.now() / 1000;
+        };
+
+        // ── Aim wiring: slowYaw is the yaw subgroup ──────────────────────────
+        // tickAim rotates slowYaw so the emitter dish faces the primary target.
+        // tickEmitterPulses and getObjectByName('emitter') still resolve through
+        // the hierarchy — no change needed for existing pulse/scale animations.
+        towerGroup.userData['aimYawSubgroupName'] = 'slowYaw';
+        towerGroup.userData['aimTick'] = (_g: THREE.Group, _t: number, _hasTarget: boolean): void => {
+          // Yaw is applied by tickAim (lerpYaw on the 'slowYaw' subgroup).
         };
 
         // ── Accent point light at emitter height ─────────────────────────────
@@ -1037,6 +1102,14 @@ export class TowerMeshFactoryService {
           towerGroup.add(coil);
         }
 
+        // ── Yaw subgroup for aim ─────────────────────────────────────────────
+        // chainYaw carries the floating sphere, electrodes, arc, and orbiting
+        // spheres. The central post and coil tori stay on towerGroup (static).
+        // The electrode cluster pointing toward the target is the visual aim cue.
+        const chainYaw = new THREE.Group();
+        chainYaw.name = 'chainYaw';
+        towerGroup.add(chainYaw);
+
         // ── Floating sphere at top (named 'sphere') ──────────────────────────
         // Per-instance material: chargeTick and startMuzzleFlash both mutate
         // emissiveIntensity per-frame. A shared registry material would cause
@@ -1067,7 +1140,7 @@ export class TowerMeshFactoryService {
         const sphereMesh = new THREE.Mesh(sphereGeom, sphereMat);
         sphereMesh.name = 'sphere';
         sphereMesh.position.y = CHAIN_Y.sphere;
-        towerGroup.add(sphereMesh);
+        chainYaw.add(sphereMesh);
 
         // ── Four radial electrode cones around the sphere ────────────────────
         const electrodeGeom = this.cone(
@@ -1105,7 +1178,7 @@ export class TowerMeshFactoryService {
             Math.sin(angle) * CHAIN_GEOM.electrodeRadial,
           );
           electrode.rotation.y = -angle;
-          towerGroup.add(electrode);
+          chainYaw.add(electrode);
         }
 
         // ── Idle arc cylinder (thin flicker between post top and sphere) ─────
@@ -1132,7 +1205,7 @@ export class TowerMeshFactoryService {
         const arcMesh = new THREE.Mesh(arcGeom, arcMat);
         arcMesh.name = 'arc';
         arcMesh.position.y = CHAIN_Y.arc;
-        towerGroup.add(arcMesh);
+        chainYaw.add(arcMesh);
 
         // ── T2: second orbiting sphere (hidden until T2) ─────────────────────
         // Per-instance material clone so its charge state is independent.
@@ -1166,7 +1239,7 @@ export class TowerMeshFactoryService {
         orbitMesh2.userData['minTier'] = 2;
         orbitMesh2.userData['orbitRadius'] = CHAIN_GEOM.orbitSphere2Radial;
         orbitMesh2.userData['orbitY'] = CHAIN_Y.orbitSpheres;
-        towerGroup.add(orbitMesh2);
+        chainYaw.add(orbitMesh2);
 
         // ── T3: third orbiting sphere (hidden until T3) ──────────────────────
         const orbitGeom3 = this.sphere(
@@ -1181,7 +1254,7 @@ export class TowerMeshFactoryService {
         orbitMesh3.userData['minTier'] = 3;
         orbitMesh3.userData['orbitRadius'] = CHAIN_GEOM.orbitSphere3Radial;
         orbitMesh3.userData['orbitY'] = CHAIN_Y.orbitSpheres;
-        towerGroup.add(orbitMesh3);
+        chainYaw.add(orbitMesh3);
 
         // ── Charge-up animation (chargeTick) ─────────────────────────────────
         // Pulses the main sphere's emissiveIntensity on a slow sine that mimics
@@ -1264,6 +1337,16 @@ export class TowerMeshFactoryService {
         // (Phase I red-team Finding I-4 — CHAIN recoil no-op.)
         towerGroup.userData['fireTick'] = (_group: THREE.Group, _duration: number): void => {
           // No-op: CHAIN fire animation is handled entirely by startMuzzleFlash.
+        };
+
+        // ── Aim wiring: chainYaw is the yaw subgroup ─────────────────────────
+        // tickAim rotates chainYaw so the electrode cluster points at the target.
+        // The coil tori and central post stay fixed on towerGroup. Sphere bob,
+        // arc flicker, electrode shimmer, and orbit animations all run on objects
+        // that are children of chainYaw — they compose correctly with parent yaw.
+        towerGroup.userData['aimYawSubgroupName'] = 'chainYaw';
+        towerGroup.userData['aimTick'] = (_g: THREE.Group, _t: number, _hasTarget: boolean): void => {
+          // Yaw is applied by tickAim (lerpYaw on the 'chainYaw' subgroup).
         };
 
         // ── Accent point light at sphere height ─────────────────────────────
@@ -1350,6 +1433,16 @@ export class TowerMeshFactoryService {
         housing.position.y = MORTAR_HOUSING_Y;
         towerGroup.add(housing);
 
+        // ── Yaw subgroup for aim ─────────────────────────────────────────────
+        // mortarYaw carries barrelPivot (and everything inside it). The chassis,
+        // treads, vents, housing, ammo crate, and shells stay on towerGroup so
+        // only the weapon head (barrel assembly) yaws to track a target.
+        // Separating yaw (mortarYaw.rotation.y) from elevation (barrelPivot.rotation.x)
+        // prevents the elevation from tilting sideways when yawing.
+        const mortarYaw = new THREE.Group();
+        mortarYaw.name = 'mortarYaw';
+        towerGroup.add(mortarYaw);
+
         // ── Barrel pivot group (rotates so barrel points up-and-forward) ───
         // Pivot sits at the housing top face. The barrelPivot group is rotated
         // MORTAR_BARREL_ELEVATION_RAD around local X, so its +Y axis becomes
@@ -1359,7 +1452,7 @@ export class TowerMeshFactoryService {
         barrelPivot.name = 'barrelPivot';
         barrelPivot.position.y = MORTAR_BARREL_PIVOT_Y;
         barrelPivot.rotation.x = MORTAR_BARREL_ELEVATION_RAD;
-        towerGroup.add(barrelPivot);
+        mortarYaw.add(barrelPivot);
 
         // ── T1 barrel (named 'barrelT1') ────────────────────────────────────
         const barrelT1Geom = this.cyl(
@@ -1487,6 +1580,15 @@ export class TowerMeshFactoryService {
           group.userData['recoilDuration'] = duration;
           group.userData['recoilDistance'] = MORTAR_RECOIL_CONFIG.distance;
           group.userData['mortarBarrelNames'] = MORTAR_BARREL_NAMES;
+        };
+
+        // ── Aim wiring: mortarYaw is the yaw subgroup ────────────────────────
+        // tickAim rotates mortarYaw (yaw). The barrel elevation (barrelPivot.rotation.x)
+        // is independent — the two axes compose without fighting. Recoil acts on
+        // barrelPivot-local Y (bore axis), unchanged by the parent yaw.
+        towerGroup.userData['aimYawSubgroupName'] = 'mortarYaw';
+        towerGroup.userData['aimTick'] = (_g: THREE.Group, _t: number, _hasTarget: boolean): void => {
+          // Yaw is applied by tickAim (lerpYaw on the 'mortarYaw' subgroup).
         };
 
         // ── Accent point light ───────────────────────────────────────────────

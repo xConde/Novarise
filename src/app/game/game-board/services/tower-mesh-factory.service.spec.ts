@@ -19,6 +19,7 @@ import {
   CHAIN_Y,
   MORTAR_RECOIL_CONFIG,
   MORTAR_BARREL_NAMES,
+  MORTAR_BARREL_ELEVATION_RAD,
 } from '../constants/tower-anim.constants';
 
 function disposeGroupHelper(group: THREE.Group): void {
@@ -1173,6 +1174,435 @@ describe('TowerMeshFactoryService', () => {
       service.attachAccentLight(group, TowerType.BASIC, false);
 
       expect(() => disposeGroup(group)).not.toThrow();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Phase B — Per-tower aim wiring
+  // For each tower: aimYawSubgroupName, aimTick, yaw correctness, idle behaviour.
+  // ---------------------------------------------------------------------------
+
+  describe('Phase B aim wiring — BASIC', () => {
+    let basicGroup: THREE.Group;
+
+    beforeEach(() => {
+      basicGroup = service.createTowerMesh(5, 5, TowerType.BASIC, boardWidth, boardHeight);
+      createdGroups.push(basicGroup);
+    });
+
+    it('has aimYawSubgroupName = "turret"', () => {
+      expect(basicGroup.userData['aimYawSubgroupName']).toBe('turret');
+    });
+
+    it('has an aimTick function registered on userData', () => {
+      expect(typeof basicGroup.userData['aimTick']).toBe('function');
+    });
+
+    it('aimTick is a function that accepts (group, t, hasTarget) without throwing', () => {
+      const aimTick = basicGroup.userData['aimTick'] as (g: THREE.Group, t: number, h: boolean) => void;
+      expect(() => aimTick(basicGroup, 0, true)).not.toThrow();
+      expect(() => aimTick(basicGroup, 0, false)).not.toThrow();
+    });
+
+    it('"turret" subgroup exists and is a THREE.Group', () => {
+      const turret = basicGroup.getObjectByName('turret');
+      expect(turret).toBeInstanceOf(THREE.Group);
+    });
+
+    it('idleTick rotates the turret subgroup (idle swivel)', () => {
+      const idleTick = basicGroup.userData['idleTick'] as (g: THREE.Group, t: number) => void;
+      const turret = basicGroup.getObjectByName('turret') as THREE.Group;
+
+      idleTick(basicGroup, 0);
+      const atZero = turret.rotation.y;
+      idleTick(basicGroup, Math.PI / (2 * BASIC_IDLE_CONFIG.swivelSpeed));
+      const atPeak = turret.rotation.y;
+
+      // Peak magnitude should equal swivelAmplitudeRad (within fp tolerance)
+      expect(Math.abs(atPeak)).toBeCloseTo(BASIC_IDLE_CONFIG.swivelAmplitudeRad, 4);
+      // The values differ (the swivel is actually moving)
+      expect(atPeak).not.toBeCloseTo(atZero, 4);
+    });
+
+    it('towerGroup itself does not rotate when idleTick runs (only turret yaws)', () => {
+      const idleTick = basicGroup.userData['idleTick'] as (g: THREE.Group, t: number) => void;
+      idleTick(basicGroup, 1.0);
+      // towerGroup.rotation.y must stay 0 — only the turret child rotates
+      expect(basicGroup.rotation.y).toBeCloseTo(0, 6);
+    });
+  });
+
+  describe('Phase B aim wiring — MORTAR', () => {
+    let mortarGroup2: THREE.Group;
+
+    beforeEach(() => {
+      mortarGroup2 = service.createTowerMesh(5, 5, TowerType.MORTAR, boardWidth, boardHeight);
+      createdGroups.push(mortarGroup2);
+    });
+
+    it('has aimYawSubgroupName = "mortarYaw"', () => {
+      expect(mortarGroup2.userData['aimYawSubgroupName']).toBe('mortarYaw');
+    });
+
+    it('has an aimTick function registered on userData', () => {
+      expect(typeof mortarGroup2.userData['aimTick']).toBe('function');
+    });
+
+    it('"mortarYaw" subgroup exists and is a THREE.Group', () => {
+      const mortarYaw = mortarGroup2.getObjectByName('mortarYaw');
+      expect(mortarYaw).toBeInstanceOf(THREE.Group);
+    });
+
+    it('"barrelPivot" is a child of "mortarYaw" (not a direct child of towerGroup)', () => {
+      const mortarYaw = mortarGroup2.getObjectByName('mortarYaw') as THREE.Group;
+      const barrelPivot = mortarGroup2.getObjectByName('barrelPivot') as THREE.Group;
+      expect(barrelPivot).toBeTruthy();
+      expect(mortarYaw.children).toContain(barrelPivot as THREE.Object3D);
+    });
+
+    it('barrelPivot still carries its MORTAR_BARREL_ELEVATION_RAD rotation on X', () => {
+      const barrelPivot = mortarGroup2.getObjectByName('barrelPivot') as THREE.Group;
+      expect(barrelPivot.rotation.x).toBeCloseTo(MORTAR_BARREL_ELEVATION_RAD, 5);
+    });
+
+    it('rotating mortarYaw.rotation.y does not change barrelPivot.rotation.x (elevation preserved)', () => {
+      const mortarYaw = mortarGroup2.getObjectByName('mortarYaw') as THREE.Group;
+      const barrelPivot = mortarGroup2.getObjectByName('barrelPivot') as THREE.Group;
+      const elevBefore = barrelPivot.rotation.x;
+      mortarYaw.rotation.y = Math.PI / 4;
+      expect(barrelPivot.rotation.x).toBeCloseTo(elevBefore, 6);
+    });
+
+    it('barrelT1 resolves via getObjectByName from towerGroup (hierarchy walk still works)', () => {
+      const barrel = mortarGroup2.getObjectByName('barrelT1');
+      expect(barrel).toBeTruthy();
+    });
+
+    it('fireTick stores mortarBarrelNames matching MORTAR_BARREL_NAMES', () => {
+      const fire = mortarGroup2.userData['fireTick'] as (g: THREE.Group, d: number) => void;
+      fire(mortarGroup2, 0.1);
+      expect(mortarGroup2.userData['mortarBarrelNames']).toEqual(MORTAR_BARREL_NAMES);
+    });
+  });
+
+  describe('Phase B aim wiring — SNIPER', () => {
+    let sniperGroup2: THREE.Group;
+
+    beforeEach(() => {
+      sniperGroup2 = service.createTowerMesh(5, 5, TowerType.SNIPER, boardWidth, boardHeight);
+      createdGroups.push(sniperGroup2);
+    });
+
+    it('has aimYawSubgroupName = "aimGroup"', () => {
+      expect(sniperGroup2.userData['aimYawSubgroupName']).toBe('aimGroup');
+    });
+
+    it('has an aimTick function registered on userData', () => {
+      expect(typeof sniperGroup2.userData['aimTick']).toBe('function');
+    });
+
+    it('"aimGroup" subgroup exists and is a THREE.Group', () => {
+      const ag = sniperGroup2.getObjectByName('aimGroup');
+      expect(ag).toBeInstanceOf(THREE.Group);
+    });
+
+    it('barrel resolves within aimGroup (not a direct child of towerGroup)', () => {
+      const ag = sniperGroup2.getObjectByName('aimGroup') as THREE.Group;
+      const barrel = sniperGroup2.getObjectByName('barrel');
+      // barrel must be reachable from towerGroup
+      expect(barrel).toBeTruthy();
+      // barrel must be reachable from aimGroup as well
+      expect(ag.getObjectByName('barrel')).toBeTruthy();
+    });
+
+    it('tripod base (post + struts) are direct children of towerGroup, not inside aimGroup (I-4 fix)', () => {
+      // The central post and 3 struts are unnamed meshes added BEFORE aimGroup in
+      // the SNIPER factory case. They must remain at towerGroup level so they do
+      // not rotate when aimGroup yaws.
+      // Verify: towerGroup has exactly 4 unnamed direct-child Mesh objects (1 post + 3 struts).
+      let directUnnamedOnTowerGroup = 0;
+      sniperGroup2.children.forEach(c => {
+        if (c instanceof THREE.Mesh && c.name === '') directUnnamedOnTowerGroup++;
+      });
+      expect(directUnnamedOnTowerGroup).toBe(4);
+    });
+
+    it('rotating aimGroup.rotation.y does not affect towerGroup.rotation.y (I-4 regression)', () => {
+      const ag = sniperGroup2.getObjectByName('aimGroup') as THREE.Group;
+      sniperGroup2.rotation.y = 0;
+      ag.rotation.y = Math.PI / 4;
+      // towerGroup rotation must be unaffected
+      expect(sniperGroup2.rotation.y).toBeCloseTo(0, 6);
+    });
+
+    it('tier-gated parts (scopeLong, stabilizer, bipods) are still found via getObjectByName after aimGroup nesting', () => {
+      expect(sniperGroup2.getObjectByName('scopeLong')).toBeTruthy();
+      expect(sniperGroup2.getObjectByName('stabilizer')).toBeTruthy();
+      // bipods are named 'bipod' — at least 2 should be present
+      const bipods: THREE.Object3D[] = [];
+      sniperGroup2.traverse(o => { if (o.name === 'bipod') bipods.push(o); });
+      expect(bipods.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('tier-visibility tags are preserved on parts after aimGroup nesting', () => {
+      const scopeLong = sniperGroup2.getObjectByName('scopeLong');
+      expect((scopeLong?.userData as Record<string, unknown>)['minTier']).toBe(2);
+      const stabilizer = sniperGroup2.getObjectByName('stabilizer');
+      expect((stabilizer?.userData as Record<string, unknown>)['minTier']).toBe(3);
+    });
+
+    it('idleTick rotates aimGroup (not towerGroup) for phantom drift', () => {
+      const idleTick = sniperGroup2.userData['idleTick'] as (g: THREE.Group, t: number) => void;
+      const ag = sniperGroup2.getObjectByName('aimGroup') as THREE.Group;
+
+      idleTick(sniperGroup2, Math.PI / 2);
+      // aimGroup should have non-zero y rotation (phantom drift)
+      expect(Math.abs(ag.rotation.y)).toBeGreaterThan(0);
+      // towerGroup itself must NOT have been rotated by idleTick
+      expect(sniperGroup2.rotation.y).toBeCloseTo(0, 5);
+    });
+  });
+
+  describe('Phase B aim wiring — SPLASH', () => {
+    let splashGroup2: THREE.Group;
+
+    beforeEach(() => {
+      splashGroup2 = service.createTowerMesh(5, 5, TowerType.SPLASH, boardWidth, boardHeight);
+      createdGroups.push(splashGroup2);
+    });
+
+    it('has aimYawSubgroupName = "splashYaw"', () => {
+      expect(splashGroup2.userData['aimYawSubgroupName']).toBe('splashYaw');
+    });
+
+    it('has an aimTick function registered on userData', () => {
+      expect(typeof splashGroup2.userData['aimTick']).toBe('function');
+    });
+
+    it('"splashYaw" subgroup exists and is a THREE.Group', () => {
+      const sy = splashGroup2.getObjectByName('splashYaw');
+      expect(sy).toBeInstanceOf(THREE.Group);
+    });
+
+    it('"drum" is a child of "splashYaw" (not a direct child of towerGroup)', () => {
+      const sy = splashGroup2.getObjectByName('splashYaw') as THREE.Group;
+      const drum = splashGroup2.getObjectByName('drum') as THREE.Group;
+      expect(drum).toBeTruthy();
+      expect(sy.children).toContain(drum as THREE.Object3D);
+    });
+
+    it('tube1 resolves via getObjectByName from towerGroup (hierarchy still works)', () => {
+      expect(splashGroup2.getObjectByName('tube1')).toBeTruthy();
+    });
+
+    it('heatVent resolves from towerGroup (T3 part inside drum inside splashYaw)', () => {
+      const heatVent = splashGroup2.getObjectByName('heatVent');
+      expect(heatVent).toBeTruthy();
+    });
+
+    it('idleTick rotates drum.rotation.z (forward-axis spin, not splashYaw)', () => {
+      const idleTick = splashGroup2.userData['idleTick'] as (g: THREE.Group, t: number) => void;
+      const drum = splashGroup2.getObjectByName('drum') as THREE.Group;
+
+      idleTick(splashGroup2, 0);
+      idleTick(splashGroup2, 1.0);
+      // After 1 second the drum angle should advance by idleSpeed * 1s
+      expect(Math.abs(drum.rotation.z)).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Phase B aim wiring — SLOW', () => {
+    let slowGroup2: THREE.Group;
+
+    beforeEach(() => {
+      slowGroup2 = service.createTowerMesh(5, 5, TowerType.SLOW, boardWidth, boardHeight);
+      createdGroups.push(slowGroup2);
+    });
+
+    it('has aimYawSubgroupName = "slowYaw"', () => {
+      expect(slowGroup2.userData['aimYawSubgroupName']).toBe('slowYaw');
+    });
+
+    it('has an aimTick function registered on userData', () => {
+      expect(typeof slowGroup2.userData['aimTick']).toBe('function');
+    });
+
+    it('"slowYaw" subgroup exists and is a THREE.Group', () => {
+      const sy = slowGroup2.getObjectByName('slowYaw');
+      expect(sy).toBeInstanceOf(THREE.Group);
+    });
+
+    it('"emitter" is a child of "slowYaw" (not a direct child of towerGroup)', () => {
+      const sy = slowGroup2.getObjectByName('slowYaw') as THREE.Group;
+      const emitter = slowGroup2.getObjectByName('emitter');
+      expect(emitter).toBeTruthy();
+      expect(sy.getObjectByName('emitter')).toBeTruthy();
+    });
+
+    it('coil is a DIRECT child of towerGroup (static, not inside slowYaw)', () => {
+      const coil = slowGroup2.getObjectByName('coil');
+      expect(coil).toBeTruthy();
+      // coil must be a direct child of towerGroup, not nested under slowYaw
+      expect(slowGroup2.children).toContain(coil as THREE.Object3D);
+    });
+
+    it('crystalCore is a direct child of towerGroup (static, not inside slowYaw)', () => {
+      const crystal = slowGroup2.getObjectByName('crystalCore');
+      expect(crystal).toBeTruthy();
+      expect(slowGroup2.children).toContain(crystal as THREE.Object3D);
+    });
+
+    it('emitter resolves via towerGroup.getObjectByName after slowYaw nesting', () => {
+      expect(slowGroup2.getObjectByName('emitter')).toBeTruthy();
+    });
+
+    it('rotating slowYaw.rotation.y does not change coil position (coil is independent)', () => {
+      const sy = slowGroup2.getObjectByName('slowYaw') as THREE.Group;
+      const coil = slowGroup2.getObjectByName('coil') as THREE.Mesh;
+      const coilYBefore = coil.position.y;
+      sy.rotation.y = Math.PI / 3;
+      expect(coil.position.y).toBeCloseTo(coilYBefore, 6);
+    });
+  });
+
+  describe('Phase B aim wiring — CHAIN', () => {
+    let chainGroup2: THREE.Group;
+
+    beforeEach(() => {
+      chainGroup2 = service.createTowerMesh(5, 5, TowerType.CHAIN, boardWidth, boardHeight);
+      createdGroups.push(chainGroup2);
+    });
+
+    it('has aimYawSubgroupName = "chainYaw"', () => {
+      expect(chainGroup2.userData['aimYawSubgroupName']).toBe('chainYaw');
+    });
+
+    it('has an aimTick function registered on userData', () => {
+      expect(typeof chainGroup2.userData['aimTick']).toBe('function');
+    });
+
+    it('"chainYaw" subgroup exists and is a THREE.Group', () => {
+      const cy = chainGroup2.getObjectByName('chainYaw');
+      expect(cy).toBeInstanceOf(THREE.Group);
+    });
+
+    it('"sphere" is reachable via chainYaw.getObjectByName', () => {
+      const cy = chainGroup2.getObjectByName('chainYaw') as THREE.Group;
+      expect(cy.getObjectByName('sphere')).toBeTruthy();
+    });
+
+    it('"arc" is reachable via chainYaw.getObjectByName', () => {
+      const cy = chainGroup2.getObjectByName('chainYaw') as THREE.Group;
+      expect(cy.getObjectByName('arc')).toBeTruthy();
+    });
+
+    it('"orbitSphere2" is reachable via chainYaw.getObjectByName', () => {
+      const cy = chainGroup2.getObjectByName('chainYaw') as THREE.Group;
+      expect(cy.getObjectByName('orbitSphere2')).toBeTruthy();
+    });
+
+    it('"orbitSphere3" is reachable via chainYaw.getObjectByName', () => {
+      const cy = chainGroup2.getObjectByName('chainYaw') as THREE.Group;
+      expect(cy.getObjectByName('orbitSphere3')).toBeTruthy();
+    });
+
+    it('all 4 electrodes are inside chainYaw (not direct towerGroup children)', () => {
+      const cy = chainGroup2.getObjectByName('chainYaw') as THREE.Group;
+      const electrodes: THREE.Object3D[] = [];
+      cy.traverse(o => { if (o.name === 'electrode') electrodes.push(o); });
+      expect(electrodes.length).toBe(4);
+    });
+
+    it('coil tori are direct towerGroup children (static, not inside chainYaw)', () => {
+      // Coil tori have no name — they are the only Mesh children of towerGroup
+      // that are not inside chainYaw. At minimum post + 3 coil tori = 4 direct children.
+      const directMeshChildren = chainGroup2.children.filter(c => c instanceof THREE.Mesh);
+      // post + 3 coil tori = 4 direct Mesh children
+      expect(directMeshChildren.length).toBeGreaterThanOrEqual(4);
+    });
+
+    it('tier-visibility tag on orbitSphere2 is preserved (minTier=2)', () => {
+      const orbit2 = chainGroup2.getObjectByName('orbitSphere2');
+      expect((orbit2?.userData as Record<string, unknown>)['minTier']).toBe(2);
+    });
+
+    it('tier-visibility tag on orbitSphere3 is preserved (minTier=3)', () => {
+      const orbit3 = chainGroup2.getObjectByName('orbitSphere3');
+      expect((orbit3?.userData as Record<string, unknown>)['minTier']).toBe(3);
+    });
+
+    it('chargeTick still resolves "sphere" by name and mutates its emissiveIntensity', () => {
+      const chargeTick = chainGroup2.userData['chargeTick'] as (g: THREE.Group, t: number) => void;
+      const sphere = chainGroup2.getObjectByName('sphere') as THREE.Mesh;
+      expect(sphere).toBeTruthy();
+      const mat = sphere.material as THREE.MeshStandardMaterial;
+      const before = mat.emissiveIntensity;
+      // Advance to a point where sine peaks
+      chargeTick(chainGroup2, Math.PI / 2);
+      expect(mat.emissiveIntensity).not.toBeCloseTo(before, 5);
+    });
+
+    it('idleTick sphere bob still works after chainYaw nesting', () => {
+      const idleTick = chainGroup2.userData['idleTick'] as (g: THREE.Group, t: number) => void;
+      const sphere = chainGroup2.getObjectByName('sphere') as THREE.Mesh;
+
+      idleTick(chainGroup2, 0);
+      const yAt0 = sphere.position.y;
+      idleTick(chainGroup2, Math.PI / (2 * ((Math.PI * 2) / CHAIN_SPHERE_BOB_CONFIG.periodSec)));
+      const yAtPeak = sphere.position.y;
+
+      expect(Math.abs(yAtPeak - CHAIN_Y.sphere)).toBeGreaterThan(0);
+      expect(yAt0).not.toBeCloseTo(yAtPeak, 4);
+    });
+  });
+
+  describe('Phase B aim wiring — shared contract', () => {
+    const aimWiredTypes = [
+      TowerType.BASIC,
+      TowerType.MORTAR,
+      TowerType.SNIPER,
+      TowerType.SPLASH,
+      TowerType.SLOW,
+      TowerType.CHAIN,
+    ];
+
+    aimWiredTypes.forEach(towerType => {
+      describe(`${towerType}`, () => {
+        let group: THREE.Group;
+
+        beforeEach(() => {
+          group = service.createTowerMesh(5, 5, towerType, boardWidth, boardHeight);
+          createdGroups.push(group);
+        });
+
+        it('has aimYawSubgroupName set on userData', () => {
+          expect(typeof group.userData['aimYawSubgroupName']).toBe('string');
+          expect((group.userData['aimYawSubgroupName'] as string).length).toBeGreaterThan(0);
+        });
+
+        it('aimYawSubgroupName resolves to an Object3D via getObjectByName', () => {
+          const name = group.userData['aimYawSubgroupName'] as string;
+          expect(group.getObjectByName(name)).toBeTruthy();
+        });
+
+        it('has aimTick function on userData', () => {
+          expect(typeof group.userData['aimTick']).toBe('function');
+        });
+
+        it('aimTick does not throw when called with hasTarget=true', () => {
+          const aimTick = group.userData['aimTick'] as (g: THREE.Group, t: number, h: boolean) => void;
+          expect(() => aimTick(group, 1.0, true)).not.toThrow();
+        });
+
+        it('aimTick does not throw when called with hasTarget=false', () => {
+          const aimTick = group.userData['aimTick'] as (g: THREE.Group, t: number, h: boolean) => void;
+          expect(() => aimTick(group, 1.0, false)).not.toThrow();
+        });
+
+        it('disposeGroup still works after aim-wiring subgroups are added', () => {
+          expect(() => disposeGroup(group)).not.toThrow();
+        });
+      });
     });
   });
 });
