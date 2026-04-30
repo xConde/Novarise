@@ -2039,7 +2039,7 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 
 **Risk:** The SNIPER `fireTick` writes `recoilDistance = 0.08` to `userData`. `tickRecoilAnimations` hardcodes `BASIC_RECOIL_CONFIG.distance` (0.05u) and never reads `recoilDistance`. All SNIPER shots recoil at BASIC distance — the per-tower differentiation is silent. The three existing recoil specs only test the BASIC case and assert against `BASIC_RECOIL_CONFIG.distance`, so they cannot detect this.
 
-**Fix applied (this commit):** `tickRecoilAnimations` now reads `group.userData['recoilDistance'] ?? BASIC_RECOIL_CONFIG.distance`. Two new specs in `tower-animation.service.spec.ts`: (1) SNIPER override path uses 0.08u at t=0; (2) absent `recoilDistance` falls back to `BASIC_RECOIL_CONFIG.distance`.
+**Fix applied:** `tickRecoilAnimations` now reads `group.userData['recoilDistance'] ?? BASIC_RECOIL_CONFIG.distance`. Two new specs in `tower-animation.service.spec.ts`: (1) SNIPER override path uses 0.08u at t=0; (2) absent `recoilDistance` falls back to `BASIC_RECOIL_CONFIG.distance`. Fixed in commit `fb04703`.
 
 ---
 
@@ -2049,4 +2049,4 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 
 **Risk:** The scope housing (`scopeMesh`) correctly carries `userData['maxTier'] = 1`, so `revealTierParts` hides it at T2. The lens disk (`lensMesh`, named `'scope'`) has no `maxTier` tag — `revealTierParts` leaves it visible. At T2+ the invisible housing is gone but the glowing lens disk remains floating in space. No spec tested the lens's `maxTier` because the spec only checked the housing. The upgrade-visual spec for `maxTier` behaviour validates the service logic correctly, but the factory spec didn't assert this field on the lens.
 
-**Fix applied (this commit):** Added `lensMesh.userData['maxTier'] = 1` immediately after lens mesh construction. Added a factory spec asserting `getObjectByName('scope').userData['maxTier'] === 1`.
+**Fix applied:** Added `lensMesh.userData['maxTier'] = 1` immediately after lens mesh construction. Added a factory spec asserting `getObjectByName('scope').userData['maxTier'] === 1`. Fixed in commit `fb04703`.
