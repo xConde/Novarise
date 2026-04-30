@@ -4,6 +4,7 @@ import { PlacedTower, TowerType } from '../models/tower.model';
 import { BlockType } from '../models/game-board-tile';
 import { ANIMATION_CONFIG } from '../constants/rendering.constants';
 import { MUZZLE_FLASH_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
+import { AIM_LERP_CONFIG, AIM_FALLBACK_CONFIG } from '../constants/tower-aim.constants';
 import { getMaterials } from '../utils/three-utils';
 import {
   BASIC_RECOIL_CONFIG,
@@ -14,9 +15,42 @@ import {
   SELECTION_PULSE_CONFIG,
   HOVER_LIFT_CONFIG,
 } from '../constants/tower-anim.constants';
+import type { TargetPreviewService } from './target-preview.service';
+
+/**
+ * Lerp the current yaw angle toward a target yaw angle, always taking the
+ * shortest angular path across the ±π boundary.
+ *
+ * Returns the new yaw after advancing by at most `deltaTime * speedRadPerSec`
+ * radians. If the remaining angular distance is smaller than one frame's
+ * step, the target yaw is returned directly (clamped — no overshoot).
+ *
+ * @param currentRad  Current yaw in radians (any value, not restricted to ±π).
+ * @param targetRad   Target yaw in radians.
+ * @param deltaTime   Time since last frame in seconds.
+ * @param speedRadPerSec  Angular velocity cap in radians per second.
+ */
+export function lerpYaw(
+  currentRad: number,
+  targetRad: number,
+  deltaTime: number,
+  speedRadPerSec: number,
+): number {
+  let delta = targetRad - currentRad;
+  // Wrap delta into (-π, π] so we always rotate the short way.
+  while (delta > Math.PI)  delta -= 2 * Math.PI;
+  while (delta < -Math.PI) delta += 2 * Math.PI;
+
+  const maxStep = deltaTime * speedRadPerSec;
+  if (Math.abs(delta) <= maxStep) {
+    return targetRad;
+  }
+  return currentRad + Math.sign(delta) * maxStep;
+}
 
 @Injectable()
 export class TowerAnimationService {
+
   /**
    * Animate tower idle and charge effects. For each group, the call order is:
    *
@@ -24,9 +58,13 @@ export class TowerAnimationService {
    *     emissive animations (e.g. CHAIN sphere intensity) that should update
    *     before the idle positional changes so any intensity written by chargeTick
    *     is not overwritten by idleTick in the same frame.
-   *  2. `idleTick(group, t)` — fires SECOND when registered. All six redesigned
-   *     tower types register an idleTick in TowerMeshFactoryService. Gives each
-   *     tower full ownership of its idle animation (position, rotation, opacity).
+   *  2. `aimTick(group, t, hasTarget)` — fires SECOND when registered. Receives
+   *     the per-frame `hasTarget` flag set by the `tickAim` pre-pass. When
+   *     `hasTarget` is true, `idleTick` is SKIPPED for that group so aim takes
+   *     precedence over idle gestures. When `hasTarget` is false, aim has no
+   *     active target and control falls through to `idleTick` as normal.
+   *  3. `idleTick(group, t)` — fires THIRD, but ONLY when `aimTick` either is not
+   *     registered or `hasTarget` is false for this group.
    *
    * The legacy named-mesh traverse (cases 'crystal', 'spark', 'spore', 'tip')
    * was removed in Phase I once all six tower types shipped their own idleTick
@@ -45,10 +83,21 @@ export class TowerAnimationService {
       // drives all visual state until onExpire fires and disposes the group.
       if (group.userData['selling']) continue;
 
-      // chargeTick runs BEFORE idleTick so charge-up emissive changes land first.
+      // chargeTick runs BEFORE aimTick/idleTick so charge-up emissive changes land first.
       const chargeTick = group.userData['chargeTick'] as ((g: THREE.Group, t: number) => void) | undefined;
       if (typeof chargeTick === 'function') {
         chargeTick(group, t);
+      }
+
+      // aimTick runs BEFORE idleTick. When a target is active, idleTick is
+      // suppressed so aim rotation takes precedence over idle gestures.
+      const aimTick = group.userData['aimTick'] as
+        ((g: THREE.Group, t: number, hasTarget: boolean) => void) | undefined;
+      const hasTarget = group.userData['currentAimTarget'] != null;
+      if (typeof aimTick === 'function') {
+        aimTick(group, t, hasTarget);
+        // Idle gesture suspended while aim is engaged — skip idleTick this frame.
+        if (hasTarget) continue;
       }
 
       // Per-tower idle hook — all six redesigned types register this. Groups that
@@ -57,6 +106,100 @@ export class TowerAnimationService {
       const idleTick = group.userData['idleTick'] as ((g: THREE.Group, t: number) => void) | undefined;
       if (typeof idleTick === 'function') {
         idleTick(group, t);
+      }
+    }
+  }
+
+  /**
+   * Per-frame aim pre-pass: for each tower group that has registered an
+   * `aimTick` callback, queries the current primary target via
+   * `TargetPreviewService` and writes the result to
+   * `userData['currentAimTarget']`.
+   *
+   * Groups without an `aimTick` are skipped entirely — zero overhead for
+   * towers that have not opted in to the aim subsystem.
+   *
+   * Groups with `userData['selling'] = true` are skipped so the aim subsystem
+   * does not fight the sell-shrink animation for the same transform.
+   *
+   * Call once per animation frame BEFORE `updateTowerAnimations` so the
+   * `currentAimTarget` flag is current when `aimTick` callbacks run.
+   *
+   * `TargetPreviewService` is passed as a parameter (not injected in the
+   * constructor) to avoid a DI cycle: TowerAnimationService ← TowerCombatService
+   * ← TowerAnimationService. The caller (GameRenderService) holds references
+   * to both services and wires them here.
+   *
+   * @param towerMeshes          Registry map of tower group key → THREE.Group.
+   * @param towersByKey          Registry map of tower group key → PlacedTower.
+   * @param deltaTime            Seconds since last frame.
+   * @param targetPreviewService Aim target resolver. Pass null/undefined to
+   *                             disable aim updates (e.g. in test beds that
+   *                             don't need it).
+   * @param reduceMotion         When true, use the snap-speed so yaw updates
+   *                             are effectively instantaneous.
+   */
+  tickAim(
+    towerMeshes: Map<string, THREE.Group>,
+    towersByKey: Map<string, PlacedTower>,
+    deltaTime: number,
+    targetPreviewService?: TargetPreviewService | null,
+    reduceMotion = false,
+  ): void {
+    if (!targetPreviewService) return;
+
+    const speed = reduceMotion
+      ? AIM_LERP_CONFIG.reduceMotionSpeedRadPerSec
+      : AIM_LERP_CONFIG.speedRadPerSec;
+
+    for (const [key, group] of towerMeshes.entries()) {
+      // Only process towers that have opted into the aim subsystem.
+      if (typeof group.userData['aimTick'] !== 'function') continue;
+
+      // Sell-shrink owns all transforms for this group — cede control.
+      if (group.userData['selling']) continue;
+
+      const tower = towersByKey.get(key);
+      if (!tower) continue;
+
+      const target = targetPreviewService.getPreviewTarget(tower);
+
+      if (target === null) {
+        // No in-range target: clear the aim slot and advance the grace timer.
+        group.userData['currentAimTarget'] = null;
+        const grace = (group.userData['noTargetGraceTime'] as number | undefined) ?? 0;
+        group.userData['noTargetGraceTime'] = Math.min(
+          grace + deltaTime,
+          AIM_FALLBACK_CONFIG.noTargetGraceSec,
+        );
+      } else {
+        // Target found: compute target yaw and lerp the aim subgroup.
+        group.userData['currentAimTarget'] = target;
+        group.userData['noTargetGraceTime'] = 0;
+
+        const subgroupName = group.userData['aimYawSubgroupName'] as string | undefined;
+        const yawGroup = subgroupName
+          ? (group.getObjectByName(subgroupName) as THREE.Object3D | undefined)
+          : undefined;
+
+        if (yawGroup) {
+          // World position of the tower: read from the group's world matrix.
+          // Using group.position is incorrect for towers elevated on a tile —
+          // the world position is what matters for the angle calculation.
+          const towerWorld = new THREE.Vector3();
+          group.getWorldPosition(towerWorld);
+
+          const dx = target.position.x - towerWorld.x;
+          const dz = target.position.z - towerWorld.z;
+          const targetYaw = Math.atan2(dx, dz);
+
+          yawGroup.rotation.y = lerpYaw(
+            yawGroup.rotation.y,
+            targetYaw,
+            deltaTime,
+            speed,
+          );
+        }
       }
     }
   }

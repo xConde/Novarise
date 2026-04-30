@@ -1,12 +1,15 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
-import { TowerAnimationService } from './tower-animation.service';
+import { TowerAnimationService, lerpYaw } from './tower-animation.service';
+import { TargetPreviewService } from './target-preview.service';
 import { TowerMeshFactoryService } from './tower-mesh-factory.service';
-import { PlacedTower, TowerType, TargetingMode } from '../models/tower.model';
+import { PlacedTower, TowerType, TOWER_CONFIGS, TargetingMode } from '../models/tower.model';
 import { BlockType } from '../models/game-board-tile';
 import { MUZZLE_FLASH_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
 import { ANIMATION_CONFIG } from '../constants/rendering.constants';
+import { AIM_LERP_CONFIG } from '../constants/tower-aim.constants';
 import { BASIC_RECOIL_CONFIG, SPLASH_TUBE_EMIT_CONFIG, SLOW_EMITTER_PULSE_FIRE, MORTAR_RECOIL_CONFIG, MORTAR_BARREL_NAMES, TIER_UP_BOUNCE_CONFIG, SELL_ANIM_CONFIG, SELECTION_PULSE_CONFIG } from '../constants/tower-anim.constants';
+import { createTestEnemy } from '../testing';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1908,6 +1911,337 @@ describe('TowerAnimationService', () => {
       bodyMat.dispose();
       tubeMat.dispose();
       geo.dispose();
+    });
+  });
+
+  // ---- lerpYaw utility ----
+
+  describe('lerpYaw', () => {
+    it('advances toward target on a normal delta', () => {
+      // After 1 second at 8 rad/s the angle must have moved toward π/2
+      const result = lerpYaw(0, Math.PI / 2, 1, 8);
+      expect(result).toBeCloseTo(Math.PI / 2, 4);
+    });
+
+    it('takes the SHORT path across the ±π boundary (170° → -170°)', () => {
+      const from = THREE.MathUtils.degToRad(170);
+      const to   = THREE.MathUtils.degToRad(-170);
+      // Short path is -20° (via -180°), long path is +340°.
+      // After one tick at high speed the result should be LESS than 170°
+      // (moving in the negative direction), not greater.
+      const result = lerpYaw(from, to, 0.1, AIM_LERP_CONFIG.speedRadPerSec);
+      // The result must have moved TOWARD to (i.e. the wrapped direction)
+      // Wrapped delta = -20° ≈ -0.349 rad. After 0.1s at 8 rad/s the step is 0.8 rad.
+      // Step exceeds |delta|, so result clamps to `to`.
+      expect(result).toBeCloseTo(to, 4);
+    });
+
+    it('returns targetRad when current === target (no change)', () => {
+      expect(lerpYaw(1.0, 1.0, 0.016, AIM_LERP_CONFIG.speedRadPerSec)).toBeCloseTo(1.0, 6);
+    });
+
+    it('clamps to target when deltaTime is very large (no overshoot)', () => {
+      const result = lerpYaw(0, Math.PI / 4, 100, AIM_LERP_CONFIG.speedRadPerSec);
+      expect(result).toBeCloseTo(Math.PI / 4, 6);
+    });
+
+    it('converges to target over multiple ticks', () => {
+      let yaw = 0;
+      const target = Math.PI / 2;
+      const dt = 0.016; // 60fps
+      for (let i = 0; i < 200; i++) {
+        yaw = lerpYaw(yaw, target, dt, AIM_LERP_CONFIG.speedRadPerSec);
+      }
+      expect(yaw).toBeCloseTo(target, 4);
+    });
+  });
+
+  // ---- aimTick channel in updateTowerAnimations ----
+
+  describe('aimTick channel', () => {
+    it('calls aimTick with hasTarget=true when currentAimTarget is set, and skips idleTick', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+
+      const mockEnemy = createTestEnemy('e1', 1, 0);
+      group.userData['currentAimTarget'] = mockEnemy;
+
+      const aimTickSpy = jasmine.createSpy('aimTick');
+      const idleTickSpy = jasmine.createSpy('idleTick');
+      group.userData['aimTick'] = aimTickSpy;
+      group.userData['idleTick'] = idleTickSpy;
+
+      service.updateTowerAnimations(new Map([['0-0', group]]), 1000);
+
+      expect(aimTickSpy).toHaveBeenCalledOnceWith(
+        group,
+        1000 * ANIMATION_CONFIG.msToSeconds,
+        true,
+      );
+      expect(idleTickSpy).not.toHaveBeenCalled();
+    });
+
+    it('calls aimTick with hasTarget=false and then calls idleTick when target is null', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      group.userData['currentAimTarget'] = null; // no target
+
+      const aimTickSpy = jasmine.createSpy('aimTick');
+      const idleTickSpy = jasmine.createSpy('idleTick');
+      group.userData['aimTick'] = aimTickSpy;
+      group.userData['idleTick'] = idleTickSpy;
+
+      service.updateTowerAnimations(new Map([['0-0', group]]), 1000);
+
+      expect(aimTickSpy).toHaveBeenCalledOnceWith(
+        group,
+        1000 * ANIMATION_CONFIG.msToSeconds,
+        false,
+      );
+      expect(idleTickSpy).toHaveBeenCalled();
+    });
+
+    it('calls idleTick normally when aimTick is not registered', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+
+      const idleTickSpy = jasmine.createSpy('idleTick');
+      group.userData['idleTick'] = idleTickSpy;
+      // No aimTick registered
+
+      service.updateTowerAnimations(new Map([['0-0', group]]), 1000);
+
+      expect(idleTickSpy).toHaveBeenCalled();
+    });
+
+    it('resumes idleTick after target is cleared', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+
+      const mockEnemy = createTestEnemy('e1', 1, 0);
+      group.userData['currentAimTarget'] = mockEnemy;
+
+      const aimTickSpy = jasmine.createSpy('aimTick');
+      const idleTickSpy = jasmine.createSpy('idleTick');
+      group.userData['aimTick'] = aimTickSpy;
+      group.userData['idleTick'] = idleTickSpy;
+
+      // Frame 1: with target — idleTick suppressed
+      service.updateTowerAnimations(new Map([['0-0', group]]), 1000);
+      expect(idleTickSpy).not.toHaveBeenCalled();
+
+      // Frame 2: target cleared — idleTick resumes
+      group.userData['currentAimTarget'] = null;
+      service.updateTowerAnimations(new Map([['0-0', group]]), 2000);
+      expect(idleTickSpy).toHaveBeenCalled();
+    });
+  });
+
+  // ---- tickAim ----
+
+  describe('tickAim', () => {
+    let targetPreviewSpy: jasmine.SpyObj<TargetPreviewService>;
+
+    beforeEach(() => {
+      targetPreviewSpy = jasmine.createSpyObj<TargetPreviewService>(
+        'TargetPreviewService',
+        ['getPreviewTarget', 'invalidate', 'tickPreviewCache', 'clearAll'],
+      );
+    });
+
+    function makePlacedTower(key: string, type = TowerType.BASIC): PlacedTower {
+      const [row, col] = key.split('-').map(Number);
+      return {
+        id: key,
+        type,
+        level: 1,
+        row,
+        col,
+        targetingMode: TargetingMode.NEAREST,
+        mesh: undefined,
+        actualCost: TOWER_CONFIGS[type].cost,
+        placedAtTurn: 0,
+      } as unknown as PlacedTower;
+    }
+
+    it('sets currentAimTarget when an in-range enemy is found', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      group.userData['aimTick'] = () => {};
+
+      const enemy = createTestEnemy('e1', 1, 0);
+      targetPreviewSpy.getPreviewTarget.and.returnValue(enemy);
+
+      const tower = makePlacedTower('5-5');
+      service.tickAim(
+        new Map([['5-5', group]]),
+        new Map([['5-5', tower]]),
+        0.016,
+        targetPreviewSpy,
+      );
+
+      expect(group.userData['currentAimTarget']).toBe(enemy);
+    });
+
+    it('sets currentAimTarget to null when no enemy is in range', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      group.userData['aimTick'] = () => {};
+      group.userData['currentAimTarget'] = createTestEnemy('stale', 0, 0); // was previously set
+
+      targetPreviewSpy.getPreviewTarget.and.returnValue(null);
+
+      const tower = makePlacedTower('5-5');
+      service.tickAim(
+        new Map([['5-5', group]]),
+        new Map([['5-5', tower]]),
+        0.016,
+        targetPreviewSpy,
+      );
+
+      expect(group.userData['currentAimTarget']).toBeNull();
+    });
+
+    it('skips groups without aimTick registered', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      // No aimTick — should be untouched
+
+      const tower = makePlacedTower('5-5');
+      service.tickAim(
+        new Map([['5-5', group]]),
+        new Map([['5-5', tower]]),
+        0.016,
+        targetPreviewSpy,
+      );
+
+      expect(targetPreviewSpy.getPreviewTarget).not.toHaveBeenCalled();
+      expect(group.userData['currentAimTarget']).toBeUndefined();
+    });
+
+    it('handles zero enemies without throwing', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      group.userData['aimTick'] = () => {};
+
+      targetPreviewSpy.getPreviewTarget.and.returnValue(null);
+
+      const tower = makePlacedTower('5-5');
+      expect(() => service.tickAim(
+        new Map([['5-5', group]]),
+        new Map([['5-5', tower]]),
+        0.016,
+        targetPreviewSpy,
+      )).not.toThrow();
+    });
+
+    it('is a no-op when targetPreviewService is null', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      group.userData['aimTick'] = () => {};
+
+      const tower = makePlacedTower('5-5');
+      expect(() => service.tickAim(
+        new Map([['5-5', group]]),
+        new Map([['5-5', tower]]),
+        0.016,
+        null,
+      )).not.toThrow();
+
+      expect(group.userData['currentAimTarget']).toBeUndefined();
+    });
+
+    it('all towers get same enemy reference when all target the same enemy', () => {
+      const enemy = createTestEnemy('shared', 2, 2);
+      targetPreviewSpy.getPreviewTarget.and.returnValue(enemy);
+
+      const groups = new Map<string, THREE.Group>();
+      const towers = new Map<string, PlacedTower>();
+      for (let i = 0; i < 5; i++) {
+        const key = `${i}-0`;
+        const g = new THREE.Group();
+        g.userData['towerType'] = TowerType.BASIC;
+        g.userData['aimTick'] = () => {};
+        groups.set(key, g);
+        towers.set(key, makePlacedTower(key));
+      }
+
+      service.tickAim(groups, towers, 0.016, targetPreviewSpy);
+
+      for (const g of groups.values()) {
+        expect(g.userData['currentAimTarget']).toBe(enemy);
+      }
+    });
+
+    it('skips selling groups', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      group.userData['aimTick'] = () => {};
+      group.userData['selling'] = true;
+
+      const enemy = createTestEnemy('e1', 1, 0);
+      targetPreviewSpy.getPreviewTarget.and.returnValue(enemy);
+
+      const tower = makePlacedTower('5-5');
+      service.tickAim(
+        new Map([['5-5', group]]),
+        new Map([['5-5', tower]]),
+        0.016,
+        targetPreviewSpy,
+      );
+
+      expect(targetPreviewSpy.getPreviewTarget).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---- tickAim perf gate spec (Sprint 17) ----
+
+  describe('tickAim perf gate', () => {
+    it('completes tickAim on 30 towers × 50 enemies in under 5ms', () => {
+      const perfSpy = jasmine.createSpyObj<TargetPreviewService>(
+        'TargetPreviewService',
+        ['getPreviewTarget'],
+      );
+
+      // Create 50 mock enemies
+      const enemies = Array.from({ length: 50 }, (_, i) =>
+        createTestEnemy(`enemy-${i}`, i * 0.5, i * 0.3),
+      );
+
+      // Rotate through enemies so each tower gets a non-null target
+      perfSpy.getPreviewTarget.and.callFake(
+        (tower: PlacedTower) => enemies[Number(tower.row) % enemies.length],
+      );
+
+      const groups = new Map<string, THREE.Group>();
+      const towers = new Map<string, PlacedTower>();
+
+      for (let i = 0; i < 30; i++) {
+        const key = `${i}-0`;
+        const g = new THREE.Group();
+        g.userData['towerType'] = TowerType.BASIC;
+        g.userData['aimTick'] = () => {};
+        groups.set(key, g);
+        towers.set(key, {
+          id: key,
+          type: TowerType.BASIC,
+          level: 1,
+          row: i,
+          col: 0,
+          targetingMode: TargetingMode.NEAREST,
+          mesh: undefined,
+          actualCost: TOWER_CONFIGS[TowerType.BASIC].cost,
+          placedAtTurn: 0,
+        } as unknown as PlacedTower);
+      }
+
+      const start = performance.now();
+      service.tickAim(groups, towers, 0.016, perfSpy);
+      const elapsed = performance.now() - start;
+
+      // 5ms budget — loose enough for CI hardware; production is much faster.
+      // If this fails, implement round-robin recompute per aim-perf-contingency.md.
+      expect(elapsed).toBeLessThan(5);
     });
   });
 });
