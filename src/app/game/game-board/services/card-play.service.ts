@@ -41,6 +41,7 @@ import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 import { buildDisposeProtect, disposeGroup } from '../utils/three-utils';
 import { GeometryRegistryService } from './geometry-registry.service';
 import { MaterialRegistryService } from './material-registry.service';
+import { TargetPreviewService } from './target-preview.service';
 
 /**
  * Upgraded CARTOGRAPHER_SEAL refunds this many energy on the first terraform
@@ -151,6 +152,12 @@ export class CardPlayService {
     // resources when card effects dispose tower meshes.
     @Optional() private geometryRegistry?: GeometryRegistryService,
     @Optional() private materialRegistry?: MaterialRegistryService,
+    /**
+     * @Optional() — aim-cache invalidation after tower mutation cards
+     * (FORTIFY). When absent (test beds without full providers), invalidation
+     * is skipped; aim cache simply becomes stale until the next enemy event.
+     */
+    @Optional() private targetPreviewService?: TargetPreviewService,
   ) {}
 
   /**
@@ -814,6 +821,10 @@ export class CardPlayService {
       target.originalEmissiveIntensity = undefined;
       target.muzzleFlashTimer = undefined;
       target.emissiveBaselines = undefined; // will be re-read from mesh userData on next fire
+
+      // Invalidate aim cache — range may have grown after the free upgrade
+      // (Sprint 38: tower-mutation card hook).
+      this.targetPreviewService?.invalidate(key);
     }
 
     this.callbacks?.onRefreshUI();

@@ -402,6 +402,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private pathMutationService: PathMutationService,
     private towerGraphService: TowerGraphService,
     private linkMeshService: LinkMeshService,
+    private targetPreviewService: TargetPreviewService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -905,6 +906,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       placedTower.emissiveBaselines = undefined; // will be re-read from mesh userData on next fire
     }
 
+    // Invalidate aim cache — range may have grown after upgrade (Sprint 38).
+    this.targetPreviewService.invalidate(this.selectedTowerInfo.id);
+
     // Refresh info panel
     this.refreshTowerInfoPanel();
     this.rangeVisualizationService.showForTower(
@@ -952,7 +956,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   cycleTargeting(): void {
+    const tower = this.towerSelectionService.selectedTowerInfo;
     this.towerSelectionService.cycleTargeting();
+    // Invalidate aim cache for the selected tower so aim re-orients to the
+    // new targeting-mode pick within the next animation frame (Sprint 39).
+    if (tower) {
+      this.targetPreviewService.invalidate(`${tower.row}-${tower.col}`);
+    }
   }
 
   deselectTower(): void {
@@ -1301,6 +1311,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.audioService.playTowerPlace();
     this.gameStatsService.recordTowerBuilt();
+
+    // Invalidate aim cache for the newly placed tower so it gets a preview
+    // target within the next animation frame (Sprint 37).
+    this.targetPreviewService.invalidate(`${row}-${col}`);
 
     // Hide preview and invalidate preview cache — board layout changed
     this.boardPointer.clearSelectedTile();
