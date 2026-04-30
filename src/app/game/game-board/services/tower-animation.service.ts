@@ -62,9 +62,11 @@ export class TowerAnimationService {
    *     the per-frame `hasTarget` flag set by the `tickAim` pre-pass. When
    *     `hasTarget` is true, `idleTick` is SKIPPED for that group so aim takes
    *     precedence over idle gestures. When `hasTarget` is false, aim has no
-   *     active target and control falls through to `idleTick` as normal.
-   *  3. `idleTick(group, t)` — fires THIRD, but ONLY when `aimTick` either is not
-   *     registered or `hasTarget` is false for this group.
+   *     active target. Whether `idleTick` resumes depends on `aimEngaged` (see below).
+   *  3. `idleTick(group, t)` — fires THIRD, but ONLY when `aimTick` is not
+   *     registered OR `userData['aimEngaged']` is false. `aimEngaged` stays true
+   *     for `AIM_FALLBACK_CONFIG.noTargetGraceSec` after the last target leaves
+   *     range, preventing a jarring snap-to-idle on enemy death (Sprint 40).
    *
    * The legacy named-mesh traverse (cases 'crystal', 'spark', 'spore', 'tip')
    * was removed in Phase I once all six tower types shipped their own idleTick
@@ -89,15 +91,19 @@ export class TowerAnimationService {
         chargeTick(group, t);
       }
 
-      // aimTick runs BEFORE idleTick. When a target is active, idleTick is
-      // suppressed so aim rotation takes precedence over idle gestures.
+      // aimTick runs BEFORE idleTick. When aim is engaged (active target OR
+      // within the no-target grace window), idleTick is suppressed so the last
+      // aim yaw is held. `aimEngaged` is set by tickAim: true when a target was
+      // found, stays true until noTargetGraceSec elapses after the target leaves,
+      // then falls to false so idle gesture resumes (Sprint 40 — fixes A-2/B-3).
       const aimTick = group.userData['aimTick'] as
         ((g: THREE.Group, t: number, hasTarget: boolean) => void) | undefined;
+      const aimEngaged = group.userData['aimEngaged'] === true;
       const hasTarget = group.userData['currentAimTarget'] != null;
       if (typeof aimTick === 'function') {
         aimTick(group, t, hasTarget);
-        // Idle gesture suspended while aim is engaged — skip idleTick this frame.
-        if (hasTarget) continue;
+        // Idle gesture suspended while aim is engaged (active target or grace hold).
+        if (aimEngaged) continue;
       }
 
       // Per-tower idle hook — all six redesigned types register this. Groups that
@@ -166,16 +172,28 @@ export class TowerAnimationService {
 
       if (target === null) {
         // No in-range target: clear the aim slot and advance the grace timer.
+        // aimEngaged stays true while the tower is within the grace window so
+        // idleTick does not interrupt the last yaw (Sprint 40 — fixes A-2/B-3).
         group.userData['currentAimTarget'] = null;
         const grace = (group.userData['noTargetGraceTime'] as number | undefined) ?? 0;
-        group.userData['noTargetGraceTime'] = Math.min(
-          grace + deltaTime,
-          AIM_FALLBACK_CONFIG.noTargetGraceSec,
-        );
+        const newGrace = grace + deltaTime;
+        if (newGrace >= AIM_FALLBACK_CONFIG.noTargetGraceSec) {
+          // Grace window expired: release aim hold so idle gesture resumes.
+          group.userData['noTargetGraceTime'] = AIM_FALLBACK_CONFIG.noTargetGraceSec;
+          group.userData['aimEngaged'] = false;
+        } else {
+          group.userData['noTargetGraceTime'] = newGrace;
+          // Keep aimEngaged true only if it was true before target was lost.
+          // If this tower never aimed (cold start), do not engage idle hold.
+          // aimEngaged is only set to true when a target is found (see below),
+          // so undefined/false here means the tower never had a target.
+          // No change needed — leave it at its current value.
+        }
       } else {
         // Target found: compute target yaw and lerp the aim subgroup.
         group.userData['currentAimTarget'] = target;
         group.userData['noTargetGraceTime'] = 0;
+        group.userData['aimEngaged'] = true;
 
         const subgroupName = group.userData['aimYawSubgroupName'] as string | undefined;
         const yawGroup = subgroupName

@@ -1959,12 +1959,14 @@ describe('TowerAnimationService', () => {
   // ---- aimTick channel in updateTowerAnimations ----
 
   describe('aimTick channel', () => {
-    it('calls aimTick with hasTarget=true when currentAimTarget is set, and skips idleTick', () => {
+    it('calls aimTick with hasTarget=true when currentAimTarget is set, and skips idleTick (aimEngaged=true)', () => {
       const group = new THREE.Group();
       group.userData['towerType'] = TowerType.BASIC;
 
       const mockEnemy = createTestEnemy('e1', 1, 0);
       group.userData['currentAimTarget'] = mockEnemy;
+      // aimEngaged is set by tickAim when a target is found; simulate that here.
+      group.userData['aimEngaged'] = true;
 
       const aimTickSpy = jasmine.createSpy('aimTick');
       const idleTickSpy = jasmine.createSpy('idleTick');
@@ -2014,26 +2016,47 @@ describe('TowerAnimationService', () => {
       expect(idleTickSpy).toHaveBeenCalled();
     });
 
-    it('resumes idleTick after target is cleared', () => {
+    it('resumes idleTick after target is cleared AND aimEngaged is false', () => {
       const group = new THREE.Group();
       group.userData['towerType'] = TowerType.BASIC;
 
       const mockEnemy = createTestEnemy('e1', 1, 0);
       group.userData['currentAimTarget'] = mockEnemy;
+      group.userData['aimEngaged'] = true; // set by tickAim when target found
 
       const aimTickSpy = jasmine.createSpy('aimTick');
       const idleTickSpy = jasmine.createSpy('idleTick');
       group.userData['aimTick'] = aimTickSpy;
       group.userData['idleTick'] = idleTickSpy;
 
-      // Frame 1: with target — idleTick suppressed
+      // Frame 1: aim engaged — idleTick suppressed
       service.updateTowerAnimations(new Map([['0-0', group]]), 1000);
       expect(idleTickSpy).not.toHaveBeenCalled();
 
-      // Frame 2: target cleared — idleTick resumes
+      // Frame 2: target cleared AND grace expired (aimEngaged = false) — idleTick resumes
       group.userData['currentAimTarget'] = null;
+      group.userData['aimEngaged'] = false; // grace expired; set by tickAim after noTargetGraceSec
       service.updateTowerAnimations(new Map([['0-0', group]]), 2000);
       expect(idleTickSpy).toHaveBeenCalled();
+    });
+
+    it('does NOT resume idleTick while aimEngaged is true (grace window active)', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+
+      const aimTickSpy = jasmine.createSpy('aimTick');
+      const idleTickSpy = jasmine.createSpy('idleTick');
+      group.userData['aimTick'] = aimTickSpy;
+      group.userData['idleTick'] = idleTickSpy;
+
+      // Target was lost but grace window is still active
+      group.userData['currentAimTarget'] = null;
+      group.userData['aimEngaged'] = true; // grace hold set by tickAim
+
+      service.updateTowerAnimations(new Map([['0-0', group]]), 1000);
+
+      // idleTick must remain suppressed during grace hold
+      expect(idleTickSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -2191,6 +2214,88 @@ describe('TowerAnimationService', () => {
       );
 
       expect(targetPreviewSpy.getPreviewTarget).not.toHaveBeenCalled();
+    });
+
+    // ── Sprint 40: grace timer + aimEngaged ─────────────────────────────
+
+    it('sets aimEngaged true when a target is found', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      group.userData['aimTick'] = () => {};
+
+      const enemy = createTestEnemy('e1', 1, 0);
+      targetPreviewSpy.getPreviewTarget.and.returnValue(enemy);
+
+      const tower = makePlacedTower('5-5');
+      service.tickAim(new Map([['5-5', group]]), new Map([['5-5', tower]]), 0.016, targetPreviewSpy);
+
+      expect(group.userData['aimEngaged']).toBeTrue();
+      expect(group.userData['noTargetGraceTime']).toBe(0);
+    });
+
+    it('does NOT immediately clear aimEngaged when target leaves range', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      group.userData['aimTick'] = () => {};
+      // Simulate previously aimed state
+      group.userData['aimEngaged'] = true;
+      group.userData['noTargetGraceTime'] = 0;
+
+      targetPreviewSpy.getPreviewTarget.and.returnValue(null);
+
+      const tower = makePlacedTower('5-5');
+      service.tickAim(new Map([['5-5', group]]), new Map([['5-5', tower]]), 0.1, targetPreviewSpy);
+
+      // 0.1s < 0.5s grace — aimEngaged must still be true
+      expect(group.userData['aimEngaged']).toBeTrue();
+    });
+
+    it('clears aimEngaged after grace window expires', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      group.userData['aimTick'] = () => {};
+      group.userData['aimEngaged'] = true;
+      group.userData['noTargetGraceTime'] = 0;
+
+      targetPreviewSpy.getPreviewTarget.and.returnValue(null);
+      const tower = makePlacedTower('5-5');
+      const groupMap = new Map([['5-5', group]]);
+      const towerMap = new Map([['5-5', tower]]);
+
+      // Advance past grace threshold (0.5s) in one step
+      service.tickAim(groupMap, towerMap, 0.6, targetPreviewSpy);
+
+      expect(group.userData['aimEngaged']).toBeFalse();
+    });
+
+    it('does NOT set aimEngaged on cold-start with no target', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      group.userData['aimTick'] = () => {};
+      // No aimEngaged at all yet — brand-new tower
+
+      targetPreviewSpy.getPreviewTarget.and.returnValue(null);
+      const tower = makePlacedTower('5-5');
+      service.tickAim(new Map([['5-5', group]]), new Map([['5-5', tower]]), 0.016, targetPreviewSpy);
+
+      // aimEngaged must not have been set to true on a tower that never aimed
+      expect(group.userData['aimEngaged']).not.toBeTrue();
+    });
+
+    it('re-acquiring target before grace expires resets aimEngaged to true and clears grace', () => {
+      const group = new THREE.Group();
+      group.userData['towerType'] = TowerType.BASIC;
+      group.userData['aimTick'] = () => {};
+      group.userData['aimEngaged'] = true;
+      group.userData['noTargetGraceTime'] = 0.3; // mid-grace
+
+      const enemy = createTestEnemy('e1', 1, 0);
+      targetPreviewSpy.getPreviewTarget.and.returnValue(enemy);
+      const tower = makePlacedTower('5-5');
+      service.tickAim(new Map([['5-5', group]]), new Map([['5-5', tower]]), 0.016, targetPreviewSpy);
+
+      expect(group.userData['aimEngaged']).toBeTrue();
+      expect(group.userData['noTargetGraceTime']).toBe(0);
     });
   });
 
