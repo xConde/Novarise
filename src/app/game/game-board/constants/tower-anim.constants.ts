@@ -641,3 +641,102 @@ export const MORTAR_RECOIL_CONFIG = {
  * recoil together (they fire as one unit visually).
  */
 export const MORTAR_BARREL_NAMES = ['barrelT1', 'barrelT2', 'dualBarrel'] as const;
+
+// ─── MORTAR idle animation (barrel elevate gesture) ───────────────────────────
+
+export const MORTAR_IDLE_CONFIG = {
+  /**
+   * How often the barrel elevate gesture fires (seconds between each cycle start).
+   * The barrel briefly raises +5° then returns to neutral, then waits for the
+   * next cycle.
+   */
+  cycleIntervalSec: 4.0,
+  /** Duration of the raise phase (seconds). */
+  raiseDurationSec: 0.5,
+  /** Duration of the return phase (seconds). */
+  returnDurationSec: 0.7,
+  /** Peak additional elevation in radians added on top of MORTAR_BARREL_ELEVATION_RAD. */
+  peakExtraRadians: 5 * (Math.PI / 180),
+} as const;
+
+// ─── CHAIN recoil config ──────────────────────────────────────────────────────
+
+export const CHAIN_RECOIL_CONFIG = {
+  /**
+   * Small barrel-equivalent recoil on discharge — reinforces the electric
+   * spark-kick without the full BASIC ballistic read.
+   */
+  distance: 0.03,
+  easing: 'easeOutCubic' as const,
+} as const;
+
+// ─── SNIPER signature gesture (tracking) ─────────────────────────────────────
+
+export const SNIPER_TRACK_CONFIG = {
+  /**
+   * Additional barrel rotation applied as a slow 2° sine drift on top of the
+   * scope lens pulse. Simulates the sniper tracking an off-axis phantom target.
+   * Amplitude in radians (±2°).
+   */
+  amplitudeRad: 2 * (Math.PI / 180),
+  /** Sine frequency in cycles per second — slow, deliberate tracking. */
+  speedHz: 0.18,
+} as const;
+
+// ─── SPLASH charge-cycle gesture ─────────────────────────────────────────────
+
+export const SPLASH_CHARGE_CONFIG = {
+  /**
+   * How often the brief drum-speed-burst gesture fires (seconds between peaks).
+   * Every ~3 s the drum spins up for a fraction of a second as a charge-cycle hint.
+   */
+  cycleIntervalSec: 3.0,
+  /** Duration of the burst window (seconds). */
+  burstDurationSec: 0.4,
+  /** Rotation speed multiplier during the burst (applied to idleSpeedRadPerSec). */
+  burstSpeedMultiplier: 3.5,
+} as const;
+
+// ─── Tier-up bounce animation ─────────────────────────────────────────────────
+
+export const TIER_UP_BOUNCE_CONFIG = {
+  /**
+   * Peak scale factor applied to the tower group at the start of the tier-up
+   * bounce. The group then eases back to 1.0× over durationSec.
+   */
+  peakScale: 1.10,
+  /** Total duration of the bounce animation in seconds. */
+  durationSec: 0.3,
+  easing: 'easeOutCubic' as const,
+} as const;
+
+// ─── Sell animation ───────────────────────────────────────────────────────────
+
+export const SELL_ANIM_CONFIG = {
+  /** Duration of the shrink-and-fade animation in seconds. */
+  durationSec: 0.4,
+  /** Target scale at the end of the animation (tower disappears at this scale). */
+  finalScale: 0.0,
+} as const;
+
+// ─── Selection pulse ──────────────────────────────────────────────────────────
+
+export const SELECTION_PULSE_CONFIG = {
+  /** Minimum opacity of the glow ring while a tower is selected. */
+  opacityMin: 0.5,
+  /** Maximum opacity of the glow ring while a tower is selected. */
+  opacityMax: 0.9,
+  /** Period of one full pulse cycle in seconds. */
+  periodSec: 1.4,
+} as const;
+
+// ─── Hover accent-light lift ──────────────────────────────────────────────────
+
+export const HOVER_LIFT_CONFIG = {
+  /**
+   * Multiplier applied to the base accent point-light intensity when the
+   * cursor is over a tower. Provides subtle feedback that the tower is
+   * interactive without changing the material.
+   */
+  intensityMultiplier: 1.3,
+} as const;
