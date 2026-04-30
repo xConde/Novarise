@@ -7,9 +7,7 @@ import { TowerPreviewService } from './tower-preview.service';
 import { RangeVisualizationService } from './range-visualization.service';
 import { GameStateService } from './game-state.service';
 import { GameBoardService } from '../game-board.service';
-import { TILE_EMISSIVE } from '../constants/ui.constants';
 import { TowerType, PlacedTower } from '../models/tower.model';
-import { BlockType } from '../models/game-board-tile';
 import { GamePhase } from '../models/game-state.model';
 
 export interface PointerCallbacks {

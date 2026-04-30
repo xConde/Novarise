@@ -116,9 +116,9 @@ describe('VfxPoolService', () => {
   describe('dispose', () => {
     it('clears active + free pools', () => {
       const a = pool.acquireArc(8, 0xff0000, 0.6);
-      const z = pool.acquireZone(2, 24, 0xff8800, 0.4);
+      pool.acquireZone(2, 24, 0xff8800, 0.4);
       pool.releaseArc(a.line);
-      // a in free, z in active
+      // a in free, zone in active
       pool.dispose();
       expect(pool.arcActiveCount()).toBe(0);
       expect(pool.arcFreeCount()).toBe(0);

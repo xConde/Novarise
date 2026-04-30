@@ -1,7 +1,6 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, Subscription } from 'rxjs';
-import * as THREE from 'three';
 import { GameBoardService } from './game-board.service';
 import { disposeGroup } from './utils/three-utils';
 import { BlockType } from './models/game-board-tile';

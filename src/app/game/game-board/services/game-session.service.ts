@@ -35,7 +35,7 @@ import { MaterialRegistryService } from './material-registry.service';
 import { TextSpritePoolService } from './text-sprite-pool.service';
 import { GoldPopupService } from './gold-popup.service';
 import { VfxPoolService } from './vfx-pool.service';
-import { buildDisposeProtect, disposeGroup, DisposeProtect } from '../utils/three-utils';
+import { buildDisposeProtect, disposeGroup } from '../utils/three-utils';
 
 /**
  * Orchestrates game-level lifecycle: service resets on restart and Three.js scene cleanup.

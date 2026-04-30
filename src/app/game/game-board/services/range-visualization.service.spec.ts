@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { RangeVisualizationService } from './range-visualization.service';
 import { PlacedTower, TowerType, TargetingMode, getEffectiveStats, TOWER_CONFIGS } from '../models/tower.model';
+import { ElevationService } from './elevation.service';
 import { RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG } from '../constants/ui.constants';
 
 // ---------------------------------------------------------------------------
@@ -318,7 +319,7 @@ describe('RangeVisualizationService', () => {
         getElevation: (r: number, c: number) => (r === 4 && c === 4 ? 2 : 0),
       } as unknown as { getElevation(r: number, c: number): number };
       const localScene = new THREE.Scene();
-      const localSvc = new RangeVisualizationService(fakeElev as any);
+      const localSvc = new RangeVisualizationService(fakeElev as unknown as ElevationService);
 
       localSvc.showForPosition(TowerType.BASIC, 4, 4, BOARD_WIDTH, BOARD_HEIGHT, TILE_SIZE, localScene);
       const ring = localScene.children[0] as THREE.Mesh;
@@ -332,7 +333,7 @@ describe('RangeVisualizationService', () => {
         getElevation: () => 1,
       } as unknown as { getElevation(r: number, c: number): number };
       const localScene = new THREE.Scene();
-      const localSvc = new RangeVisualizationService(fakeElev as any);
+      const localSvc = new RangeVisualizationService(fakeElev as unknown as ElevationService);
       const tower = makePlacedTower(3, 3);
       localSvc.showForTower(tower, BOARD_WIDTH, BOARD_HEIGHT, TILE_SIZE, localScene);
 
