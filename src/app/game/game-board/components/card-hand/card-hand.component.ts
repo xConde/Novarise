@@ -99,20 +99,6 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
-   * Deterministic hue (0-359) derived from the card instance id.
-   * Used to tint the instance-identifier dot so duplicate cards in the
-   * hand (e.g., 5× Basic Tower) are still visually distinguishable.
-   */
-  instanceHue(instanceId: string): number {
-    let hash = 0;
-    for (let i = 0; i < instanceId.length; i++) {
-      hash = (hash * 31 + instanceId.charCodeAt(i)) >>> 0;
-    }
-    // Prime-mix to spread similar instance ids across the hue wheel
-    return (hash * 137) % 360;
-  }
-
-  /**
    * Sprint 12 — Per-tower-type accent color.
    * Returns a CSS variable string referencing the tower-type accent color
    * (e.g., 'var(--tower-color-sniper)'). Bound to --card-tower-accent on the

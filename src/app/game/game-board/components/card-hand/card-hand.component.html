@@ -51,11 +51,13 @@
       [style.--archetype-trim-color]="getArchetypeTrimColor(card)"
       [style.--archetype-trim-color-strong]="getArchetypeTrimColorStrong(card)">
 
-      <!-- Cost pill — value + "Energy" as one inline-flex chip so it reads as a single element.
-           Shows effectiveEnergyCost (post-relic discount, e.g. WORLD_SPIRIT). -->
-      <span class="card__cost" [class.card__cost--affordable]="card.canPlay" aria-hidden="true">
-        <strong class="card__cost-value">{{ card.effectiveEnergyCost }}</strong>
-        <span class="card__cost-label">Energy</span>
+      <!-- Cost pip — just the number. Type-color tinted, big + bold. The
+           ENERGY label is redundant at this scale; tooltip carries full
+           context. effectiveEnergyCost reflects post-relic discount. -->
+      <span class="card__cost"
+            [class.card__cost--affordable]="card.canPlay"
+            [attr.aria-label]="card.effectiveEnergyCost + ' energy'">
+        {{ card.effectiveEnergyCost }}
       </span>
 
       <!-- Upgraded indicator -->
@@ -104,10 +106,6 @@
         </span>
       </span>
 
-      <!-- Instance dot — tints per-instance so identical cards are distinguishable -->
-      <span class="card__instance-dot"
-            [style.background]="'hsl(' + instanceHue(card.instance.instanceId) + ', 70%, 55%)'"
-            aria-hidden="true"></span>
 
     </button>
   </div>

@@ -12,29 +12,32 @@
 :root {
 
   // === Card sizing (hand) ===
+  // StS / Marvel Snap reference: cards feel substantial when they
+  // command screen real estate. Bumped 12% from initial sizing.
 
-  --card-width-desktop:      6.25rem;
-  --card-width-tablet:       5.25rem;
-  --card-width-mobile:       3.75rem;
+  --card-width-desktop:      7rem;
+  --card-width-tablet:       6rem;
+  --card-width-mobile:       4rem;
 
-  --card-min-height-desktop: 8.5rem;
-  --card-min-height-tablet:  7rem;
-  --card-min-height-mobile:  5.5rem;
+  --card-min-height-desktop: 9.5rem;
+  --card-min-height-tablet:  8rem;
+  --card-min-height-mobile:  6rem;
 
-  // padding-top reserves space for the cost pill + corner icon
-  --card-padding-top-desktop: 2.1rem;
-  --card-padding-top-tablet:  1.9rem;
-  --card-padding-top-mobile:  1.5rem;
+  // padding-top reserves space for the cost pip + corner icon
+  --card-padding-top-desktop: 2.4rem;
+  --card-padding-top-tablet:  2rem;
+  --card-padding-top-mobile:  1.6rem;
 
-  // padding-bottom leaves the instance dot its corner
-  --card-padding-bottom-desktop: 0.9rem;
-  --card-padding-bottom-tablet:  0.8rem;
-  --card-padding-bottom-mobile:  0.5rem;
+  // padding-bottom — instance dot was removed at S76, but a small
+  // bottom strip keeps the keyword-badge row breathable.
+  --card-padding-bottom-desktop: 0.6rem;
+  --card-padding-bottom-tablet:  0.5rem;
+  --card-padding-bottom-mobile:  0.4rem;
 
   --card-padding-x-desktop: var(--spacing-xs);  // 0.3125rem
   --card-padding-x-mobile:  0.25rem;
 
-  --card-border-radius: var(--border-radius-sm);  // 0.25rem
+  --card-border-radius: 0.5rem;  // 8px — friendlier corners than the prior 0.25rem
 
   // Fan overlap margins — applied as negative left margin on non-first cards
   --card-fan-margin-default: 0;       // set dynamically via [style] binding
