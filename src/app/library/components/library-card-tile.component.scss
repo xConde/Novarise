@@ -499,6 +499,33 @@
   }
 }
 
+/* --- Framed tile (Utility polygon silhouette) --- */
+//
+// Mirrors .tile--frame-modifier pattern. Uses --card-frame-utility-clip--tile
+// (chevron at 55%/65%/75% — shifted lower vs. hand to avoid the art-strip focal
+// region on the taller 22/32 face). The bilateral V-notch differentiates Utility
+// from Tower (battlements), Spell (peak), and Modifier (octagon) in the library
+// grid at a glance.
+
+.tile--frame-utility {
+  clip-path: var(--card-frame-utility-clip--tile);
+  transition:
+    transform var(--card-tile-transition-duration) ease-out,
+    border-color var(--card-tile-transition-duration) ease,
+    filter var(--card-tile-transition-duration) ease,
+    clip-path var(--card-tile-transition-duration) ease;
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 0 transparent);
+
+  &:hover,
+  &:focus-visible {
+    box-shadow: none !important;
+    filter:
+      drop-shadow(0 0 min(6px, var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
+      brightness(1.06);
+  }
+}
+
 /* --- Reduce-motion --- */
 
 body.reduce-motion .tile,

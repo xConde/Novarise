@@ -353,7 +353,55 @@
     0%   91%,
     0%   9%
   );
-  --card-frame-utility-clip:  polygon(/* chamfered corners — defined S13 */);
+  // Utility: price-tag / tool-tag chevron — bilateral inset points on both
+  // vertical sides at lower-mid height. Evokes a resource tag, scroll pull-tab,
+  // or equipment label. Distinct from Tower (battlements top), Spell (top peak),
+  // and Modifier (full-perimeter octagon) — the only silhouette with mid-card
+  // lateral indentation.
+  //
+  // Chevron geometry: full-width top (0%–50%), then right edge cuts to (92%, 60%)
+  // and back to (100%, 70%) — a 8% inward V on the right side. Mirror on left.
+  // Bottom is full-width. Net effect: a banner / tag that appears "cinched" at
+  // the lower-middle — readable as "resource" or "utility object" at hand scale.
+  //
+  // Chrome verification (hand ~100×136px):
+  //   Cost pill (top:0.3rem left:0.3rem) → 4.8%, 3.5% — inside full-width top zone (0%–50%). Safe.
+  //   Type icon (top:0.45rem right:0.4rem) → 93.6%, 5.3% — top zone, no right-edge cut until 50%. Safe.
+  //   Upgraded badge (top:0.2rem right:0.25rem) → 97.5%, 1.5% — top zone. Safe.
+  //   Chevron right-edge cut occurs at 50%–70% of height; all chrome is above 50%. No conflict.
+  //
+  // Fan-overlap left-edge: left chevron cuts at most 8% inward at 60% height.
+  // Above y=50% and below y=70% the left edge is vertical (0%). Well within
+  // the ≤10% adjacent-neighbor amputation budget.
+  --card-frame-utility-clip: polygon(
+    0%   0%,      /* top-left — full width, cost pill safe                  */
+    100% 0%,      /* top-right — full width, type icon + badge safe         */
+    100% 50%,     /* right edge descends to chevron start                   */
+    92%  60%,     /* right chevron inward point — 8% cut                    */
+    100% 70%,     /* right edge resumes after chevron                       */
+    100% 100%,    /* bottom-right                                            */
+    0%   100%,    /* bottom-left                                             */
+    0%   70%,     /* left edge before chevron resumes                       */
+    8%   60%,     /* left chevron inward point — mirror right                */
+    0%   50%      /* left edge descends to chevron start                    */
+  );
+
+  // Tile variant (22/32 aspect — ~220×320px). Chevron at 50%/60%/70% of 320px
+  // puts the V-point at 192px height — lower-middle of tile, below the art strip.
+  // Shift to 55%/65%/75% to move it into the lower third, avoiding the card-art
+  // focal region while preserving the tag silhouette read on the taller face.
+  --card-frame-utility-clip--tile: polygon(
+    0%   0%,
+    100% 0%,
+    100% 55%,     /* right edge to chevron start                            */
+    92%  65%,     /* right chevron inward — 8% cut                          */
+    100% 75%,     /* right edge resumes                                     */
+    100% 100%,
+    0%   100%,
+    0%   75%,     /* left edge before chevron resumes                       */
+    8%   65%,     /* left chevron inward — mirror right                     */
+    0%   55%      /* left edge to chevron start                             */
+  );
 
   // Drop-shadow cap — enforced in all per-type filter declarations
   --card-frame-drop-shadow-blur-max: 8px;

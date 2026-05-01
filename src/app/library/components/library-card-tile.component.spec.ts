@@ -70,6 +70,20 @@ describe('LibraryCardTileComponent', () => {
     link: true,
   };
 
+  const utilityDef: CardDefinition = {
+    id: CardId.DRAW_TWO,
+    name: 'Quick Draw',
+    description: 'Draw 2 cards.',
+    upgradedDescription: 'Draw 3 cards.',
+    type: CardType.UTILITY,
+    rarity: CardRarity.COMMON,
+    energyCost: 1,
+    upgraded: false,
+    archetype: 'neutral',
+    effect: { type: 'utility', utilityId: 'draw', value: 2 },
+    upgradedEffect: { type: 'utility', utilityId: 'draw', value: 3 },
+  };
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       declarations: [LibraryCardTileComponent],
@@ -256,6 +270,30 @@ describe('LibraryCardTileComponent', () => {
       const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
       expect(btn.classList.contains('tile--modifier')).toBe(true);
       expect(btn.classList.contains('tile--frame-modifier')).toBe(true);
+    });
+  });
+
+  describe('utility frame class binding', () => {
+    it('applies tile--frame-utility to utility-type cards', () => {
+      component.definition = utilityDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--frame-utility')).toBe(true);
+    });
+
+    it('does NOT apply tile--frame-utility to non-utility cards', () => {
+      component.definition = towerDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--frame-utility')).toBe(false);
+    });
+
+    it('utility tile has tile--utility alongside tile--frame-utility', () => {
+      component.definition = utilityDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--utility')).toBe(true);
+      expect(btn.classList.contains('tile--frame-utility')).toBe(true);
     });
   });
 });

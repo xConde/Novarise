@@ -33,6 +33,7 @@
       [class.card--frame-tower]="card.definition.type === CardType.TOWER"
       [class.card--frame-spell]="card.definition.type === CardType.SPELL"
       [class.card--frame-modifier]="card.definition.type === CardType.MODIFIER"
+      [class.card--frame-utility]="card.definition.type === CardType.UTILITY"
       [disabled]="!card.canPlay || (pendingCardId !== null && card.instance.instanceId !== pendingCardId)"
       (click)="onCardClick(card)"
       (contextmenu)="onCardContextMenu($event, card)"
