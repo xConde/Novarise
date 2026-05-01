@@ -16,6 +16,8 @@
       <div *ngFor="let c of groupedCards"
            class="pile-inspector__card"
            [class.pile-inspector__card--upgraded]="c.upgraded">
+        <span class="pile-shape-badge pile-shape-badge--{{ c.type }}"
+              aria-hidden="true"></span>
         <span class="pile-inspector__card-name">{{ c.name }}</span>
         <span class="pile-inspector__card-count">×{{ c.count }}</span>
       </div>

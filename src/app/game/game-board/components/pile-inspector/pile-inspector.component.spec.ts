@@ -107,4 +107,46 @@ describe('PileInspectorComponent', () => {
       expect(component.close).not.toHaveBeenCalled();
     });
   });
+
+  describe('shape badges', () => {
+    it('renders a tower badge with pile-shape-badge--tower class', () => {
+      component.pile = [makeInstance(CardId.TOWER_BASIC)];
+      fixture.detectChanges();
+      const badge = fixture.nativeElement.querySelector('.pile-shape-badge--tower');
+      expect(badge).toBeTruthy();
+    });
+
+    it('renders a spell badge with pile-shape-badge--spell class', () => {
+      component.pile = [makeInstance(CardId.GOLD_RUSH)];
+      fixture.detectChanges();
+      const badge = fixture.nativeElement.querySelector('.pile-shape-badge--spell');
+      expect(badge).toBeTruthy();
+    });
+
+    it('renders a modifier badge with pile-shape-badge--modifier class', () => {
+      component.pile = [makeInstance(CardId.DAMAGE_BOOST)];
+      fixture.detectChanges();
+      const badge = fixture.nativeElement.querySelector('.pile-shape-badge--modifier');
+      expect(badge).toBeTruthy();
+    });
+
+    it('renders a utility badge with pile-shape-badge--utility class', () => {
+      component.pile = [makeInstance(CardId.DRAW_TWO)];
+      fixture.detectChanges();
+      const badge = fixture.nativeElement.querySelector('.pile-shape-badge--utility');
+      expect(badge).toBeTruthy();
+    });
+
+    it('sets aria-hidden on every shape badge', () => {
+      component.pile = [
+        makeInstance(CardId.TOWER_BASIC),
+        makeInstance(CardId.GOLD_RUSH),
+      ];
+      fixture.detectChanges();
+      const badges = fixture.nativeElement.querySelectorAll('.pile-shape-badge');
+      badges.forEach((badge: Element) => {
+        expect(badge.getAttribute('aria-hidden')).toBe('true');
+      });
+    });
+  });
 });

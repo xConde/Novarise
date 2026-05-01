@@ -129,6 +129,38 @@
   margin: 0;
 }
 
+// Per-type silhouette badge — clip-path shape communicates card type at a glance.
+// Intentionally decorative (aria-hidden on the element); no box-shadow (clip-path
+// strips it). 20px chosen: Tower battlement notches and Utility chevron V-points
+// drop below 2px resolution at 16px and become indistinguishable.
+.pile-shape-badge {
+  display: inline-block;
+  flex-shrink: 0;
+  width:  var(--card-shape-badge-size, 1.25rem);
+  height: var(--card-shape-badge-size, 1.25rem);
+  opacity: var(--card-shape-badge-opacity, 0.6);
+}
+
+.pile-shape-badge--tower {
+  clip-path: var(--card-frame-tower-clip);
+  background: var(--card-type-tower);
+}
+
+.pile-shape-badge--spell {
+  clip-path: var(--card-frame-spell-clip);
+  background: var(--card-type-spell);
+}
+
+.pile-shape-badge--modifier {
+  clip-path: var(--card-frame-modifier-clip);
+  background: var(--card-type-modifier);
+}
+
+.pile-shape-badge--utility {
+  clip-path: var(--card-frame-utility-clip);
+  background: var(--card-type-utility);
+}
+
 @keyframes pile-inspector-fade {
   from { opacity: 0; }
   to { opacity: 1; }

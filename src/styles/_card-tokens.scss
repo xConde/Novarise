@@ -406,4 +406,13 @@
   // Drop-shadow cap — enforced in all per-type filter declarations
   --card-frame-drop-shadow-blur-max: 8px;
 
+
+  // === Card shape badges ===
+  // Small silhouette badges used in pile-inspector rows to communicate card type
+  // at a glance. Uses the same clip-path tokens as the full card frames, scaled
+  // down to badge size. 20px chosen over 16px: at 16px the Tower battlement
+  // notches and Utility chevron V-points compress to <2px — not legible.
+  --card-shape-badge-size:    1.25rem;  // 20px
+  --card-shape-badge-opacity: 0.6;
+
 }

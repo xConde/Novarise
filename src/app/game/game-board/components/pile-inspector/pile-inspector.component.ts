@@ -7,6 +7,7 @@ interface GroupedCard {
   name: string;
   count: number;
   upgraded: boolean;
+  type: string;
 }
 
 /**
@@ -53,6 +54,7 @@ export class PileInspectorComponent implements OnInit {
           name: def.name + (inst.upgraded ? '+' : ''),
           count: 1,
           upgraded: inst.upgraded,
+          type: def.type,
         });
       }
     }
