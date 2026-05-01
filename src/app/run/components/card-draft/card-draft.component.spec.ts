@@ -90,6 +90,22 @@ describe('CardDraftComponent', () => {
     expect(component.getRarityClass(CardRarity.RARE)).toBe('card-draft__card--rarity-rare');
   });
 
+  it('getFrameClass returns frame modifier for tower type', () => {
+    expect(component.getFrameClass(CardType.TOWER)).toBe('card-draft__card--frame-tower');
+  });
+
+  it('getFrameClass returns frame modifier for spell type', () => {
+    expect(component.getFrameClass(CardType.SPELL)).toBe('card-draft__card--frame-spell');
+  });
+
+  it('getFrameClass returns frame modifier for modifier type', () => {
+    expect(component.getFrameClass(CardType.MODIFIER)).toBe('card-draft__card--frame-modifier');
+  });
+
+  it('getFrameClass returns frame modifier for utility type', () => {
+    expect(component.getFrameClass(CardType.UTILITY)).toBe('card-draft__card--frame-utility');
+  });
+
   it('selected card receives --selected class after picking', () => {
     component.pickCard(MOCK_CHOICES[2]);
     fixture.detectChanges();

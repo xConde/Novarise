@@ -7,7 +7,7 @@
     <button
       *ngFor="let item of resolvedCards; let i = index"
       class="card-draft__card"
-      [class]="'card-draft__card ' + getTypeClass(item.definition.type) + ' ' + getRarityClass(item.definition.rarity)"
+      [class]="'card-draft__card ' + getTypeClass(item.definition.type) + ' ' + getRarityClass(item.definition.rarity) + ' ' + getFrameClass(item.definition.type)"
       [class.card-draft__card--selected]="selectedCard === item.reward.cardId"
       (click)="pickCard(item.reward)"
       [attr.aria-label]="'Option ' + (i + 1) + '. ' + item.definition.name + ': ' + item.definition.description + '. Type: ' + item.definition.type + '. Cost: ' + item.definition.energyCost + ' energy. Press ' + (i + 1) + ' to pick.'"

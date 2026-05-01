@@ -40,4 +40,8 @@ export class CardDraftComponent {
   getRarityClass(rarity: CardRarity): string {
     return `card-draft__card--rarity-${rarity}`;
   }
+
+  getFrameClass(type: CardType): string {
+    return `card-draft__card--frame-${type}`;
+  }
 }

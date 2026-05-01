@@ -56,6 +56,12 @@
 // ── Individual card ───────────────────────────────────────────────────────────
 
 .card-draft__card {
+  // Rarity glow vars — initialized to no-op so framed selectors can compose
+  // drop-shadow without a conditional. Rarity selectors (.card-draft__card--rarity-*)
+  // set these to real values.
+  --card-glow-color: transparent;
+  --card-glow-blur: 0rem;
+
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -138,6 +144,29 @@
     .card-draft__type-badge { color: var(--action-success); }
   }
 
+  // ── Rarity glow vars ───────────────────────────────────────────────────
+  //
+  // Unframed cards: box-shadow reads --card-glow-color / --card-glow-blur.
+  // Framed cards (.card-draft__card--frame-*): box-shadow is suppressed;
+  // filter:drop-shadow reads these same vars so polygons glow at the outline.
+  //
+  // Draft rare glow uses 0.7rem blur — slightly stronger than card-hand's
+  // 0.6rem to account for the larger draft card face. Uncommon stays at 0.5rem.
+
+  &--rarity-uncommon {
+    --card-glow-color: var(--card-rarity-uncommon-glow-outer);
+    --card-glow-blur: 0.5rem;
+    border-color: var(--card-rarity-uncommon-border);
+    box-shadow: 0 0 var(--card-glow-blur) var(--card-glow-color);
+  }
+
+  &--rarity-rare {
+    --card-glow-color: var(--card-rarity-rare-glow-outer);
+    --card-glow-blur: 0.7rem;
+    border-color: var(--card-rarity-rare-border);
+    box-shadow: 0 0 var(--card-glow-blur) var(--card-glow-color);
+  }
+
   // ── Selected state ─────────────────────────────────────────────────────
 
   &--selected {
@@ -145,6 +174,91 @@
     background: var(--game-gold-a25) !important;
     box-shadow: var(--shadow-md) var(--game-gold-a25) !important;
   }
+}
+
+// ── Per-type frame silhouettes ────────────────────────────────────────────────
+//
+// Draft card aspect ratio: 13rem wide, actual rendered height ~18–20rem
+// (padding-top var(--spacing-lg) + cost/name/desc/rarity content). That lands
+// at roughly 13:19 ≈ 1:1.46 — closer to the library tile's 220:320 (1:1.45)
+// than the hand card's ~100:136 (1:1.36). Using the --tile polygon variants.
+//
+// clip-path invalidates box-shadow, so rarity glows redirect to
+// filter:drop-shadow using the same --card-glow-color / --card-glow-blur vars.
+// Hover brightness composes on a single filter: line (last-wins rule).
+// The card-draft-in entry animation uses opacity + translateY — both are
+// compositor-safe under clip-path with no flicker risk.
+
+.card-draft__card--frame-tower {
+  clip-path: var(--card-frame-tower-clip--tile);
+  transition:
+    transform var(--transition-fast) ease,
+    filter var(--transition-fast) ease,
+    opacity var(--transition-fast) ease,
+    clip-path var(--transition-fast) ease;
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color));
+}
+
+.card-draft__card--frame-tower:hover:not(:disabled) {
+  box-shadow: none !important;
+  filter:
+    drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
+    brightness(1.06);
+}
+
+.card-draft__card--frame-spell {
+  clip-path: var(--card-frame-spell-clip--tile);
+  transition:
+    transform var(--transition-fast) ease,
+    filter var(--transition-fast) ease,
+    opacity var(--transition-fast) ease,
+    clip-path var(--transition-fast) ease;
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color));
+}
+
+.card-draft__card--frame-spell:hover:not(:disabled) {
+  box-shadow: none !important;
+  filter:
+    drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
+    brightness(1.06);
+}
+
+.card-draft__card--frame-modifier {
+  clip-path: var(--card-frame-modifier-clip--tile);
+  transition:
+    transform var(--transition-fast) ease,
+    filter var(--transition-fast) ease,
+    opacity var(--transition-fast) ease,
+    clip-path var(--transition-fast) ease;
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color));
+}
+
+.card-draft__card--frame-modifier:hover:not(:disabled) {
+  box-shadow: none !important;
+  filter:
+    drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
+    brightness(1.06);
+}
+
+.card-draft__card--frame-utility {
+  clip-path: var(--card-frame-utility-clip--tile);
+  transition:
+    transform var(--transition-fast) ease,
+    filter var(--transition-fast) ease,
+    opacity var(--transition-fast) ease,
+    clip-path var(--transition-fast) ease;
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color));
+}
+
+.card-draft__card--frame-utility:hover:not(:disabled) {
+  box-shadow: none !important;
+  filter:
+    drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
+    brightness(1.06);
 }
 
 // ── Card inner elements ───────────────────────────────────────────────────────
