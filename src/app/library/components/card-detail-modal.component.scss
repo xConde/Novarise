@@ -21,12 +21,12 @@
 .backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(4px);
+  background: var(--card-modal-backdrop-bg);
+  backdrop-filter: blur(var(--card-modal-backdrop-blur));
   display: grid;
   place-items: center;
   padding: var(--spacing-md);
-  animation: modal-fade-in 160ms ease-out;
+  animation: modal-fade-in var(--card-modal-enter-duration) ease-out;
 
   @media (prefers-reduced-motion: reduce) {
     animation: none;
@@ -41,15 +41,15 @@
 /* --- Modal shell --- */
 
 .modal {
-  width: min(920px, 100%);
-  max-height: 90vh;
+  width: var(--card-library-modal-width);
+  max-height: var(--card-library-modal-max-height);
   overflow-y: auto;
   background: linear-gradient(
     160deg,
     rgba(22, 16, 34, 0.98) 0%,
     rgba(12, 8, 20, 0.99) 100%
   );
-  border: 1px solid var(--theme-purple-a35);
+  border: var(--border-width-thin) solid var(--theme-purple-a35);
   border-radius: var(--border-radius-lg);
   color: var(--text-color);
   font-family: "Orbitron", sans-serif;
@@ -57,7 +57,7 @@
   box-shadow:
     0 20px 60px -10px rgba(0, 0, 0, 0.8),
     0 0 0 1px var(--theme-purple-a20);
-  animation: modal-slide-in 180ms ease-out;
+  animation: modal-slide-in var(--card-modal-enter-duration) ease-out;
 
   /* Dark scrollbar — matches app-profile / Codex treatment. Default browser
      scrollbar looks off on the dark modal gradient. */
@@ -72,6 +72,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    :root { --card-modal-enter-duration: var(--card-modal-enter-duration-reduced); }
     animation: none;
   }
 }
@@ -111,13 +112,13 @@
   flex-shrink: 0;
   width: 2.2rem;
   height: 2.2rem;
-  border: 1px solid var(--border-color-subtle);
+  border: var(--border-width-thin) solid var(--border-color-subtle);
   border-radius: var(--border-radius-md);
   background: transparent;
   color: var(--theme-purple-light);
   font-size: 1.1rem;
   cursor: pointer;
-  transition: background 160ms, border-color 160ms;
+  transition: background var(--card-modal-enter-duration), border-color var(--card-modal-enter-duration);
 
   &:hover, &:focus-visible {
     background: var(--theme-purple-a15);
@@ -139,7 +140,7 @@
   gap: 0.25rem;
   padding: 0.25rem 0.55rem;
   background: var(--game-gold-a15);
-  border: 1px solid var(--game-gold-a40);
+  border: var(--border-width-thin) solid var(--game-gold-a40);
   border-radius: var(--border-radius-sm);
   color: var(--game-gold);
   font-weight: 700;
@@ -163,7 +164,7 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   font-weight: 700;
-  border: 1px solid var(--border-color-subtle);
+  border: var(--border-width-thin) solid var(--border-color-subtle);
   background: rgba(255, 255, 255, 0.04);
 }
 
@@ -177,10 +178,10 @@
 .modal__type--modifier { color: var(--theme-purple-light); border-color: var(--theme-purple-a35); }
 .modal__type--utility  { color: #9af2b8; border-color: rgba(80, 255, 136, 0.3); }
 
-.modal__archetype--cartographer { color: #a8d8ff; border-color: rgba(120, 180, 255, 0.35); }
-.modal__archetype--highground   { color: #ffd8a8; border-color: rgba(255, 180, 100, 0.35); }
-.modal__archetype--conduit      { color: #a8ffe0; border-color: rgba(100, 255, 200, 0.35); }
-.modal__archetype--siegeworks   { color: #ffa8a8; border-color: rgba(255, 120, 120, 0.35); }
+.modal__archetype--cartographer { color: var(--card-archetype-cartographer); border-color: var(--card-archetype-cartographer-border); }
+.modal__archetype--highground   { color: var(--card-archetype-highground);   border-color: var(--card-archetype-highground-border); }
+.modal__archetype--conduit      { color: var(--card-archetype-conduit);      border-color: var(--card-archetype-conduit-border); }
+.modal__archetype--siegeworks   { color: var(--card-archetype-siegeworks);   border-color: var(--card-archetype-siegeworks-border); }
 
 .modal__gold {
   background: var(--game-gold-a08);
@@ -197,7 +198,7 @@
 .modal__keyword {
   padding: 0.15rem 0.5rem;
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border-color-subtle);
+  border: var(--border-width-thin) solid var(--border-color-subtle);
   border-radius: var(--border-radius-sm);
   font-size: var(--font-size-tiny);
   letter-spacing: 0.1em;
@@ -226,7 +227,7 @@
   padding: var(--spacing-md);
   border-radius: var(--border-radius-md);
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-color-subtle);
+  border: var(--border-width-thin) solid var(--border-color-subtle);
 }
 
 .panel--upgraded {
@@ -271,7 +272,7 @@
 
 .modal__balance {
   padding: var(--spacing-md) 0;
-  border-top: 1px solid var(--border-color-subtle);
+  border-top: var(--border-width-thin) solid var(--border-color-subtle);
 }
 
 .modal__section-title {
@@ -293,7 +294,7 @@
   th, td {
     padding: 0.4rem 0.6rem;
     text-align: left;
-    border-bottom: 1px solid var(--border-color-subtle);
+    border-bottom: var(--border-width-thin) solid var(--border-color-subtle);
   }
 
   thead th {
@@ -321,18 +322,18 @@
 .modal__raw {
   margin-top: var(--spacing-md);
   padding-top: var(--spacing-md);
-  border-top: 1px solid var(--border-color-subtle);
+  border-top: var(--border-width-thin) solid var(--border-color-subtle);
 
   summary {
     cursor: pointer;
     padding: 0.4rem 0.6rem;
     background: rgba(255, 255, 255, 0.04);
-    border: 1px solid var(--border-color-subtle);
+    border: var(--border-width-thin) solid var(--border-color-subtle);
     border-radius: var(--border-radius-sm);
     font-size: var(--font-size-xs);
     letter-spacing: 0.06em;
     color: var(--theme-purple-light);
-    transition: background 160ms;
+    transition: background var(--card-modal-enter-duration);
 
     &:hover, &:focus-visible {
       background: var(--theme-purple-a10);

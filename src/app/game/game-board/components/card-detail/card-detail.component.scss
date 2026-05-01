@@ -5,25 +5,25 @@
 .card-detail-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(4px);
+  background: var(--card-modal-backdrop-bg);
+  backdrop-filter: blur(var(--card-modal-backdrop-blur));
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: calc(var(--z-index-modal) + 10);
   cursor: pointer;
-  animation: card-detail-fade 0.15s ease-out;
+  animation: card-detail-fade var(--card-modal-enter-duration) ease-out;
 }
 
 .card-detail {
   cursor: default;
-  width: min(26rem, 92vw);
-  max-height: 80vh;
+  width: var(--card-detail-width);
+  max-height: var(--card-detail-max-height);
   display: flex;
   flex-direction: column;
   background: var(--panel-blue-bg, rgba(10, 20, 40, 0.95));
   border: var(--border-width-thin) solid rgba(255, 255, 255, 0.18);
-  border-radius: var(--border-radius-md);
+  border-radius: var(--border-radius-md); // card-detail uses global border-radius-md, not card-border-radius
   font-family: "Orbitron", sans-serif;
   overflow: hidden; // lets the per-type header tint own the top rounded corners
 }
@@ -100,7 +100,7 @@
   font-size: 1.25rem;
   line-height: 1;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast) ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -265,6 +265,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :root { --card-modal-enter-duration: var(--card-modal-enter-duration-reduced); }
   .card-detail-backdrop { animation: none; }
 }
 

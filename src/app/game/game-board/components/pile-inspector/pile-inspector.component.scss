@@ -1,20 +1,20 @@
 .pile-inspector-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(4px);
+  background: var(--card-modal-backdrop-bg);
+  backdrop-filter: blur(var(--card-modal-backdrop-blur));
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: calc(var(--z-index-modal) + 10);
   cursor: pointer;
-  animation: pile-inspector-fade 0.15s ease-out;
+  animation: pile-inspector-fade var(--card-modal-enter-duration) ease-out;
 }
 
 .pile-inspector {
   cursor: default;
-  width: min(32rem, 92vw);
-  max-height: 80vh;
+  width: var(--card-pile-inspector-width);
+  max-height: var(--card-pile-inspector-max-height);
   display: flex;
   flex-direction: column;
   background: var(--panel-blue-bg, rgba(10, 20, 40, 0.95));
@@ -58,7 +58,7 @@
   font-size: 1.25rem;
   line-height: 1;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast) ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -135,6 +135,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :root { --card-modal-enter-duration: var(--card-modal-enter-duration-reduced); }
   .pile-inspector-backdrop {
     animation: none;
   }

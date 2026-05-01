@@ -22,26 +22,26 @@
   flex-direction: column;
   align-items: flex-start;
   width: 100%;
-  aspect-ratio: 22 / 32;       /* 220:320 tiles per kickoff spec */
-  min-height: 280px;
+  aspect-ratio: var(--card-tile-aspect-ratio);
+  min-height: var(--card-tile-min-height);
   padding: var(--spacing-md) var(--spacing-sm) var(--spacing-sm);
   background: linear-gradient(
     150deg,
     rgba(18, 14, 28, 0.92) 0%,
     rgba(10, 7, 18, 0.95) 100%
   );
-  border: 1px solid var(--border-color-subtle);
-  border-top: 2px solid var(--tile-accent);
+  border: var(--border-width-thin) solid var(--border-color-subtle);
+  border-top: var(--border-width-medium) solid var(--tile-accent);
   border-radius: var(--border-radius-md);
   color: var(--text-color);
   font-family: "Orbitron", sans-serif;
   text-align: left;
   cursor: pointer;
   transition:
-    transform 180ms ease-out,
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    filter 180ms ease;
+    transform var(--card-tile-transition-duration) ease-out,
+    border-color var(--card-tile-transition-duration) ease,
+    box-shadow var(--card-tile-transition-duration) ease,
+    filter var(--card-tile-transition-duration) ease;
   box-shadow: 0 0 0 1px transparent, 0 0 0 transparent;
 
   /* Art zone — faint radial bloom tinted by --tile-accent. */
@@ -89,7 +89,7 @@
 
   &:hover,
   &:focus-visible {
-    transform: translateY(-2px);
+    transform: translateY(var(--card-tile-hover-lift));
     border-color: var(--tile-accent);
     box-shadow:
       0 0 0 1px var(--tile-accent),
@@ -105,27 +105,27 @@
 /* --- Type accents — override --tile-accent --- */
 
 .tile--tower {
-  --tile-accent: var(--tile-tower-accent, var(--tower-color-basic));
+  --tile-accent: var(--tile-tower-accent, var(--card-tile-accent-tower));
 }
 .tile--spell {
-  --tile-accent: var(--theme-cyan);
+  --tile-accent: var(--card-tile-accent-spell);
 }
 .tile--modifier {
-  --tile-accent: var(--theme-purple-light);
+  --tile-accent: var(--card-tile-accent-modifier);
 }
 .tile--utility {
-  --tile-accent: var(--action-success);
+  --tile-accent: var(--card-tile-accent-utility);
 }
 
 /* --- Rarity glow --- */
 
 .tile--uncommon {
-  --tile-glow: rgba(100, 200, 255, 0.3);
+  --tile-glow: var(--card-tile-glow-uncommon);
 }
 .tile--rare {
-  --tile-glow: rgba(255, 215, 0, 0.4);
+  --tile-glow: var(--card-tile-glow-rare);
   border-top-width: 3px;
-  animation: tile-rare-shimmer 3s ease-in-out infinite;
+  animation: tile-rare-shimmer var(--card-tile-rare-shimmer-duration) ease-in-out infinite;
 }
 
 @keyframes tile-rare-shimmer {
@@ -136,7 +136,7 @@
 /* --- Upgraded + desaturated modes --- */
 
 .tile--upgraded {
-  --tile-glow: rgba(180, 120, 255, 0.45);
+  --tile-glow: var(--card-tile-glow-upgraded);
 
   &::before {
     opacity: 1;
@@ -252,7 +252,7 @@
   gap: 0.15rem;
   padding: 0.2rem 0.45rem;
   background: var(--game-gold-a15);
-  border: 1px solid var(--game-gold-a40);
+  border: var(--border-width-thin) solid var(--game-gold-a40);
   border-radius: var(--border-radius-sm);
   color: var(--game-gold);
   font-size: var(--font-size-base);
@@ -335,14 +335,14 @@
   text-transform: uppercase;
   border-radius: var(--border-radius-sm);
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border-color-subtle);
+  border: var(--border-width-thin) solid var(--border-color-subtle);
   color: var(--theme-purple-mid);
 }
 
-.tile__archetype--cartographer { color: #a8d8ff; border-color: rgba(120, 180, 255, 0.35); }
-.tile__archetype--highground   { color: #ffd8a8; border-color: rgba(255, 180, 100, 0.35); }
-.tile__archetype--conduit      { color: #a8ffe0; border-color: rgba(100, 255, 200, 0.35); }
-.tile__archetype--siegeworks   { color: #ffa8a8; border-color: rgba(255, 120, 120, 0.35); }
+.tile__archetype--cartographer { color: var(--card-archetype-cartographer); border-color: var(--card-archetype-cartographer-border); }
+.tile__archetype--highground   { color: var(--card-archetype-highground);   border-color: var(--card-archetype-highground-border); }
+.tile__archetype--conduit      { color: var(--card-archetype-conduit);      border-color: var(--card-archetype-conduit-border); }
+.tile__archetype--siegeworks   { color: var(--card-archetype-siegeworks);   border-color: var(--card-archetype-siegeworks-border); }
 
 .tile__description {
   margin: 0;
@@ -371,7 +371,7 @@
   gap: var(--spacing-xs);
   margin-top: auto;
   padding-top: var(--spacing-xs);
-  border-top: 1px solid var(--border-color-subtle);
+  border-top: var(--border-width-thin) solid var(--border-color-subtle);
 }
 
 .tile__rarity {
@@ -390,7 +390,7 @@
   margin-left: auto;
   padding: 0.1rem 0.35rem;
   background: var(--game-gold-a08);
-  border: 1px solid var(--game-gold-a25);
+  border: var(--border-width-thin) solid var(--game-gold-a25);
   border-radius: var(--border-radius-sm);
   color: var(--game-gold);
   font-size: var(--font-size-3xs);
@@ -406,7 +406,7 @@
 .tile__keyword {
   padding: 0.1rem 0.35rem;
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border-color-subtle);
+  border: var(--border-width-thin) solid var(--border-color-subtle);
   border-radius: var(--border-radius-sm);
   font-size: var(--font-size-tiny);
   letter-spacing: 0.08em;
@@ -427,6 +427,7 @@ body.reduce-motion .tile:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :root { --card-tile-rare-shimmer-duration: var(--card-tile-rare-shimmer-duration-reduced); }
   .tile {
     transition: none;
     animation: none;

@@ -489,7 +489,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
 
   [CardId.TOWER_SPLASH_CLUSTER]: {
     id: CardId.TOWER_SPLASH_CLUSTER,
-    name: 'Cluster Splash',
+    name: 'Splash Cluster',
     description: 'Deploy a Splash tower with 40% smaller radius.',
     upgradedDescription: 'Deploy a Splash tower with 15% smaller radius.',
     type: CardType.TOWER,
@@ -502,7 +502,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
 
   [CardId.TOWER_SLOW_AURA]: {
     id: CardId.TOWER_SLOW_AURA,
-    name: 'Aura Slow',
+    name: 'Slow Aura',
     description: 'Deploy a Slow tower with 50% larger aura range.',
     upgradedDescription: 'Deploy a Slow tower with 80% larger aura range.',
     type: CardType.TOWER,
@@ -515,7 +515,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
 
   [CardId.TOWER_CHAIN_TESLA]: {
     id: CardId.TOWER_CHAIN_TESLA,
-    name: 'Tesla Chain',
+    name: 'Chain Tesla',
     description: 'Deploy a Chain tower with +1 starting chain bounce.',
     upgradedDescription: 'Deploy a Chain tower with +2 starting chain bounces.',
     type: CardType.TOWER,
@@ -528,7 +528,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
 
   [CardId.TOWER_MORTAR_BARRAGE]: {
     id: CardId.TOWER_MORTAR_BARRAGE,
-    name: 'Barrage Mortar',
+    name: 'Mortar Barrage',
     description: 'Deploy a Mortar tower with 30% smaller radius and 20% less DoT damage.',
     upgradedDescription: 'Deploy a Mortar tower with 15% smaller radius and 10% less DoT damage.',
     type: CardType.TOWER,
@@ -795,7 +795,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
 
   [CardId.ENEMY_SLOW]: {
     id: CardId.ENEMY_SLOW,
-    name: 'Enemy Slow',
+    name: 'Heavy Fog',
     description: 'All enemies 15% slower for 3 waves.',
     upgradedDescription: 'All enemies 22.5% slower for 3 waves.',
     type: CardType.MODIFIER,
@@ -818,7 +818,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
 
   [CardId.GOLD_INTEREST]: {
     id: CardId.GOLD_INTEREST,
-    name: 'Gold Interest',
+    name: 'Bounty Orders',
     description: '+50% gold from kills for 2 waves.',
     upgradedDescription: '+75% gold from kills for 2 waves.',
     type: CardType.MODIFIER,
@@ -912,7 +912,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
 
   [CardId.DRAW_TWO]: {
     id: CardId.DRAW_TWO,
-    name: 'Draw Two',
+    name: 'Quick Draw',
     description: 'Draw 2 cards.',
     upgradedDescription: 'Draw 3 cards.',
     type: CardType.UTILITY,
@@ -1005,7 +1005,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
    */
   [CardId.BATTLE_SURGE]: {
     id: CardId.BATTLE_SURGE,
-    name: 'Battle Surge',
+    name: 'Emergency Orders',
     description: 'Draw 3 cards. Exhaust.',
     upgradedDescription: 'Draw 4 cards. Exhaust.',
     type: CardType.UTILITY,
@@ -1023,7 +1023,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
    */
   [CardId.IRON_WILL]: {
     id: CardId.IRON_WILL,
-    name: 'Iron Will',
+    name: 'Far Sight',
     description: 'All towers +40% range for 3 waves. Exhaust.',
     upgradedDescription: 'All towers +60% range for 3 waves. Exhaust.',
     type: CardType.MODIFIER,
@@ -1183,7 +1183,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
    */
   [CardId.ADVANCE_GUARD]: {
     id: CardId.ADVANCE_GUARD,
-    name: 'Advance Guard',
+    name: 'Forward Pay',
     description: 'Gain 30 gold. Innate.',
     upgradedDescription: 'Gain 50 gold. Innate.',
     type: CardType.SPELL,
@@ -1239,7 +1239,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
    */
   [CardId.WARP_STRIKE]: {
     id: CardId.WARP_STRIKE,
-    name: 'Warp Strike',
+    name: 'Phase Bolt',
     description: 'Deal 80 damage to the strongest enemy. Ethereal.',
     upgradedDescription: 'Deal 120 damage to the strongest enemy. Ethereal.',
     type: CardType.SPELL,
