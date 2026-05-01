@@ -2470,7 +2470,7 @@ Result: when SNIPER has a target in range, `tickAim`'s lerpYaw result is immedia
 - "D-1: geometry IS rebuilt when the target moves beyond the rebuild threshold" — moves enemy by 3 world units between calls; asserts geometry reference changed.
 - "D-1: cached endpoints are cleared by cleanup() so first update after restart rebuilds" — full cleanup → fresh service instance → update; asserts new geometry allocated.
 
-**Fixed in commit:** TBD (this commit).
+**Fixed in commit:** `3ee313b`.
 
 ---
 
@@ -2485,7 +2485,7 @@ Result: when SNIPER has a target in range, `tickAim`'s lerpYaw result is immedia
 **New spec** (`aim-line.service.spec.ts`):
 - "D-2: ngOnDestroy() removes the mesh from the scene (route-change safety)" — calls `update()` to add mesh, then `ngOnDestroy()`; asserts mesh removed from scene children.
 
-**Fixed in commit:** TBD (this commit).
+**Fixed in commit:** `3ee313b`.
 
 ---
 
