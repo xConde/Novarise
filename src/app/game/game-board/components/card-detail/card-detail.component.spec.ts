@@ -283,7 +283,10 @@ describe('CardDetailComponent', () => {
     });
 
     it('does NOT render .card-detail__flavor when flavorText is undefined', () => {
-      component.card = makeHandCard(CardId.GOLD_RUSH);
+      const def = getCardDefinition(CardId.GOLD_RUSH);
+      component.card = makeHandCard(CardId.GOLD_RUSH, {
+        definition: { ...def, flavorText: undefined },
+      });
       fixture.detectChanges();
 
       const flavor = (fixture.nativeElement as HTMLElement)

@@ -1334,17 +1334,18 @@ describe('CARD_DEFINITIONS', () => {
     });
   });
 
-  // ── flavorText length guard ──────────────────────────────────────────────
+  // ── flavorText — Phase G writing pass ───────────────────────────────────
   describe('flavorText', () => {
-    it('every flavorText, when present, is 80 characters or fewer', () => {
-      for (const def of Object.values(CARD_DEFINITIONS)) {
-        if (def.flavorText !== undefined) {
-          expect(def.flavorText.length).toBeLessThanOrEqual(
-            80,
-            `${def.id} flavorText exceeds 80 chars (${def.flavorText.length}): "${def.flavorText}"`,
-          );
-        }
-      }
+    it('is present on every card', () => {
+      Object.entries(CARD_DEFINITIONS).forEach(([id, def]) => {
+        expect(def.flavorText).withContext(id).toBeTruthy();
+      });
+    });
+
+    it('is at most 80 chars', () => {
+      Object.entries(CARD_DEFINITIONS).forEach(([id, def]) => {
+        expect(def.flavorText!.length).withContext(id).toBeLessThanOrEqual(80);
+      });
     });
 
     it('no flavorText is empty string (use undefined to omit, not empty)', () => {
@@ -1356,6 +1357,37 @@ describe('CARD_DEFINITIONS', () => {
           );
         }
       }
+    });
+
+    // Smoke: spot-check specific lines render exactly as written
+    it('TOWER_BASIC flavor matches expected text', () => {
+      expect(CARD_DEFINITIONS[CardId.TOWER_BASIC].flavorText)
+        .toBe("Cheap. Reliable. Fires at whatever's closest.");
+    });
+
+    it('PHANTOM_GOLD flavor matches expected text', () => {
+      expect(CARD_DEFINITIONS[CardId.PHANTOM_GOLD].flavorText)
+        .toBe('Spend it before it forgets to exist.');
+    });
+
+    it('CARTOGRAPHER_SEAL flavor matches expected text', () => {
+      expect(CARD_DEFINITIONS[CardId.CARTOGRAPHER_SEAL].flavorText)
+        .toBe('Every mark on this map stays.');
+    });
+
+    it('HIVE_MIND flavor matches expected text', () => {
+      expect(CARD_DEFINITIONS[CardId.HIVE_MIND].flavorText)
+        .toBe('The strongest node defines what every node becomes.');
+    });
+
+    it('KING_OF_THE_HILL flavor matches expected text', () => {
+      expect(CARD_DEFINITIONS[CardId.KING_OF_THE_HILL].flavorText)
+        .toBe('The peak answers to one tower. Make it worth it.');
+    });
+
+    it('WAR_FUND flavor matches expected text', () => {
+      expect(CARD_DEFINITIONS[CardId.WAR_FUND].flavorText)
+        .toBe('Held coin gathers no rust.');
     });
   });
 });

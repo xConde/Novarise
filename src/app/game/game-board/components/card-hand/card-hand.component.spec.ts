@@ -695,7 +695,7 @@ describe('CardHandComponent', () => {
         const def = getCardDefinition(CardId.TOWER_BASIC);
         return {
           instance: { cardId: CardId.TOWER_BASIC, instanceId: 'no-flavor-inst', upgraded: false },
-          definition: { ...def },
+          definition: { ...def, flavorText: undefined },
           canPlay: true,
           effectiveEnergyCost: def.energyCost,
           goldCost: null,
