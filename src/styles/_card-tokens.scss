@@ -1,0 +1,206 @@
+// === Card surface design tokens ===
+// All custom properties that govern card rendering across card-hand, card-detail,
+// pile-inspector, card-draft, card-library-tile, and card-detail-modal.
+// Consuming SCSS files reference these vars; raw values are defined once here.
+//
+// Reduce-motion hooks:
+//   --card-pending-pulse-duration, --card-play-animation-duration,
+//   --card-rare-shimmer-duration, --card-tile-rare-shimmer-duration, and
+//   --card-modal-enter-duration all have a *-reduced companion set to 0ms.
+//   Implement the reduce-motion overrides in the consuming files (sprint 4+).
+
+:root {
+
+  // === Card sizing (hand) ===
+
+  --card-width-desktop:      6.25rem;
+  --card-width-tablet:       5.25rem;
+  --card-width-mobile:       3.75rem;
+
+  --card-min-height-desktop: 8.5rem;
+  --card-min-height-tablet:  7rem;
+  --card-min-height-mobile:  5.5rem;
+
+  // padding-top reserves space for the cost pill + corner icon
+  --card-padding-top-desktop: 2.1rem;
+  --card-padding-top-tablet:  1.9rem;
+  --card-padding-top-mobile:  1.5rem;
+
+  // padding-bottom leaves the instance dot its corner
+  --card-padding-bottom-desktop: 0.9rem;
+  --card-padding-bottom-tablet:  0.8rem;
+  --card-padding-bottom-mobile:  0.5rem;
+
+  --card-padding-x-desktop: var(--spacing-xs);  // 0.3125rem
+  --card-padding-x-mobile:  0.25rem;
+
+  --card-border-radius: var(--border-radius-sm);  // 0.25rem
+
+  // Fan overlap margins — applied as negative left margin on non-first cards
+  --card-fan-margin-default: 0;       // set dynamically via [style] binding
+  --card-fan-margin-mobile:  -0.3rem;
+  --card-fan-margin-mobile-fan: -0.6rem;
+
+  // Minimum touch target (WCAG 44px)
+  --card-min-touch-width: 2.75rem;
+
+
+  // === Card background ===
+
+  --card-bg: rgba(10, 5, 20, 0.88);
+
+
+  // === Card type colors ===
+  // Aliases onto existing palette tokens so there is one definition to change.
+
+  --card-type-tower:    var(--tower-color-basic);  // #ff6600
+  --card-type-spell:    var(--theme-cyan);          // #00ffff
+  --card-type-modifier: var(--theme-purple);        // #6a4a8a
+  --card-type-utility:  var(--action-success);      // #50ff88
+
+
+  // === Card art zone ===
+  // Top 55% of the card; rendered as ::before pseudo-element.
+
+  --card-art-zone-height: 55%;
+
+  // Opacity values used in the per-type radial gradient stops (inner / outer)
+  --card-art-tower-opacity-inner:    0.28;
+  --card-art-tower-opacity-outer:    0.05;
+  --card-art-spell-opacity-inner:    0.22;
+  --card-art-spell-opacity-outer:    0.04;
+  --card-art-modifier-opacity-inner: 0.28;
+  --card-art-modifier-opacity-outer: 0.05;
+  --card-art-utility-opacity-inner:  0.22;
+  --card-art-utility-opacity-outer:  0.04;
+
+  // CRT scan-line texture (::after) — 1px horizontal lines
+  --card-scanline-color:   rgba(255, 255, 255, 0.025);
+  --card-scanline-opacity: 0.6;
+
+
+  // === Card rarity treatment ===
+
+  --card-rarity-common-border:   rgba(255, 255, 255, 0.12);
+
+  --card-rarity-uncommon-border: rgba(100, 200, 255, 0.5);
+  --card-rarity-uncommon-glow-outer: rgba(100, 200, 255, 0.25);
+  --card-rarity-uncommon-glow-inner: rgba(100, 200, 255, 0.08);
+
+  --card-rarity-rare-border:     rgba(255, 215, 0, 0.6);
+  --card-rarity-rare-glow-outer: rgba(255, 215, 0, 0.35);
+  --card-rarity-rare-glow-inner: rgba(255, 215, 0, 0.12);
+
+  --card-rarity-rare-shimmer-duration: 3s;
+  // Reduce-motion hook — override to 0ms when prefers-reduced-motion is active
+  --card-rarity-rare-shimmer-duration-reduced: 0ms;
+
+
+  // === Card state ===
+
+  --card-hover-lift:        -0.5rem;
+  --card-hover-brightness:   1.08;
+
+  --card-unplayable-opacity:   0.55;
+  --card-unplayable-grayscale: 40%;
+  --card-unplayable-border:    rgba(255, 60, 60, 0.55);
+
+  --card-pending-brightness:         1.3;
+  --card-pending-pulse-duration:     1.5s;
+  --card-pending-pulse-duration-reduced: 0ms;
+
+
+  // === Card upgraded state ===
+
+  --card-upgraded-border-width: 0.25rem;
+  // Upgraded border color inherits from the card's type accent (--card-type-color)
+  // No separate color token needed — the type accent IS the upgraded border color.
+  --card-upgraded-glow-inner: rgba(255, 215, 0, 0.15);
+  --card-upgraded-glow-outer: rgba(255, 215, 0, 0.2);
+
+
+  // === Card transitions / animations ===
+
+  // Card-face hover/state transitions delegate to --transition-fast (0.2s)
+  // from _variables.scss — no separate token needed.
+
+  --card-play-animation-duration:         220ms;
+  --card-play-animation-duration-reduced: 0ms;
+
+  --card-tooltip-enter-duration:         120ms;
+  --card-tooltip-enter-duration-reduced: 0ms;
+
+  --card-modal-enter-duration:         150ms;
+  --card-modal-enter-duration-reduced: 0ms;
+
+
+  // === Card accent border widths ===
+  // Top + left edge accents; separate from global --border-width-thin.
+
+  --card-accent-border-width: 0.1875rem;  // 3px — top + left type accent
+
+
+  // === Library card tile sizing ===
+  // LibraryCardTileComponent uses a distinct larger format.
+
+  --card-tile-aspect-ratio: 22 / 32;  // 220:320 per spec
+  --card-tile-min-height:   280px;
+
+  // Tile type accent (CSS custom property bound per tile in the component)
+  // --tile-accent is component-scoped; tokens below define the per-type values
+  // that are assigned to it:
+  --card-tile-accent-tower:    var(--tower-color-basic);
+  --card-tile-accent-spell:    var(--theme-cyan);
+  --card-tile-accent-modifier: var(--theme-purple-light);
+  --card-tile-accent-utility:  var(--action-success);
+
+  --card-tile-hover-lift: -2px;  // translateY on hover (px intentional — same scale as border-top)
+
+  --card-tile-rare-shimmer-duration:         3s;
+  --card-tile-rare-shimmer-duration-reduced: 0ms;
+
+  --card-tile-transition-duration: 180ms;
+
+  // Rarity glow (--tile-glow component-scoped var; tokens define the values)
+  --card-tile-glow-default:  rgba(255, 255, 255, 0.08);
+  --card-tile-glow-uncommon: rgba(100, 200, 255, 0.3);
+  --card-tile-glow-rare:     rgba(255, 215, 0, 0.4);
+  --card-tile-glow-upgraded: rgba(180, 120, 255, 0.45);
+
+
+  // === Modal / inspector sizing ===
+  // Shared by card-detail, pile-inspector, and card-detail-modal.
+
+  --card-modal-backdrop-bg: rgba(0, 0, 0, 0.72);
+  --card-modal-backdrop-blur: 4px;
+
+  // card-detail modal
+  --card-detail-width: min(26rem, 92vw);
+  --card-detail-max-height: 80vh;
+
+  // pile-inspector modal
+  --card-pile-inspector-width: min(32rem, 92vw);
+  --card-pile-inspector-max-height: 80vh;
+
+  // card-detail-modal (/library)
+  --card-library-modal-width: min(920px, 100%);
+  --card-library-modal-max-height: 90vh;
+
+
+  // === Archetype badge colors ===
+  // Used in tile__archetype and modal__archetype modifiers.
+  // Shared across library-card-tile and card-detail-modal.
+
+  --card-archetype-cartographer: #a8d8ff;
+  --card-archetype-cartographer-border: rgba(120, 180, 255, 0.35);
+
+  --card-archetype-highground: #ffd8a8;
+  --card-archetype-highground-border: rgba(255, 180, 100, 0.35);
+
+  --card-archetype-conduit: #a8ffe0;
+  --card-archetype-conduit-border: rgba(100, 255, 200, 0.35);
+
+  --card-archetype-siegeworks: #ffa8a8;
+  --card-archetype-siegeworks-border: rgba(255, 120, 120, 0.35);
+
+}
