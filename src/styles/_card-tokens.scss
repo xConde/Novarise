@@ -531,4 +531,25 @@
   // on the ::before layer gives a net ~4–7% opacity relative to card bg.
   --card-backdrop-opacity: 0.12;
 
+
+  // === Keyword icon tints ===
+  // Applied via color: in .card__keyword--{name} rules.
+  // Icons use currentColor so each badge inherits the per-keyword hue.
+  // Chosen to contrast against the dark card bg (rgba 10,5,20) and be
+  // distinguishable at 14px icon size.
+  //
+  // terraform — cyan (matches theme-cyan, echoes the Cartographer archetype trim blue-green)
+  // link      — purple-light (matches Conduit archetype trim violet; echoes kw-link node circles)
+  // innate    — lime green (matches action-success; "always available" feel)
+  // retain    — warm amber (distinct from cyan/green/purple; "held back" warmth)
+  // ethereal  — pale violet (slightly lighter than --theme-purple-light; ghostly)
+  // exhaust   — orange-red (danger/consumption signal, warm complement to the red-pixel exhaust card icon)
+
+  --keyword-color-terraform: var(--theme-cyan);            // #00ffff
+  --keyword-color-link:      var(--theme-purple-light);    // ~#b482f0
+  --keyword-color-innate:    var(--action-success);        // #50ff88
+  --keyword-color-retain:    #ffaa66;                      // warm amber
+  --keyword-color-ethereal:  #cc99ff;                      // pale violet
+  --keyword-color-exhaust:   #ff8866;                      // orange-red
+
 }

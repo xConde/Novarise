@@ -255,7 +255,7 @@ describe('CardHandComponent', () => {
     it('returns empty string when no keywords are set', () => {
       const card: HandCard = {
         instance: { cardId: CardId.TOWER_BASIC, instanceId: 'x', upgraded: false },
-        definition: { ...getCardDefinition(CardId.TOWER_BASIC), innate: undefined, retain: undefined, ethereal: undefined, exhaust: undefined } as CardDefinition,
+        definition: { ...getCardDefinition(CardId.TOWER_BASIC), innate: undefined, retain: undefined, ethereal: undefined, exhaust: undefined, terraform: undefined, link: undefined } as CardDefinition,
         canPlay: true,
         effectiveEnergyCost: 1,
         goldCost: 50,
@@ -263,7 +263,7 @@ describe('CardHandComponent', () => {
       expect(component.keywordAriaLabel(card)).toBe('');
     });
 
-    it('lists active keywords in stable order', () => {
+    it('lists active keywords in stable order (innate, retain, exhaust)', () => {
       const card: HandCard = {
         instance: { cardId: CardId.TOWER_BASIC, instanceId: 'x', upgraded: false },
         definition: { ...getCardDefinition(CardId.TOWER_BASIC), innate: true, retain: true, ethereal: false, exhaust: true } as CardDefinition,
@@ -272,6 +272,39 @@ describe('CardHandComponent', () => {
         goldCost: 50,
       };
       expect(component.keywordAriaLabel(card)).toBe('Keywords: Innate, Retain, Exhaust');
+    });
+
+    it('includes Terraform in label when terraform is true', () => {
+      const card: HandCard = {
+        instance: { cardId: CardId.LAY_TILE, instanceId: 'x', upgraded: false },
+        definition: { ...getCardDefinition(CardId.LAY_TILE), terraform: true } as CardDefinition,
+        canPlay: true,
+        effectiveEnergyCost: 1,
+        goldCost: null,
+      };
+      expect(component.keywordAriaLabel(card)).toContain('Terraform');
+    });
+
+    it('includes Link in label when link is true', () => {
+      const card: HandCard = {
+        instance: { cardId: CardId.CONDUIT_BRIDGE, instanceId: 'x', upgraded: false },
+        definition: { ...getCardDefinition(CardId.CONDUIT_BRIDGE), link: true } as CardDefinition,
+        canPlay: true,
+        effectiveEnergyCost: 1,
+        goldCost: null,
+      };
+      expect(component.keywordAriaLabel(card)).toContain('Link');
+    });
+
+    it('lists Terraform before Link before innate keywords in stable order', () => {
+      const card: HandCard = {
+        instance: { cardId: CardId.TOWER_BASIC, instanceId: 'x', upgraded: false },
+        definition: { ...getCardDefinition(CardId.TOWER_BASIC), terraform: true, link: true, innate: true } as CardDefinition,
+        canPlay: true,
+        effectiveEnergyCost: 1,
+        goldCost: null,
+      };
+      expect(component.keywordAriaLabel(card)).toBe('Keywords: Terraform, Link, Innate');
     });
   });
 

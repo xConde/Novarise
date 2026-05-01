@@ -78,17 +78,31 @@
         {{ card.goldCost }}g
       </span>
 
-      <!-- H3 keyword chips — compact one-letter badges so players can spot
-           exhaust / retain / innate / ethereal cards at a glance without
-           dominating the card face. Full keyword names live in the card
-           detail modal (right-click / long-press). -->
+      <!-- Keyword icon badges — one icon per active keyword so players can spot
+           terraform / link / innate / retain / ethereal / exhaust at a glance.
+           Full keyword names live in the card detail modal (right-click / long-press).
+           Icons use currentColor; each modifier class tints via --keyword-color-* tokens. -->
       <span class="card__keywords"
-            *ngIf="card.definition.exhaust || card.definition.retain || card.definition.innate || card.definition.ethereal"
+            *ngIf="card.definition.terraform || card.definition.link || card.definition.innate || card.definition.retain || card.definition.ethereal || card.definition.exhaust"
             [attr.aria-label]="keywordAriaLabel(card)">
-        <span *ngIf="card.definition.innate"   class="card__keyword card__keyword--innate"   title="Innate">I</span>
-        <span *ngIf="card.definition.retain"   class="card__keyword card__keyword--retain"   title="Retain">R</span>
-        <span *ngIf="card.definition.ethereal" class="card__keyword card__keyword--ethereal" title="Ethereal">Et</span>
-        <span *ngIf="card.definition.exhaust"  class="card__keyword card__keyword--exhaust"  title="Exhaust">Ex</span>
+        <span *ngIf="card.definition.terraform" class="card__keyword card__keyword--terraform" [attr.aria-label]="'Terraform'">
+          <app-icon name="kw-terraform" [size]="14"></app-icon>
+        </span>
+        <span *ngIf="card.definition.link" class="card__keyword card__keyword--link" [attr.aria-label]="'Link'">
+          <app-icon name="kw-link" [size]="14"></app-icon>
+        </span>
+        <span *ngIf="card.definition.innate" class="card__keyword card__keyword--innate" [attr.aria-label]="'Innate'">
+          <app-icon name="kw-innate" [size]="14"></app-icon>
+        </span>
+        <span *ngIf="card.definition.retain" class="card__keyword card__keyword--retain" [attr.aria-label]="'Retain'">
+          <app-icon name="kw-retain" [size]="14"></app-icon>
+        </span>
+        <span *ngIf="card.definition.ethereal" class="card__keyword card__keyword--ethereal" [attr.aria-label]="'Ethereal'">
+          <app-icon name="kw-ethereal" [size]="14"></app-icon>
+        </span>
+        <span *ngIf="card.definition.exhaust" class="card__keyword card__keyword--exhaust" [attr.aria-label]="'Exhaust'">
+          <app-icon name="kw-exhaust" [size]="14"></app-icon>
+        </span>
       </span>
 
       <!-- Instance dot — tints per-instance so identical cards are distinguishable -->

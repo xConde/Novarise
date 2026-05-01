@@ -483,12 +483,15 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
-   * Screen-reader label for the keyword-badge row. Expands the compact
-   * I/R/Et/Ex letters into full words so assistive tech announces e.g.
-   * "Keywords: Innate, Exhaust" instead of reading the letters individually.
+   * Screen-reader label for the keyword-badge row. Announces all active
+   * keywords as full words so assistive tech reads e.g. "Keywords: Innate, Exhaust"
+   * rather than icon descriptions. Badge icons are decorative; the wrapping
+   * span carries the semantics via aria-label.
    */
   keywordAriaLabel(card: HandCard): string {
     const words: string[] = [];
+    if (card.definition.terraform) words.push('Terraform');
+    if (card.definition.link) words.push('Link');
     if (card.definition.innate) words.push('Innate');
     if (card.definition.retain) words.push('Retain');
     if (card.definition.ethereal) words.push('Ethereal');
