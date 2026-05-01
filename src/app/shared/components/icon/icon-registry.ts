@@ -16,7 +16,7 @@ export interface IconDef {
 }
 
 export const ICON_REGISTRY: Record<IconName, IconDef> = {
-  'gear':          { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '2' },
+  'gear':          { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '1.5' },
   'heart':         { viewBox: '0 0 24 24', fill: 'currentColor', stroke: 'currentColor', strokeWidth: '1' },
   'diamond':       { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '2' },
   'coin':          { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '2' },
@@ -35,9 +35,9 @@ export const ICON_REGISTRY: Record<IconName, IconDef> = {
   'draw-pile':     { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '2' },
   'discard':       { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '2' },
   'exhaust':       { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '2' },
-  'crosshair':     { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '2' },
-  'bolt':          { viewBox: '0 0 24 24', fill: 'currentColor', stroke: 'none',         strokeWidth: '0' },
-  'shield':        { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '2' },
+  'crosshair':     { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '1.5' },
+  'bolt':          { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '1.5' },
+  'shield':        { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '1.5' },
   'node-combat':   { viewBox: '0 0 24 24', fill: 'currentColor', stroke: 'none',         strokeWidth: '0' },
   'node-elite':    { viewBox: '0 0 24 24', fill: 'currentColor', stroke: 'none',         strokeWidth: '0' },
   'node-boss':     { viewBox: '0 0 24 24', fill: 'currentColor', stroke: 'none',         strokeWidth: '0' },

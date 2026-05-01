@@ -6,6 +6,8 @@ const KEYWORD_ICON_NAMES: IconName[] = [
   'kw-terraform', 'kw-link', 'kw-exhaust', 'kw-retain', 'kw-innate', 'kw-ethereal',
 ];
 
+const TYPE_ICON_NAMES: IconName[] = ['crosshair', 'bolt', 'shield', 'gear'];
+
 describe('IconComponent', () => {
   let component: IconComponent;
   let fixture: ComponentFixture<IconComponent>;
@@ -151,6 +153,66 @@ describe('IconComponent', () => {
         expect(component.def.viewBox).withContext(`${name} fell through to FALLBACK`).toBe('0 0 24 24');
         expect(component.def.strokeWidth).withContext(`${name} fell through to FALLBACK`).toBe('1.5');
       }
+    });
+  });
+
+  describe('type icons (crosshair / bolt / shield / gear)', () => {
+    it('all 4 type icons are registered in ICON_REGISTRY', () => {
+      for (const name of TYPE_ICON_NAMES) {
+        expect(ICON_REGISTRY[name])
+          .withContext(`"${name}" missing from ICON_REGISTRY`)
+          .toBeDefined();
+      }
+    });
+
+    it('all 4 type icons use viewBox "0 0 24 24"', () => {
+      for (const name of TYPE_ICON_NAMES) {
+        expect(ICON_REGISTRY[name].viewBox)
+          .withContext(`viewBox mismatch for "${name}"`)
+          .toBe('0 0 24 24');
+      }
+    });
+
+    it('all 4 type icons use strokeWidth 1.5 (matches keyword icon vocabulary)', () => {
+      for (const name of TYPE_ICON_NAMES) {
+        expect(ICON_REGISTRY[name].strokeWidth)
+          .withContext(`strokeWidth mismatch for "${name}"`)
+          .toBe('1.5');
+      }
+    });
+
+    it('all 4 type icons use stroke="currentColor" (no filled silhouettes)', () => {
+      for (const name of TYPE_ICON_NAMES) {
+        expect(ICON_REGISTRY[name].stroke)
+          .withContext(`stroke mismatch for "${name}"`)
+          .toBe('currentColor');
+        expect(ICON_REGISTRY[name].fill)
+          .withContext(`fill mismatch for "${name}"`)
+          .toBe('none');
+      }
+    });
+
+    it('each type icon renders an SVG without error', () => {
+      for (const name of TYPE_ICON_NAMES) {
+        component.name = name;
+        component.ngOnChanges();
+        fixture.detectChanges();
+        const svg = fixture.nativeElement.querySelector('svg');
+        expect(svg).withContext(`SVG missing for type icon "${name}"`).toBeTruthy();
+      }
+    });
+
+    it('crosshair no longer carries a per-element fill attribute on any child', () => {
+      component.name = 'crosshair';
+      component.ngOnChanges();
+      fixture.detectChanges();
+      const svg = fixture.nativeElement.querySelector('svg') as SVGElement;
+      svg.querySelectorAll('*').forEach((el) => {
+        const perElementFill = el.getAttribute('fill');
+        expect(perElementFill)
+          .withContext('crosshair children must not carry per-element fill')
+          .toBeNull();
+      });
     });
   });
 });

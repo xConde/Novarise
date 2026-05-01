@@ -107,18 +107,19 @@
     </ng-container>
 
     <ng-container *ngSwitchCase="'crosshair'">
-      <svg:line x1="12" y1="2" x2="12" y2="10"/>
-      <svg:line x1="12" y1="14" x2="12" y2="22"/>
-      <svg:line x1="4" y1="12" x2="20" y2="12"/>
-      <svg:circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+      <svg:line x1="12" y1="2" x2="12" y2="9"/>
+      <svg:line x1="12" y1="15" x2="12" y2="22"/>
+      <svg:line x1="2" y1="12" x2="9" y2="12"/>
+      <svg:line x1="15" y1="12" x2="22" y2="12"/>
+      <svg:circle cx="12" cy="12" r="3"/>
     </ng-container>
 
     <ng-container *ngSwitchCase="'bolt'">
-      <svg:path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+      <svg:polyline points="14,3 8,13 12,13 10,21 16,11 12,11"/>
     </ng-container>
 
     <ng-container *ngSwitchCase="'shield'">
-      <svg:path d="M12 2l9 4v6c0 5.25-3.75 10.15-9 11.25C6.75 22.15 3 17.25 3 12V6l9-4z"/>
+      <svg:path d="M12 3l8 3.5v5c0 4.5-3.5 8.5-8 9.5C7.5 20 4 16 4 11.5V6.5L12 3z"/>
     </ng-container>
 
     <ng-container *ngSwitchCase="'node-combat'">
