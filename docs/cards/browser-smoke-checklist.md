@@ -273,3 +273,55 @@ either:
 - [ ] Footprint feels like decoration, not chrome — should NOT
       attract attention away from name / cost / type icon
 
+
+---
+
+# Phase F additions (after Phase E items)
+
+## Card-detail modal (in-game, right-click on a card)
+
+- [ ] Modal opens when right-clicking a card in card-hand
+- [ ] Modal shows archetype trim ring around the panel
+- [ ] Modal shows archetype backdrop pattern in the top art-zone strip
+- [ ] Cartographer / Highground / Conduit cards: their archetype color
+      / pattern visible
+- [ ] Neutral cards: charcoal trim, blueprint cross-hatch backdrop
+- [ ] Archetype sub-icon glyph visible in art zone (compass / peaks /
+      3-node / X mark)
+- [ ] Tower cards show footprint glyph
+- [ ] Keyword icons (NOT text labels) appear for cards with keywords
+- [ ] Inline {kw-*} icons in description text render correctly
+      (e.g., LAST_STAND shows the exhaust card-with-X icon inline)
+- [ ] Modal is NOT a polygon clip-path silhouette — it's a wide info
+      panel with rounded corners. Confirmed honest design choice.
+
+## Library card-detail-modal
+
+- [ ] Same checks as in-game modal
+- [ ] Both base and upgraded panels carry trim + backdrop
+- [ ] Existing archetype text chip in meta row coexists with new
+      archetype sub-icon (different elements, both visible)
+
+## Cross-surface consistency
+
+- [ ] Same card viewed in card-hand, library tile, and card-detail
+      modal: identity reads consistently (same archetype color, same
+      backdrop pattern, same keywords)
+- [ ] Tower cards show the footprint glyph in all 4 surfaces
+      (card-hand, library tile, card-draft, both modals) — NOT in
+      pile-inspector
+- [ ] Archetype trim color matches across surfaces (pull a Cartographer
+      card and check teal in all surfaces)
+
+## Mobile (≤480px) responsive
+
+- [ ] Card-hand cards: 3.75rem width, sub-icon hidden, footprint
+      hidden, keyword badges hidden
+- [ ] Tower clip-path battlements at 3.75rem: are the ~5px notches
+      readable as battlements, or do they look like visual noise?
+      (HONEST FLAG — if the latter, Phase H polish suppresses the
+      polygon at mobile and falls back to flat rectangle on tower
+      mobile cards)
+- [ ] Modal at mobile width: layout intact, no horizontal scroll
+- [ ] Pile inspector: rows still readable
+
