@@ -224,7 +224,53 @@
   // Format: polygon(<top-left x> <top-left y>, <top-right x> <top-right y>,
   //                 <bottom-right x> <bottom-right y>, <bottom-left x> <bottom-left y>)
 
-  --card-frame-tower-clip:    polygon(/* trapezoidal roof-line — defined S10 */);
+  // Tower: trapezoidal top with stepped battlement notches at the top corners —
+  // evokes a tower floor-plan / parapet silhouette. Insets are kept within 5%
+  // so the cost pill (top:0.3rem left:0.3rem) and type icon (top:0.45rem right:0.4rem)
+  // remain inside the clipped region. The battlement notches (8%/13% steps) read
+  // as "structure" at hand-card size without eating the UI chrome corners.
+  //
+  // Hand cards (~100×136px):
+  //   top-left step-down at (0, 8%) then back at (13%, 0%)
+  //   top-right step-down at (87%, 0%) then (100%, 8%)
+  //   bottom corners: small chamfer for floor-plan feel
+  --card-frame-tower-clip: polygon(
+    0%   8%,      /* upper-left battlement base                */
+    8%   8%,      /* left notch inner-top                      */
+    8%   0%,      /* left notch outer-top                      */
+    13%  0%,      /* left notch outer-right                    */
+    13%  8%,      /* left notch inner-right                    */
+    87%  8%,      /* right notch inner-left                    */
+    87%  0%,      /* right notch outer-left                    */
+    92%  0%,      /* right notch outer-top                     */
+    92%  8%,      /* right notch inner-top                     */
+    100% 8%,      /* upper-right battlement base               */
+    100% 94%,     /* right edge                                */
+    96%  100%,    /* bottom-right chamfer                      */
+    4%   100%,    /* bottom-left chamfer                       */
+    0%   94%      /* left edge                                 */
+  );
+
+  // Tile variant (22/32 aspect — ~220×320px). At taller aspect the battlement
+  // notches (8% of height ≈ 25px) are more pronounced. Flatten to 5% height so
+  // they remain a subtle accent rather than dominating the tile header.
+  --card-frame-tower-clip--tile: polygon(
+    0%   5%,
+    8%   5%,
+    8%   0%,
+    13%  0%,
+    13%  5%,
+    87%  5%,
+    87%  0%,
+    92%  0%,
+    92%  5%,
+    100% 5%,
+    100% 97%,
+    97%  100%,
+    3%   100%,
+    0%   97%
+  );
+
   --card-frame-spell-clip:    polygon(/* arched top — defined S11 */);
   --card-frame-modifier-clip: polygon(/* notched shoulders — defined S12 */);
   --card-frame-utility-clip:  polygon(/* chamfered corners — defined S13 */);

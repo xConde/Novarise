@@ -414,6 +414,40 @@
   color: var(--theme-purple-lighter);
 }
 
+/* --- Framed tile (Tower polygon silhouette) --- */
+//
+// Mirrors the framed-card system from card-hand, adapted for the tile's
+// 22/32 aspect ratio. Uses --card-frame-tower-clip--tile (tile-specific polygon
+// with shallower notches so they don't overpower the taller card face).
+//
+// Tile glow was previously box-shadow on :hover/:focus-visible. clip-path
+// invalidates box-shadow, so we redirect to filter:drop-shadow, composed
+// with brightness for hover.
+
+.tile--frame-tower {
+  clip-path: var(--card-frame-tower-clip--tile);
+  transition:
+    transform var(--card-tile-transition-duration) ease-out,
+    border-color var(--card-tile-transition-duration) ease,
+    filter var(--card-tile-transition-duration) ease,
+    clip-path var(--card-tile-transition-duration) ease;
+  // Suppress box-shadow — clip-path clips at the bounding rect, not the polygon.
+  box-shadow: none !important;
+  // Default state: no glow (--tile-glow is transparent for common).
+  filter: drop-shadow(0 0 0 transparent);
+
+  &:hover,
+  &:focus-visible {
+    box-shadow: none !important;
+    filter:
+      drop-shadow(0 0 min(6px, var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
+      brightness(1.06);
+  }
+}
+
+// Rare shimmer animation on framed tile: the ::after pseudo is clipped by the
+// parent polygon in Blink, so no shimmer amputation. No special handling needed.
+
 /* --- Reduce-motion --- */
 
 body.reduce-motion .tile,

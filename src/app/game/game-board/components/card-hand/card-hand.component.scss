@@ -397,6 +397,21 @@ $card-type-colors: (
 .card--utility  { --card-type-color: #{map-get($card-type-colors, utility)}; }
 
 // ── Card rarity glow ─────────────────────────────────────────
+//
+// Glow is channelled through two CSS vars so framed cards can redirect from
+// box-shadow to filter:drop-shadow without duplicating rarity color values.
+//
+//   --card-glow-color  — the rgba color for this card's rarity glow
+//   --card-glow-blur   — the blur radius (rem) for the outer glow
+//
+// Unframed cards (.card without a --frame-* modifier): box-shadow reads these.
+// Framed cards (.card--frame-tower etc.): box-shadow is suppressed; filter:
+// drop-shadow reads the same vars.
+
+.card {
+  --card-glow-color: transparent;
+  --card-glow-blur: 0rem;
+}
 
 .card--starter,
 .card--common {
@@ -404,16 +419,20 @@ $card-type-colors: (
 }
 
 .card--uncommon {
+  --card-glow-color: var(--card-rarity-uncommon-glow-outer);
+  --card-glow-blur: 0.5rem;
   border-color: var(--card-rarity-uncommon-border);
   box-shadow:
-    0 0 0.5rem var(--card-rarity-uncommon-glow-outer),
+    0 0 var(--card-glow-blur) var(--card-glow-color),
     inset 0 0 0.25rem var(--card-rarity-uncommon-glow-inner);
 }
 
 .card--rare {
+  --card-glow-color: var(--card-rarity-rare-glow-outer);
+  --card-glow-blur: 0.6rem;
   border-color: var(--card-rarity-rare-border);
   box-shadow:
-    0 0 0.6rem var(--card-rarity-rare-glow-outer),
+    0 0 var(--card-glow-blur) var(--card-glow-color),
     inset 0 0 0.3rem var(--card-rarity-rare-glow-inner);
 }
 
@@ -454,6 +473,72 @@ $card-type-colors: (
 }
 
 body.reduce-motion .card--rare::after { animation: none; background-position: 0 0, 0 0; }
+
+// ── Framed-card system ───────────────────────────────────────
+//
+// Cards with a type-specific polygon silhouette use clip-path.
+// clip-path invalidates box-shadow (it clips at the bounding rectangle, not
+// the polygon), so rarity glow must redirect through filter:drop-shadow().
+//
+// Only Tower cards are framed in this sprint. Spell / Modifier / Utility
+// remain unframed (no clip-path, no filter change).
+//
+// Layer contract:
+//   .card--frame-tower              → shape + glow redirect, transition
+//   .card--frame-tower.card--rare::after
+//                                   → shimmer band stays inside clip region
+//                                     (clip-path clips ::after children too)
+//   hover-brightness composition    → single filter: line per selector
+
+.card--frame-tower {
+  clip-path: var(--card-frame-tower-clip);
+  // Transition clip-path for smooth state changes (compositor-accelerated in Blink).
+  // prefers-reduced-motion: suppressed by the existing body.reduce-motion
+  // .card--playable { transition: none } rule.
+  transition:
+    transform var(--transition-fast) ease,
+    filter var(--transition-fast) ease,
+    opacity var(--transition-fast) ease,
+    clip-path var(--transition-fast) ease;
+  // Redirect rarity glow: box-shadow doesn't follow clip-path outline.
+  box-shadow: none !important;
+  // Drop-shadow follows the polygon. Cap at --card-frame-drop-shadow-blur-max (8px).
+  // Blur is driven by --card-glow-blur (set by rarity selectors above).
+  // 8px cap: if glow-blur resolves > 8px this inline clamp wins via specificity.
+  filter: drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color));
+}
+
+// Hover brightness must compose with drop-shadow in a single filter: declaration.
+// Two filter: rules on the same element — last wins, the first is silently dropped.
+.card--frame-tower.card--playable:hover {
+  box-shadow: none !important;
+  filter:
+    drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
+    brightness(var(--card-hover-brightness));
+}
+
+// Pending framed tower — keep the gold pulse glow via drop-shadow.
+.card--frame-tower.card--pending {
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 0.75rem var(--game-gold-a50)) brightness(var(--card-pending-brightness)) !important;
+  animation: card-frame-tower-pending-pulse var(--card-pending-pulse-duration) ease-in-out infinite;
+}
+
+@keyframes card-frame-tower-pending-pulse {
+  0%, 100% { filter: drop-shadow(0 0 0.5rem var(--game-gold-a40))  brightness(var(--card-pending-brightness)); }
+  50%       { filter: drop-shadow(0 0 1rem rgba(255, 215, 0, 0.65)) brightness(var(--card-pending-brightness)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card--frame-tower.card--pending { animation: none; }
+}
+body.reduce-motion .card--frame-tower.card--pending { animation: none; }
+
+// Rare shimmer on framed Tower: the ::after pseudo is clipped by the parent's
+// clip-path in Blink, so the diagonal band is naturally contained within the
+// polygon. No special adjustment needed — the shimmer reads correctly.
+// (Verified: clip-path on a stacking context clips all descendants including
+// ::after. The band stays inside the trapezoid silhouette.)
 
 // ── Card states ──────────────────────────────────────────────
 
@@ -499,10 +584,12 @@ body.reduce-motion .card--rare::after { animation: none; background-position: 0 
 
 // Upgraded state polish
 .card--upgraded {
+  --card-glow-color: var(--card-upgraded-glow-outer);
+  --card-glow-blur: 0.4rem;
   border-top-width: var(--card-upgraded-border-width); // slightly thicker top accent
   box-shadow:
     inset 0 0 0.4rem var(--card-upgraded-glow-inner),
-    0 0 0.4rem var(--card-upgraded-glow-outer);
+    0 0 var(--card-glow-blur) var(--card-glow-color);
 
   // Blend art zone toward gold to signal power-up while preserving type identity
   &::before {

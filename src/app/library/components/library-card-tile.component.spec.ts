@@ -174,4 +174,28 @@ describe('LibraryCardTileComponent', () => {
     const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
     expect(btn.classList.contains('tile--desaturated')).toBe(true);
   });
+
+  describe('frame class binding', () => {
+    it('applies tile--frame-tower to tower-type cards', () => {
+      component.definition = towerDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--frame-tower')).toBe(true);
+    });
+
+    it('does NOT apply tile--frame-tower to non-tower cards', () => {
+      component.definition = modifierDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--frame-tower')).toBe(false);
+    });
+
+    it('tower tile has tile--tower alongside tile--frame-tower', () => {
+      component.definition = towerDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--tower')).toBe(true);
+      expect(btn.classList.contains('tile--frame-tower')).toBe(true);
+    });
+  });
 });

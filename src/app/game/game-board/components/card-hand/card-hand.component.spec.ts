@@ -645,4 +645,39 @@ describe('CardHandComponent', () => {
       expect(top).toBeGreaterThanOrEqual(110);
     });
   });
+
+  describe('frame class binding', () => {
+    it('applies card--frame-tower to tower-type cards', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      expect(cards.length).toBe(1);
+      expect(cards[0].classList.contains('card--frame-tower')).toBe(true);
+    });
+
+    it('does NOT apply card--frame-tower to non-tower cards', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.GOLD_RUSH)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      expect(cards.length).toBe(1);
+      expect(cards[0].classList.contains('card--frame-tower')).toBe(false);
+    });
+
+    it('tower card has card--tower type class alongside card--frame-tower', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const card = fixture.nativeElement.querySelector('.card') as HTMLElement;
+      expect(card.classList.contains('card--tower')).toBe(true);
+      expect(card.classList.contains('card--frame-tower')).toBe(true);
+    });
+  });
 });
