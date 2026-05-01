@@ -124,3 +124,70 @@ either:
 - Address in Phase C if it's archetype-related
 - Address in Phase H polish if it's animation/perf related
 - Address in a quick-fix S18.x sprint if it's a regression
+
+---
+
+# Phase C additions (after Phase B items)
+
+## Archetype trim — card-hand
+
+- [ ] Force a Cartographer card into hand (e.g., LAY_TILE, SCOUT_AHEAD,
+      DETOUR). The card has a green-teal ring along its polygon outline,
+      visibly different from Neutral.
+- [ ] Force a Highground card into hand (e.g., RAISE_PLATFORM, HIGH_PERCH).
+      Terracotta ring.
+- [ ] Force a Conduit card into hand (e.g., HANDSHAKE, FORMATION).
+      Violet ring.
+- [ ] Neutral cards: charcoal-silver ring, "quiet but present"
+- [ ] Hover any framed card — trim widens (2px → 3px) and brightens (uses
+      the strong variant of the archetype color)
+- [ ] Trim follows the polygon outline (battlements / peak / octagon /
+      chevron), NOT the bounding rectangle
+
+## Archetype trim — composition with rarity
+
+- [ ] Highground rare card (e.g., KING_OF_THE_HILL, GRAVITY_WELL): does
+      the terracotta trim fight with the gold rare glow? Should be 38° hue
+      separation — flag if it looks like "off-gold" rather than two
+      distinct colors.
+- [ ] Cartographer rare card (CARTOGRAPHER_SEAL, LABYRINTH_MIND): green-teal
+      trim + gold rare glow.
+- [ ] Conduit rare card (ARCHITECT, HIVE_MIND): violet trim + gold rare glow.
+
+## Archetype backdrop — card-hand
+
+- [ ] Cartographer cards: 3 curved survey lines visible in art zone
+- [ ] Highground cards: concentric elevation rings centered below middle
+- [ ] Conduit cards: H+V crosshair grid with corner + center circle nodes
+- [ ] Neutral cards: 45° cross-hatch (subtle / quiet)
+- [ ] Patterns are SUBTLE — visible but not competing with the type
+      gradient. If any pattern is invisible in real card context, the
+      design knob is in `_card-tokens.scss` `--card-backdrop-*` SVG
+      stroke opacity (0.35-0.55 currently; bump to 0.75 if needed).
+
+## Pile inspector — archetype trim
+
+- [ ] Each row carries a 3px colored left-edge stripe in the archetype
+      color
+- [ ] On upgraded rows: the gold border + the archetype stripe coexist
+      (gold = 4-side border, archetype = left-edge inset shadow). Both
+      visible.
+- [ ] No backdrop pattern in pile inspector (intentional — illegible at
+      row scale)
+
+## Library tile — archetype trim + backdrop
+
+- [ ] Each tile carries archetype trim ring (matches card-hand)
+- [ ] Each tile carries archetype backdrop pattern (matches card-hand)
+- [ ] Existing archetype badge chip (the labeled chip showing
+      "CARTOGRAPHER" etc.) is NOT obscured by the backdrop
+- [ ] Framed rare tile: rarity glow follows polygon outline via
+      filter:drop-shadow (NOT box-shadow rectangle leak)
+- [ ] Rare shimmer keyframe + inset trim composition: shimmer pulses
+      cleanly, trim color persists through the pulse
+
+## Card-draft
+
+- [ ] Card-draft cards do NOT yet show archetype trim or backdrop
+      (deferred from Phase C; planned for a future sprint). Type frame
+      silhouette is correct (Phase B work). No regression here.
