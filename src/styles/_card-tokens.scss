@@ -203,4 +203,33 @@
   --card-archetype-siegeworks: #ffa8a8;
   --card-archetype-siegeworks-border: rgba(255, 120, 120, 0.35);
 
+
+  // === Card frame shapes (S9 decision: clip-path + filter:drop-shadow) ===
+  // Per-type clip-path silhouettes. Implemented in S10 (tower), S11 (spell),
+  // S12 (modifier), S13 (utility).
+  //
+  // Rules for all consumers (S10-S13):
+  //   1. clip-path invalidates box-shadow on the same element — use
+  //      filter:drop-shadow() instead for all rarity glows on shaped cards.
+  //   2. filter declarations MUST compose brightness + drop-shadow in a single
+  //      `filter:` property (e.g. `filter: brightness(1.08) drop-shadow(...)`).
+  //      Two separate filter declarations on the same element: last wins.
+  //   3. Cap drop-shadow blur radius at 8px to contain GPU rasterization cost.
+  //   4. Polygon vertices must keep .card__cost (top:0.3rem left:0.3rem pill)
+  //      and .card__type-icon (top:0.45rem right:0.4rem) fully inside the shape.
+  //   5. Fan overlap uses negative left margins — do NOT clip the left edge of
+  //      any silhouette so deeply that it visually amputates overlapping cards.
+  //
+  // Placeholder values: actual polygons are authored per-type in S10-S13.
+  // Format: polygon(<top-left x> <top-left y>, <top-right x> <top-right y>,
+  //                 <bottom-right x> <bottom-right y>, <bottom-left x> <bottom-left y>)
+
+  --card-frame-tower-clip:    polygon(/* trapezoidal roof-line — defined S10 */);
+  --card-frame-spell-clip:    polygon(/* arched top — defined S11 */);
+  --card-frame-modifier-clip: polygon(/* notched shoulders — defined S12 */);
+  --card-frame-utility-clip:  polygon(/* chamfered corners — defined S13 */);
+
+  // Drop-shadow cap — enforced in all per-type filter declarations
+  --card-frame-drop-shadow-blur-max: 8px;
+
 }
