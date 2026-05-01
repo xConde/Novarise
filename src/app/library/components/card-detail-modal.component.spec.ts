@@ -27,6 +27,7 @@ describe('CardDetailModalComponent', () => {
     rarity: CardRarity.STARTER,
     energyCost: 1,
     upgraded: false,
+    archetype: 'neutral',
     effect: { type: 'tower', towerType: TowerType.BASIC },
   };
 

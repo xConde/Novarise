@@ -236,7 +236,7 @@ export interface CardDefinition {
 
   /**
    * Phase 1 Sprint 8 — spatial archetype tag.
-   * Defaults to `'neutral'` when undefined. Drives reward-pool weighting via
+   * Required on every CardDefinition. Drives reward-pool weighting via
    * DeckService.getDominantArchetype().
    *
    * **Checkpoint migration note:** archetype/terraform/link live on
@@ -246,7 +246,7 @@ export interface CardDefinition {
    * UNLESS a future feature serializes a CardDefinition snapshot directly
    * (telemetry payload, card-crafting state, etc.) — in that case bump.
    */
-  readonly archetype?: CardArchetype;
+  readonly archetype: CardArchetype;
 }
 
 export type CardEffect =
