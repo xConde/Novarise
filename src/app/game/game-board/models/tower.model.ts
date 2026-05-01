@@ -18,7 +18,7 @@ export const TARGETING_MODES: TargetingMode[] = [
   TargetingMode.STRONGEST,
   TargetingMode.WEAKEST,
 ];
-export const DEFAULT_TARGETING_MODE: TargetingMode = TargetingMode.NEAREST;
+export const DEFAULT_TARGETING_MODE: TargetingMode = TargetingMode.FIRST;
 
 export const TARGETING_MODE_LABELS: Record<TargetingMode, string> = {
   [TargetingMode.NEAREST]: 'Nearest',
