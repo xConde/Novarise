@@ -253,3 +253,23 @@ either:
       is a triple archetype signal. Sub-icon at 50% opacity is the most
       removable layer if needed.
 
+
+---
+
+# Phase E additions (after Phase D items)
+
+## Tower footprint preview
+
+- [ ] Tower cards in card-hand: small outlined square at bottom-center
+- [ ] Color matches tower type (BASIC orange / SNIPER purple /
+      SPLASH lime / SLOW blue / CHAIN yellow / MORTAR red-orange)
+- [ ] Spell / Modifier / Utility cards do NOT show a footprint
+- [ ] Mobile (≤480px): footprint hidden cleanly
+- [ ] Library tile tower cards: 1.5rem footprint at bottom
+- [ ] Library tile color: per-tower-type via --tile-tower-accent
+- [ ] Card-draft tower cards: 1.5rem footprint (generic orange —
+      card-draft has no per-subtype binding; this is intentional)
+- [ ] Pile-inspector: NO footprint glyph (intentional skip per S43)
+- [ ] Footprint feels like decoration, not chrome — should NOT
+      attract attention away from name / cost / type icon
+
