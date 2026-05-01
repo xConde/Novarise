@@ -423,4 +423,63 @@
   --card-shape-badge-size:    1.25rem;  // 20px
   --card-shape-badge-opacity: 0.6;
 
+
+  // === Archetype trim ===
+  // The archetype trim sits between the frame silhouette (Phase B) and the
+  // rarity glow. It's a thin colored outline that follows the polygon via
+  // filter:drop-shadow — NOT a fill. Trim, not full-frame fill, prevents the
+  // hand from looking like a rainbow when archetypes mix.
+  //
+  // Color reasoning:
+  //   Cartographer: pulled from starter teal (#5a9a8a, ~168°) greener to ~155°
+  //     (#4a9a72) to open hue separation from Conduit. Both are low-saturation
+  //     on a dark bg; 60° gap compressed perceptually — widening to ~90° is
+  //     the honest fix. Maps/ink/survey-line read still holds at the greener hue.
+  //
+  //   Conduit: shifted from starter blue-violet (#6a7ab8, ~228°) to pure violet
+  //     (#7a6ab8, ~258°) to open distance from Cartographer and align closer to
+  //     the existing Conduit chip color (#c98cf0). Circuitry/link-node read
+  //     is stronger at violet than cornflower-blue.
+  //
+  //   Highground: slid warmer/more terracotta (#b8724a, ~22°) from starter ochre
+  //     (#b88c4a, ~36°). Rare-gold glow is pure yellow (~60°); keeping trim at
+  //     ~36° risked it reading as "slightly off gold" on rare cards. Terracotta
+  //     reads unambiguously as "stone/earth" even adjacent to the gold glow.
+  //
+  //   Neutral: brightened from starter #6a6a78 to #7a7a88 — the darker value
+  //     had negligible contrast against the near-black card bg (rgba 10,5,20).
+  //     Deliberate identity, not absence of color.
+  //
+  //   Siegeworks: retained red (#b86a6a) as-is — deferred, Phase 5 unscoped,
+  //     and red is maximally distinct from the other four.
+
+  // Cartographer — green-teal (maps, ink, survey lines)
+  --card-trim-cartographer:        #4a9a72;
+  --card-trim-cartographer-strong: #6ab890;  // hover/selected state
+  --card-trim-cartographer-bg:     rgba(74, 154, 114, 0.06);
+
+  // Highground — terracotta ochre (stone, elevation)
+  --card-trim-highground:        #b8724a;
+  --card-trim-highground-strong: #d49068;
+  --card-trim-highground-bg:     rgba(184, 114, 74, 0.06);
+
+  // Conduit — violet-blue (circuitry, link nodes)
+  --card-trim-conduit:        #7a6ab8;
+  --card-trim-conduit-strong: #9a8ad4;
+  --card-trim-conduit-bg:     rgba(122, 106, 184, 0.06);
+
+  // Neutral — charcoal-silver (deliberate identity, not "no trim")
+  --card-trim-neutral:        #7a7a88;
+  --card-trim-neutral-strong: #9a9aaa;
+  --card-trim-neutral-bg:     rgba(122, 122, 136, 0.04);
+
+  // Siegeworks — deferred, Phase 5
+  --card-trim-siegeworks:        #b86a6a;
+  --card-trim-siegeworks-strong: #d48a8a;
+  --card-trim-siegeworks-bg:     rgba(184, 106, 106, 0.06);
+
+  // Trim drop-shadow blur radii (filter:drop-shadow path in S21+)
+  --card-trim-blur:        0.4rem;
+  --card-trim-blur-strong: 0.6rem;
+
 }
