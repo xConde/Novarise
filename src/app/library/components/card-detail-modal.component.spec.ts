@@ -10,6 +10,7 @@ import {
 import { TowerType } from '../../game/game-board/models/tower.model';
 import { MODIFIER_STAT } from '../../run/constants/modifier-stat.constants';
 import { DescriptionTextComponent } from '@shared/components/description-text/description-text.component';
+import { IconComponent } from '@shared/components/icon/icon.component';
 
 describe('CardDetailModalComponent', () => {
   let fixture: ComponentFixture<CardDetailModalComponent>;
@@ -60,7 +61,7 @@ describe('CardDetailModalComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       declarations: [CardDetailModalComponent],
-      imports: [DescriptionTextComponent],
+      imports: [DescriptionTextComponent, IconComponent],
     }).compileComponents();
 
     fixture = TestBed.createComponent(CardDetailModalComponent);
@@ -197,12 +198,13 @@ describe('CardDetailModalComponent', () => {
     expect(json).toContain('"upgradedEffect": null');
   });
 
-  it('renders Link keyword chip', () => {
+  it('renders Link keyword icon badge', () => {
     component.definition = modifierDef;
     refresh();
-    const chips = Array.from(fixture.nativeElement.querySelectorAll('.modal__keyword'))
-      .map(c => (c as HTMLElement).textContent?.trim());
-    expect(chips).toContain('Link');
+    // Keywords now render as icon badges with aria-label (not text content)
+    const badges = Array.from(fixture.nativeElement.querySelectorAll('.modal__keyword'))
+      .map(c => (c as HTMLElement).getAttribute('aria-label'));
+    expect(badges).toContain('Link');
   });
 
   it('shows archetype chip for non-neutral archetypes', () => {
@@ -216,5 +218,61 @@ describe('CardDetailModalComponent', () => {
     component.definition = towerDef; // no archetype → undefined
     refresh();
     expect(fixture.nativeElement.querySelector('.modal__archetype')).toBeFalsy();
+  });
+
+  describe('archetype branding', () => {
+    it('renders the art strip', () => {
+      component.definition = towerDef;
+      refresh();
+      expect(fixture.nativeElement.querySelector('.modal__art-strip')).not.toBeNull();
+    });
+
+    it('renders the archetype sub-icon glyph', () => {
+      component.definition = towerDef;
+      refresh();
+      expect(fixture.nativeElement.querySelector('.modal__archetype-glyph')).not.toBeNull();
+    });
+
+    it('renders tower footprint on tower cards', () => {
+      component.definition = towerDef;
+      refresh();
+      expect(fixture.nativeElement.querySelector('.modal__footprint')).not.toBeNull();
+    });
+
+    it('does not render footprint on non-tower cards', () => {
+      component.definition = modifierDef;
+      refresh();
+      expect(fixture.nativeElement.querySelector('.modal__footprint')).toBeNull();
+    });
+
+    it('archetypeTrimColor returns neutral trim var for neutral archetype', () => {
+      component.definition = towerDef;
+      expect(component.archetypeTrimColor).toBe('var(--card-trim-neutral)');
+    });
+
+    it('archetypeTrimColor returns conduit trim var for conduit archetype', () => {
+      component.definition = modifierDef;
+      expect(component.archetypeTrimColor).toBe('var(--card-trim-conduit)');
+    });
+
+    it('archetypeIconName returns arch-conduit for conduit archetype', () => {
+      component.definition = modifierDef;
+      expect(component.archetypeIconName).toBe('arch-conduit');
+    });
+
+    it('archetypeIconName returns arch-neutral for neutral archetype', () => {
+      component.definition = towerDef;
+      expect(component.archetypeIconName).toBe('arch-neutral');
+    });
+
+    it('isTowerCard is true for tower cards', () => {
+      component.definition = towerDef;
+      expect(component.isTowerCard).toBeTrue();
+    });
+
+    it('isTowerCard is false for modifier cards', () => {
+      component.definition = modifierDef;
+      expect(component.isTowerCard).toBeFalse();
+    });
   });
 });

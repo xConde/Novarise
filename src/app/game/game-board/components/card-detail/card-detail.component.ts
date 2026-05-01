@@ -1,6 +1,8 @@
 import { Component, ElementRef, EventEmitter, HostListener, Input, OnInit, Output } from '@angular/core';
 import { CardDefinition, CardType } from '../../../../run/models/card.model';
 import { HandCard } from '../card-hand/card-hand.component';
+import { ARCHETYPE_DISPLAY } from '../../../../run/constants/archetype.constants';
+import { IconName } from '../../../../shared/components/icon/icon-registry';
 
 /**
  * CardDetailComponent — modal overlay showing the full information for a
@@ -85,6 +87,12 @@ export class CardDetailComponent implements OnInit {
     return this.activeKeywords.length > 0;
   }
 
+  /** Accessible label for the keyword icon row — full keyword names joined. */
+  get keywordsAriaLabel(): string {
+    const labels = this.activeKeywords.map(k => k.label);
+    return labels.length > 0 ? `Keywords: ${labels.join(', ')}` : '';
+  }
+
   /** CSS class suffix for per-type tinting of the header band. */
   get typeClassSuffix(): string {
     switch (this.definition.type) {
@@ -95,6 +103,44 @@ export class CardDetailComponent implements OnInit {
       default: return 'tower';
     }
   }
+
+  /** CSS var() for the archetype trim ring (inset box-shadow). */
+  get archetypeTrimColor(): string {
+    const trimVar = ARCHETYPE_DISPLAY[this.definition.archetype]?.trimVar ?? '--card-trim-neutral';
+    return `var(${trimVar})`;
+  }
+
+  /** CSS var() for the archetype backdrop pattern applied to the art zone. */
+  get archetypeBackdropVar(): string {
+    switch (this.definition.archetype) {
+      case 'cartographer': return 'var(--card-backdrop-cartographer)';
+      case 'highground':   return 'var(--card-backdrop-highground)';
+      case 'conduit':      return 'var(--card-backdrop-conduit)';
+      case 'neutral':
+      case 'siegeworks':
+      default:             return 'var(--card-backdrop-neutral)';
+    }
+  }
+
+  /** Icon name for the archetype sub-icon glyph. */
+  get archetypeIconName(): IconName {
+    switch (this.definition.archetype) {
+      case 'cartographer': return 'arch-cartographer';
+      case 'highground':   return 'arch-highground';
+      case 'conduit':      return 'arch-conduit';
+      case 'neutral':
+      case 'siegeworks':
+      default:             return 'arch-neutral';
+    }
+  }
+
+  /** True when the card is a tower type, so the footprint glyph should render. */
+  get isTowerCard(): boolean {
+    return this.definition.type === CardType.TOWER;
+  }
+
+  // Expose CardType to template for keyword icon conditions
+  readonly CardType = CardType;
 
   close(): void {
     this.closed.emit();

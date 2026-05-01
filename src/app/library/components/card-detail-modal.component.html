@@ -5,7 +5,25 @@
   [attr.aria-labelledby]="'modal-title-' + definition.id"
   (click)="onBackdropClick($event)">
 
-  <div #modal class="modal">
+  <div #modal
+       class="modal"
+       [style.--archetype-trim-color]="archetypeTrimColor"
+       [style.--card-backdrop-image]="archetypeBackdropVar">
+
+    <!-- Branding strip — archetype backdrop pattern + sub-icon + footprint.
+         The modal is a wide tool panel, not a card shape, so no clip-path.
+         Sub-icon and footprint mirror the card-hand visual language. -->
+    <div class="modal__art-strip" aria-hidden="true">
+      <span class="modal__archetype-glyph" aria-hidden="true">
+        <app-icon [name]="archetypeIconName" [size]="24"></app-icon>
+      </span>
+      <span *ngIf="isTowerCard" class="modal__footprint" aria-hidden="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="4" width="16" height="16" rx="1"
+                stroke="currentColor" stroke-width="1.5" fill="none"/>
+        </svg>
+      </span>
+    </div>
 
     <!-- Header -->
     <header class="modal__header">
@@ -30,8 +48,29 @@
         </span>
         <span *ngIf="goldCost !== null" class="modal__gold">{{ goldCost }}g</span>
       </div>
-      <div *ngIf="keywordChips.length > 0" class="modal__keywords">
-        <span *ngFor="let kw of keywordChips" class="modal__keyword">{{ kw }}</span>
+      <!-- Keyword icon badges — mirrors card-hand S36 icon treatment.
+           Full names in aria-label; icons are decorative. -->
+      <div *ngIf="keywordChips.length > 0"
+           class="modal__keywords"
+           [attr.aria-label]="'Keywords: ' + keywordChips.join(', ')">
+        <span *ngIf="definition.terraform" class="modal__keyword modal__keyword--terraform" aria-label="Terraform">
+          <app-icon name="kw-terraform" [size]="14"></app-icon>
+        </span>
+        <span *ngIf="definition.link" class="modal__keyword modal__keyword--link" aria-label="Link">
+          <app-icon name="kw-link" [size]="14"></app-icon>
+        </span>
+        <span *ngIf="definition.innate" class="modal__keyword modal__keyword--innate" aria-label="Innate">
+          <app-icon name="kw-innate" [size]="14"></app-icon>
+        </span>
+        <span *ngIf="definition.retain" class="modal__keyword modal__keyword--retain" aria-label="Retain">
+          <app-icon name="kw-retain" [size]="14"></app-icon>
+        </span>
+        <span *ngIf="definition.ethereal" class="modal__keyword modal__keyword--ethereal" aria-label="Ethereal">
+          <app-icon name="kw-ethereal" [size]="14"></app-icon>
+        </span>
+        <span *ngIf="definition.exhaust" class="modal__keyword modal__keyword--exhaust" aria-label="Exhaust">
+          <app-icon name="kw-exhaust" [size]="14"></app-icon>
+        </span>
       </div>
     </header>
 

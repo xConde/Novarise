@@ -3,7 +3,28 @@
      role="dialog"
      aria-modal="true"
      [attr.aria-label]="definition.name + ' — card details'">
-  <div class="card-detail" [class]="'card-detail card-detail--' + typeClassSuffix">
+  <div class="card-detail"
+       [class]="'card-detail card-detail--' + typeClassSuffix"
+       [style.--archetype-trim-color]="archetypeTrimColor"
+       [style.--card-backdrop-image]="archetypeBackdropVar">
+
+    <!-- Art zone header strip — backdrop pattern + sub-icon + name/close row.
+         The backdrop ::before is absolute over this strip, giving the same
+         archetype-identity signal as on card-hand cards without a clip-path. -->
+    <div class="card-detail__art-zone" aria-hidden="true">
+      <!-- Archetype sub-icon glyph — mirrors card-hand top-left glyph position.
+           Purely decorative; screen readers get archetype from the aria-label. -->
+      <span class="card-detail__archetype-glyph" aria-hidden="true">
+        <app-icon [name]="archetypeIconName" [size]="28"></app-icon>
+      </span>
+      <!-- Tower footprint — present on tower cards to echo the hand-card pattern. -->
+      <span *ngIf="isTowerCard" class="card-detail__footprint" aria-hidden="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="4" width="16" height="16" rx="1"
+                stroke="currentColor" stroke-width="1.5" fill="none"/>
+        </svg>
+      </span>
+    </div>
 
     <!-- Header: name + close -->
     <header class="card-detail__header">
@@ -36,11 +57,29 @@
       </span>
     </div>
 
-    <!-- Keyword chips -->
-    <div class="card-detail__keywords" *ngIf="hasKeywords" aria-label="Card keywords">
-      <span *ngFor="let kw of activeKeywords"
-            class="card-detail__keyword"
-            [ngClass]="kw.className">{{ kw.label }}</span>
+    <!-- Keyword icon badges — mirrors card-hand keyword row.
+         Full keyword names in aria-label; icons are decorative. -->
+    <div class="card-detail__keywords"
+         *ngIf="hasKeywords"
+         [attr.aria-label]="keywordsAriaLabel">
+      <span *ngIf="definition.terraform" class="card-detail__keyword card-detail__keyword--terraform" aria-label="Terraform">
+        <app-icon name="kw-terraform" [size]="14"></app-icon>
+      </span>
+      <span *ngIf="definition.link" class="card-detail__keyword card-detail__keyword--link" aria-label="Link">
+        <app-icon name="kw-link" [size]="14"></app-icon>
+      </span>
+      <span *ngIf="definition.innate" class="card-detail__keyword card-detail__keyword--innate" aria-label="Innate">
+        <app-icon name="kw-innate" [size]="14"></app-icon>
+      </span>
+      <span *ngIf="definition.retain" class="card-detail__keyword card-detail__keyword--retain" aria-label="Retain">
+        <app-icon name="kw-retain" [size]="14"></app-icon>
+      </span>
+      <span *ngIf="definition.ethereal" class="card-detail__keyword card-detail__keyword--ethereal" aria-label="Ethereal">
+        <app-icon name="kw-ethereal" [size]="14"></app-icon>
+      </span>
+      <span *ngIf="definition.exhaust" class="card-detail__keyword card-detail__keyword--exhaust" aria-label="Exhaust">
+        <app-icon name="kw-exhaust" [size]="14"></app-icon>
+      </span>
     </div>
 
     <!-- Descriptions: current + upgraded preview -->

@@ -54,9 +54,12 @@
   color: var(--text-color);
   font-family: "Orbitron", sans-serif;
   padding: var(--spacing-lg);
+  // Archetype trim ring — inset box-shadow follows the border-radius naturally.
+  // Stacked with the existing ambient drop-shadow.
   box-shadow:
     0 20px 60px -10px rgba(0, 0, 0, 0.8),
-    0 0 0 1px var(--theme-purple-a20);
+    0 0 0 1px var(--theme-purple-a20),
+    inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral));
   animation: modal-slide-in var(--card-modal-enter-duration) ease-out;
 
   /* Dark scrollbar — matches app-profile / Codex treatment. Default browser
@@ -80,6 +83,66 @@
 @keyframes modal-slide-in {
   from { transform: translateY(12px); opacity: 0; }
   to   { transform: translateY(0);     opacity: 1; }
+}
+
+/* --- Branding art strip --- */
+//
+// Thin strip at the top of the modal that hosts the archetype backdrop pattern,
+// sub-icon glyph, and tower footprint. The modal is a wide QA tool panel —
+// no clip-path silhouette — so this strip is the identity anchor instead.
+
+.modal__art-strip {
+  position: relative;
+  height: 2.5rem;
+  margin: calc(-1 * var(--spacing-lg)) calc(-1 * var(--spacing-lg)) var(--spacing-md);
+  border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+  overflow: hidden;
+
+  // Backdrop pattern (layer 1) + faint radial glow (layer 2).
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      var(--card-backdrop-image, none),
+      radial-gradient(
+        ellipse at 50% 100%,
+        rgba(255, 255, 255, 0.04) 0%,
+        transparent 70%
+      );
+    background-size: auto, cover;
+    background-repeat: repeat, no-repeat;
+    pointer-events: none;
+  }
+}
+
+.modal__archetype-glyph {
+  position: absolute;
+  bottom: var(--spacing-xs);
+  left: var(--spacing-sm);
+  color: var(--archetype-trim-color, var(--card-trim-neutral));
+  opacity: 0.8;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+}
+
+.modal__footprint {
+  position: absolute;
+  bottom: var(--spacing-xs);
+  right: var(--spacing-sm);
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--archetype-trim-color, var(--card-trim-neutral));
+  opacity: var(--card-footprint-opacity, 0.65);
+  pointer-events: none;
+  z-index: 1;
+
+  svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
 }
 
 /* --- Header --- */
@@ -195,16 +258,26 @@
   gap: 0.3rem;
 }
 
+// Keyword icon badges — mirrors card-hand S36 icon treatment.
+// Text labels are surfaced via aria-label on each badge span.
+
 .modal__keyword {
-  padding: 0.15rem 0.5rem;
-  background: rgba(255, 255, 255, 0.06);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
   border: var(--border-width-thin) solid var(--border-color-subtle);
-  border-radius: var(--border-radius-sm);
-  font-size: var(--font-size-tiny);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--theme-purple-lighter);
+  background: rgba(255, 255, 255, 0.06);
 }
+
+.modal__keyword--terraform { color: var(--keyword-color-terraform); border-color: rgba(0, 255, 255, 0.4); }
+.modal__keyword--link      { color: var(--keyword-color-link);      border-color: rgba(180, 130, 240, 0.4); }
+.modal__keyword--innate    { color: var(--keyword-color-innate);    border-color: rgba(80, 255, 136, 0.4); }
+.modal__keyword--retain    { color: var(--keyword-color-retain);    border-color: rgba(255, 170, 102, 0.4); }
+.modal__keyword--ethereal  { color: var(--keyword-color-ethereal);  border-color: rgba(204, 153, 255, 0.4); }
+.modal__keyword--exhaust   { color: var(--keyword-color-exhaust);   border-color: rgba(255, 136, 102, 0.4); }
 
 /* --- Base / upgraded panels --- */
 
