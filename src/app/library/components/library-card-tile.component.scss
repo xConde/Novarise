@@ -448,6 +448,31 @@
 // Rare shimmer animation on framed tile: the ::after pseudo is clipped by the
 // parent polygon in Blink, so no shimmer amputation. No special handling needed.
 
+/* --- Framed tile (Spell polygon silhouette) --- */
+//
+// Mirrors .tile--frame-tower pattern. Uses --card-frame-spell-clip--tile
+// (shallower corner steps — 8% instead of 12% — so the peak stays
+// proportionate on the taller 22/32 aspect without dominating the header).
+
+.tile--frame-spell {
+  clip-path: var(--card-frame-spell-clip--tile);
+  transition:
+    transform var(--card-tile-transition-duration) ease-out,
+    border-color var(--card-tile-transition-duration) ease,
+    filter var(--card-tile-transition-duration) ease,
+    clip-path var(--card-tile-transition-duration) ease;
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 0 transparent);
+
+  &:hover,
+  &:focus-visible {
+    box-shadow: none !important;
+    filter:
+      drop-shadow(0 0 min(6px, var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
+      brightness(1.06);
+  }
+}
+
 /* --- Reduce-motion --- */
 
 body.reduce-motion .tile,

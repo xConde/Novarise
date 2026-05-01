@@ -680,4 +680,39 @@ describe('CardHandComponent', () => {
       expect(card.classList.contains('card--frame-tower')).toBe(true);
     });
   });
+
+  describe('spell frame class binding', () => {
+    it('applies card--frame-spell to spell-type cards', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.GOLD_RUSH)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      expect(cards.length).toBe(1);
+      expect(cards[0].classList.contains('card--frame-spell')).toBe(true);
+    });
+
+    it('does NOT apply card--frame-spell to non-spell cards', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      expect(cards.length).toBe(1);
+      expect(cards[0].classList.contains('card--frame-spell')).toBe(false);
+    });
+
+    it('spell card has card--spell type class alongside card--frame-spell', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.GOLD_RUSH)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const card = fixture.nativeElement.querySelector('.card') as HTMLElement;
+      expect(card.classList.contains('card--spell')).toBe(true);
+      expect(card.classList.contains('card--frame-spell')).toBe(true);
+    });
+  });
 });

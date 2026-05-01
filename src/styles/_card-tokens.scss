@@ -271,7 +271,45 @@
     0%   97%
   );
 
-  --card-frame-spell-clip:    polygon(/* arched top — defined S11 */);
+  // Spell: tapered obelisk peak at the top center — evokes "fires once / instant
+  // action" energy. Corners step down to 12% so the cost pill (top:0.3rem left:0.3rem)
+  // and type icon (top:0.45rem right:0.4rem) stay well inside the clip region.
+  // The peak occupies the center 30%–70% band (clear of both chrome corners).
+  // Slopes are gentle (4% shoulder at 25%/75%) to avoid a knife-edge that looks
+  // fragile at fan-overlap density. The bottom chamfers mirror Tower for visual
+  // consistency in the hand.
+  //
+  // Hand cards (~100×136px): peak at 0% height, shoulder at 4%, corners at 12%.
+  --card-frame-spell-clip: polygon(
+    0%   12%,     /* top-left corner — stepped down, cost pill clear */
+    25%  12%,     /* left shoulder base                              */
+    35%  4%,      /* left shoulder rise                              */
+    50%  0%,      /* center peak                                     */
+    65%  4%,      /* right shoulder rise                             */
+    75%  12%,     /* right shoulder base — type icon clear           */
+    100% 12%,     /* top-right corner                                */
+    100% 94%,     /* right edge                                      */
+    96%  100%,    /* bottom-right chamfer                            */
+    4%   100%,    /* bottom-left chamfer                             */
+    0%   94%      /* left edge                                       */
+  );
+
+  // Tile variant (22/32 aspect — ~220×320px). 12% of height ≈ 38px on a 320px
+  // tile — that's noticeably deep. Flatten corners to 8% and shoulder to 3%
+  // so the peak accent stays proportionate without dominating the card header.
+  --card-frame-spell-clip--tile: polygon(
+    0%   8%,
+    25%  8%,
+    35%  3%,
+    50%  0%,
+    65%  3%,
+    75%  8%,
+    100% 8%,
+    100% 97%,
+    97%  100%,
+    3%   100%,
+    0%   97%
+  );
   --card-frame-modifier-clip: polygon(/* notched shoulders — defined S12 */);
   --card-frame-utility-clip:  polygon(/* chamfered corners — defined S13 */);
 

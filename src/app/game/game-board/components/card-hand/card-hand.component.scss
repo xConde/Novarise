@@ -540,6 +540,50 @@ body.reduce-motion .card--frame-tower.card--pending { animation: none; }
 // (Verified: clip-path on a stacking context clips all descendants including
 // ::after. The band stays inside the trapezoid silhouette.)
 
+// ── Framed Spell card ────────────────────────────────────────
+//
+// Spell silhouette: obelisk peak at top center — reads as "quick / instant /
+// fires once." Corners step down to 12% so both UI overlays (cost pill,
+// type icon) remain inside the clipped region. Bottom chamfers match Tower
+// for visual consistency in the fan.
+//
+// Pattern is identical to .card--frame-tower: same CSS-var rarity glow,
+// same min() blur clamp, same composed filter on hover, per-type keyframe.
+
+.card--frame-spell {
+  clip-path: var(--card-frame-spell-clip);
+  transition:
+    transform var(--transition-fast) ease,
+    filter var(--transition-fast) ease,
+    opacity var(--transition-fast) ease,
+    clip-path var(--transition-fast) ease;
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color));
+}
+
+.card--frame-spell.card--playable:hover {
+  box-shadow: none !important;
+  filter:
+    drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
+    brightness(var(--card-hover-brightness));
+}
+
+.card--frame-spell.card--pending {
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 0.75rem var(--game-gold-a50)) brightness(var(--card-pending-brightness)) !important;
+  animation: card-frame-spell-pending-pulse var(--card-pending-pulse-duration) ease-in-out infinite;
+}
+
+@keyframes card-frame-spell-pending-pulse {
+  0%, 100% { filter: drop-shadow(0 0 0.5rem var(--game-gold-a40))  brightness(var(--card-pending-brightness)); }
+  50%       { filter: drop-shadow(0 0 1rem rgba(255, 215, 0, 0.65)) brightness(var(--card-pending-brightness)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card--frame-spell.card--pending { animation: none; }
+}
+body.reduce-motion .card--frame-spell.card--pending { animation: none; }
+
 // ── Card states ──────────────────────────────────────────────
 
 .card--playable {

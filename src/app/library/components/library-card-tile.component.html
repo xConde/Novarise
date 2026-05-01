@@ -12,6 +12,7 @@
   [class.tile--upgraded]="showUpgraded && !desaturated && hasMeaningfulUpgrade"
   [class.tile--desaturated]="desaturated"
   [class.tile--frame-tower]="definition.type === CardType.TOWER"
+  [class.tile--frame-spell]="definition.type === CardType.SPELL"
   [style.--tile-tower-accent]="towerAccent"
   (click)="onClick()"
   [attr.aria-label]="desaturated

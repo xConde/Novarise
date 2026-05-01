@@ -33,6 +33,18 @@ describe('LibraryCardTileComponent', () => {
     effect: { type: 'tower', towerType: TowerType.BASIC },
   };
 
+  const spellDef: CardDefinition = {
+    id: CardId.GOLD_RUSH,
+    name: 'Gold Rush',
+    description: 'Gain 40 gold.',
+    type: CardType.SPELL,
+    rarity: CardRarity.COMMON,
+    energyCost: 1,
+    upgraded: false,
+    archetype: 'neutral',
+    effect: { type: 'spell', spellId: 'gold_rush', value: 40 },
+  };
+
   const modifierDef: CardDefinition = {
     id: CardId.HANDSHAKE,
     name: 'Handshake',
@@ -196,6 +208,30 @@ describe('LibraryCardTileComponent', () => {
       const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
       expect(btn.classList.contains('tile--tower')).toBe(true);
       expect(btn.classList.contains('tile--frame-tower')).toBe(true);
+    });
+  });
+
+  describe('spell frame class binding', () => {
+    it('applies tile--frame-spell to spell-type cards', () => {
+      component.definition = spellDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--frame-spell')).toBe(true);
+    });
+
+    it('does NOT apply tile--frame-spell to non-spell cards', () => {
+      component.definition = towerDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--frame-spell')).toBe(false);
+    });
+
+    it('spell tile has tile--spell alongside tile--frame-spell', () => {
+      component.definition = spellDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--spell')).toBe(true);
+      expect(btn.classList.contains('tile--frame-spell')).toBe(true);
     });
   });
 });
