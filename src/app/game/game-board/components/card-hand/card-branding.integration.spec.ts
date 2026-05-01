@@ -250,12 +250,8 @@ describe('Card branding — card-hand surface', () => {
           .toContain(sample.trimFrag);
       });
 
-      it('archetype backdrop image var is bound', () => {
-        const backdrop = cardEl.style.getPropertyValue('--card-backdrop-image');
-        expect(backdrop)
-          .withContext(`${sample.label}: --card-backdrop-image should contain ${sample.backdropFrag}`)
-          .toContain(sample.backdropFrag);
-      });
+      // Archetype backdrop var was removed from card-hand at S75 (kept on tiles).
+      // Tile-surface backdrop assertion still runs in the library-card-tile block below.
 
       it(`frame class ${sample.handFrameClass} is applied`, () => {
         expect(cardEl.classList.contains(sample.handFrameClass))

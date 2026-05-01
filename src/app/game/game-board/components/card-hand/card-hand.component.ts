@@ -145,23 +145,6 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
-   * CSS var() reference for the archetype backdrop pattern.
-   * Bound to --card-backdrop-image on each card element; consumed by the
-   * per-type ::before background-image layers.
-   * Siegeworks falls back to neutral (Phase 5 unscoped).
-   */
-  getArchetypeBackdropVar(card: HandCard): string {
-    switch (card.definition.archetype) {
-      case 'cartographer': return 'var(--card-backdrop-cartographer)';
-      case 'highground':   return 'var(--card-backdrop-highground)';
-      case 'conduit':      return 'var(--card-backdrop-conduit)';
-      case 'neutral':
-      case 'siegeworks':
-      default:             return 'var(--card-backdrop-neutral)';
-    }
-  }
-
-  /**
    * CSS var() reference for the archetype trim color (hover/selected state).
    * Bound to --archetype-trim-color-strong on each card element.
    */

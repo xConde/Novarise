@@ -50,7 +50,7 @@
 }
 
 .tutorial-card--select_tower {
-  bottom: 8rem; /* Above the tower bar */
+  bottom: 16rem; /* Clear the card-hand row + breathing space */
   left: 50%;
   transform: translateX(-50%);
 }
@@ -64,9 +64,9 @@
   transform: translateX(-50%);
 }
 
-/* upgrade_tower: above the tower bar, centered */
+/* upgrade_tower: above the card-hand row, centered */
 .tutorial-card--upgrade_tower {
-  bottom: 8rem; /* above tower bar, similar to select_tower */
+  bottom: 16rem; /* clear the card-hand row + breathing space */
   left: 50%;
   right: auto;
   top: auto;
