@@ -5,6 +5,7 @@
  * radians. No magic numbers elsewhere — every numeric literal for aim belongs
  * here.
  */
+import { TowerType } from '../models/tower.model';
 
 /** Lerp and snap parameters for turret yaw tracking. */
 export const AIM_LERP_CONFIG = {
@@ -38,6 +39,43 @@ export const AIM_FALLBACK_CONFIG = {
    * lingering perception of motion for motion-sensitive users.
    */
   reduceMotionGraceSec: 0,
+} as const;
+
+/**
+ * Per-tower yaw amplitude clamp (radians from the neutral forward direction).
+ *
+ * Directional towers (BASIC, SNIPER, MORTAR) rotate without restriction —
+ * their visual fiction is a barrel or scope that points exactly at the target.
+ *
+ * Omnidirectional towers (SLOW dish, CHAIN sphere) use a reduced amplitude so
+ * the aim gesture reads as "leaning toward" rather than "tracking precisely".
+ * This preserves the field-weapon fiction while still giving the player a clear
+ * indication of which target is selected.
+ *
+ * SPLASH drum spins on its forward axis (roll, not yaw) for the idle effect;
+ * the splashYaw parent allows full yaw so the cluster faces the target — full
+ * rotation is acceptable because the cluster head looks like a directional weapon.
+ *
+ * Set to Math.PI (180°) to allow unrestricted rotation. Clamp is applied to the
+ * computed targetYaw before `lerpYaw` so the lerp still takes the shortest path
+ * within the allowed arc.
+ */
+export const AIM_AMPLITUDE_CONFIG: Record<TowerType, number> = {
+  [TowerType.BASIC]:  Math.PI,
+  [TowerType.SNIPER]: Math.PI,
+  [TowerType.SPLASH]: Math.PI,
+  /**
+   * SLOW emitter dish: ±90° arc centered on forward. The field-weapon read is
+   * preserved — the dish "leans" toward the target rather than spinning freely.
+   */
+  [TowerType.SLOW]:   Math.PI / 2,
+  /**
+   * CHAIN sphere+electrodes: ±90° arc. The electrode cluster tilts toward the
+   * target; the arc discharge VFX is still omnidirectional so the field-weapon
+   * read is maintained.
+   */
+  [TowerType.CHAIN]:  Math.PI / 2,
+  [TowerType.MORTAR]: Math.PI,
 } as const;
 
 /** Visual parameters for the selected-tower aim line indicator. */

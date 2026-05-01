@@ -1634,6 +1634,91 @@ describe('TowerMeshFactoryService', () => {
         it('disposeGroup still works after aim-wiring subgroups are added', () => {
           expect(() => disposeGroup(group)).not.toThrow();
         });
+
+        it('disposeGroup disposes geometry of meshes nested inside the aim-yaw subgroup', () => {
+          // Verify the aim yaw wrapper group is part of disposeGroup's recursive walk.
+          // disposeGroup uses group.traverse() which walks all descendants regardless
+          // of nesting depth, so mortarYaw > barrelPivot > barrel is fully covered.
+          const subgroupName = group.userData['aimYawSubgroupName'] as string;
+          const yawGroup = group.getObjectByName(subgroupName);
+          expect(yawGroup).toBeTruthy();
+
+          // Collect a sample mesh from inside the yaw subgroup.
+          let innerMesh: THREE.Mesh | undefined;
+          yawGroup!.traverse((child) => {
+            if (!innerMesh && child instanceof THREE.Mesh) {
+              innerMesh = child;
+            }
+          });
+
+          if (innerMesh) {
+            const geo = innerMesh.geometry;
+            spyOn(geo, 'dispose');
+            // disposeGroup must reach into the yaw subgroup and call dispose.
+            disposeGroup(group);
+            expect(geo.dispose).toHaveBeenCalledTimes(1);
+          } else {
+            // Some yaw groups contain only further sub-groups (no direct meshes);
+            // confirm the overall group still disposes without error.
+            expect(() => disposeGroup(group)).not.toThrow();
+          }
+        });
+      });
+    });
+  });
+
+  // ── Sprint 48 (Phase E) — Disposal audit: all 6 yaw wrapper groups walked ────
+  //
+  // Confirms disposeGroup's recursive traverse reaches all aim-yaw subgroups
+  // introduced in Phase B: mortarYaw, aimGroup, splashYaw, slowYaw, chainYaw.
+  // The BASIC turretGroup pre-existed; all new wrappers must also be covered.
+  describe('Phase E disposal audit — aim-yaw subgroups fully walked by disposeGroup', () => {
+    const expectedYawSubgroups: Partial<Record<TowerType, string>> = {
+      [TowerType.BASIC]:  'turret',
+      [TowerType.SNIPER]: 'aimGroup',
+      [TowerType.SPLASH]: 'splashYaw',
+      [TowerType.SLOW]:   'slowYaw',
+      [TowerType.CHAIN]:  'chainYaw',
+      [TowerType.MORTAR]: 'mortarYaw',
+    };
+
+    Object.entries(expectedYawSubgroups).forEach(([type, subgroupName]) => {
+      it(`${type}: disposeGroup calls geometry.dispose on a mesh inside ${subgroupName}`, () => {
+        const group = service.createTowerMesh(3, 3, type as TowerType, boardWidth, boardHeight);
+        createdGroups.push(group);
+
+        const yawGroup = group.getObjectByName(subgroupName);
+        expect(yawGroup).withContext(`${subgroupName} must exist on ${type} tower`).toBeTruthy();
+
+        // Find any Mesh descendant of the yaw subgroup.
+        let innerMesh: THREE.Mesh | undefined;
+        yawGroup!.traverse((child) => {
+          if (!innerMesh && child instanceof THREE.Mesh) {
+            innerMesh = child;
+          }
+        });
+
+        expect(innerMesh).withContext(
+          `${subgroupName} must have at least one Mesh descendant for disposal verification`
+        ).toBeTruthy();
+
+        if (innerMesh) {
+          spyOn(innerMesh.geometry, 'dispose');
+          disposeGroup(group);
+          expect(innerMesh.geometry.dispose).toHaveBeenCalledTimes(1);
+        }
+      });
+    });
+
+    it('all 6 tower types dispose without throwing when aim-yaw subgroups are present', () => {
+      const allTypes = [
+        TowerType.BASIC, TowerType.SNIPER, TowerType.SPLASH,
+        TowerType.SLOW, TowerType.CHAIN, TowerType.MORTAR,
+      ];
+      allTypes.forEach((type) => {
+        const group = service.createTowerMesh(2, 2, type, boardWidth, boardHeight);
+        createdGroups.push(group);
+        expect(() => disposeGroup(group)).not.toThrow();
       });
     });
   });

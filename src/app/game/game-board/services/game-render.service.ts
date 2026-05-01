@@ -153,6 +153,11 @@ export class GameRenderService {
 
     // Animate tower idle effects, recoil, tube emits, emitter pulses, and tile pulses
     const nowSeconds = performance.now() / 1000;
+    // Single reduce-motion read per frame shared by tickAim and aimLineService.
+    // Reading body.classList once and passing it down avoids the duplicate DOM
+    // access that was previously split across the two call sites (Finding D-3).
+    const reduceMotion =
+      typeof document !== 'undefined' && document.body.classList.contains('reduce-motion');
     // Aim pre-pass: resolve primary targets and write currentAimTarget onto each
     // group BEFORE updateTowerAnimations so the aimTick callbacks see current data.
     this.towerAnimationService.tickAim(
@@ -160,7 +165,7 @@ export class GameRenderService {
       this.towerCombatService.getPlacedTowers(),
       deltaTime,
       this.targetPreviewService,
-      typeof document !== 'undefined' && document.body.classList.contains('reduce-motion'),
+      reduceMotion,
     );
     // Clear the DIRTY_ALL sentinel after the full tickAim pass has read every tower.
     // Without this call the sentinel accumulates until individual tower keys are
@@ -170,9 +175,7 @@ export class GameRenderService {
     // Update aim-line cylinder for the selected tower. Runs after tickAim so
     // currentAimTarget on each group is current. Hides automatically when
     // no tower is selected or no target is found.
-    const currentReduceMotion =
-      typeof document !== 'undefined' && document.body.classList.contains('reduce-motion');
-    this.aimLineService?.update(currentReduceMotion);
+    this.aimLineService?.update(reduceMotion);
     this.towerAnimationService.updateTowerAnimations(this.meshRegistry.towerMeshes, time);
     this.towerAnimationService.tickRecoilAnimations(this.meshRegistry.towerMeshes, nowSeconds);
     this.towerAnimationService.tickTubeEmits(this.meshRegistry.towerMeshes, nowSeconds);

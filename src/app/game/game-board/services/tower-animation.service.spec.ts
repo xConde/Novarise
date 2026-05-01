@@ -7,7 +7,7 @@ import { PlacedTower, TowerType, TOWER_CONFIGS, TargetingMode } from '../models/
 import { BlockType } from '../models/game-board-tile';
 import { MUZZLE_FLASH_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
 import { ANIMATION_CONFIG } from '../constants/rendering.constants';
-import { AIM_LERP_CONFIG } from '../constants/tower-aim.constants';
+import { AIM_LERP_CONFIG, AIM_AMPLITUDE_CONFIG } from '../constants/tower-aim.constants';
 import { BASIC_RECOIL_CONFIG, SPLASH_TUBE_EMIT_CONFIG, SLOW_EMITTER_PULSE_FIRE, MORTAR_RECOIL_CONFIG, MORTAR_BARREL_NAMES, TIER_UP_BOUNCE_CONFIG, SELL_ANIM_CONFIG, SELECTION_PULSE_CONFIG } from '../constants/tower-anim.constants';
 import { createTestEnemy } from '../testing';
 
@@ -2296,6 +2296,118 @@ describe('TowerAnimationService', () => {
 
       expect(group.userData['aimEngaged']).toBeTrue();
       expect(group.userData['noTargetGraceTime']).toBe(0);
+    });
+  });
+
+  // ---- tickAim perf gate spec (Sprint 17) ----
+  //
+  // NOTE (Red-Team Finding A-3): this spec measures the loop iteration overhead
+  // and lerpYaw math only. `getPreviewTarget` is spied to return immediately,
+  // bypassing TowerCombatService.findTarget and spatialGrid.queryRadius entirely.
+  // A slow spatial grid would still pass this gate. A real end-to-end perf
+  // measurement (Phase E sprint 37) should instantiate TowerCombatService with a
+  // live spatial grid under load to validate the full round-trip budget.
+
+  // ── Sprint 49 (Phase E) — amplitude clamp for omnidirectional towers ────────
+  //
+  // SLOW and CHAIN use AIM_AMPLITUDE_CONFIG[type] = Math.PI/2 (±90°).
+  // Targets behind the tower (targetYaw > π/2 or < -π/2) are clamped so the
+  // emitter/sphere only "leans toward" the target, preserving the field-weapon
+  // visual fiction rather than spinning to face backwards.
+  describe('tickAim amplitude clamp (Phase E Sprint 49)', () => {
+    function makeAimGroupForType(towerType: TowerType, subgroupName: string): {
+      group: THREE.Group;
+      yawGroup: THREE.Group;
+      tower: PlacedTower;
+    } {
+      const group = new THREE.Group();
+      group.userData['towerType'] = towerType;
+      group.userData['aimYawSubgroupName'] = subgroupName;
+      group.userData['aimTick'] = () => {};
+
+      const yawGroup = new THREE.Group();
+      yawGroup.name = subgroupName;
+      group.add(yawGroup);
+
+      const tower: PlacedTower = {
+        id: '5-5',
+        type: towerType,
+        level: 1,
+        row: 5,
+        col: 5,
+        targetingMode: TargetingMode.NEAREST,
+        mesh: undefined,
+        actualCost: TOWER_CONFIGS[towerType].cost,
+        placedAtTurn: 0,
+      } as unknown as PlacedTower;
+
+      return { group, yawGroup, tower };
+    }
+
+    afterEach(() => {
+      // No GPU resources in these test groups — just GC.
+    });
+
+    it('SLOW: target behind tower is clamped to Math.PI/2', () => {
+      const { group, yawGroup, tower } = makeAimGroupForType(TowerType.SLOW, 'slowYaw');
+      // Tower is at world (0,0,0); target is directly behind (negative Z = behind).
+      const behindEnemy = createTestEnemy('e1', 0, -5); // dz=-5, dx=0 → atan2(0,-5)=π
+      const previewSpy = jasmine.createSpyObj<TargetPreviewService>('TPS', ['getPreviewTarget']);
+      previewSpy.getPreviewTarget.and.returnValue(behindEnemy);
+
+      service.tickAim(new Map([['5-5', group]]), new Map([['5-5', tower]]), 0.5, previewSpy);
+
+      const maxAmp = AIM_AMPLITUDE_CONFIG[TowerType.SLOW];
+      // Snap lerp (large deltaTime) so yawGroup.rotation.y === clamped targetYaw.
+      expect(yawGroup.rotation.y).toBeCloseTo(maxAmp, 4);
+    });
+
+    it('SLOW: target within arc rotates freely to exact angle', () => {
+      const { group, yawGroup, tower } = makeAimGroupForType(TowerType.SLOW, 'slowYaw');
+      // Target at 45° — within ±90° arc.
+      const targetEnemy = createTestEnemy('e2', 5, 5); // dx=5, dz=5 → atan2(5,5)=π/4
+      const previewSpy = jasmine.createSpyObj<TargetPreviewService>('TPS', ['getPreviewTarget']);
+      previewSpy.getPreviewTarget.and.returnValue(targetEnemy);
+
+      service.tickAim(new Map([['5-5', group]]), new Map([['5-5', tower]]), 0.5, previewSpy);
+
+      expect(yawGroup.rotation.y).toBeCloseTo(Math.PI / 4, 3);
+    });
+
+    it('CHAIN: target behind tower is clamped to Math.PI/2', () => {
+      const { group, yawGroup, tower } = makeAimGroupForType(TowerType.CHAIN, 'chainYaw');
+      const behindEnemy = createTestEnemy('e3', 0, -5); // atan2(0,-5)=π
+      const previewSpy = jasmine.createSpyObj<TargetPreviewService>('TPS', ['getPreviewTarget']);
+      previewSpy.getPreviewTarget.and.returnValue(behindEnemy);
+
+      service.tickAim(new Map([['5-5', group]]), new Map([['5-5', tower]]), 0.5, previewSpy);
+
+      expect(yawGroup.rotation.y).toBeCloseTo(AIM_AMPLITUDE_CONFIG[TowerType.CHAIN], 4);
+    });
+
+    it('BASIC: no clamp — target behind tower reaches ±π freely', () => {
+      const { group, yawGroup, tower } = makeAimGroupForType(TowerType.BASIC, 'turret');
+      const behindEnemy = createTestEnemy('e4', 0, -5); // atan2(0,-5)=π
+      const previewSpy = jasmine.createSpyObj<TargetPreviewService>('TPS', ['getPreviewTarget']);
+      previewSpy.getPreviewTarget.and.returnValue(behindEnemy);
+
+      service.tickAim(new Map([['5-5', group]]), new Map([['5-5', tower]]), 0.5, previewSpy);
+
+      // BASIC has Math.PI amplitude — no clamp fires, lerp reaches π.
+      expect(Math.abs(yawGroup.rotation.y)).toBeCloseTo(Math.PI, 3);
+    });
+
+    it('MORTAR: no clamp — full 360° rotation allowed', () => {
+      const { group, yawGroup, tower } = makeAimGroupForType(TowerType.MORTAR, 'mortarYaw');
+      const leftEnemy = createTestEnemy('e5', -5, -5); // atan2(-5,-5) ≈ -3π/4
+      const previewSpy = jasmine.createSpyObj<TargetPreviewService>('TPS', ['getPreviewTarget']);
+      previewSpy.getPreviewTarget.and.returnValue(leftEnemy);
+
+      service.tickAim(new Map([['5-5', group]]), new Map([['5-5', tower]]), 0.5, previewSpy);
+
+      // Expected unclamped yaw ≈ -3π/4 ≈ -2.356.
+      // MORTAR amplitude = Math.PI so no clamp fires.
+      expect(Math.abs(yawGroup.rotation.y)).toBeGreaterThan(Math.PI / 2);
     });
   });
 

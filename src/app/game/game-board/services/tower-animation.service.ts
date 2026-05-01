@@ -4,7 +4,7 @@ import { PlacedTower, TowerType } from '../models/tower.model';
 import { BlockType } from '../models/game-board-tile';
 import { ANIMATION_CONFIG } from '../constants/rendering.constants';
 import { MUZZLE_FLASH_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
-import { AIM_LERP_CONFIG, AIM_FALLBACK_CONFIG } from '../constants/tower-aim.constants';
+import { AIM_LERP_CONFIG, AIM_FALLBACK_CONFIG, AIM_AMPLITUDE_CONFIG } from '../constants/tower-aim.constants';
 import { getMaterials } from '../utils/three-utils';
 import {
   BASIC_RECOIL_CONFIG,
@@ -213,7 +213,20 @@ export class TowerAnimationService {
 
           const dx = target.position.x - towerWorld.x;
           const dz = target.position.z - towerWorld.z;
-          const targetYaw = Math.atan2(dx, dz);
+          let targetYaw = Math.atan2(dx, dz);
+
+          // Amplitude clamp for omnidirectional towers (SLOW, CHAIN): restrict
+          // yaw to ±AIM_AMPLITUDE_CONFIG[type] radians from forward (0 rad).
+          // Directional towers (BASIC, SNIPER, SPLASH, MORTAR) use Math.PI so
+          // the clamp is a no-op. This preserves the field-weapon visual fiction
+          // for SLOW/CHAIN while still showing which target is selected.
+          const towerType = group.userData['towerType'] as TowerType | undefined;
+          if (towerType) {
+            const maxAmp = AIM_AMPLITUDE_CONFIG[towerType];
+            if (maxAmp < Math.PI) {
+              targetYaw = Math.max(-maxAmp, Math.min(maxAmp, targetYaw));
+            }
+          }
 
           yawGroup.rotation.y = lerpYaw(
             yawGroup.rotation.y,
