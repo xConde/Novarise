@@ -32,6 +32,7 @@
       [class.card--playing]="card.instance.instanceId === playingCardId"
       [class.card--frame-tower]="card.definition.type === CardType.TOWER"
       [class.card--frame-spell]="card.definition.type === CardType.SPELL"
+      [class.card--frame-modifier]="card.definition.type === CardType.MODIFIER"
       [disabled]="!card.canPlay || (pendingCardId !== null && card.instance.instanceId !== pendingCardId)"
       (click)="onCardClick(card)"
       (contextmenu)="onCardContextMenu($event, card)"

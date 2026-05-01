@@ -715,4 +715,39 @@ describe('CardHandComponent', () => {
       expect(card.classList.contains('card--frame-spell')).toBe(true);
     });
   });
+
+  describe('modifier frame class binding', () => {
+    it('applies card--frame-modifier to modifier-type cards', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.DAMAGE_BOOST)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      expect(cards.length).toBe(1);
+      expect(cards[0].classList.contains('card--frame-modifier')).toBe(true);
+    });
+
+    it('does NOT apply card--frame-modifier to non-modifier cards', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      expect(cards.length).toBe(1);
+      expect(cards[0].classList.contains('card--frame-modifier')).toBe(false);
+    });
+
+    it('modifier card has card--modifier type class alongside card--frame-modifier', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.DAMAGE_BOOST)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const card = fixture.nativeElement.querySelector('.card') as HTMLElement;
+      expect(card.classList.contains('card--modifier')).toBe(true);
+      expect(card.classList.contains('card--frame-modifier')).toBe(true);
+    });
+  });
 });

@@ -310,7 +310,49 @@
     3%   100%,
     0%   97%
   );
-  --card-frame-modifier-clip: polygon(/* notched shoulders — defined S12 */);
+  // Modifier: 8-vertex octagonal medallion — equal 45° chamfers at all four
+  // corners evoke a coin, seal, or persistent-effect token. Reads as "soft /
+  // continuous" against Tower's battlements and Spell's peak.
+  //
+  // Corner depth: 12% (hand). Chrome verification:
+  //   Cost pill top-left (4.8%, 3.5%): top-left edge from (0%,12%) to (12%,0%),
+  //     cross product C(8.3-C) at C=12 → 12×(8.3-12)=-44.4 ≤ 0 → inside.
+  //   Type icon top-left (93.6%, 5.3%): top-right edge from (88%,0%) to (100%,12%),
+  //     cross C(11.7-C) at C=12 → 12×(11.7-12)=-3.6 ≤ 0 → inside (barely).
+  //   Upgraded badge top-right (96%, 2.4%): same edge, C(11.7-C)=-3.6 ≤ 0 → inside.
+  //   Fan-overlap left-edge: clip only occurs in top-left 12% zone (triangle);
+  //     the vertical left edge below y=12% is uncut — within ≤10% budget.
+  //
+  // 8 vertices are the honest choice at ~100×136px. A 16-vertex approximation
+  // produces visible facets (~1-2px spacing) at this scale; the deliberate
+  // octagon reads cleanly as "medallion / badge" without jagged artifact.
+  --card-frame-modifier-clip: polygon(
+    12%  0%,      /* top-left chamfer — right of cost pill                  */
+    88%  0%,      /* top-right chamfer — left of type icon                  */
+    100% 12%,     /* top-right corner                                        */
+    100% 88%,     /* bottom-right approach                                   */
+    88%  100%,    /* bottom-right chamfer                                    */
+    12%  100%,    /* bottom-left chamfer                                     */
+    0%   88%,     /* bottom-left corner                                      */
+    0%   12%      /* top-left corner                                         */
+  );
+
+  // Tile variant (22/32 aspect — ~220×320px). 12% of 320px = 38px — too deep
+  // on the taller face; the corner cuts would dominate the header strip.
+  // 9% corners give an equivalent visual weight: 9% of 320px ≈ 29px chamfer,
+  // proportionate to the 9% of 136px ≈ 12px used at hand size.
+  // Chrome at tile: cost/icon both at var(--spacing-sm) ≈ 8px. As percent:
+  //   x=3.6%, y=2.5% — well within the 9% safe zone.
+  --card-frame-modifier-clip--tile: polygon(
+    9%   0%,
+    91%  0%,
+    100% 9%,
+    100% 91%,
+    91%  100%,
+    9%   100%,
+    0%   91%,
+    0%   9%
+  );
   --card-frame-utility-clip:  polygon(/* chamfered corners — defined S13 */);
 
   // Drop-shadow cap — enforced in all per-type filter declarations

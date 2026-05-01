@@ -473,6 +473,32 @@
   }
 }
 
+/* --- Framed tile (Modifier polygon silhouette) --- */
+//
+// Mirrors .tile--frame-tower pattern. Uses --card-frame-modifier-clip--tile
+// (9% chamfer — proportionate to the 12% hand chamfer on the taller 22/32 face).
+// The octagonal medallion shape differentiates Modifier from Tower (battlements)
+// and Spell (peak) in the library grid at a glance.
+
+.tile--frame-modifier {
+  clip-path: var(--card-frame-modifier-clip--tile);
+  transition:
+    transform var(--card-tile-transition-duration) ease-out,
+    border-color var(--card-tile-transition-duration) ease,
+    filter var(--card-tile-transition-duration) ease,
+    clip-path var(--card-tile-transition-duration) ease;
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 0 transparent);
+
+  &:hover,
+  &:focus-visible {
+    box-shadow: none !important;
+    filter:
+      drop-shadow(0 0 min(6px, var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
+      brightness(1.06);
+  }
+}
+
 /* --- Reduce-motion --- */
 
 body.reduce-motion .tile,

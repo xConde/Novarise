@@ -234,4 +234,28 @@ describe('LibraryCardTileComponent', () => {
       expect(btn.classList.contains('tile--frame-spell')).toBe(true);
     });
   });
+
+  describe('modifier frame class binding', () => {
+    it('applies tile--frame-modifier to modifier-type cards', () => {
+      component.definition = modifierDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--frame-modifier')).toBe(true);
+    });
+
+    it('does NOT apply tile--frame-modifier to non-modifier cards', () => {
+      component.definition = spellDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--frame-modifier')).toBe(false);
+    });
+
+    it('modifier tile has tile--modifier alongside tile--frame-modifier', () => {
+      component.definition = modifierDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--modifier')).toBe(true);
+      expect(btn.classList.contains('tile--frame-modifier')).toBe(true);
+    });
+  });
 });
