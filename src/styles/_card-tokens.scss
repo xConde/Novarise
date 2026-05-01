@@ -532,6 +532,13 @@
   --card-backdrop-opacity: 0.12;
 
 
+  // === Tower footprint preview ===
+  // Small outlined square at the bottom of tower cards — "this card places 1 tile."
+  // Suppressed on mobile via media query in card-hand.component.scss.
+  --card-footprint-size:    1.2rem;
+  --card-footprint-opacity: 0.65;
+
+
   // === Keyword icon tints ===
   // Applied via color: in .card__keyword--{name} rules.
   // Icons use currentColor so each badge inherits the per-keyword hue.

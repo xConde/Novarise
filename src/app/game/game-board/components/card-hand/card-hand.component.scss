@@ -1174,6 +1174,35 @@ body.reduce-motion .card-hand { animation: none; }
   border-color: rgba(255, 136, 102, 0.55);
 }
 
+// Footprint preview — tower cards only. Flat outlined square reads as "1 tile."
+// Centered at the bottom strip; bottom: 0.3rem keeps it above the instance dot
+// corner (bottom-right) without competing for the same vertical position.
+// color inherits --card-tower-accent (per-tower-type, bound inline in the template)
+// so the shape automatically matches BASIC orange, SNIPER purple, etc.
+// Suppressed on mobile — 3.75rem cards have no vertical room.
+.card__footprint {
+  position: absolute;
+  bottom: 0.3rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--card-footprint-size, 1.2rem);
+  height: var(--card-footprint-size, 1.2rem);
+  color: var(--card-tower-accent, var(--card-type-tower));
+  opacity: var(--card-footprint-opacity, 0.65);
+  pointer-events: none;
+  z-index: 1; // same layer as other card chrome
+
+  svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  @media (max-width: 480px) {
+    display: none;
+  }
+}
+
 // Description body text block was removed from the card face — players
 // now reach full rules via right-click (desktop) / long-press (touch), which
 // opens the CardDetailComponent modal. The card face is kept terse

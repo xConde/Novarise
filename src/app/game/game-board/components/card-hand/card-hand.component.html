@@ -113,6 +113,18 @@
         </span>
       </span>
 
+      <!-- Footprint preview — tower cards only. Flat outlined square communicates
+           "this card places a tower on a board tile." Purely decorative; suppressed
+           on mobile. Centered at the bottom strip, clear of the instance dot (bottom-right). -->
+      <span *ngIf="card.definition.type === CardType.TOWER"
+            class="card__footprint"
+            aria-hidden="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="4" width="16" height="16" rx="1"
+                stroke="currentColor" stroke-width="1.5" fill="none"/>
+        </svg>
+      </span>
+
       <!-- Instance dot — tints per-instance so identical cards are distinguishable -->
       <span class="card__instance-dot"
             [style.background]="'hsl(' + instanceHue(card.instance.instanceId) + ', 70%, 55%)'"

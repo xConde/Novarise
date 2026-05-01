@@ -1306,6 +1306,74 @@ describe('CardHandComponent', () => {
     });
   });
 
+  // ── S41/42 Phase E — Tower footprint preview ─────────────────────────────
+
+  describe('card__footprint — tower placement preview', () => {
+    function makeHandCard(cardId: CardId): HandCard {
+      const def = getCardDefinition(cardId);
+      return {
+        instance: makeInstance(cardId),
+        definition: def,
+        canPlay: true,
+        effectiveEnergyCost: def.energyCost,
+        goldCost: def.type === CardType.TOWER ? 50 : null,
+      };
+    }
+
+    it('tower card renders .card__footprint element', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const footprint = fixture.nativeElement.querySelector('.card__footprint') as HTMLElement;
+      expect(footprint).toBeTruthy();
+    });
+
+    it('spell card does NOT render .card__footprint element', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.GOLD_RUSH)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const footprint = fixture.nativeElement.querySelector('.card__footprint');
+      expect(footprint).toBeNull();
+    });
+
+    it('modifier card does NOT render .card__footprint element', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.DAMAGE_BOOST)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const footprint = fixture.nativeElement.querySelector('.card__footprint');
+      expect(footprint).toBeNull();
+    });
+
+    it('footprint element has aria-hidden attribute', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const footprint = fixture.nativeElement.querySelector('.card__footprint') as HTMLElement;
+      expect(footprint).toBeTruthy();
+      expect(footprint.getAttribute('aria-hidden')).toBe('true');
+    });
+
+    it('tower card has --card-tower-accent bound on the card element', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const card = fixture.nativeElement.querySelector('.card') as HTMLElement;
+      const accent = card.style.getPropertyValue('--card-tower-accent');
+      // getTowerAccentColor returns a non-empty color string for tower cards
+      expect(accent).toBeTruthy();
+    });
+  });
+
   describe('perf probe — mixed 10-card hand layout cost', () => {
     function buildMixed10(): CardInstance[] {
       const ids: CardId[] = [
