@@ -967,14 +967,14 @@ describe('CardHandComponent', () => {
   });
 
   describe('hover / pending / play-lift cross-type state classes', () => {
-    const FRAMED_TYPES: Array<{ cardId: CardId; frameClass: string; pendingAnimation: string }> = [
-      { cardId: CardId.TOWER_BASIC,   frameClass: 'card--frame-tower',    pendingAnimation: 'card-frame-tower-pending-pulse' },
-      { cardId: CardId.GOLD_RUSH,     frameClass: 'card--frame-spell',    pendingAnimation: 'card-frame-spell-pending-pulse' },
-      { cardId: CardId.DAMAGE_BOOST,  frameClass: 'card--frame-modifier', pendingAnimation: 'card-frame-modifier-pending-pulse' },
-      { cardId: CardId.DRAW_TWO,      frameClass: 'card--frame-utility',  pendingAnimation: 'card-frame-utility-pending-pulse' },
+    const FRAMED_TYPES: Array<{ cardId: CardId; frameClass: string }> = [
+      { cardId: CardId.TOWER_BASIC,   frameClass: 'card--frame-tower' },
+      { cardId: CardId.GOLD_RUSH,     frameClass: 'card--frame-spell' },
+      { cardId: CardId.DAMAGE_BOOST,  frameClass: 'card--frame-modifier' },
+      { cardId: CardId.DRAW_TWO,      frameClass: 'card--frame-utility' },
     ];
 
-    FRAMED_TYPES.forEach(({ cardId, frameClass }) => {
+    FRAMED_TYPES.forEach(({ cardId, frameClass }: { cardId: CardId; frameClass: string }) => {
       it(`${frameClass}: card--playable co-exists with frame class`, () => {
         component.deckState = makeDeckState([makeInstance(cardId)]);
         component.energy = makeEnergy(3, 3);
@@ -1124,7 +1124,7 @@ describe('CardHandComponent', () => {
     // mobile/tablet dimensions from inside a spec. What we CAN verify:
     // (a) The frame classes are applied regardless of viewport — they're data-driven, not media-query-conditional.
     // (b) The component renders all 4 types without throwing at any initial viewport size.
-    // Visual quality (do clip-paths look correct at 3.75rem width) requires real-browser inspection.
+    // Visual quality at narrow widths requires real-browser inspection.
 
     const BREAKPOINT_CASES: Array<{ label: string; cardId: CardId; frameClass: string }> = [
       { label: 'tower at mobile width',   cardId: CardId.TOWER_BASIC,  frameClass: 'card--frame-tower' },
@@ -1301,115 +1301,9 @@ describe('CardHandComponent', () => {
     });
   });
 
-  // ── S39 — archetype sub-icon glyph ────────────────────────────────────────
+  // ── Tower accent binding (preserved — footprint was removed but accent still feeds art-zone gradient) ──
 
-  describe('getArchetypeIconName', () => {
-    function makeHandCardWithArchetype(
-      cardId: CardId,
-      archetype: CardDefinition['archetype'],
-    ): HandCard {
-      const def = { ...getCardDefinition(cardId), archetype } as CardDefinition;
-      return {
-        instance: makeInstance(cardId),
-        definition: def,
-        canPlay: true,
-        effectiveEnergyCost: 1,
-        goldCost: null,
-      };
-    }
-
-    it('returns arch-cartographer for cartographer archetype', () => {
-      const card = makeHandCardWithArchetype(CardId.SCOUT_AHEAD, 'cartographer');
-      expect(component.getArchetypeIconName(card)).toBe('arch-cartographer');
-    });
-
-    it('returns arch-highground for highground archetype', () => {
-      const card = makeHandCardWithArchetype(CardId.RAISE_PLATFORM, 'highground');
-      expect(component.getArchetypeIconName(card)).toBe('arch-highground');
-    });
-
-    it('returns arch-conduit for conduit archetype', () => {
-      const card = makeHandCardWithArchetype(CardId.HANDSHAKE, 'conduit');
-      expect(component.getArchetypeIconName(card)).toBe('arch-conduit');
-    });
-
-    it('returns arch-neutral for neutral archetype', () => {
-      const card = makeHandCardWithArchetype(CardId.GOLD_RUSH, 'neutral');
-      expect(component.getArchetypeIconName(card)).toBe('arch-neutral');
-    });
-
-    it('returns arch-neutral for siegeworks archetype (deferred Phase 5)', () => {
-      const card = makeHandCardWithArchetype(CardId.TOWER_BASIC, 'siegeworks');
-      expect(component.getArchetypeIconName(card)).toBe('arch-neutral');
-    });
-
-    it('renders .card__archetype-glyph element with aria-hidden for each card', () => {
-      component.deckState = makeDeckState([makeInstance(CardId.SCOUT_AHEAD)]);
-      component.energy = makeEnergy(3, 3);
-      component.resolveHand();
-      fixture.detectChanges();
-
-      const glyph = fixture.nativeElement.querySelector('.card__archetype-glyph') as HTMLElement;
-      expect(glyph).toBeTruthy();
-      expect(glyph.getAttribute('aria-hidden')).toBe('true');
-    });
-  });
-
-  // ── S41/42 Phase E — Tower footprint preview ─────────────────────────────
-
-  describe('card__footprint — tower placement preview', () => {
-    function makeHandCard(cardId: CardId): HandCard {
-      const def = getCardDefinition(cardId);
-      return {
-        instance: makeInstance(cardId),
-        definition: def,
-        canPlay: true,
-        effectiveEnergyCost: def.energyCost,
-        goldCost: def.type === CardType.TOWER ? 50 : null,
-      };
-    }
-
-    it('tower card renders .card__footprint element', () => {
-      component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
-      component.energy = makeEnergy(3, 3);
-      component.resolveHand();
-      fixture.detectChanges();
-
-      const footprint = fixture.nativeElement.querySelector('.card__footprint') as HTMLElement;
-      expect(footprint).toBeTruthy();
-    });
-
-    it('spell card does NOT render .card__footprint element', () => {
-      component.deckState = makeDeckState([makeInstance(CardId.GOLD_RUSH)]);
-      component.energy = makeEnergy(3, 3);
-      component.resolveHand();
-      fixture.detectChanges();
-
-      const footprint = fixture.nativeElement.querySelector('.card__footprint');
-      expect(footprint).toBeNull();
-    });
-
-    it('modifier card does NOT render .card__footprint element', () => {
-      component.deckState = makeDeckState([makeInstance(CardId.DAMAGE_BOOST)]);
-      component.energy = makeEnergy(3, 3);
-      component.resolveHand();
-      fixture.detectChanges();
-
-      const footprint = fixture.nativeElement.querySelector('.card__footprint');
-      expect(footprint).toBeNull();
-    });
-
-    it('footprint element has aria-hidden attribute', () => {
-      component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
-      component.energy = makeEnergy(3, 3);
-      component.resolveHand();
-      fixture.detectChanges();
-
-      const footprint = fixture.nativeElement.querySelector('.card__footprint') as HTMLElement;
-      expect(footprint).toBeTruthy();
-      expect(footprint.getAttribute('aria-hidden')).toBe('true');
-    });
-
+  describe('tower accent binding', () => {
     it('tower card has --card-tower-accent bound on the card element', () => {
       component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
       component.energy = makeEnergy(3, 3);
@@ -1418,8 +1312,18 @@ describe('CardHandComponent', () => {
 
       const card = fixture.nativeElement.querySelector('.card') as HTMLElement;
       const accent = card.style.getPropertyValue('--card-tower-accent');
-      // getTowerAccentColor returns a non-empty color string for tower cards
       expect(accent).toBeTruthy();
+    });
+
+    it('non-tower card does NOT have --card-tower-accent bound', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.GOLD_RUSH)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const card = fixture.nativeElement.querySelector('.card') as HTMLElement;
+      const accent = card.style.getPropertyValue('--card-tower-accent');
+      expect(accent).toBeFalsy();
     });
   });
 

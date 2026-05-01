@@ -427,15 +427,14 @@ $card-type-colors: (
 
 // ── Card rarity glow ─────────────────────────────────────────
 //
-// Glow is channelled through two CSS vars so framed cards can redirect from
-// box-shadow to filter:drop-shadow without duplicating rarity color values.
+// Glow is channelled through two CSS vars shared by all cards:
 //
 //   --card-glow-color  — the rgba color for this card's rarity glow
 //   --card-glow-blur   — the blur radius (rem) for the outer glow
 //
-// Unframed cards (.card without a --frame-* modifier): box-shadow reads these.
-// Framed cards (.card--frame-tower etc.): box-shadow is suppressed; filter:
-// drop-shadow reads the same vars.
+// All cards (framed and unframed) use box-shadow for the outer glow.
+// Framed cards compose trim + glow in a single multi-shadow (see the
+// framed-card system below).
 
 .card {
   --card-glow-color: transparent;
@@ -505,60 +504,38 @@ body.reduce-motion .card--rare::after { animation: none; background-position: 0 
 
 // ── Framed-card system ───────────────────────────────────────
 //
-// Cards with a type-specific polygon silhouette use clip-path.
-// clip-path invalidates box-shadow (it clips at the bounding rectangle, not
-// the polygon), so rarity glow must redirect through filter:drop-shadow().
+// Frame classes carry per-type styling (archetype trim ring + rarity glow
+// composed in a single box-shadow). Polygon clip-path was removed at hand
+// scale (~100×136px) — battlement notches read as rendering artifacts, not
+// blueprint silhouette. Rectangles are correct here; polygons live on
+// library-card-tile and card-draft where they have room.
 //
-// Only Tower cards are framed in this sprint. Spell / Modifier / Utility
-// remain unframed (no clip-path, no filter change).
-//
-// Layer contract:
-//   .card--frame-tower              → shape + glow redirect, transition
-//   .card--frame-tower.card--rare::after
-//                                   → shimmer band stays inside clip region
-//                                     (clip-path clips ::after children too)
-//   hover-brightness composition    → single filter: line per selector
+// Multi-shadow composition on framed cards:
+//   box-shadow:
+//     inset 0 0 0 2px var(--archetype-trim-color)     ← archetype ring
+//     0 0 var(--card-glow-blur) var(--card-glow-color) ← rarity outer glow
+//   (comma-separated multi-shadow; both coexist on the same property)
 
 .card--frame-tower {
-  clip-path: var(--card-frame-tower-clip);
-  // Transition clip-path for smooth state changes (compositor-accelerated in Blink).
-  // prefers-reduced-motion: suppressed by the existing body.reduce-motion
-  // .card--playable { transition: none } rule.
   transition:
     transform var(--transition-fast) ease,
-    filter var(--transition-fast) ease,
-    opacity var(--transition-fast) ease,
-    clip-path var(--transition-fast) ease,
-    box-shadow var(--transition-fast) ease;
-  // Rarity glow redirected to filter:drop-shadow — box-shadow doesn't follow
-  // clip-path outlines. Archetype trim uses inset box-shadow which DOES clip
-  // naturally to the polygon, so we can reinstate box-shadow here for trim only.
-  // The inset shadow falls back to neutral if --archetype-trim-color is not bound.
-  box-shadow: inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral));
-  // Drop-shadow follows the polygon. Cap at --card-frame-drop-shadow-blur-max (8px).
-  filter: drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color));
+    box-shadow var(--transition-fast) ease,
+    opacity var(--transition-fast) ease;
+  box-shadow:
+    inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral)),
+    0 0 var(--card-glow-blur) var(--card-glow-color);
 }
 
-// Hover: swap to the strong trim color + slightly thicker border for the
-// "hoverable" signal. Brightness composes with drop-shadow in a single filter.
 .card--frame-tower.card--playable:hover {
-  box-shadow: inset 0 0 0 var(--card-trim-width-hover, 3px) var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
-  filter:
-    drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
-    brightness(var(--card-hover-brightness));
+  box-shadow:
+    inset 0 0 0 var(--card-trim-width-hover, 3px) var(--archetype-trim-color-strong, var(--card-trim-neutral-strong)),
+    0 0 var(--card-glow-blur) var(--card-glow-color),
+    0 0.5rem 1rem rgba(0, 0, 0, 0.5),
+    0 0 0.6rem var(--card-type-color, rgba(255, 255, 255, 0.2));
 }
 
-// Pending framed tower — keep the gold pulse glow via drop-shadow.
-// Two-class specificity (0,2,0) beats .card--pending (0,1,0) without !important.
 .card--frame-tower.card--pending {
-  box-shadow: none;
-  filter: drop-shadow(0 0 0.75rem var(--game-gold-a50)) brightness(var(--card-pending-brightness));
-  animation: card-frame-tower-pending-pulse var(--card-pending-pulse-duration) ease-in-out infinite;
-}
-
-@keyframes card-frame-tower-pending-pulse {
-  0%, 100% { filter: drop-shadow(0 0 0.5rem var(--game-gold-a40))  brightness(var(--card-pending-brightness)); }
-  50%       { filter: drop-shadow(0 0 1rem rgba(255, 215, 0, 0.65)) brightness(var(--card-pending-brightness)); }
+  animation: card-pending-pulse var(--card-pending-pulse-duration) ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -566,50 +543,28 @@ body.reduce-motion .card--rare::after { animation: none; background-position: 0 
 }
 body.reduce-motion .card--frame-tower.card--pending { animation: none; }
 
-// Rare shimmer on framed Tower: the ::after pseudo is clipped by the parent's
-// clip-path in Blink, so the diagonal band is naturally contained within the
-// polygon. No special adjustment needed — the shimmer reads correctly.
-// (Verified: clip-path on a stacking context clips all descendants including
-// ::after. The band stays inside the trapezoid silhouette.)
-
 // ── Framed Spell card ────────────────────────────────────────
-//
-// Spell silhouette: obelisk peak at top center — reads as "quick / instant /
-// fires once." Corners step down to 12% so both UI overlays (cost pill,
-// type icon) remain inside the clipped region. Bottom chamfers match Tower
-// for visual consistency in the fan.
-//
-// Pattern is identical to .card--frame-tower: same CSS-var rarity glow,
-// same min() blur clamp, same composed filter on hover, per-type keyframe.
 
 .card--frame-spell {
-  clip-path: var(--card-frame-spell-clip);
   transition:
     transform var(--transition-fast) ease,
-    filter var(--transition-fast) ease,
-    opacity var(--transition-fast) ease,
-    clip-path var(--transition-fast) ease,
-    box-shadow var(--transition-fast) ease;
-  box-shadow: inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral));
-  filter: drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color));
+    box-shadow var(--transition-fast) ease,
+    opacity var(--transition-fast) ease;
+  box-shadow:
+    inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral)),
+    0 0 var(--card-glow-blur) var(--card-glow-color);
 }
 
 .card--frame-spell.card--playable:hover {
-  box-shadow: inset 0 0 0 var(--card-trim-width-hover, 3px) var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
-  filter:
-    drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
-    brightness(var(--card-hover-brightness));
+  box-shadow:
+    inset 0 0 0 var(--card-trim-width-hover, 3px) var(--archetype-trim-color-strong, var(--card-trim-neutral-strong)),
+    0 0 var(--card-glow-blur) var(--card-glow-color),
+    0 0.5rem 1rem rgba(0, 0, 0, 0.5),
+    0 0 0.6rem var(--card-type-color, rgba(255, 255, 255, 0.2));
 }
 
 .card--frame-spell.card--pending {
-  box-shadow: none;
-  filter: drop-shadow(0 0 0.75rem var(--game-gold-a50)) brightness(var(--card-pending-brightness));
-  animation: card-frame-spell-pending-pulse var(--card-pending-pulse-duration) ease-in-out infinite;
-}
-
-@keyframes card-frame-spell-pending-pulse {
-  0%, 100% { filter: drop-shadow(0 0 0.5rem var(--game-gold-a40))  brightness(var(--card-pending-brightness)); }
-  50%       { filter: drop-shadow(0 0 1rem rgba(255, 215, 0, 0.65)) brightness(var(--card-pending-brightness)); }
+  animation: card-pending-pulse var(--card-pending-pulse-duration) ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -618,43 +573,27 @@ body.reduce-motion .card--frame-tower.card--pending { animation: none; }
 body.reduce-motion .card--frame-spell.card--pending { animation: none; }
 
 // ── Framed Modifier card ─────────────────────────────────────
-//
-// Modifier silhouette: octagonal medallion (8 vertices, 12% corner chamfers) —
-// reads as "persistent / continuous-effect token." Distinct from Tower
-// (battlements) and Spell (peak) without sharing any vertex pattern.
-//
-// Pattern mirrors .card--frame-tower and .card--frame-spell exactly:
-// same CSS-var rarity glow, same min() blur clamp, same composed filter on
-// hover, per-type keyframe for pending pulse.
 
 .card--frame-modifier {
-  clip-path: var(--card-frame-modifier-clip);
   transition:
     transform var(--transition-fast) ease,
-    filter var(--transition-fast) ease,
-    opacity var(--transition-fast) ease,
-    clip-path var(--transition-fast) ease,
-    box-shadow var(--transition-fast) ease;
-  box-shadow: inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral));
-  filter: drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color));
+    box-shadow var(--transition-fast) ease,
+    opacity var(--transition-fast) ease;
+  box-shadow:
+    inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral)),
+    0 0 var(--card-glow-blur) var(--card-glow-color);
 }
 
 .card--frame-modifier.card--playable:hover {
-  box-shadow: inset 0 0 0 var(--card-trim-width-hover, 3px) var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
-  filter:
-    drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
-    brightness(var(--card-hover-brightness));
+  box-shadow:
+    inset 0 0 0 var(--card-trim-width-hover, 3px) var(--archetype-trim-color-strong, var(--card-trim-neutral-strong)),
+    0 0 var(--card-glow-blur) var(--card-glow-color),
+    0 0.5rem 1rem rgba(0, 0, 0, 0.5),
+    0 0 0.6rem var(--card-type-color, rgba(255, 255, 255, 0.2));
 }
 
 .card--frame-modifier.card--pending {
-  box-shadow: none;
-  filter: drop-shadow(0 0 0.75rem var(--game-gold-a50)) brightness(var(--card-pending-brightness));
-  animation: card-frame-modifier-pending-pulse var(--card-pending-pulse-duration) ease-in-out infinite;
-}
-
-@keyframes card-frame-modifier-pending-pulse {
-  0%, 100% { filter: drop-shadow(0 0 0.5rem var(--game-gold-a40))  brightness(var(--card-pending-brightness)); }
-  50%       { filter: drop-shadow(0 0 1rem rgba(255, 215, 0, 0.65)) brightness(var(--card-pending-brightness)); }
+  animation: card-pending-pulse var(--card-pending-pulse-duration) ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -662,48 +601,28 @@ body.reduce-motion .card--frame-spell.card--pending { animation: none; }
 }
 body.reduce-motion .card--frame-modifier.card--pending { animation: none; }
 
-// ── Framed Utility card ─────────────────────────────────────
-//
-// Utility silhouette: price-tag / tool-tag chevron — bilateral inset V-points
-// on both vertical edges at lower-mid height. Reads as "resource / equipment
-// tag." Distinct from Tower (battlements), Spell (peak), Modifier (octagon).
-//
-// The chevron inset is 8% — within the ≤10% fan-overlap budget. All UI chrome
-// (cost pill, type icon, upgrade badge) lives in the full-width top zone
-// (0%–50%) and is unaffected by the lateral cuts.
-//
-// Pattern mirrors .card--frame-tower, .card--frame-spell, .card--frame-modifier:
-// same CSS-var rarity glow, same min() blur clamp, same composed filter on
-// hover, per-type keyframe for pending pulse.
+// ── Framed Utility card ──────────────────────────────────────
 
 .card--frame-utility {
-  clip-path: var(--card-frame-utility-clip);
   transition:
     transform var(--transition-fast) ease,
-    filter var(--transition-fast) ease,
-    opacity var(--transition-fast) ease,
-    clip-path var(--transition-fast) ease,
-    box-shadow var(--transition-fast) ease;
-  box-shadow: inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral));
-  filter: drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color));
+    box-shadow var(--transition-fast) ease,
+    opacity var(--transition-fast) ease;
+  box-shadow:
+    inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral)),
+    0 0 var(--card-glow-blur) var(--card-glow-color);
 }
 
 .card--frame-utility.card--playable:hover {
-  box-shadow: inset 0 0 0 var(--card-trim-width-hover, 3px) var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
-  filter:
-    drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
-    brightness(var(--card-hover-brightness));
+  box-shadow:
+    inset 0 0 0 var(--card-trim-width-hover, 3px) var(--archetype-trim-color-strong, var(--card-trim-neutral-strong)),
+    0 0 var(--card-glow-blur) var(--card-glow-color),
+    0 0.5rem 1rem rgba(0, 0, 0, 0.5),
+    0 0 0.6rem var(--card-type-color, rgba(255, 255, 255, 0.2));
 }
 
 .card--frame-utility.card--pending {
-  box-shadow: none;
-  filter: drop-shadow(0 0 0.75rem var(--game-gold-a50)) brightness(var(--card-pending-brightness));
-  animation: card-frame-utility-pending-pulse var(--card-pending-pulse-duration) ease-in-out infinite;
-}
-
-@keyframes card-frame-utility-pending-pulse {
-  0%, 100% { filter: drop-shadow(0 0 0.5rem var(--game-gold-a40))  brightness(var(--card-pending-brightness)); }
-  50%       { filter: drop-shadow(0 0 1rem rgba(255, 215, 0, 0.65)) brightness(var(--card-pending-brightness)); }
+  animation: card-pending-pulse var(--card-pending-pulse-duration) ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -963,40 +882,6 @@ body.reduce-motion .card-hand { animation: none; }
   }
 }
 
-// Archetype sub-icon glyph — small corner accent anchored at the top of the card
-// content zone (top: --card-padding-top-desktop = 2.1rem). This overlaps slightly
-// with the far-left edge of the centered card name on long titles; opacity 0.5
-// keeps it from competing with readable text. On mobile cards it is hidden entirely
-// since the art zone is too compressed to add visual noise.
-// 1.5rem = 24px, matching the icon [size] binding.
-// pointer-events: none — purely decorative, no interaction.
-.card__archetype-glyph {
-  position: absolute;
-  top: var(--card-padding-top-desktop);
-  left: 0.4rem;
-  width: 1.5rem;
-  height: 1.5rem;
-  color: var(--archetype-trim-color, var(--card-trim-neutral));
-  opacity: 0.5;
-  pointer-events: none;
-  z-index: 1; // above art-zone pseudo, same layer as other card chrome
-
-  svg {
-    width: 100%;
-    height: 100%;
-  }
-
-  @media (max-width: 768px) {
-    top: var(--card-padding-top-tablet);
-    width: 1.25rem;
-    height: 1.25rem;
-  }
-
-  @media (max-width: 480px) {
-    display: none; // card too narrow — art zone already compressed on mobile
-  }
-}
-
 // Type icon — small top-right corner chip signals type at a glance
 // (tower/spell/modifier/utility). The @each type-color rule above keeps per-type tinting.
 .card__type-icon {
@@ -1172,35 +1057,6 @@ body.reduce-motion .card-hand { animation: none; }
 .card__keyword--exhaust {
   color: var(--keyword-color-exhaust, #ff8866);
   border-color: rgba(255, 136, 102, 0.55);
-}
-
-// Footprint preview — tower cards only. Flat outlined square reads as "1 tile."
-// Centered at the bottom strip; bottom: 0.3rem keeps it above the instance dot
-// corner (bottom-right) without competing for the same vertical position.
-// color inherits --card-tower-accent (per-tower-type, bound inline in the template)
-// so the shape automatically matches BASIC orange, SNIPER purple, etc.
-// Suppressed on mobile — 3.75rem cards have no vertical room.
-.card__footprint {
-  position: absolute;
-  bottom: 0.3rem;
-  left: 50%;
-  transform: translateX(-50%);
-  width: var(--card-footprint-size, 1.2rem);
-  height: var(--card-footprint-size, 1.2rem);
-  color: var(--card-tower-accent, var(--card-type-tower));
-  opacity: var(--card-footprint-opacity, 0.65);
-  pointer-events: none;
-  z-index: 1; // same layer as other card chrome
-
-  svg {
-    width: 100%;
-    height: 100%;
-    display: block;
-  }
-
-  @media (max-width: 480px) {
-    display: none;
-  }
 }
 
 // Description body text block was removed from the card face — players

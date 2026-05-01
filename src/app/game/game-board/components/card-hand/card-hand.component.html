@@ -59,14 +59,6 @@
         <span class="card__cost-label">Energy</span>
       </span>
 
-      <!-- Archetype sub-icon glyph — top-left of art zone, below cost pill.
-           Purely decorative; reinforces archetype identity alongside the trim
-           ring and backdrop pattern. aria-hidden — screen readers get the
-           archetype from the card aria-label. -->
-      <span class="card__archetype-glyph" aria-hidden="true">
-        <app-icon [name]="getArchetypeIconName(card)" [size]="24"></app-icon>
-      </span>
-
       <!-- Upgraded indicator -->
       <span class="card__upgraded-badge" *ngIf="card.instance.upgraded" aria-hidden="true">+</span>
 
@@ -111,18 +103,6 @@
         <span *ngIf="card.definition.exhaust" class="card__keyword card__keyword--exhaust" [attr.aria-label]="'Exhaust'">
           <app-icon name="kw-exhaust" [size]="14"></app-icon>
         </span>
-      </span>
-
-      <!-- Footprint preview — tower cards only. Flat outlined square communicates
-           "this card places a tower on a board tile." Purely decorative; suppressed
-           on mobile. Centered at the bottom strip, clear of the instance dot (bottom-right). -->
-      <span *ngIf="card.definition.type === CardType.TOWER"
-            class="card__footprint"
-            aria-hidden="true">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="4" y="4" width="16" height="16" rx="1"
-                stroke="currentColor" stroke-width="1.5" fill="none"/>
-        </svg>
       </span>
 
       <!-- Instance dot — tints per-instance so identical cards are distinguishable -->

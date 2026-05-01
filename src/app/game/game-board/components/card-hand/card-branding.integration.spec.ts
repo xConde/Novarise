@@ -274,15 +274,6 @@ describe('Card branding — card-hand surface', () => {
           .toBe(1);
       });
 
-      it('footprint renders only for tower cards', () => {
-        const fp = handFixture.nativeElement.querySelector('.card__footprint');
-        if (sample.isTower) {
-          expect(fp).withContext(`${sample.label}: footprint should exist for tower`).not.toBeNull();
-        } else {
-          expect(fp).withContext(`${sample.label}: footprint should NOT exist for non-tower`).toBeNull();
-        }
-      });
-
       it('keyword badges render when expected', () => {
         const badges = handFixture.nativeElement.querySelectorAll('.card__keyword') as NodeListOf<HTMLElement>;
         if (sample.hasKeywords) {
@@ -296,13 +287,6 @@ describe('Card branding — card-hand surface', () => {
         }
       });
 
-      it('archetype glyph element is present and aria-hidden', () => {
-        const glyph = handFixture.nativeElement.querySelector('.card__archetype-glyph') as HTMLElement;
-        expect(glyph).withContext(`${sample.label}: .card__archetype-glyph must exist`).not.toBeNull();
-        expect(glyph?.getAttribute('aria-hidden'))
-          .withContext(`${sample.label}: glyph must be aria-hidden`)
-          .toBe('true');
-      });
     });
   }
 });
