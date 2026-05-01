@@ -1,9 +1,8 @@
 /**
- * Card definitions for Ascent Mode deckbuilder.
- *
- * All 25 cards defined as a Record<CardId, CardDefinition>.
- * Energy costs for tower cards: tower gold cost / 50, rounded.
- * Upgraded effects apply +50% values or -1 energy cost where meaningful.
+ * Card definitions. Every CardId maps to one CardDefinition (compile-time
+ * enforced via Record<CardId, CardDefinition>). Tower energy costs derive
+ * from tower gold cost / 50, rounded. Upgraded effects typically apply
+ * +50% values or -1 energy cost where meaningful.
  */
 
 import { TowerType } from '../../game/game-board/models/tower.model';
