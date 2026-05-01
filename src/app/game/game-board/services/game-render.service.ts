@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import { AudioService } from './audio.service';
 import { FpsCounterService } from './fps-counter.service';
 import { GameInputService } from './game-input.service';
@@ -7,6 +7,8 @@ import { GameStateService } from './game-state.service';
 import { EnemyService } from './enemy.service';
 import { TowerAnimationService } from './tower-animation.service';
 import { TowerCombatService } from './tower-combat.service';
+import { TargetPreviewService } from './target-preview.service';
+import { TowerMeshLifecycleService } from './tower-mesh-lifecycle.service';
 import { ParticleService } from './particle.service';
 import { GoldPopupService } from './gold-popup.service';
 import { DamagePopupService } from './damage-popup.service';
@@ -22,6 +24,7 @@ import { GamePhase } from '../models/game-state.model';
 import { PHYSICS_CONFIG } from '../constants/physics.constants';
 import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 import { CombatFrameResult } from '../models/combat-frame.model';
+import { AimLineService } from './aim-line.service';
 import type { ChallengeDefinition } from '../../../run/data/challenges';
 
 /**
@@ -60,6 +63,7 @@ export class GameRenderService {
     private enemyService: EnemyService,
     private towerAnimationService: TowerAnimationService,
     private towerCombatService: TowerCombatService,
+    private towerMeshLifecycle: TowerMeshLifecycleService,
     private particleService: ParticleService,
     private goldPopupService: GoldPopupService,
     private damagePopupService: DamagePopupService,
@@ -71,6 +75,12 @@ export class GameRenderService {
     private cardEffectService: CardEffectService,
     private gameBoardService: GameBoardService,
     private meshRegistry: BoardMeshRegistryService,
+    // @Optional() — not provided in GameRenderService test beds. tickAim
+    // degrades gracefully to a no-op when the service is absent.
+    @Optional() private targetPreviewService?: TargetPreviewService,
+    // @Optional() — aim-line cylinder for selected tower. update() is a no-op
+    // when the service is absent so test beds without full provider lists work.
+    @Optional() private aimLineService?: AimLineService,
   ) {}
 
   /** Initialize the render service. Call in ngAfterViewInit. */
@@ -141,8 +151,41 @@ export class GameRenderService {
       }
     }
 
-    // Animate tower idle effects and tile pulses
+    // Animate tower idle effects, recoil, tube emits, emitter pulses, and tile pulses
+    const nowSeconds = performance.now() / 1000;
+    // Single reduce-motion read per frame shared by tickAim and aimLineService.
+    // Reading body.classList once and passing it down avoids the duplicate DOM
+    // access that was previously split across the two call sites (Finding D-3).
+    const reduceMotion =
+      typeof document !== 'undefined' && document.body.classList.contains('reduce-motion');
+    // Aim pre-pass: resolve primary targets and write currentAimTarget onto each
+    // group BEFORE updateTowerAnimations so the aimTick callbacks see current data.
+    this.towerAnimationService.tickAim(
+      this.meshRegistry.towerMeshes,
+      this.towerCombatService.getPlacedTowers(),
+      deltaTime,
+      this.targetPreviewService,
+      reduceMotion,
+    );
+    // Clear the DIRTY_ALL sentinel after the full tickAim pass has read every tower.
+    // Without this call the sentinel accumulates until individual tower keys are
+    // each read once, which may take many frames for towers not yet in towerMeshes.
+    // (Phase C red-team Finding C-2.)
+    this.targetPreviewService?.tickPreviewCache();
+    // Update aim-line cylinder for the selected tower. Runs after tickAim so
+    // currentAimTarget on each group is current. Hides automatically when
+    // no tower is selected or no target is found.
+    this.aimLineService?.update(reduceMotion);
     this.towerAnimationService.updateTowerAnimations(this.meshRegistry.towerMeshes, time);
+    this.towerAnimationService.tickRecoilAnimations(this.meshRegistry.towerMeshes, nowSeconds);
+    this.towerAnimationService.tickTubeEmits(this.meshRegistry.towerMeshes, nowSeconds);
+    this.towerAnimationService.tickEmitterPulses(this.meshRegistry.towerMeshes, nowSeconds);
+    this.towerAnimationService.tickTierUpScale(this.meshRegistry.towerMeshes, nowSeconds);
+    this.towerAnimationService.tickSellAnimations(
+      this.meshRegistry.towerMeshes,
+      nowSeconds,
+      (key) => this.towerMeshLifecycle.removeMesh(key, false),
+    );
     this.towerAnimationService.updateTilePulse(this.meshRegistry.tileMeshes, time);
     this.towerAnimationService.updateMuzzleFlashes(this.towerCombatService.getPlacedTowers(), deltaTime);
 

@@ -10,7 +10,9 @@ import { StatusEffectType } from '../constants/status-effect.constants';
 import { StatusEffectService } from './status-effect.service';
 import { SpatialGrid } from '../utils/spatial-grid';
 import { dist2d, gridToWorld } from '../utils/coordinate-utils';
-import { disposeGroup } from '../utils/three-utils';
+import { buildDisposeProtect, disposeGroup } from '../utils/three-utils';
+import { GeometryRegistryService } from './geometry-registry.service';
+import { MaterialRegistryService } from './material-registry.service';
 import { CombatVFXService } from './combat-vfx.service';
 import { GameStateService } from './game-state.service';
 import { TowerAnimationService } from './tower-animation.service';
@@ -166,6 +168,10 @@ export class TowerCombatService {
     // @Optional() — HARMONIC needs seeded RNG for passenger selection.
     // Absent → no passenger fires; test beds without a live run stay unchanged.
     @Optional() private runService?: RunService,
+    // @Optional() — Phase B sprint 14. Used to protect registry-shared
+    // geometries/materials when disposing tower groups (sell, restart).
+    @Optional() private geometryRegistry?: GeometryRegistryService,
+    @Optional() private materialRegistry?: MaterialRegistryService,
   ) {}
 
   /**
@@ -452,7 +458,7 @@ export class TowerCombatService {
       for (let shot = 0; shot < shotsPerTurn; shot++) {
         if (tower.type === TowerType.SLOW) {
           this.applySlowAura(tower, stats, turnNumber);
-          this.towerAnimationService.startMuzzleFlash(tower);
+          this.towerAnimationService.triggerFire(tower);
           fired.push(tower.type);
           break; // Aura fires once regardless of shotsPerTurn.
         }
@@ -460,7 +466,7 @@ export class TowerCombatService {
         const target = this.findTarget(tower, stats);
         if (!target) break;
 
-        this.towerAnimationService.startMuzzleFlash(tower);
+        this.towerAnimationService.triggerFire(tower);
         fired.push(tower.type);
         lastTarget = target;
 
@@ -502,7 +508,7 @@ export class TowerCombatService {
           };
           if (!this.isTargetInRange(passenger, lastTarget, passengerStats)) continue;
           if (lastTarget.health <= 0) continue;
-          this.towerAnimationService.startMuzzleFlash(passenger);
+          this.towerAnimationService.triggerFire(passenger);
           fired.push(passenger.type);
           const passengerResult = this.fireShotAtTarget(
             passenger, lastTarget, passengerStats, scene, turnNumber,
@@ -951,7 +957,15 @@ export class TowerCombatService {
     return tower.targetingMode;
   }
 
-  private findTarget(tower: PlacedTower, stats: TowerStats): Enemy | null {
+  /**
+   * Returns the highest-priority target for the given tower and stat snapshot,
+   * respecting the tower's current targeting mode and LOS rules.
+   *
+   * Side-effect-free: calling this method does NOT mutate enemy state, register
+   * hits, or advance any timers. It is safe to call every animation frame for
+   * aim preview purposes (see TargetPreviewService).
+   */
+  findTarget(tower: PlacedTower, stats: TowerStats): Enemy | null {
     const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
 
     let best: Enemy | null = null;
@@ -1160,7 +1174,8 @@ export class TowerCombatService {
     // Dispose and remove all tower meshes from scene
     this.placedTowers.forEach(tower => {
       if (tower.mesh) {
-        disposeGroup(tower.mesh, scene);
+        disposeGroup(tower.mesh, scene,
+          buildDisposeProtect(this.geometryRegistry, this.materialRegistry));
       }
     });
     this.placedTowers.clear();

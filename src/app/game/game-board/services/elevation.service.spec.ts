@@ -9,6 +9,7 @@ import { TowerType } from '../models/tower.model';
 import { SerializableTileElevationState } from './elevation.types';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { BOARD_CONFIG } from '../constants/board.constants';
+import { GeometryRegistryService } from './geometry-registry.service';
 import { SceneService } from './scene.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
 
@@ -789,6 +790,37 @@ describe('ElevationService', () => {
       expect(cliffRegistry.cliffMeshes.size).toBe(0);
       // Both cliff meshes removed from scene
       expect(mockScene.children.length).toBe(childrenBefore - 2);
+    });
+
+    it('reset() does NOT dispose registry-owned cliff geometry (Phase C sprint 30 fix)', () => {
+      // Use a real GeometryRegistryService injected into a fresh ElevationService
+      // so the cliff geometry is genuinely registry-owned.
+      const localScene = new THREE.Scene();
+      const localSceneSpy = jasmine.createSpyObj<SceneService>('SceneService', ['getScene']);
+      localSceneSpy.getScene.and.returnValue(localScene);
+      const localGB = new GameBoardService();
+      localGB.importBoard(makeBoard(5, 5), 5, 5);
+      const localRegistry = new BoardMeshRegistryService();
+      const localPool = new TerraformMaterialPoolService();
+      const localGeomRegistry = new GeometryRegistryService();
+      const localSvc = new ElevationService(
+        localGB,
+        localRegistry,
+        localSceneSpy,
+        localPool,
+        localGeomRegistry,
+      );
+      localSvc.raise(1, 1, 1, null, 'card-x', 1);
+      const cliffMesh = localRegistry.cliffMeshes.get('1-1')!;
+      expect(cliffMesh).toBeTruthy();
+      expect(localGeomRegistry.isRegisteredGeometry(cliffMesh.geometry)).toBeTrue();
+      spyOn(cliffMesh.geometry, 'dispose');
+
+      localSvc.reset();
+
+      expect(cliffMesh.geometry.dispose).not.toHaveBeenCalled();
+      localPool.dispose();
+      localGeomRegistry.dispose();
     });
 
     it('pool material is NOT disposed by cliff removal (pool owns it)', () => {

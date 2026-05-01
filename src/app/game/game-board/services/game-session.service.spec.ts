@@ -30,6 +30,7 @@ import { GamePauseService } from './game-pause.service';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
+import { TowerDecalLibraryService } from './tower-decal-library.service';
 import { GameState, DifficultyLevel, GamePhase } from '../models/game-state.model';
 import { GameStats } from './game-stats.service';
 import { ChallengeSnapshot } from './challenge-tracking.service';
@@ -60,6 +61,7 @@ describe('GameSessionService', () => {
   let wavePreviewSpy: jasmine.SpyObj<WavePreviewService>;
   let gamePauseSpy: jasmine.SpyObj<GamePauseService>;
   let terraformPoolSpy: jasmine.SpyObj<TerraformMaterialPoolService>;
+  let decalLibrarySpy: jasmine.SpyObj<TowerDecalLibraryService>;
   let scene: THREE.Scene;
 
   beforeEach(() => {
@@ -124,7 +126,7 @@ describe('GameSessionService', () => {
 
     pathVisSpy = jasmine.createSpyObj('PathVisualizationService', ['hidePath', 'cleanup', 'showPath']);
 
-    tileHighlightSpy = jasmine.createSpyObj('TileHighlightService', ['clearHighlights', 'updateHighlights', 'restoreAfterHover']);
+    tileHighlightSpy = jasmine.createSpyObj('TileHighlightService', ['clearHighlights', 'updateHighlights', 'restoreAfterHover', 'resetAllState']);
 
     rangeVisSpy = jasmine.createSpyObj('RangeVisualizationService', ['cleanup', 'showForTower', 'removePreview', 'toggleAllRanges']);
 
@@ -157,6 +159,11 @@ describe('GameSessionService', () => {
     // isPoolMaterial always returns false in session-service specs so per-tile
     // material disposal path is exercised (no actual pooled meshes in registry).
     terraformPoolSpy.isPoolMaterial.and.returnValue(false);
+
+    decalLibrarySpy = jasmine.createSpyObj<TowerDecalLibraryService>(
+      'TowerDecalLibraryService',
+      ['getDecal', 'dispose'],
+    );
 
     TestBed.configureTestingModule({
       providers: [
@@ -194,6 +201,7 @@ describe('GameSessionService', () => {
           useValue: jasmine.createSpyObj<ElevationService>('ElevationService', ['reset']),
         },
         { provide: TerraformMaterialPoolService, useValue: terraformPoolSpy },
+        { provide: TowerDecalLibraryService, useValue: decalLibrarySpy },
       ],
     });
 
@@ -286,9 +294,9 @@ describe('GameSessionService', () => {
       expect(pathVisSpy.cleanup).toHaveBeenCalled();
     });
 
-    it('should call tileHighlightService.clearHighlights with the registry tileMeshes map', () => {
+    it('should call tileHighlightService.resetAllState (sprint 30 red-team fix)', () => {
       service.cleanupScene();
-      expect(tileHighlightSpy.clearHighlights).toHaveBeenCalledWith(meshRegistry.tileMeshes, scene);
+      expect(tileHighlightSpy.resetAllState).toHaveBeenCalled();
     });
 
     it('should call rangeVisualizationService.cleanup', () => {
@@ -364,6 +372,11 @@ describe('GameSessionService', () => {
     it('should call terraformPool.dispose() during cleanupScene', () => {
       service.cleanupScene();
       expect(terraformPoolSpy.dispose).toHaveBeenCalled();
+    });
+
+    it('should call towerDecalLibrary.dispose() during cleanupScene to release CanvasTexture GPU memory', () => {
+      service.cleanupScene();
+      expect(decalLibrarySpy.dispose).toHaveBeenCalled();
     });
 
     it('should not dispose pool materials via individual mesh disposal', () => {

@@ -7,12 +7,19 @@ import { assertNever } from './utils/assert-never';
 import { isInBounds } from './utils/coordinate-utils';
 import { MutationOp } from './services/path-mutation.types';
 import { TerraformMaterialPoolService } from './services/terraform-material-pool.service';
+import { GeometryRegistryService } from './services/geometry-registry.service';
+import { MaterialRegistryService } from './services/material-registry.service';
+import { TileInstanceLayer } from './services/tile-instance-layer';
 
 @Injectable()
 export class GameBoardService {
   constructor(
     @Optional() private readonly terraformPool?: TerraformMaterialPoolService,
+    @Optional() private readonly geometryRegistry?: GeometryRegistryService,
+    @Optional() private readonly materialRegistry?: MaterialRegistryService,
   ) {}
+
+  private wallEdgeTexture: THREE.CanvasTexture | null = null;
 
   // Board configuration
   private gameBoardWidth = BOARD_CONFIG.width;
@@ -29,11 +36,24 @@ export class GameBoardService {
     return [[r - 1, c - 1], [r - 1, c], [r, c - 1], [r, c]];
   })();
 
-  // Colors for different tile types — base must be visually distinct from wall
-  private readonly colorBase = 0x404858;    // Lighter blue-gray — reads as "buildable ground"
-  private readonly colorSpawner = 0x00ffff;
-  private readonly colorExit = 0xff00ff;
-  private readonly colorWall = 0x1a1520;    // Much darker — reads as "not usable"
+  // Colors for different tile types — base must be visually distinct from wall.
+  //
+  // Iteration history:
+  //  - Pre-branch (main, broken pipeline):     base=0x404858, wall=0x1a1520
+  //  - First fix attempt (+50% bump, Phase A): base=0x6a7488, wall=0x2c2434  ← too bright
+  //  - This iteration (~15% bump):             base=0x4a5366, wall=0x231c2c
+  //
+  // Phase A sprint 2/3 added outputColorSpace + OutputPass to the composer
+  // chain. Tiny perceptual shift; not enough to need the +50% bump that
+  // overshot the dark moody look.
+  private readonly colorBase = 0x4a5366;    // small bump from 0x404858
+  // UX-11: spawner / exit toned from pure cyan / magenta to muted versions
+  // that read as "spawn portal" / "exit goal" without breaking the deep
+  // moody atmosphere. Pure 0x00ffff and 0xff00ff popped as UI-bright
+  // beacons against the dark board.
+  private readonly colorSpawner = 0x2db8c4;  // muted teal-cyan
+  private readonly colorExit = 0xc234a8;     // deep rose-magenta
+  private readonly colorWall = 0x231c2c;    // small bump from 0x1a1520
   private readonly colorGrid = 0x444444;
 
   // State
@@ -144,7 +164,12 @@ export class GameBoardService {
   // Default elevation = 0 preserves all existing call sites unchanged.
   createTileMesh(row: number, col: number, type: BlockType, mutationOp?: MutationOp, elevation = 0): THREE.Mesh {
     const tileFootprint = this.tileSize * TILE_VISUAL_CONFIG.geometryGapFactor;
-    const geometry = new THREE.BoxGeometry(tileFootprint, this.tileHeight, tileFootprint);
+    // GeometryRegistry is optional so flat TestBeds without it still work;
+    // shipping path always has it (registered alongside TerraformMaterialPool
+    // in GameBoardComponent.providers).
+    const geometry = this.geometryRegistry
+      ? this.geometryRegistry.getBox(tileFootprint, this.tileHeight, tileFootprint)
+      : new THREE.BoxGeometry(tileFootprint, this.tileHeight, tileFootprint);
 
     let material: THREE.MeshStandardMaterial;
 
@@ -152,20 +177,21 @@ export class GameBoardService {
       // Shared pool material — do NOT dispose this on individual mesh swap.
       material = this.terraformPool.getMaterial(mutationOp);
     } else {
-      const color = this.getTileColor(type);
-
-      // Material — base tiles glow subtly to signal "buildable", walls are dark and inert
-      const isBase = type === BlockType.BASE;
-      const isWall = type === BlockType.WALL;
-      const v = TILE_VISUAL_CONFIG;
-      material = new THREE.MeshStandardMaterial({
-        color: color,
-        emissive: isWall ? v.wall.emissive : isBase ? v.baseEmissive : color,
-        emissiveIntensity: isBase ? v.base.emissiveIntensity : isWall ? v.wall.emissiveIntensity : v.other.emissiveIntensity,
-        metalness: isWall ? v.wall.metalness : v.base.metalness,
-        roughness: isBase ? v.base.roughness : isWall ? v.wall.roughness : v.other.roughness,
-        envMapIntensity: v.envMapIntensity,
-      });
+      // Per-instance tile material.
+      //
+      // Phase B sprint 14 originally cached this via MaterialRegistry per
+      // BlockType, but TileHighlightService and BoardPointerService both
+      // mutate `mesh.material.emissive` and `emissiveIntensity` directly to
+      // drive hover, selection, valid-placement, and blocked-placement
+      // tints. A shared cached material aliased every BASE tile to the
+      // last writer's color — visible during placement preview. Reverted to
+      // per-instance allocation pre-sprint-21.
+      //
+      // Sprint 21+ migrates BASE tiles to InstancedMesh + per-instance
+      // color via instanceColor attribute, at which point only one shared
+      // base material is needed and per-instance state lives in the
+      // attribute. Until then, per-tile materials are correct.
+      material = this.makeTileMaterial(type);
     }
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -181,57 +207,222 @@ export class GameBoardService {
     return mesh;
   }
 
-  // Create grid lines - interior lines positioned BETWEEN tiles (24x19)
+  /**
+   * Build a TileInstanceLayer for every tile of `targetType` on the current
+   * board that has NO active mutationOp. Returns null if no such tiles exist.
+   *
+   * Used by GameBoardComponent.renderGameBoard (sprint 22+) for BASE tiles
+   * (and sprint 23 for WALL/SPAWNER/EXIT). Mutated tiles render as
+   * individual meshes via createTileMesh — those slots are NOT included
+   * in the instance layer.
+   *
+   * Material is shared across all instances (one MeshStandardMaterial per
+   * BlockType). Geometry comes from GeometryRegistry. Per-instance colour
+   * starts at identity (1, 1, 1); TileHighlightService writes per-instance
+   * tints via `layer.setColorAt`.
+   */
+  buildTileInstanceLayer(targetType: BlockType): TileInstanceLayer | null {
+    // WALL layer uses an overlap factor so connected impassable tiles
+    // merge into a continuous structure; every other type uses the
+    // standard gap so adjacent tiles read as discrete cells.
+    const gapFactor = targetType === BlockType.WALL
+      ? TILE_VISUAL_CONFIG.wallGapFactor
+      : TILE_VISUAL_CONFIG.geometryGapFactor;
+    const tileFootprint = this.tileSize * gapFactor;
+    const geometry = this.geometryRegistry
+      ? this.geometryRegistry.getBox(tileFootprint, this.tileHeight, tileFootprint)
+      : new THREE.BoxGeometry(tileFootprint, this.tileHeight, tileFootprint);
+
+    // Phase C sprint 30 red-team fix: route the per-type instanced material
+    // through MaterialRegistry so its disposal is owned by the registry's
+    // batch-dispose at encounter teardown. Pre-fix, the layer held a raw
+    // material that was never disposed (TileInstanceLayer.dispose only
+    // disposes the InstancedMesh, not the material; layer comments
+    // incorrectly said the material was registry-owned).
+    //
+    // Per-instance highlights mutate `instanceColor`, NOT the shared
+    // material — the sprint 22 instanceColor strategy is exactly what
+    // makes this caching safe. Per-instance state lives in the buffer
+    // attribute.
+    const materialKey = `tile:instanced:${targetType}`;
+    const material = this.materialRegistry
+      ? this.materialRegistry.getOrCreate(materialKey, () => this.makeTileMaterial(targetType))
+      : this.makeTileMaterial(targetType);
+
+    const instances: Array<{ row: number; col: number; worldX: number; worldZ: number; worldY: number }> = [];
+    for (let row = 0; row < this.gameBoard.length; row++) {
+      const rowTiles = this.gameBoard[row];
+      for (let col = 0; col < rowTiles.length; col++) {
+        const tile = rowTiles[col];
+        if (tile.type !== targetType) continue;
+        // Mutated tiles use per-mesh rendering via createTileMesh + TerraformPool.
+        if (tile.mutationOp !== undefined) continue;
+        const elevation = tile.elevation ?? 0;
+        const x = (col - this.gameBoardWidth / 2) * this.tileSize;
+        const z = (row - this.gameBoardHeight / 2) * this.tileSize;
+        const y = elevation + this.tileHeight / 2;
+        instances.push({ row, col, worldX: x, worldZ: z, worldY: y });
+      }
+    }
+
+    if (instances.length === 0) {
+      // Material is registry-owned (or per-call when no registry); the
+      // registry's batch dispose handles either case. Don't dispose here.
+      if (!this.materialRegistry) {
+        material.dispose();
+      }
+      return null;
+    }
+
+    return new TileInstanceLayer(targetType, geometry, material, instances);
+  }
+
+  private makeTileMaterial(type: BlockType): THREE.MeshStandardMaterial {
+    const color = this.getTileColor(type);
+    const isBase = type === BlockType.BASE;
+    const isWall = type === BlockType.WALL;
+    const v = TILE_VISUAL_CONFIG;
+    const params: THREE.MeshStandardMaterialParameters = {
+      color: color,
+      emissive: isWall ? v.wall.emissive : isBase ? v.baseEmissive : color,
+      emissiveIntensity: isBase ? v.base.emissiveIntensity : isWall ? v.wall.emissiveIntensity : v.other.emissiveIntensity,
+      metalness: isWall ? v.wall.metalness : v.base.metalness,
+      roughness: isBase ? v.base.roughness : isWall ? v.wall.roughness : v.other.roughness,
+      envMapIntensity: v.envMapIntensity,
+    };
+    if (isWall) {
+      // Walls bake the cell-edge accent into an emissive texture so the
+      // border shows on every cell at any camera angle, instead of
+      // depending on a trim-plane being visible through a gap (which
+      // front-face occlusion makes inconsistent across axes).
+      params.emissive = 0xffffff;
+      params.emissiveMap = this.getWallEdgeTexture();
+      params.emissiveIntensity = 0.22;
+    }
+    return new THREE.MeshStandardMaterial(params);
+  }
+
+  private getWallEdgeTexture(): THREE.CanvasTexture {
+    if (this.wallEdgeTexture) return this.wallEdgeTexture;
+
+    const size = 64;
+    const edge = 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Failed to acquire 2d canvas context for wall edge texture');
+    }
+    // Black center → no emissive contribution → wall material color
+    // shows through unchanged on the cell interior.
+    ctx.fillStyle = 'rgb(0, 0, 0)';
+    ctx.fillRect(0, 0, size, size);
+    // Deep-space cool purple — much darker than the wall material is
+    // bright, so the rim reads as an extension of the background
+    // palette. The contrast against the navy wall fill is what makes
+    // it perceptually lighter without being a saturated UI line.
+    // Tuned barely above the wall fill color so wall cells read as
+    // "toned out / out-of-bounds" rather than as active board.
+    ctx.fillStyle = 'rgb(36, 30, 52)';
+    ctx.fillRect(0, 0, size, edge);
+    ctx.fillRect(0, size - edge, size, edge);
+    ctx.fillRect(0, 0, edge, size);
+    ctx.fillRect(size - edge, 0, edge, size);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    this.wallEdgeTexture = tex;
+    return tex;
+  }
+
+  /**
+   * Two trim planes sitting just above the floor: a bright cool plane
+   * scoped to the bounding box of non-wall tiles (designed trim
+   * between buildable cells) and a dimmer purple-grey plane scoped to
+   * the wall bounding box (accent-tinted structure between wall
+   * cells). Each plane is hidden by its respective tile geometry from
+   * above; the cell gap exposes a strip of plane color at every
+   * boundary.
+   *
+   * Two planes (rather than one full-board plane) prevent the bright
+   * trim from leaking through wall column seams and into tile-less
+   * cells beyond the playable area, while still giving walls visible
+   * cell structure with their own accent-tinted color.
+   *
+   * Returns a Group for API compatibility — disposal traverses the
+   * group and disposes each mesh's geometry/material.
+   */
   createGridLines(): THREE.Group {
     const gridGroup = new THREE.Group();
 
-    // Subtle bioluminescent veins
-    const gridMaterial = new THREE.LineBasicMaterial({
-      color: 0x7a6a9a,
-      transparent: true,
-      opacity: 0.45,
-      linewidth: 1
-    });
+    if (this.gameBoardWidth <= 0 || this.gameBoardHeight <= 0) return gridGroup;
 
-    // Create vertical lines between columns - positioned at tile boundaries
-    for (let i = 1; i < this.gameBoardWidth; i++) {
-      const geometry = new THREE.BufferGeometry();
-      // Shift by -0.5 to position lines BETWEEN tiles instead of at centers
-      const x = (i - this.gameBoardWidth / 2 - 0.5) * this.tileSize;
-      // Lines should only extend across actual tile range
-      const z1 = (-this.gameBoardHeight / 2) * this.tileSize;
-      const z2 = (this.gameBoardHeight / 2 - 1) * this.tileSize;
-
-      const vertices = new Float32Array([
-        x, 0.01, z1,
-        x, 0.01, z2
-      ]);
-
-      geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-      const line = new THREE.Line(geometry, gridMaterial);
-      gridGroup.add(line);
-    }
-
-    // Create horizontal lines between rows - positioned at tile boundaries
-    for (let i = 1; i < this.gameBoardHeight; i++) {
-      const geometry = new THREE.BufferGeometry();
-      // Shift by -0.5 to position lines BETWEEN tiles instead of at centers
-      const z = (i - this.gameBoardHeight / 2 - 0.5) * this.tileSize;
-      // Lines should only extend across actual tile range
-      const x1 = (-this.gameBoardWidth / 2) * this.tileSize;
-      const x2 = (this.gameBoardWidth / 2 - 1) * this.tileSize;
-
-      const vertices = new Float32Array([
-        x1, 0.01, z,
-        x2, 0.01, z
-      ]);
-
-      geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-      const line = new THREE.Line(geometry, gridMaterial);
-      gridGroup.add(line);
+    // Deep-space cool purple — same hue as the wall edge texture so
+    // the whole board shares one accent palette. Dark enough that
+    // the trim reads as a natural extension of the background; the
+    // contrast against the lighter buildable tile faces is what
+    // makes the border perceptually visible without saturation.
+    // Fully opaque so the gap between buildable tiles reads as a
+    // solid grout line instead of letting the void show through.
+    const TRIM_ACCENT = 0x2c2440;
+    const nonWallBB = this.computeTileBoundingBox(t => t.type !== BlockType.WALL);
+    if (nonWallBB) {
+      gridGroup.add(this.buildTrimPlane(nonWallBB, TRIM_ACCENT, 1.0, 0.005));
     }
 
     return gridGroup;
+  }
+
+  private computeTileBoundingBox(
+    filter: (tile: GameBoardTile) => boolean,
+  ): { minRow: number; maxRow: number; minCol: number; maxCol: number } | null {
+    let minRow = Number.POSITIVE_INFINITY;
+    let maxRow = Number.NEGATIVE_INFINITY;
+    let minCol = Number.POSITIVE_INFINITY;
+    let maxCol = Number.NEGATIVE_INFINITY;
+    let any = false;
+    for (let row = 0; row < this.gameBoard.length; row++) {
+      const rowTiles = this.gameBoard[row];
+      for (let col = 0; col < rowTiles.length; col++) {
+        const tile = rowTiles[col];
+        if (!tile || !filter(tile)) continue;
+        any = true;
+        if (row < minRow) minRow = row;
+        if (row > maxRow) maxRow = row;
+        if (col < minCol) minCol = col;
+        if (col > maxCol) maxCol = col;
+      }
+    }
+    return any ? { minRow, maxRow, minCol, maxCol } : null;
+  }
+
+  private buildTrimPlane(
+    bb: { minRow: number; maxRow: number; minCol: number; maxCol: number },
+    color: number,
+    opacity: number,
+    y: number,
+  ): THREE.Mesh {
+    const planeWidth = (bb.maxCol - bb.minCol + 1) * this.tileSize;
+    const planeHeight = (bb.maxRow - bb.minRow + 1) * this.tileSize;
+    const centerX = ((bb.minCol + bb.maxCol) / 2 - this.gameBoardWidth / 2) * this.tileSize;
+    const centerZ = ((bb.minRow + bb.maxRow) / 2 - this.gameBoardHeight / 2) * this.tileSize;
+
+    const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+    const material = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(centerX, y, centerZ);
+    mesh.renderOrder = -1;
+
+    return mesh;
   }
 
   private getTileColor(type: BlockType): number {

@@ -5,7 +5,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
-import { disposeMaterial, disposeMesh } from '@game/game-board/utils/three-utils';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass';
+import { clampPixelRatio, disposeMaterial, disposeMesh } from '@game/game-board/utils/three-utils';
 import {
   EDITOR_SCENE_CONFIG,
   EDITOR_RENDERER_CONFIG,
@@ -97,12 +98,14 @@ export class EditorSceneService {
   private composer!: EffectComposer;
   private bloomPass?: UnrealBloomPass;
   private vignettePass?: ShaderPass;
+  private outputPass?: OutputPass;
   private renderPass?: RenderPass;
   private skybox?: THREE.Mesh;
   private particles: THREE.Points | null = null;
 
   /** Shadow-casting light — tracked for shadow map disposal. */
   private shadowLight?: THREE.DirectionalLight;
+  private lights: THREE.Light[] = [];
 
   // Context loss handlers — stored for removal on dispose
   private contextLostHandler: ((event: Event) => void) | null = null;
@@ -110,6 +113,7 @@ export class EditorSceneService {
 
   // Resize handler — stored for removal on dispose
   private resizeHandler: (() => void) | null = null;
+  private resizeViewport: VisualViewport | null = null;
 
   // ----- Getters -----
 
@@ -153,7 +157,7 @@ export class EditorSceneService {
     onContextRestored: () => void
   ): void {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, EDITOR_RENDERER_CONFIG.maxPixelRatio));
+    this.renderer.setPixelRatio(clampPixelRatio(window.devicePixelRatio, EDITOR_RENDERER_CONFIG.maxPixelRatio));
 
     const { width, height } = this.getViewportSize();
     this.renderer.setSize(width, height);
@@ -185,7 +189,8 @@ export class EditorSceneService {
 
     window.addEventListener('resize', this.resizeHandler);
     if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', this.resizeHandler);
+      this.resizeViewport = window.visualViewport;
+      this.resizeViewport.addEventListener('resize', this.resizeHandler);
     }
   }
 
@@ -216,6 +221,12 @@ export class EditorSceneService {
 
     this.vignettePass = new ShaderPass(vignetteShader);
     this.composer.addPass(this.vignettePass);
+
+    // OutputPass MUST be last. Applies the renderer's tone mapping +
+    // outputColorSpace to composer-rendered frames. Without this the
+    // composer bypasses ACESFilmicToneMapping + SRGBColorSpace.
+    this.outputPass = new OutputPass();
+    this.composer.addPass(this.outputPass);
   }
 
   initLights(): void {
@@ -223,7 +234,7 @@ export class EditorSceneService {
       EDITOR_LIGHTS.ambient.color,
       EDITOR_LIGHTS.ambient.intensity
     );
-    this.scene.add(ambientLight);
+    this.addLight(ambientLight);
 
     const [dl1Cfg, dl2Cfg, dl3Cfg, dl4Cfg] = EDITOR_LIGHTS.directional;
 
@@ -236,38 +247,61 @@ export class EditorSceneService {
     this.shadowLight.shadow.camera.bottom = -dl1Cfg.shadowCameraExtent!;
     this.shadowLight.shadow.mapSize.width = dl1Cfg.shadowMapSize!;
     this.shadowLight.shadow.mapSize.height = dl1Cfg.shadowMapSize!;
-    this.scene.add(this.shadowLight);
+    this.addLight(this.shadowLight);
 
     const directionalLight2 = new THREE.DirectionalLight(dl2Cfg.color, dl2Cfg.intensity);
     directionalLight2.position.set(...dl2Cfg.position);
-    this.scene.add(directionalLight2);
+    this.addLight(directionalLight2);
 
     const directionalLight3 = new THREE.DirectionalLight(dl3Cfg.color, dl3Cfg.intensity);
     directionalLight3.position.set(...dl3Cfg.position);
-    this.scene.add(directionalLight3);
+    this.addLight(directionalLight3);
 
     const directionalLight4 = new THREE.DirectionalLight(dl4Cfg.color, dl4Cfg.intensity);
     directionalLight4.position.set(...dl4Cfg.position);
-    this.scene.add(directionalLight4);
+    this.addLight(directionalLight4);
 
     const blCfg = EDITOR_LIGHTS.bottomLight;
     const bottomLight = new THREE.DirectionalLight(blCfg.color, blCfg.intensity);
     bottomLight.position.set(...blCfg.position);
     bottomLight.lookAt(0, 0, 0);
-    this.scene.add(bottomLight);
+    this.addLight(bottomLight);
 
     const hemiLight = new THREE.HemisphereLight(
       EDITOR_LIGHTS.hemisphere.skyColor,
       EDITOR_LIGHTS.hemisphere.groundColor,
       EDITOR_LIGHTS.hemisphere.intensity
     );
-    this.scene.add(hemiLight);
+    this.addLight(hemiLight);
 
     for (const cfg of EDITOR_LIGHTS.point) {
       const pl = new THREE.PointLight(cfg.color, cfg.intensity, cfg.distance);
       pl.position.set(...cfg.position);
-      this.scene.add(pl);
+      this.addLight(pl);
     }
+  }
+
+  private addLight(light: THREE.Light): void {
+    this.scene.add(light);
+    this.lights.push(light);
+  }
+
+  /**
+   * Remove every tracked light from the scene and dispose any shadow maps.
+   * Lights themselves have no .dispose() — but their shadow.map render
+   * target does, and unrooting them from the scene graph breaks the
+   * scene → light → parent cycle for early GC.
+   */
+  disposeLights(): void {
+    for (const light of this.lights) {
+      const dirLight = light as THREE.DirectionalLight;
+      if (dirLight.shadow?.map) {
+        dirLight.shadow.map.dispose();
+      }
+      this.scene.remove(light);
+    }
+    this.lights = [];
+    this.shadowLight = undefined;
   }
 
   initSkybox(): void {
@@ -350,6 +384,9 @@ export class EditorSceneService {
       this.camera.updateProjectionMatrix();
     }
     if (this.renderer) {
+      // Re-apply pixel ratio: display switch / browser zoom can change
+      // window.devicePixelRatio without recreating the renderer.
+      this.renderer.setPixelRatio(clampPixelRatio(window.devicePixelRatio, EDITOR_RENDERER_CONFIG.maxPixelRatio));
       this.renderer.setSize(width, height);
     }
     if (this.composer) {
@@ -394,6 +431,10 @@ export class EditorSceneService {
     this.disposeSkybox();
 
     // Post-processing
+    if (this.outputPass) {
+      this.outputPass.dispose();
+      this.outputPass = undefined;
+    }
     if (this.vignettePass) {
       this.vignettePass.dispose();
       this.vignettePass = undefined;
@@ -425,18 +466,15 @@ export class EditorSceneService {
     // Resize handlers
     if (this.resizeHandler) {
       window.removeEventListener('resize', this.resizeHandler);
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', this.resizeHandler);
+      if (this.resizeViewport) {
+        this.resizeViewport.removeEventListener('resize', this.resizeHandler);
+        this.resizeViewport = null;
       }
       this.resizeHandler = null;
     }
 
-    // Shadow map render target
-    if (this.shadowLight) {
-      this.shadowLight.shadow.map?.dispose();
-      this.scene.remove(this.shadowLight);
-      this.shadowLight = undefined;
-    }
+    // Lights (shadow maps + scene unroot)
+    this.disposeLights();
 
     // Controls
     if (this.controls) {

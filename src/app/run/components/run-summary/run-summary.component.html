@@ -8,49 +8,48 @@
   <!-- Background glow -->
   <div class="run-summary__glow" aria-hidden="true"></div>
 
-  <!-- Header -->
-  <header class="run-summary__header">
+  <!-- Hero block: title + dominant final-score figure -->
+  <header class="run-summary__hero">
     <h1 class="run-summary__title">
-      {{ isVictory ? 'Ascent Complete!' : 'Run Failed' }}
+      {{ isVictory ? 'Ascent Complete' : 'Run Failed' }}
     </h1>
     <span
       *ngIf="ascensionLabel"
       class="run-summary__ascension-badge"
       [attr.aria-label]="ascensionLabel"
     >{{ ascensionLabel }}</span>
+
+    <div class="run-summary__hero-figure" [attr.aria-label]="'Final score ' + runState.score">
+      <span class="run-summary__hero-value">{{ runState.score }}</span>
+      <span class="run-summary__hero-label">Final Score</span>
+    </div>
   </header>
 
-  <!-- Score -->
-  <div class="run-summary__score" [attr.aria-label]="'Final score ' + runState.score">
-    <span class="run-summary__score-label">Score</span>
-    <span class="run-summary__score-value">{{ runState.score }}</span>
-  </div>
-
-  <!-- Stats grid -->
+  <!-- Stats: single horizontal bar of run summary metrics -->
   <section class="run-summary__stats" aria-label="Run statistics">
-    <div class="stat-card">
-      <span class="stat-card__value">{{ encountersCompleted }}/{{ totalEncounters }}</span>
-      <span class="stat-card__label">Encounters</span>
+    <div class="stat-cell">
+      <span class="stat-cell__value">{{ encountersCompleted }}<span class="stat-cell__sep">/</span>{{ totalEncounters }}</span>
+      <span class="stat-cell__label">Encounters</span>
     </div>
-    <div class="stat-card">
-      <span class="stat-card__value">{{ totalKills }}</span>
-      <span class="stat-card__label">Enemies Killed</span>
+    <div class="stat-cell">
+      <span class="stat-cell__value">{{ totalKills }}</span>
+      <span class="stat-cell__label">Enemies</span>
     </div>
-    <div class="stat-card">
-      <span class="stat-card__value">{{ totalGoldEarned }}</span>
-      <span class="stat-card__label">Gold Earned</span>
+    <div class="stat-cell">
+      <span class="stat-cell__value">{{ totalGoldEarned }}</span>
+      <span class="stat-cell__label">Gold</span>
     </div>
-    <div class="stat-card">
-      <span class="stat-card__value">{{ actsReached }}</span>
-      <span class="stat-card__label">Acts Reached</span>
+    <div class="stat-cell">
+      <span class="stat-cell__value">{{ actsReached }}</span>
+      <span class="stat-cell__label">Acts</span>
     </div>
-    <div class="stat-card">
-      <span class="stat-card__value">{{ runDuration }}</span>
-      <span class="stat-card__label">Run Duration</span>
+    <div class="stat-cell">
+      <span class="stat-cell__value">{{ runState.relicIds.length }}</span>
+      <span class="stat-cell__label">Relics</span>
     </div>
-    <div class="stat-card">
-      <span class="stat-card__value">{{ runState.relicIds.length }}</span>
-      <span class="stat-card__label">Relics Collected</span>
+    <div class="stat-cell stat-cell--duration">
+      <span class="stat-cell__value">{{ runDuration }}</span>
+      <span class="stat-cell__label">Duration</span>
     </div>
   </section>
 
@@ -89,21 +88,21 @@
     </ol>
   </section>
 
-  <!-- Action buttons -->
+  <!-- Action buttons — primary action dominant, secondary as ghost link -->
   <div class="run-summary__actions">
-    <button
-      class="run-summary__btn run-summary__btn--secondary"
-      type="button"
-      (click)="onReturnToMenu()"
-    >
-      Return to Menu
-    </button>
     <button
       class="run-summary__btn run-summary__btn--primary"
       type="button"
       (click)="onStartNewRun()"
     >
       New Run
+    </button>
+    <button
+      class="run-summary__btn run-summary__btn--ghost"
+      type="button"
+      (click)="onReturnToMenu()"
+    >
+      Return to Menu
     </button>
   </div>
 </div>

@@ -30,7 +30,14 @@ import { ElevationService } from './elevation.service';
 import { TowerGraphService } from './tower-graph.service';
 import { LinkMeshService } from './link-mesh.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
-import { disposeGroup } from '../utils/three-utils';
+import { GeometryRegistryService } from './geometry-registry.service';
+import { MaterialRegistryService } from './material-registry.service';
+import { TextSpritePoolService } from './text-sprite-pool.service';
+import { GoldPopupService } from './gold-popup.service';
+import { VfxPoolService } from './vfx-pool.service';
+import { TowerDecalLibraryService } from './tower-decal-library.service';
+import { AimLineService } from './aim-line.service';
+import { buildDisposeProtect, disposeGroup } from '../utils/three-utils';
 
 /**
  * Orchestrates game-level lifecycle: service resets on restart and Three.js scene cleanup.
@@ -66,12 +73,25 @@ export class GameSessionService {
     private pathMutationService: PathMutationService,
     private elevationService: ElevationService,
     @Optional() private terraformPool?: TerraformMaterialPoolService,
+    // @Optional() so flat test beds without GameBoardComponent.providers
+    // don't need to register the registries.
+    @Optional() private geometryRegistry?: GeometryRegistryService,
+    @Optional() private materialRegistry?: MaterialRegistryService,
+    @Optional() private textSpritePool?: TextSpritePoolService,
+    @Optional() private goldPopupService?: GoldPopupService,
+    @Optional() private vfxPool?: VfxPoolService,
     // @Optional() so pre-Conduit test beds don't need to register this.
     // Production wires it via GameBoardComponent.providers.
     @Optional() private towerGraphService?: TowerGraphService,
     // @Optional() — LinkMeshService owns all link-mesh disposal; cleanupScene
     // delegates to its dispose().
     @Optional() private linkMeshService?: LinkMeshService,
+    // @Optional() — Phase A tower polish. Caches CanvasTextures; dispose()
+    // must be called at encounter teardown to release GPU texture memory.
+    @Optional() private towerDecalLibrary?: TowerDecalLibraryService,
+    // @Optional() — aim-line cylinder for selected tower; cleanup() removes
+    // the mesh from the scene and disposes geometry + material.
+    @Optional() private aimLineService?: AimLineService,
   ) {}
 
   /**
@@ -141,8 +161,10 @@ export class GameSessionService {
     // Clean up tower placement preview
     this.towerPreviewService.cleanup(scene);
 
-    // Clean up damage popups
+    // Clean up damage + gold popups (sprint 16 — gold popup cleanup was
+    // missing from cleanupScene before; pre-Phase-B leak fixed here).
     this.damagePopupService.cleanup(scene);
+    this.goldPopupService?.cleanup(scene);
 
     // Clean up minimap
     this.minimapService.cleanup();
@@ -152,7 +174,10 @@ export class GameSessionService {
     this.pathVisualizationService.cleanup();
 
     // Clean up tile highlights (needs tile meshes before they are cleared)
-    this.tileHighlightService.clearHighlights(this.meshRegistry.tileMeshes, scene);
+    // Drop all highlight/hover/selection state before layer disposal so the
+    // next encounter's fresh layers aren't poisoned by stale saved colors
+    // (sprint 30 red-team fix).
+    this.tileHighlightService.resetAllState();
 
     // Clean up range preview and range toggle rings
     this.rangeVisualizationService.cleanup(scene);
@@ -160,45 +185,81 @@ export class GameSessionService {
     // Clean up upgrade flash/glow ring effects
     this.towerUpgradeVisualService.cleanup(scene);
 
-    // Dispose tower meshes
-    this.meshRegistry.towerMeshes.forEach(group => disposeGroup(group, scene));
+    // Dispose aim-line cylinder (mesh + geometry + material). Must run before
+    // tower mesh disposal in case the line references the same scene context.
+    this.aimLineService?.cleanup();
+
+    // Dispose tower meshes — protect registry-owned geometry/material so
+    // single-mesh disposal doesn't break the cache. Registries themselves
+    // are disposed below.
+    const protect = buildDisposeProtect(this.geometryRegistry, this.materialRegistry, this.terraformPool);
+    this.meshRegistry.towerMeshes.forEach(group => disposeGroup(group, scene, protect));
     this.meshRegistry.towerMeshes.clear();
 
-    // Dispose tile meshes.
-    // Pool materials (terraformed tiles) are NOT disposed here — they are
-    // disposed in batch by terraformPool.dispose() below, after all meshes
-    // have been removed from the scene. Per-tile materials are disposed
-    // individually as before.
+    // Dispose individual tile meshes (non-instanced surfaces — non-BASE
+    // tiles in sprint 22; widens with sprint 23).
+    //  - Pool materials (terraformed tiles) skipped — terraformPool.dispose() below.
+    //  - Registry geometry skipped (sprint 12) — geometryRegistry.dispose() below.
+    //  - Pre-sprint-21 fix: tile materials are per-instance again, so they
+    //    dispose normally (registry guard is a no-op here).
     this.meshRegistry.tileMeshes.forEach(mesh => {
       scene.remove(mesh);
-      mesh.geometry.dispose();
+      if (!this.geometryRegistry?.isRegisteredGeometry(mesh.geometry)) {
+        mesh.geometry.dispose();
+      }
       const mat = mesh.material as THREE.Material | THREE.Material[];
       const mats = Array.isArray(mat) ? mat : [mat];
       mats.forEach(m => {
-        // Skip pool materials — they are disposed in batch by terraformPool.dispose() below.
-        if (!this.terraformPool?.isPoolMaterial(m)) {
-          m.dispose();
-        }
+        if (this.terraformPool?.isPoolMaterial(m)) return;
+        if (this.materialRegistry?.isRegisteredMaterial(m)) return;
+        m.dispose();
       });
     });
     this.meshRegistry.tileMeshes.clear();
 
+    // Dispose tile InstancedMesh layers (sprint 22 BASE; sprint 23 widens).
+    // Layer.dispose disposes the InstancedMesh itself; geometry + material
+    // are registry-owned and disposed in their respective batch passes.
+    this.meshRegistry.tileInstanceLayers.forEach(layer => layer.dispose(scene));
+    this.meshRegistry.tileInstanceLayers.clear();
+
     // Dispose cliff column meshes (sprint 39 Highground polish).
-    // Cliff geometry is disposed here; material is pool-owned and disposed below.
+    // Geometry skipped if registry-shared (sprint 12), material is pool-owned.
     this.meshRegistry.cliffMeshes.forEach(cliffMesh => {
       scene.remove(cliffMesh);
-      cliffMesh.geometry.dispose();
-      // Material is pool-owned — disposed in the terraformPool.dispose() call below.
+      if (!this.geometryRegistry?.isRegisteredGeometry(cliffMesh.geometry)) {
+        cliffMesh.geometry.dispose();
+      }
     });
     this.meshRegistry.cliffMeshes.clear();
 
     // Dispose all pooled terraform materials in one batch.
-    // Must run AFTER tileMeshes.clear() and cliffMeshes.clear() so no mesh still
-    // references a pool material. terraformPool is optional (not present in test contexts
-    // without full GameModule).
     this.terraformPool?.dispose();
 
-    // Dispose grid lines (Mesh + Line children, both handled by disposeGroup)
+    // Dispose all registry-shared materials in one batch (sprint 14).
+    this.materialRegistry?.dispose();
+
+    // Dispose all registry-shared geometries in one batch.
+    this.geometryRegistry?.dispose();
+
+    // Dispose pooled sprites + their cached textures (sprint 16).
+    // Must run AFTER gold/damage popup cleanup so popups release back into
+    // the pool first, then the pool drains its caches.
+    this.textSpritePool?.dispose();
+
+    // Dispose pooled VFX visuals (chain arcs, mortar zones — sprint 18).
+    // CombatVFXService.cleanup() (called via towerCombatService.cleanup())
+    // already released the active visuals back into the pool above.
+    this.vfxPool?.dispose();
+
+    // Dispose decal CanvasTextures. Must run after tower mesh disposal so any
+    // material that held a decal texture reference is already gone.
+    this.towerDecalLibrary?.dispose();
+
+    // Dispose grid lines (Mesh + Line children, both handled by disposeGroup).
+    // Grid material is currently per-instance; once Phase B sprint 28 (or
+    // earlier) collapses grid lines into LineSegments, consider routing it
+    // through MaterialRegistry as well.
     if (this.meshRegistry.gridLines) {
       disposeGroup(this.meshRegistry.gridLines, scene);
     }

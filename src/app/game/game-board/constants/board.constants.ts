@@ -15,22 +15,56 @@ export const BOARD_CONFIG: BoardConfig = {
 /**
  * Visual configuration shared across tile mesh creation. Lives next to
  * BOARD_CONFIG because every value here is a render-side detail of how
- * a single tile is presented (geometry, materials, ambient). Values were
- * tuned by eye — group changes here, not in game-board.service.
+ * a single tile is presented (geometry, materials, ambient).
  */
 export const TILE_VISUAL_CONFIG = {
-  /** Fraction of a tile's footprint that the box geometry occupies, leaving a thin grid gap. */
-  geometryGapFactor: 0.95,
+  /**
+   * Fraction of a tile's footprint that the box geometry occupies. The
+   * leftover slice is the dark void between tiles — that void is what
+   * draws the visible grout line that separates adjacent tiles. Tuned
+   * so the line reads cleanly at the default game camera angle without
+   * looking like a gridded UI overlay.
+   */
+  geometryGapFactor: 0.93,
+  /**
+   * Walls render as a continuous solid surface; the slight overlap
+   * eliminates per-cell seams in the geometry so connected walls
+   * read as one impassable structure rather than a grid of blocks.
+   * Visible cell-edge accent on walls comes from an emissive edge
+   * texture baked into the wall material, which is consistent on
+   * every cell and every axis (gap-based trim was inconsistent —
+   * front-face occlusion hid horizontal seams from the camera).
+   */
+  wallGapFactor: 1.005,
   base: {
     emissiveIntensity: 0.35,
-    metalness: 0.1,
-    roughness: 0.7,
+    /** Slight metalness pairs with the lower roughness to let the top
+     *  edges catch a touch of rim/key specular without making the face
+     *  read as metal. */
+    metalness: 0.2,
+    /** Low enough roughness that grazing key/rim light produces a
+     *  visible highlight along tile edges; high enough that the face
+     *  itself stays matte. */
+    roughness: 0.55,
   },
   wall: {
-    emissive: 0x0a0810,
-    emissiveIntensity: 0.05,
-    metalness: 0.5,
-    roughness: 0.95,
+    /** Cool-purple emissive bright enough that the shadowed wall
+     *  front faces (the visible "horizontal lines" between wall rows
+     *  at the default camera angle) read as tinted structure rather
+     *  than pure black void. Without this lift the front-face strips
+     *  drop to absolute black and the wall block looks featureless
+     *  except for the column seams. */
+    emissive: 0x2a2238,
+    /** Inert next to BASE's 0.35, but high enough that the front-
+     *  face shadows pick up a perceptible accent tint. */
+    emissiveIntensity: 0.32,
+    /** Paired with the lower roughness to amplify the top-edge
+     *  specular into a soft border highlight. */
+    metalness: 0.55,
+    /** Lower than BASE — walls are intentionally more reflective at
+     *  the edges so grazing light produces the dark-to-lighter
+     *  border that separates adjacent walls visually. */
+    roughness: 0.78,
   },
   /** Spawner / Exit / unmarked tile material settings. */
   other: {
@@ -39,6 +73,6 @@ export const TILE_VISUAL_CONFIG = {
     roughness: 0.7,
   },
   /** Emissive color for buildable BASE tiles (dim hint they accept towers). */
-  baseEmissive: 0x303848,
+  baseEmissive: 0x363f53,
   envMapIntensity: 0.3,
 } as const;

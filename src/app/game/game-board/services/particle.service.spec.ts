@@ -227,7 +227,7 @@ describe('ParticleService', () => {
       expect(sceneCountAfterFirst).toBe(2); // sanity: first burst was present
     });
 
-    it('disposes material of expired particles (geometry is shared)', () => {
+    it('recycles expired particle materials into the free pool (Phase B sprint 19)', () => {
       service.spawnDeathBurst({ x: 0, y: 0, z: 0 }, 0xff0000, 1);
       service.addPendingToScene(scene);
 
@@ -236,9 +236,27 @@ describe('ParticleService', () => {
 
       spyOn(mat, 'dispose').and.callThrough();
 
+      expect(service.freeMaterialCount()).toBe(0);
       service.update(DEATH_BURST_CONFIG.lifetime + 0.01, scene);
 
-      expect(mat.dispose).toHaveBeenCalled();
+      // Material is NOT disposed — it goes into the pool's free list.
+      expect(mat.dispose).not.toHaveBeenCalled();
+      expect(service.freeMaterialCount()).toBe(1);
+    });
+
+    it('reuses pooled material on the next spawn (color is reset)', () => {
+      service.spawnDeathBurst({ x: 0, y: 0, z: 0 }, 0xff0000, 1);
+      service.addPendingToScene(scene);
+      service.update(DEATH_BURST_CONFIG.lifetime + 0.01, scene);
+      expect(service.freeMaterialCount()).toBe(1);
+
+      service.spawnDeathBurst({ x: 0, y: 0, z: 0 }, 0x00ff00, 1);
+      service.addPendingToScene(scene);
+      const mesh = scene.children[0] as THREE.Mesh;
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      expect(mat.color.getHex()).toBe(0x00ff00);
+      expect(mat.emissive.getHex()).toBe(0x00ff00);
+      expect(service.freeMaterialCount()).toBe(0);
     });
   });
 

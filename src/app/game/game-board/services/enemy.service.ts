@@ -1,5 +1,6 @@
 import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
+import { Subject, Observable } from 'rxjs';
 import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, DamageResult, GridNode, MINER_DIG_INTERVAL_TURNS, VEINSEEKER_SPEED_BOOST_WINDOW, VEINSEEKER_BOOSTED_TILES_PER_TURN } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
@@ -18,6 +19,9 @@ import { ElevationService } from './elevation.service';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { BlockType } from '../models/game-board-tile';
 import { shuffleInPlace } from '../utils/coordinate-utils';
+import { buildDisposeProtect, disposeGroup } from '../utils/three-utils';
+import { GeometryRegistryService } from './geometry-registry.service';
+import { MaterialRegistryService } from './material-registry.service';
 
 export { DamageResult } from '../models/enemy.model';
 
@@ -30,6 +34,19 @@ export class EnemyService {
   /** Scratch world-position objects reused each frame to avoid per-enemy allocation. */
   private scratchCurrentWorld = { x: 0, z: 0 };
   private scratchNextWorld = { x: 0, z: 0 };
+
+  /**
+   * Emits whenever the enemy roster changes in a way that may shift aim
+   * targets: spawn, batch movement, or removal. The string payload is a hint
+   * about the change class ('spawn' | 'move' | 'remove') but consumers that
+   * invalidate all towers (e.g. TargetPreviewService) may ignore it.
+   */
+  private readonly enemiesChanged = new Subject<'spawn' | 'move' | 'remove'>();
+
+  /** Observable that fires on enemy roster changes (spawn / move / remove). */
+  getEnemiesChanged(): Observable<'spawn' | 'move' | 'remove'> {
+    return this.enemiesChanged.asObservable();
+  }
 
   constructor(
     private gameBoardService: GameBoardService,
@@ -57,6 +74,12 @@ export class EnemyService {
      * which safely returns 0 (no bonus) in those contexts.
      */
     @Optional() private elevationService: ElevationService | null,
+    /**
+     * @Optional() — Phase B sprint 14. Used to protect registry-shared
+     * enemy geometries/materials when disposing enemy meshes on death.
+     */
+    @Optional() private geometryRegistry?: GeometryRegistryService,
+    @Optional() private materialRegistry?: MaterialRegistryService,
   ) {}
 
   /**
@@ -284,6 +307,7 @@ export class EnemyService {
     scene.add(enemy.mesh);
 
     this.enemies.set(enemy.id, enemy);
+    this.enemiesChanged.next('spawn');
     return enemy;
   }
 
@@ -412,6 +436,7 @@ export class EnemyService {
       }
     });
 
+    this.enemiesChanged.next('move');
     return reachedExit;
   }
 
@@ -431,26 +456,15 @@ export class EnemyService {
       this.enemyVisual.removeStatusParticles(enemy, scene);
 
       if (enemy.mesh) {
-        // Dispose health bar and shield children before removing
-        enemy.mesh.children.forEach(child => {
-          if (child instanceof THREE.Mesh) {
-            child.geometry.dispose();
-            if (Array.isArray(child.material)) {
-              child.material.forEach(mat => mat.dispose());
-            } else {
-              child.material.dispose();
-            }
-          }
-        });
-        scene.remove(enemy.mesh);
-        enemy.mesh.geometry.dispose();
-        if (Array.isArray(enemy.mesh.material)) {
-          enemy.mesh.material.forEach(mat => mat.dispose());
-        } else {
-          enemy.mesh.material.dispose();
-        }
+        // disposeGroup traverses children + root, deduplicates shared
+        // resources, and skips registry-owned ones (Phase B sprint 14).
+        // The enemy mesh itself isn't a Group but Three.js's traverse
+        // visits the root + children alike.
+        disposeGroup(enemy.mesh, scene,
+          buildDisposeProtect(this.geometryRegistry, this.materialRegistry));
       }
       this.enemies.delete(enemyId);
+      this.enemiesChanged.next('remove');
     }
   }
 
@@ -1104,16 +1118,45 @@ export class EnemyService {
   /**
    * Remove all enemies from the scene, dispose their geometries/materials,
    * and clear the internal enemies map. Call on game restart or route teardown.
+   *
+   * Emits a single 'remove' event after all enemies are disposed rather than
+   * once per enemy. N per-enemy emissions during bulk teardown would fire N
+   * DIRTY_ALL invalidations on TargetPreviewService in one synchronous pass —
+   * wasteful when the cache is about to be cleared anyway (Phase C Finding C-1).
    */
   cleanup(scene: THREE.Scene): void {
+    let hadEnemies = false;
     this.enemies.forEach((enemy, id) => {
-      this.removeEnemy(id, scene);
+      hadEnemies = true;
+      // Suppress the per-enemy 'remove' emission; emit once below.
+      this.removeEnemySilent(id, scene);
     });
     // removeEnemy deletes entries during forEach — ensure map is cleared in case
     // any entry was skipped (e.g. enemy with no mesh)
     this.enemies.clear();
 
+    if (hadEnemies) {
+      this.enemiesChanged.next('remove');
+    }
+
     // Dispose shared status-particle geometry and materials (owned by EnemyVisualService)
     this.enemyVisual.cleanup();
+  }
+
+  /**
+   * Dispose a single enemy without emitting an `enemiesChanged` event.
+   * Used by `cleanup()` to coalesce N per-enemy emissions into one signal.
+   * All other callers must use `removeEnemy` so the aim cache stays coherent.
+   */
+  private removeEnemySilent(enemyId: string, scene: THREE.Scene): void {
+    const enemy = this.enemies.get(enemyId);
+    if (enemy) {
+      this.enemyVisual.removeStatusParticles(enemy, scene);
+      if (enemy.mesh) {
+        disposeGroup(enemy.mesh, scene,
+          buildDisposeProtect(this.geometryRegistry, this.materialRegistry));
+      }
+      this.enemies.delete(enemyId);
+    }
   }
 }

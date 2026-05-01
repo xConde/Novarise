@@ -55,12 +55,13 @@ describe('TowerPlacementService', () => {
     it('should store raycaster, mouse and callbacks', () => {
       const raycaster = new THREE.Raycaster();
       const mouse = new THREE.Vector2();
-      const tileMeshArrayRef = () => [] as THREE.Mesh[];
+      const tilePickablesRef = () => [] as THREE.Object3D[];
+      const resolveTileHit = (_i: THREE.Intersection) => null;
       const onEnterPlaceMode = jasmine.createSpy('onEnterPlaceMode');
       const onPlaceAttempt = jasmine.createSpy('onPlaceAttempt');
       const onDeselectTower = jasmine.createSpy('onDeselectTower');
 
-      service.init(raycaster, mouse, tileMeshArrayRef, {
+      service.init(raycaster, mouse, tilePickablesRef, resolveTileHit, {
         onEnterPlaceMode,
         onPlaceAttempt,
         onDeselectTower,

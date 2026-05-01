@@ -1,9 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { TowerPreviewService } from './tower-preview.service';
-import { TowerType, TOWER_CONFIGS, getEffectiveStats } from '../models/tower.model';
+import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
 import { PREVIEW_CONFIG } from '../constants/preview.constants';
 
+/**
+ * Sprint UX-1: range ring rendering moved to RangeVisualizationService.
+ * This service now owns ONLY the ghost-tower mesh.
+ */
 describe('TowerPreviewService', () => {
   let service: TowerPreviewService;
   let scene: THREE.Scene;
@@ -24,14 +28,10 @@ describe('TowerPreviewService', () => {
     expect(service).toBeTruthy();
   });
 
-  // ---------------------------------------------------------------------------
-  // showPreview — mesh creation
-  // ---------------------------------------------------------------------------
-
-  describe('showPreview', () => {
-    it('adds two meshes to the scene', () => {
+  describe('showPreview — ghost mesh only (UX-1)', () => {
+    it('adds exactly one mesh (ghost) to the scene', () => {
       service.showPreview(TowerType.BASIC, 5, 5, true, scene);
-      expect(scene.children.length).toBe(2);
+      expect(scene.children.length).toBe(1);
     });
 
     it('places ghost mesh at the correct world position (centered)', () => {
@@ -44,70 +44,46 @@ describe('TowerPreviewService', () => {
       expect(ghost.position.z).toBe(-2);
     });
 
-    it('places range ring at ground offset y', () => {
-      service.showPreview(TowerType.BASIC, 3, 7, true, scene);
-      const ring = scene.children[1] as THREE.Mesh;
-      expect(ring.position.y).toBeCloseTo(PREVIEW_CONFIG.groundOffset);
-    });
-
     it('uses tower color when placement is valid', () => {
       service.showPreview(TowerType.BASIC, 5, 5, true, scene);
-      const ghost = scene.children[0] as THREE.Mesh;
-      const material = ghost.material as THREE.MeshBasicMaterial;
+      const ghost = scene.children[0] as THREE.Group;
+      // UX-3: ghost is now a Group from TowerMeshFactoryService (or fallback).
+      // Find the first Mesh child to read its material.
+      let firstMesh: THREE.Mesh | null = null;
+      ghost.traverse(c => { if (!firstMesh && c instanceof THREE.Mesh) firstMesh = c; });
+      const material = firstMesh!.material as THREE.MeshBasicMaterial;
       expect(material.color.getHex()).toBe(TOWER_CONFIGS[TowerType.BASIC].color);
     });
 
     it('uses red color when placement is invalid', () => {
       service.showPreview(TowerType.BASIC, 5, 5, false, scene);
-      const ghost = scene.children[0] as THREE.Mesh;
-      const material = ghost.material as THREE.MeshBasicMaterial;
+      const ghost = scene.children[0] as THREE.Group;
+      // UX-3: ghost is now a Group from TowerMeshFactoryService (or fallback).
+      // Find the first Mesh child to read its material.
+      let firstMesh: THREE.Mesh | null = null;
+      ghost.traverse(c => { if (!firstMesh && c instanceof THREE.Mesh) firstMesh = c; });
+      const material = firstMesh!.material as THREE.MeshBasicMaterial;
       expect(material.color.getHex()).toBe(PREVIEW_CONFIG.invalidColor);
     });
 
     it('ghost material is transparent with correct opacity', () => {
       service.showPreview(TowerType.BASIC, 5, 5, true, scene);
-      const ghost = scene.children[0] as THREE.Mesh;
-      const material = ghost.material as THREE.MeshBasicMaterial;
+      const ghost = scene.children[0] as THREE.Group;
+      // UX-3: ghost is now a Group from TowerMeshFactoryService (or fallback).
+      // Find the first Mesh child to read its material.
+      let firstMesh: THREE.Mesh | null = null;
+      ghost.traverse(c => { if (!firstMesh && c instanceof THREE.Mesh) firstMesh = c; });
+      const material = firstMesh!.material as THREE.MeshBasicMaterial;
       expect(material.transparent).toBeTrue();
       expect(material.opacity).toBeCloseTo(PREVIEW_CONFIG.ghostOpacity);
     });
-
-    it('range ring is transparent with correct opacity', () => {
-      service.showPreview(TowerType.BASIC, 5, 5, true, scene);
-      const ring = scene.children[1] as THREE.Mesh;
-      const material = ring.material as THREE.MeshBasicMaterial;
-      expect(material.transparent).toBeTrue();
-      expect(material.opacity).toBeCloseTo(PREVIEW_CONFIG.rangeRingOpacity);
-    });
-
-    it('range ring geometry outer radius matches tower level-1 range', () => {
-      service.showPreview(TowerType.SNIPER, 5, 5, true, scene);
-      const ring = scene.children[1] as THREE.Mesh;
-      const geo = ring.geometry as THREE.RingGeometry;
-      const expectedRange = getEffectiveStats(TowerType.SNIPER, 1).range;
-      expect(geo.parameters.outerRadius).toBeCloseTo(expectedRange);
-    });
-
-    it('range ring inner radius is outerRadius minus rangeRingWidth', () => {
-      service.showPreview(TowerType.SNIPER, 5, 5, true, scene);
-      const ring = scene.children[1] as THREE.Mesh;
-      const geo = ring.geometry as THREE.RingGeometry;
-      expect(geo.parameters.innerRadius).toBeCloseTo(
-        geo.parameters.outerRadius - PREVIEW_CONFIG.rangeRingWidth
-      );
-    });
   });
-
-  // ---------------------------------------------------------------------------
-  // showPreview — position update (reuse meshes)
-  // ---------------------------------------------------------------------------
 
   describe('moving preview', () => {
     it('updates ghost position without adding new meshes', () => {
       service.showPreview(TowerType.BASIC, 5, 5, true, scene);
       service.showPreview(TowerType.BASIC, 8, 3, true, scene);
-      // Still only 2 children
-      expect(scene.children.length).toBe(2);
+      expect(scene.children.length).toBe(1);
     });
 
     it('updates ghost mesh position to new tile (centered coords)', () => {
@@ -121,56 +97,38 @@ describe('TowerPreviewService', () => {
       expect(ghost.position.z).toBe(3);
     });
 
-    it('updates ring position to new tile (centered coords)', () => {
-      service.setBoardSize(10, 10);
-      service.showPreview(TowerType.BASIC, 5, 5, true, scene);
-      service.showPreview(TowerType.BASIC, 8, 3, true, scene);
-      const ring = scene.children[1] as THREE.Mesh;
-      expect(ring.position.x).toBe(-2);
-      expect(ring.position.z).toBe(3);
-    });
-
     it('validity color updates on subsequent call without tower type change', () => {
       service.showPreview(TowerType.BASIC, 5, 5, true, scene);
       service.showPreview(TowerType.BASIC, 5, 5, false, scene);
-      const ghost = scene.children[0] as THREE.Mesh;
-      const material = ghost.material as THREE.MeshBasicMaterial;
+      const ghost = scene.children[0] as THREE.Group;
+      // UX-3: ghost is now a Group from TowerMeshFactoryService (or fallback).
+      // Find the first Mesh child to read its material.
+      let firstMesh: THREE.Mesh | null = null;
+      ghost.traverse(c => { if (!firstMesh && c instanceof THREE.Mesh) firstMesh = c; });
+      const material = firstMesh!.material as THREE.MeshBasicMaterial;
       expect(material.color.getHex()).toBe(PREVIEW_CONFIG.invalidColor);
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // Tower type change — recreate meshes
-  // ---------------------------------------------------------------------------
-
   describe('changing tower type', () => {
-    it('still has exactly 2 scene children after type change', () => {
+    it('still has exactly 1 scene child after type change', () => {
       service.showPreview(TowerType.BASIC, 5, 5, true, scene);
       service.showPreview(TowerType.SNIPER, 5, 5, true, scene);
-      expect(scene.children.length).toBe(2);
-    });
-
-    it('new range ring reflects new tower range', () => {
-      service.showPreview(TowerType.BASIC, 5, 5, true, scene);
-      service.showPreview(TowerType.SNIPER, 5, 5, true, scene);
-      const ring = scene.children[1] as THREE.Mesh;
-      const geo = ring.geometry as THREE.RingGeometry;
-      const expectedRange = getEffectiveStats(TowerType.SNIPER, 1).range;
-      expect(geo.parameters.outerRadius).toBeCloseTo(expectedRange);
+      expect(scene.children.length).toBe(1);
     });
 
     it('new ghost uses new tower color', () => {
       service.showPreview(TowerType.BASIC, 5, 5, true, scene);
       service.showPreview(TowerType.SNIPER, 5, 5, true, scene);
-      const ghost = scene.children[0] as THREE.Mesh;
-      const material = ghost.material as THREE.MeshBasicMaterial;
+      const ghost = scene.children[0] as THREE.Group;
+      // UX-3: ghost is now a Group from TowerMeshFactoryService (or fallback).
+      // Find the first Mesh child to read its material.
+      let firstMesh: THREE.Mesh | null = null;
+      ghost.traverse(c => { if (!firstMesh && c instanceof THREE.Mesh) firstMesh = c; });
+      const material = firstMesh!.material as THREE.MeshBasicMaterial;
       expect(material.color.getHex()).toBe(TOWER_CONFIGS[TowerType.SNIPER].color);
     });
   });
-
-  // ---------------------------------------------------------------------------
-  // hidePreview
-  // ---------------------------------------------------------------------------
 
   describe('hidePreview', () => {
     it('removes meshes from scene', () => {
@@ -183,10 +141,6 @@ describe('TowerPreviewService', () => {
       expect(() => service.hidePreview(scene)).not.toThrow();
     });
   });
-
-  // ---------------------------------------------------------------------------
-  // cleanup — disposal
-  // ---------------------------------------------------------------------------
 
   describe('cleanup', () => {
     it('does not throw when called with no active preview', () => {
@@ -204,35 +158,7 @@ describe('TowerPreviewService', () => {
       service.hidePreview(scene);
       service.cleanup();
       service.showPreview(TowerType.BASIC, 5, 5, true, scene);
-      expect(scene.children.length).toBe(2);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Tower-specific range checks
-  // ---------------------------------------------------------------------------
-
-  describe('range ring matches tower range for each TowerType', () => {
-    const towerTypes = [
-      TowerType.BASIC,
-      TowerType.SNIPER,
-      TowerType.SPLASH,
-      TowerType.SLOW,
-      TowerType.CHAIN,
-      TowerType.MORTAR,
-    ];
-
-    towerTypes.forEach((type) => {
-      it(`range ring for ${type} uses level-1 range`, () => {
-        service.showPreview(type, 5, 5, true, scene);
-        const ring = scene.children[1] as THREE.Mesh;
-        const geo = ring.geometry as THREE.RingGeometry;
-        const expectedRange = getEffectiveStats(type, 1).range;
-        expect(geo.parameters.outerRadius).toBeCloseTo(expectedRange);
-        service.hidePreview(scene);
-        service.cleanup();
-        scene = new THREE.Scene();
-      });
+      expect(scene.children.length).toBe(1);
     });
   });
 });

@@ -77,6 +77,31 @@ describe('SceneService', () => {
       // 800/400 = 2.0
       expect(camera.aspect).toBeCloseTo(2.0);
     });
+
+    it('resize() re-applies pixel ratio with current devicePixelRatio (Phase A sprint 9)', () => {
+      service.initScene();
+      service.initCamera();
+      const setPixelRatio = jasmine.createSpy('setPixelRatio');
+      const setSize = jasmine.createSpy('setSize');
+      // Inject a fake renderer to avoid requiring WebGL.
+      (service as unknown as { renderer: { setPixelRatio: jasmine.Spy; setSize: jasmine.Spy } }).renderer = {
+        setPixelRatio,
+        setSize
+      };
+      const original = window.devicePixelRatio;
+      Object.defineProperty(window, 'devicePixelRatio', { value: 4, configurable: true });
+
+      service.resize(800, 600);
+
+      // Capped at SCENE_CONFIG.maxPixelRatio = 2 even though dpr=4
+      expect(setPixelRatio).toHaveBeenCalledWith(2);
+      // setPixelRatio MUST be called before setSize so the pixel ratio is
+      // factored into the new framebuffer allocation.
+      expect(setPixelRatio).toHaveBeenCalledBefore(setSize);
+      expect(setSize).toHaveBeenCalledWith(800, 600);
+
+      Object.defineProperty(window, 'devicePixelRatio', { value: original, configurable: true });
+    });
   });
 
   describe('tickAmbientVisuals', () => {

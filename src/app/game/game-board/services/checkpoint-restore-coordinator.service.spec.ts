@@ -29,6 +29,7 @@ import { RunService } from '../../../run/services/run.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { DeckService } from '../../../run/services/deck.service';
+import { TowerUpgradeVisualService } from './tower-upgrade-visual.service';
 import { GamePhase } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
 import { EncounterCheckpoint } from '../models/encounter-checkpoint.model';
@@ -96,6 +97,7 @@ describe('CheckpointRestoreCoordinatorService', () => {
   let relicSpy: jasmine.SpyObj<RelicService>;
   let cardEffectSpy: jasmine.SpyObj<CardEffectService>;
   let deckSpy: jasmine.SpyObj<DeckService>;
+  let towerUpgradeVisualSpy: jasmine.SpyObj<TowerUpgradeVisualService>;
   let service: CheckpointRestoreCoordinatorService;
 
   beforeEach(() => {
@@ -157,6 +159,9 @@ describe('CheckpointRestoreCoordinatorService', () => {
     relicSpy = jasmine.createSpyObj<RelicService>('RelicService', ['restoreEncounterFlags']);
     cardEffectSpy = jasmine.createSpyObj<CardEffectService>('CardEffectService', ['restoreModifiers']);
     deckSpy = jasmine.createSpyObj<DeckService>('DeckService', ['restoreState', 'setRngState']);
+    towerUpgradeVisualSpy = jasmine.createSpyObj<TowerUpgradeVisualService>(
+      'TowerUpgradeVisualService', ['applyUpgradeVisuals'],
+    );
 
     service = new CheckpointRestoreCoordinatorService(
       encounterCheckpointSpy, runSpy, sceneSpy, gameBoardSpy, gameStateSpy, waveSpy,
@@ -164,7 +169,7 @@ describe('CheckpointRestoreCoordinatorService', () => {
       gameSessionSpy, meshRegistrySpy, towerMeshFactorySpy, enemyMeshFactorySpy,
       combatLoopSpy, challengeDisplaySpy, ascensionSpy, turnHistorySpy, wavePreviewSpy,
       pathMutationSpy, elevationSpy, towerGraphSpy, spawnPreviewSpy, itemSpy,
-      runStateFlagSpy, relicSpy, cardEffectSpy, deckSpy,
+      runStateFlagSpy, relicSpy, cardEffectSpy, deckSpy, towerUpgradeVisualSpy,
     );
   });
 
@@ -328,8 +333,18 @@ describe('CheckpointRestoreCoordinatorService', () => {
         pathMutations: { mutations: [makeMutation('build', 2, 3)], nextId: 1 } as unknown as EncounterCheckpoint['pathMutations'],
       }));
       service.restore({ onFallback: () => {} });
-      // swapMesh receives the SAME targetType derived from op (build → BASE).
-      expect(pathMutationSpy.swapMesh).toHaveBeenCalledWith(2, 3, BLOCK_BASE, jasmine.any(Object));
+      // swapMesh receives the SAME targetType derived from op (build → BASE)
+      // AND the mutation.op as the 5th arg so the mesh routes through
+      // TerraformMaterialPoolService for the correct tint (Phase C sprint 30 fix).
+      expect(pathMutationSpy.swapMesh).toHaveBeenCalledWith(2, 3, BLOCK_BASE, jasmine.any(Object), 'build');
+    });
+
+    it('passes mutation.op to swapMesh for non-BASE target types too', () => {
+      encounterCheckpointSpy.loadCheckpoint.and.returnValue(makeCheckpoint({
+        pathMutations: { mutations: [makeMutation('block', 4, 5)], nextId: 1 } as unknown as EncounterCheckpoint['pathMutations'],
+      }));
+      service.restore({ onFallback: () => {} });
+      expect(pathMutationSpy.swapMesh).toHaveBeenCalledWith(4, 5, BLOCK_WALL, jasmine.any(Object), 'block');
     });
 
     it('replays mutations in the order stored in the journal', () => {
@@ -485,6 +500,75 @@ describe('CheckpointRestoreCoordinatorService', () => {
       service.restore({ onFallback: () => {} });
       // Out-of-range lookup → elevation 0 → Y not shifted.
       expect(mesh.position.y).toBe(0.5);
+    });
+
+    // ─── Finding 5 fix: applyUpgradeVisuals called for towers above level 1 ────
+
+    it('calls applyUpgradeVisuals for level-2 towers after restore (Finding 5 fix)', () => {
+      const tower = { ...makeTower('t1', 1, 1), level: 2 };
+      const mesh = new THREE.Group();
+
+      // Build a barrelCap child with minTier=2 (mirrors what BASIC factory creates)
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+      const barrelCap = new THREE.Mesh(geo, mat);
+      barrelCap.name = 'barrelCap';
+      barrelCap.visible = false;
+      barrelCap.userData['minTier'] = 2;
+      mesh.add(barrelCap);
+
+      towerMeshFactorySpy.createTowerMesh.and.returnValue(mesh);
+      // applyUpgradeVisuals is spied — make it actually call revealTierParts behavior
+      towerUpgradeVisualSpy.applyUpgradeVisuals.and.callFake(
+        (group: THREE.Group, level: number) => {
+          group.traverse(child => {
+            const minTier = child.userData['minTier'] as number | undefined;
+            if (minTier !== undefined) {
+              child.visible = minTier <= level;
+            }
+          });
+        },
+      );
+
+      encounterCheckpointSpy.loadCheckpoint.and.returnValue(makeCheckpoint({
+        towers: [tower] as unknown as EncounterCheckpoint['towers'],
+      }));
+      service.restore({ onFallback: () => {} });
+
+      expect(towerUpgradeVisualSpy.applyUpgradeVisuals).toHaveBeenCalledWith(
+        mesh, 2, undefined,
+      );
+      expect(barrelCap.visible).toBeTrue();
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('calls applyUpgradeVisuals for level-3 towers after restore', () => {
+      const tower = { ...makeTower('t1', 1, 1), level: 3 };
+      const mesh = new THREE.Group();
+      towerMeshFactorySpy.createTowerMesh.and.returnValue(mesh);
+
+      encounterCheckpointSpy.loadCheckpoint.and.returnValue(makeCheckpoint({
+        towers: [tower] as unknown as EncounterCheckpoint['towers'],
+      }));
+      service.restore({ onFallback: () => {} });
+
+      expect(towerUpgradeVisualSpy.applyUpgradeVisuals).toHaveBeenCalledWith(
+        mesh, 3, undefined,
+      );
+    });
+
+    it('does NOT call applyUpgradeVisuals for level-1 towers (no-op at T1)', () => {
+      const tower = makeTower('t1', 1, 1);  // level: 1
+      towerMeshFactorySpy.createTowerMesh.and.returnValue(new THREE.Group());
+
+      encounterCheckpointSpy.loadCheckpoint.and.returnValue(makeCheckpoint({
+        towers: [tower] as unknown as EncounterCheckpoint['towers'],
+      }));
+      service.restore({ onFallback: () => {} });
+
+      expect(towerUpgradeVisualSpy.applyUpgradeVisuals).not.toHaveBeenCalled();
     });
   });
 

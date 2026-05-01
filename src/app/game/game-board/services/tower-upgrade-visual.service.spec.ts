@@ -136,18 +136,31 @@ describe('TowerUpgradeVisualService', () => {
   });
 
   describe('applyUpgradeVisuals', () => {
-    it('should set scale to level-based value for L2 (newLevel=2)', () => {
+    it('should set scale to peak bounce value for L2 (newLevel=2, scale × 1.1 at start)', () => {
+      // applyUpgradeVisuals immediately sets the group to baseScale × 1.1 so
+      // tickTierUpScale can ease it back to baseScale. Verify the initial peak.
       const group = new THREE.Group();
       service.applyUpgradeVisuals(group, 2);
-      const expectedScale = TOWER_VISUAL_CONFIG.scaleBase + (2 - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
-      expect(group.scale.x).toBeCloseTo(expectedScale);
+      const baseScale = TOWER_VISUAL_CONFIG.scaleBase + (2 - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
+      expect(group.scale.x).toBeCloseTo(baseScale * 1.1, 4);
     });
 
-    it('should set scale to level-based value for L3 (newLevel=3)', () => {
+    it('should set scale to peak bounce value for L3 (newLevel=3, scale × 1.1 at start)', () => {
       const group = new THREE.Group();
       service.applyUpgradeVisuals(group, 3);
-      const expectedScale = TOWER_VISUAL_CONFIG.scaleBase + (3 - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
-      expect(group.scale.x).toBeCloseTo(expectedScale);
+      const baseScale = TOWER_VISUAL_CONFIG.scaleBase + (3 - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
+      expect(group.scale.x).toBeCloseTo(baseScale * 1.1, 4);
+    });
+
+    it('should store scaleAnimBaseScale and scaleAnimStart for tickTierUpScale', () => {
+      const group = new THREE.Group();
+      const before = performance.now() / 1000;
+      service.applyUpgradeVisuals(group, 2);
+      const after = performance.now() / 1000;
+      const baseScale = TOWER_VISUAL_CONFIG.scaleBase + (2 - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
+      expect(group.userData['scaleAnimBaseScale']).toBeCloseTo(baseScale, 4);
+      expect(group.userData['scaleAnimStart']).toBeGreaterThanOrEqual(before);
+      expect(group.userData['scaleAnimStart']).toBeLessThanOrEqual(after);
     });
 
     it('should boost emissive intensity on MeshStandardMaterial children', () => {
@@ -167,7 +180,7 @@ describe('TowerUpgradeVisualService', () => {
       mat.dispose();
     });
 
-    it('should skip animated children named "tip" and "orb"', () => {
+    it('should skip animated child named "tip" (per-frame emissive)', () => {
       const geo = new THREE.BoxGeometry(1, 1, 1);
       const mat = new THREE.MeshStandardMaterial();
       mat.emissiveIntensity = 0;
@@ -179,6 +192,40 @@ describe('TowerUpgradeVisualService', () => {
       service.applyUpgradeVisuals(group, 2);
 
       expect(mat.emissiveIntensity).toBe(0);
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('should skip "heatVent" child (SPLASH T3 intentional emissive)', () => {
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+      mat.emissiveIntensity = 0.9; // intentional T3 heat-vent glow
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = 'heatVent';
+      const group = new THREE.Group();
+      group.add(mesh);
+
+      service.applyUpgradeVisuals(group, 3);
+
+      expect(mat.emissiveIntensity).toBeCloseTo(0.9, 4);
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('should skip "emitter" child (SLOW idle-driven emissive)', () => {
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+      mat.emissiveIntensity = 0.85; // mid-breath value set by idleTick
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = 'emitter';
+      const group = new THREE.Group();
+      group.add(mesh);
+
+      service.applyUpgradeVisuals(group, 2);
+
+      expect(mat.emissiveIntensity).toBeCloseTo(0.85, 4);
 
       geo.dispose();
       mat.dispose();
@@ -206,6 +253,150 @@ describe('TowerUpgradeVisualService', () => {
       service.applyUpgradeVisuals(group, 2);
 
       expect(spy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('revealTierParts', () => {
+    function makeTierGroup(): { group: THREE.Group; t2mesh: THREE.Mesh; t3mesh: THREE.Mesh; always: THREE.Mesh } {
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+
+      const group = new THREE.Group();
+
+      const always = new THREE.Mesh(geo, mat);
+      always.name = 'base';
+      group.add(always);
+
+      const t2mesh = new THREE.Mesh(geo, mat);
+      t2mesh.name = 'barrelCap';
+      t2mesh.visible = false;
+      t2mesh.userData['minTier'] = 2;
+      group.add(t2mesh);
+
+      const t3mesh = new THREE.Mesh(geo, mat);
+      t3mesh.name = 'pauldron';
+      t3mesh.visible = false;
+      t3mesh.userData['minTier'] = 3;
+      group.add(t3mesh);
+
+      return { group, t2mesh, t3mesh, always };
+    }
+
+    it('keeps T2 and T3 parts hidden at level 1', () => {
+      const { group, t2mesh, t3mesh } = makeTierGroup();
+      service.revealTierParts(group, 1);
+      expect(t2mesh.visible).toBeFalse();
+      expect(t3mesh.visible).toBeFalse();
+    });
+
+    it('reveals T2 part at level 2, keeps T3 hidden', () => {
+      const { group, t2mesh, t3mesh } = makeTierGroup();
+      service.revealTierParts(group, 2);
+      expect(t2mesh.visible).toBeTrue();
+      expect(t3mesh.visible).toBeFalse();
+    });
+
+    it('reveals both T2 and T3 parts at level 3', () => {
+      const { group, t2mesh, t3mesh } = makeTierGroup();
+      service.revealTierParts(group, 3);
+      expect(t2mesh.visible).toBeTrue();
+      expect(t3mesh.visible).toBeTrue();
+    });
+
+    it('does not affect children with no minTier tag', () => {
+      const { group, always } = makeTierGroup();
+      always.visible = true;
+      service.revealTierParts(group, 1);
+      expect(always.visible).toBeTrue();
+    });
+
+    it('applyUpgradeVisuals calls revealTierParts (T2 part visible after L2 upgrade)', () => {
+      const { group, t2mesh } = makeTierGroup();
+      service.applyUpgradeVisuals(group, 2);
+      expect(t2mesh.visible).toBeTrue();
+    });
+
+    it('applyUpgradeVisuals keeps T3 hidden at L2', () => {
+      const { group, t3mesh } = makeTierGroup();
+      service.applyUpgradeVisuals(group, 2);
+      expect(t3mesh.visible).toBeFalse();
+    });
+
+    // --- maxTier support ---
+
+    it('hides a maxTier=1 child when level advances to 2', () => {
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+      const group = new THREE.Group();
+      const t1onlyMesh = new THREE.Mesh(geo, mat);
+      t1onlyMesh.name = 'scopeT1';
+      t1onlyMesh.visible = true;
+      t1onlyMesh.userData['maxTier'] = 1;
+      group.add(t1onlyMesh);
+
+      service.revealTierParts(group, 2);
+
+      expect(t1onlyMesh.visible).toBeFalse();
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('keeps a maxTier=1 child visible at level 1', () => {
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+      const group = new THREE.Group();
+      const t1onlyMesh = new THREE.Mesh(geo, mat);
+      t1onlyMesh.name = 'scopeT1';
+      t1onlyMesh.visible = true;
+      t1onlyMesh.userData['maxTier'] = 1;
+      group.add(t1onlyMesh);
+
+      service.revealTierParts(group, 1);
+
+      expect(t1onlyMesh.visible).toBeTrue();
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('hides a part with both minTier=2 and maxTier=2 when level is 1 or 3', () => {
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+      const group = new THREE.Group();
+      const t2onlyMesh = new THREE.Mesh(geo, mat);
+      t2onlyMesh.name = 'scopeMid';
+      t2onlyMesh.visible = false;
+      t2onlyMesh.userData['minTier'] = 2;
+      t2onlyMesh.userData['maxTier'] = 2;
+      group.add(t2onlyMesh);
+
+      service.revealTierParts(group, 1);
+      expect(t2onlyMesh.visible).toBeFalse();
+
+      service.revealTierParts(group, 2);
+      expect(t2onlyMesh.visible).toBeTrue();
+
+      service.revealTierParts(group, 3);
+      expect(t2onlyMesh.visible).toBeFalse();
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('bipod parts with maxTier=2 are hidden at level 3', () => {
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const mat = new THREE.MeshStandardMaterial();
+      const group = new THREE.Group();
+      const bipod = new THREE.Mesh(geo, mat);
+      bipod.name = 'bipod';
+      bipod.visible = true;
+      bipod.userData['maxTier'] = 2;
+      group.add(bipod);
+
+      service.revealTierParts(group, 3);
+
+      expect(bipod.visible).toBeFalse();
+      geo.dispose();
+      mat.dispose();
     });
   });
 
@@ -240,18 +431,35 @@ describe('TowerUpgradeVisualService', () => {
       mat.dispose();
     });
 
-    it('should skip animated "tip" children', () => {
+    it('should skip animated "tip" children (only "tip" is in the skip-set)', () => {
       const geo = new THREE.BoxGeometry(1, 1, 1);
       const mat = new THREE.MeshStandardMaterial();
       mat.emissiveIntensity = 0;
       const mesh = new THREE.Mesh(geo, mat);
-      mesh.name = 'orb';
+      mesh.name = 'tip';
       const group = new THREE.Group();
       group.add(mesh);
 
       service.applySpecializationVisual(group, TowerSpecialization.ALPHA);
 
       expect(mat.emissiveIntensity).toBe(0);
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('should apply tint to non-animated children (e.g. body mesh)', () => {
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const mat = new THREE.MeshStandardMaterial();
+      mat.emissiveIntensity = 0;
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = 'body';
+      const group = new THREE.Group();
+      group.add(mesh);
+
+      service.applySpecializationVisual(group, TowerSpecialization.ALPHA);
+
+      expect(mat.emissiveIntensity).toBe(SPECIALIZATION_VISUAL_CONFIG.alpha.emissiveIntensity);
 
       geo.dispose();
       mat.dispose();

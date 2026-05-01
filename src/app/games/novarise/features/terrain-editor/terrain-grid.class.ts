@@ -3,6 +3,7 @@ import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
 import { disposeMaterial } from '@game/game-board/utils/three-utils';
 import { TerrainGridState, TerrainGridStateLegacy } from './terrain-grid-state.interface';
 import { EDITOR_GRID_LINES, EDITOR_HEIGHT } from '../../constants/editor-ui.constants';
+import { TILE_VISUAL_CONFIG } from '@game/game-board/constants/board.constants';
 import { MAX_SPAWN_POINTS, MAX_EXIT_POINTS } from '../../constants/editor-ui.constants';
 
 export interface TerrainTile {
@@ -68,7 +69,10 @@ export class TerrainGrid {
   }
 
   private createTileMesh(x: number, z: number, type: TerrainType, height: number): THREE.Mesh {
-    const geometry = new THREE.BoxGeometry(this.tileSize * 0.95, 0.2 + height, this.tileSize * 0.95);
+    // UX-12 red-team fix: editor tile gap synced with game (was hardcoded
+    // 0.95, drifted from game's TILE_VISUAL_CONFIG.geometryGapFactor 0.97).
+    const gapFactor = TILE_VISUAL_CONFIG.geometryGapFactor;
+    const geometry = new THREE.BoxGeometry(this.tileSize * gapFactor, 0.2 + height, this.tileSize * gapFactor);
     const config = TERRAIN_CONFIGS[type];
 
     const material = new THREE.MeshStandardMaterial({

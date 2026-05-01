@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 
 import { GameBoardService } from '../game-board.service';
@@ -6,6 +6,8 @@ import { isInBounds } from '../utils/coordinate-utils';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { PathfindingService } from './pathfinding.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
+import { GeometryRegistryService } from './geometry-registry.service';
+import { MaterialRegistryService } from './material-registry.service';
 import { BlockType } from '../models/game-board-tile';
 import {
   MutationOp,
@@ -53,6 +55,16 @@ export class PathMutationService {
     private readonly registry: BoardMeshRegistryService,
     private readonly pathfindingService: PathfindingService,
     private readonly terraformPool: TerraformMaterialPoolService,
+    /**
+     * @Optional() — only present when GameBoardComponent provides it (sprint 12).
+     * Used to skip dispose on registry-shared tile geometry.
+     */
+    @Optional() private readonly geometryRegistry?: GeometryRegistryService,
+    /**
+     * @Optional() — only present when GameBoardComponent provides it (sprint 14).
+     * Used to skip dispose on registry-shared per-BlockType tile material.
+     */
+    @Optional() private readonly materialRegistry?: MaterialRegistryService,
   ) {}
 
   // ────────────────────────────────────────────────────────────────────────
@@ -323,16 +335,46 @@ export class PathMutationService {
     mutationOp?: MutationOp,
   ): void {
     const key = `${row}-${col}`;
-    const oldMesh = this.registry.tileMeshes.get(key);
-    if (oldMesh) {
-      scene.remove(oldMesh);
-      // Always dispose per-tile geometry — it is never shared.
-      oldMesh.geometry.dispose();
-      // Only dispose the material if it is NOT a pooled material.
-      // Pool materials must survive until pool.dispose() at teardown.
-      const oldMat = oldMesh.material as THREE.Material;
-      if (!this.terraformPool.isPoolMaterial(oldMat)) {
+
+    // Phase C sprint 22: there are now two surfaces a tile can live on —
+    // an instance layer (BASE) or an individual Mesh in tileMeshes.
+    // Removing the old surface depends on which one currently owns the slot.
+    const oldIndividual = this.registry.tileMeshes.get(key);
+    if (oldIndividual) {
+      scene.remove(oldIndividual);
+      if (!this.geometryRegistry?.isRegisteredGeometry(oldIndividual.geometry)) {
+        oldIndividual.geometry.dispose();
+      }
+      const oldMat = oldIndividual.material as THREE.Material;
+      if (!this.terraformPool.isPoolMaterial(oldMat)
+          && !this.materialRegistry?.isRegisteredMaterial(oldMat)) {
         oldMat.dispose();
+      }
+      this.registry.tileMeshes.delete(key);
+    }
+
+    // If the slot was in ANY instance layer (sprint 23: BASE/WALL/SPAWNER/EXIT),
+    // hide it. If the new type ALSO has an instance layer and there's no
+    // mutationOp, show the new layer's instance for that coord.
+    //
+    // Defensive: tileInstanceLayers + rebuildTilePickables are sprint 22
+    // additions; some test beds pass spy registries that don't stub them.
+    const layers = this.registry.tileInstanceLayers;
+    if (layers) {
+      // Hide whichever layer currently owns this coord (if any).
+      for (const layer of layers.values()) {
+        if (layer.findIndex(row, col) >= 0) {
+          layer.hideAt(row, col);
+        }
+      }
+      // If no mutationOp, the new type's layer (if present) should show the slot.
+      if (mutationOp === undefined) {
+        const targetLayer = layers.get(newType);
+        if (targetLayer && targetLayer.findIndex(row, col) >= 0) {
+          targetLayer.showAt(row, col);
+          this.registry.rebuildTilePickables?.();
+          return;
+        }
       }
     }
 

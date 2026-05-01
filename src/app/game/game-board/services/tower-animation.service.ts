@@ -3,72 +3,287 @@ import * as THREE from 'three';
 import { PlacedTower, TowerType } from '../models/tower.model';
 import { BlockType } from '../models/game-board-tile';
 import { ANIMATION_CONFIG } from '../constants/rendering.constants';
-import { MUZZLE_FLASH_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
+import { MUZZLE_FLASH_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
+import { AIM_LERP_CONFIG, AIM_FALLBACK_CONFIG, AIM_AMPLITUDE_CONFIG } from '../constants/tower-aim.constants';
 import { getMaterials } from '../utils/three-utils';
+import {
+  BASIC_RECOIL_CONFIG,
+  SPLASH_TUBE_EMIT_CONFIG,
+  SLOW_EMITTER_PULSE_FIRE,
+  TIER_UP_BOUNCE_CONFIG,
+  SELL_ANIM_CONFIG,
+  SELECTION_PULSE_CONFIG,
+  HOVER_LIFT_CONFIG,
+} from '../constants/tower-anim.constants';
+import type { TargetPreviewService } from './target-preview.service';
+
+/**
+ * Lerp the current yaw angle toward a target yaw angle, always taking the
+ * shortest angular path across the ±π boundary.
+ *
+ * Returns the new yaw after advancing by at most `deltaTime * speedRadPerSec`
+ * radians. If the remaining angular distance is smaller than one frame's
+ * step, the target yaw is returned directly (clamped — no overshoot).
+ *
+ * @param currentRad  Current yaw in radians (any value, not restricted to ±π).
+ * @param targetRad   Target yaw in radians.
+ * @param deltaTime   Time since last frame in seconds.
+ * @param speedRadPerSec  Angular velocity cap in radians per second.
+ */
+export function lerpYaw(
+  currentRad: number,
+  targetRad: number,
+  deltaTime: number,
+  speedRadPerSec: number,
+): number {
+  let delta = targetRad - currentRad;
+  // Wrap delta into (-π, π] so we always rotate the short way.
+  while (delta > Math.PI)  delta -= 2 * Math.PI;
+  while (delta < -Math.PI) delta += 2 * Math.PI;
+
+  const maxStep = deltaTime * speedRadPerSec;
+  if (Math.abs(delta) <= maxStep) {
+    return targetRad;
+  }
+  return currentRad + Math.sign(delta) * maxStep;
+}
 
 @Injectable()
 export class TowerAnimationService {
-  /** Animate tower idle effects (crystal bob, orb pulse, spark bob, spore bob, tip glow). */
+
+  /**
+   * Animate tower idle and charge effects. For each group, the call order is:
+   *
+   *  1. `chargeTick(group, t)` — fires FIRST when registered. Handles charge-up
+   *     emissive animations (e.g. CHAIN sphere intensity) that should update
+   *     before the idle positional changes so any intensity written by chargeTick
+   *     is not overwritten by idleTick in the same frame.
+   *  2. `aimTick(group, t, hasTarget)` — fires SECOND when registered. Receives
+   *     the per-frame `hasTarget` flag set by the `tickAim` pre-pass. When
+   *     `hasTarget` is true, `idleTick` is SKIPPED for that group so aim takes
+   *     precedence over idle gestures. When `hasTarget` is false, aim has no
+   *     active target. Whether `idleTick` resumes depends on `aimEngaged` (see below).
+   *  3. `idleTick(group, t)` — fires THIRD, but ONLY when `aimTick` is not
+   *     registered OR `userData['aimEngaged']` is false. `aimEngaged` stays true
+   *     for `AIM_FALLBACK_CONFIG.noTargetGraceSec` after the last target leaves
+   *     range, preventing a jarring snap-to-idle on enemy death (Sprint 40).
+   *
+   * The legacy named-mesh traverse (cases 'crystal', 'spark', 'spore', 'tip')
+   * was removed in Phase I once all six tower types shipped their own idleTick
+   * hooks. The 'tip'/'orb' skip-sets in startMuzzleFlash and applyUpgradeVisuals
+   * were cleaned up accordingly (see Phase I cleanup commits).
+   */
   updateTowerAnimations(towerMeshes: Map<string, THREE.Group>, time: number): void {
     const t = time * ANIMATION_CONFIG.msToSeconds;
     for (const group of towerMeshes.values()) {
       const towerType = group.userData['towerType'] as TowerType | undefined;
       if (!towerType) continue;
 
-      group.traverse((child) => {
-        if (!(child instanceof THREE.Mesh)) return;
+      // Groups currently animating a sell shrink must not have their emissive
+      // overwritten by chargeTick/idleTick — the sell fade owns those uniforms
+      // for the duration of the animation. Skip them here; tickSellAnimations
+      // drives all visual state until onExpire fires and disposes the group.
+      if (group.userData['selling']) continue;
 
-        switch (child.name) {
-          case 'crystal':
-            if (towerType === TowerType.BASIC) {
-              child.position.y = TOWER_ANIM_CONFIG.crystalBaseY
-                + Math.sin(t * TOWER_ANIM_CONFIG.crystalBobSpeed) * TOWER_ANIM_CONFIG.crystalBobAmplitude;
-              child.rotation.y = t * TOWER_ANIM_CONFIG.basicCrystalRotSpeed;
-            } else if (towerType === TowerType.SLOW) {
-              child.position.y = TOWER_ANIM_CONFIG.slowCrystalBaseY
-                + Math.sin(t * TOWER_ANIM_CONFIG.crystalBobSpeed) * TOWER_ANIM_CONFIG.slowCrystalBobAmplitude;
-              child.rotation.y = t * TOWER_ANIM_CONFIG.slowCrystalRotSpeed;
-            }
-            break;
+      // chargeTick runs BEFORE aimTick/idleTick so charge-up emissive changes land first.
+      const chargeTick = group.userData['chargeTick'] as ((g: THREE.Group, t: number) => void) | undefined;
+      if (typeof chargeTick === 'function') {
+        chargeTick(group, t);
+      }
 
-          case 'orb': {
-            const pulseScale = TOWER_ANIM_CONFIG.orbPulseMin
-              + (Math.sin(t * TOWER_ANIM_CONFIG.orbPulseSpeed) * 0.5 + 0.5)
-              * (TOWER_ANIM_CONFIG.orbPulseMax - TOWER_ANIM_CONFIG.orbPulseMin);
-            child.scale.setScalar(pulseScale);
-            break;
-          }
+      // aimTick runs BEFORE idleTick. When aim is engaged (active target OR
+      // within the no-target grace window), idleTick is suppressed so the last
+      // aim yaw is held. `aimEngaged` is set by tickAim: true when a target was
+      // found, stays true until noTargetGraceSec elapses after the target leaves,
+      // then falls to false so idle gesture resumes (Sprint 40 — fixes A-2/B-3).
+      const aimTick = group.userData['aimTick'] as
+        ((g: THREE.Group, t: number, hasTarget: boolean) => void) | undefined;
+      const aimEngaged = group.userData['aimEngaged'] === true;
+      const hasTarget = group.userData['currentAimTarget'] != null;
+      if (typeof aimTick === 'function') {
+        aimTick(group, t, hasTarget);
+        // Idle gesture suspended while aim is engaged (active target or grace hold).
+        if (aimEngaged) continue;
+      }
 
-          case 'spark': {
-            if (child.userData['baseY'] === undefined) child.userData['baseY'] = child.position.y;
-            child.position.y = child.userData['baseY']
-              + Math.sin(t * TOWER_ANIM_CONFIG.sparkBobSpeed + child.position.x * TOWER_ANIM_CONFIG.sparkPhaseScale) * TOWER_ANIM_CONFIG.sparkBobAmplitude;
-            break;
-          }
+      // Per-tower idle hook — all six redesigned types register this. Groups that
+      // lack an idleTick (e.g. a test fixture or a future unregistered tower type)
+      // simply skip animation this frame rather than falling through to legacy code.
+      const idleTick = group.userData['idleTick'] as ((g: THREE.Group, t: number) => void) | undefined;
+      if (typeof idleTick === 'function') {
+        idleTick(group, t);
+      }
+    }
+  }
 
-          case 'spore': {
-            if (child.userData['baseY'] === undefined) child.userData['baseY'] = child.position.y;
-            child.position.y = child.userData['baseY']
-              + Math.sin(t * TOWER_ANIM_CONFIG.sporeBobSpeed + child.position.x * TOWER_ANIM_CONFIG.sporePhaseScale) * TOWER_ANIM_CONFIG.sporeBobAmplitude;
-            break;
-          }
+  /**
+   * Per-frame aim pre-pass: for each tower group that has registered an
+   * `aimTick` callback, queries the current primary target via
+   * `TargetPreviewService` and writes the result to
+   * `userData['currentAimTarget']`.
+   *
+   * Groups without an `aimTick` are skipped entirely — zero overhead for
+   * towers that have not opted in to the aim subsystem.
+   *
+   * Groups with `userData['selling'] = true` are skipped so the aim subsystem
+   * does not fight the sell-shrink animation for the same transform.
+   *
+   * Call once per animation frame BEFORE `updateTowerAnimations` so the
+   * `currentAimTarget` flag is current when `aimTick` callbacks run.
+   *
+   * `TargetPreviewService` is passed as a parameter (not injected in the
+   * constructor) to avoid a DI cycle: TowerAnimationService ← TowerCombatService
+   * ← TowerAnimationService. The caller (GameRenderService) holds references
+   * to both services and wires them here.
+   *
+   * @param towerMeshes          Registry map of tower group key → THREE.Group.
+   * @param towersByKey          Registry map of tower group key → PlacedTower.
+   * @param deltaTime            Seconds since last frame.
+   * @param targetPreviewService Aim target resolver. Pass null/undefined to
+   *                             disable aim updates (e.g. in test beds that
+   *                             don't need it).
+   * @param reduceMotion         When true, use the snap-speed so yaw updates
+   *                             are effectively instantaneous.
+   */
+  tickAim(
+    towerMeshes: Map<string, THREE.Group>,
+    towersByKey: Map<string, PlacedTower>,
+    deltaTime: number,
+    targetPreviewService?: TargetPreviewService | null,
+    reduceMotion = false,
+  ): void {
+    if (!targetPreviewService) return;
 
-          case 'tip': {
-            const mat = child.material as THREE.MeshStandardMaterial;
-            mat.emissiveIntensity = TOWER_ANIM_CONFIG.tipGlowMin
-              + (Math.sin(t * TOWER_ANIM_CONFIG.tipGlowSpeed) * 0.5 + 0.5)
-              * (TOWER_ANIM_CONFIG.tipGlowMax - TOWER_ANIM_CONFIG.tipGlowMin);
-            break;
-          }
+    const speed = reduceMotion
+      ? AIM_LERP_CONFIG.reduceMotionSpeedRadPerSec
+      : AIM_LERP_CONFIG.speedRadPerSec;
+
+    for (const [key, group] of towerMeshes.entries()) {
+      // Only process towers that have opted into the aim subsystem.
+      if (typeof group.userData['aimTick'] !== 'function') continue;
+
+      // Sell-shrink owns all transforms for this group — cede control.
+      if (group.userData['selling']) continue;
+
+      const tower = towersByKey.get(key);
+      if (!tower) continue;
+
+      const target = targetPreviewService.getPreviewTarget(tower);
+
+      if (target === null) {
+        // No in-range target: clear the aim slot and advance the grace timer.
+        // aimEngaged stays true while the tower is within the grace window so
+        // idleTick does not interrupt the last yaw (Sprint 40 — fixes A-2/B-3).
+        // Under reduce-motion the grace period is zero: idle resumes immediately.
+        group.userData['currentAimTarget'] = null;
+        const graceCap = reduceMotion
+          ? AIM_FALLBACK_CONFIG.reduceMotionGraceSec
+          : AIM_FALLBACK_CONFIG.noTargetGraceSec;
+        const grace = (group.userData['noTargetGraceTime'] as number | undefined) ?? 0;
+        const newGrace = grace + deltaTime;
+        if (newGrace >= graceCap) {
+          // Grace window expired: release aim hold so idle gesture resumes.
+          group.userData['noTargetGraceTime'] = graceCap;
+          group.userData['aimEngaged'] = false;
+        } else {
+          group.userData['noTargetGraceTime'] = newGrace;
+          // Keep aimEngaged true only if it was true before target was lost.
+          // If this tower never aimed (cold start), do not engage idle hold.
+          // aimEngaged is only set to true when a target is found (see below),
+          // so undefined/false here means the tower never had a target.
+          // No change needed — leave it at its current value.
         }
-      });
+      } else {
+        // Target found: compute target yaw and lerp the aim subgroup.
+        group.userData['currentAimTarget'] = target;
+        group.userData['noTargetGraceTime'] = 0;
+        group.userData['aimEngaged'] = true;
+
+        const subgroupName = group.userData['aimYawSubgroupName'] as string | undefined;
+        const yawGroup = subgroupName
+          ? (group.getObjectByName(subgroupName) as THREE.Object3D | undefined)
+          : undefined;
+
+        if (yawGroup) {
+          // World position of the tower: read from the group's world matrix.
+          // Using group.position is incorrect for towers elevated on a tile —
+          // the world position is what matters for the angle calculation.
+          const towerWorld = new THREE.Vector3();
+          group.getWorldPosition(towerWorld);
+
+          const dx = target.position.x - towerWorld.x;
+          const dz = target.position.z - towerWorld.z;
+          let targetYaw = Math.atan2(dx, dz);
+
+          // Amplitude clamp for omnidirectional towers (SLOW, CHAIN): restrict
+          // yaw to ±AIM_AMPLITUDE_CONFIG[type] radians from forward (0 rad).
+          // Directional towers (BASIC, SNIPER, SPLASH, MORTAR) use Math.PI so
+          // the clamp is a no-op. This preserves the field-weapon visual fiction
+          // for SLOW/CHAIN while still showing which target is selected.
+          const towerType = group.userData['towerType'] as TowerType | undefined;
+          if (towerType) {
+            const maxAmp = AIM_AMPLITUDE_CONFIG[towerType];
+            if (maxAmp < Math.PI) {
+              targetYaw = Math.max(-maxAmp, Math.min(maxAmp, targetYaw));
+            }
+          }
+
+          yawGroup.rotation.y = lerpYaw(
+            yawGroup.rotation.y,
+            targetYaw,
+            deltaTime,
+            speed,
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Trigger a firing animation for the given tower. Always calls `startMuzzleFlash`
+   * to preserve the existing emissive-spike behaviour. If the tower's mesh group has
+   * a `userData['fireTick']` function registered, calls it with the group and the
+   * muzzle-flash duration so per-tower recoil / charge animations can play without
+   * forking this service.
+   *
+   * Call sites in TowerCombatService should use `triggerFire` instead of calling
+   * `startMuzzleFlash` directly so future firing-animation additions don't require
+   * touching the combat service again.
+   */
+  triggerFire(tower: PlacedTower): void {
+    // startMuzzleFlash runs unconditionally — its behaviour is well-tested and
+    // must not be gated behind the fireTick try/catch block.
+    this.startMuzzleFlash(tower);
+
+    if (!tower.mesh) return;
+    const fireTick = tower.mesh.userData['fireTick'] as
+      ((group: THREE.Group, durationSeconds: number) => void) | undefined;
+    if (typeof fireTick === 'function') {
+      try {
+        fireTick(tower.mesh, MUZZLE_FLASH_CONFIG.duration);
+      } catch (err) {
+        console.warn('triggerFire: fireTick threw', err);
+      }
     }
   }
 
   /**
    * Spikes emissive intensity on all non-tip meshes in the tower's group when it fires.
-   * Saves the current intensity per mesh so `updateMuzzleFlashes` can restore it exactly.
+   * Saves the canonical baseline per mesh so `updateMuzzleFlashes` can restore it exactly.
    * Calling again while a flash is already active resets the timer (re-trigger on rapid fire).
+   *
+   * Skip-set: `'tip'` (constant glow — must not be capped) and `'sphere'` (CHAIN tower
+   * charge-up mesh — its emissiveIntensity is driven every frame by `chargeTick`.
+   * Snapshotting the current animated value as the "original" would restore the sphere
+   * to a random charge phase instead of a stable baseline, matching the Finding 12/14
+   * class of save/restore cross-contamination).
+   *
+   * Shared-material ratchet prevention: the saved baseline is read from
+   * `tower.emissiveBaselines` (recorded at mesh construction time) rather than from
+   * `mat.emissiveIntensity` at fire time. Without this, two towers sharing a body
+   * material that fire in the same turn would ratchet: Tower-B's save would capture
+   * Tower-A's already-spiked value, and restore would elevate the shared baseline
+   * permanently — compounding across every subsequent turn.
    */
   startMuzzleFlash(tower: PlacedTower): void {
     if (!tower.mesh) return;
@@ -80,16 +295,30 @@ export class TowerAnimationService {
 
     if (!isReflash) {
       const saved = new Map<string, number>();
+      // Read baselines from the pre-recorded snapshot rather than from the current
+      // material value. Shared materials may already be spiked by a sibling tower
+      // that fired earlier in the same combat batch; using the current value would
+      // save the elevated intensity and restore to it, permanently ratcheting.
+      const baselines = tower.emissiveBaselines
+        ?? (tower.mesh.userData['emissiveBaselines'] as Map<string, number> | undefined);
 
       tower.mesh.traverse((child) => {
         if (!(child instanceof THREE.Mesh)) return;
-        if (child.name === 'tip') return;
+        // 'tip' — constant glow; 'sphere' — CHAIN charge-up driven by chargeTick;
+        // 'tubeN' — SPLASH per-tube emit driven by tickTubeEmits.
+        // All must be excluded so snapshot → restore does not corrupt animated state.
+        if (child.name === 'tip' || child.name === 'sphere') return;
+        if (child.name.startsWith('tube')) return;
 
         const materials = getMaterials(child) as THREE.MeshStandardMaterial[];
 
         for (const mat of materials) {
-          if (mat.emissiveIntensity === undefined) continue;
-          saved.set(child.uuid + '_' + mat.uuid, mat.emissiveIntensity);
+          const key = child.uuid + '_' + mat.uuid;
+          // Prefer the pre-recorded baseline; fall back to current value for
+          // any mesh that was added after construction (e.g. dynamic debug overlays).
+          const baselineValue = baselines?.get(key) ?? mat.emissiveIntensity;
+          if (baselineValue === undefined) continue;
+          saved.set(key, baselineValue);
         }
       });
 
@@ -101,7 +330,7 @@ export class TowerAnimationService {
     if (originals) {
       tower.mesh.traverse((child) => {
         if (!(child instanceof THREE.Mesh)) return;
-        if (child.name === 'tip') return;
+        if (child.name === 'tip' || child.name === 'sphere') return;
 
         const materials = getMaterials(child) as THREE.MeshStandardMaterial[];
 
@@ -151,6 +380,336 @@ export class TowerAnimationService {
         tower.muzzleFlashTimer = undefined;
         tower.originalEmissiveIntensity = undefined;
       }
+    }
+  }
+
+  /**
+   * Drive barrel-recoil animations for towers that registered a recoil timer
+   * via `userData['recoilStart']` and `userData['recoilDuration']`.
+   * Advances each active recoil, slides the barrel child(ren) back along their
+   * local +Y axis by the configured distance (ease-out-cubic), then returns
+   * them to 0 once the duration elapses.
+   *
+   * Standard towers (BASIC, SNIPER, CHAIN): the target is the single child
+   * named `'barrel'`.
+   *
+   * MORTAR: fireTick writes `userData['mortarBarrelNames']` with the full set
+   * of barrel names. This method applies the offset to every barrel in that
+   * list that is currently visible — covering the T1→T2 swap and T3 dual-barrel
+   * case without hard-coding MORTAR logic into the switch.
+   *
+   * Call once per animation frame with the current real-world time in seconds.
+   */
+  tickRecoilAnimations(towerMeshes: Map<string, THREE.Group>, nowSeconds: number): void {
+    for (const group of towerMeshes.values()) {
+      const recoilStart = group.userData['recoilStart'] as number | undefined;
+      const recoilDuration = group.userData['recoilDuration'] as number | undefined;
+      if (recoilStart === undefined || recoilDuration === undefined || recoilDuration <= 0) continue;
+
+      // Per-tower recoil distance: read from userData if set (SNIPER registers
+      // 0.08u; MORTAR registers 0.15u; BASIC does not set it, falling back to default).
+      const distance = (group.userData['recoilDistance'] as number | undefined)
+        ?? BASIC_RECOIL_CONFIG.distance;
+
+      // Barrel name list: MORTAR registers multiple names; others use ['barrel'].
+      const barrelNames = (group.userData['mortarBarrelNames'] as readonly string[] | undefined)
+        ?? ['barrel'];
+
+      const elapsed = nowSeconds - recoilStart;
+      if (elapsed >= recoilDuration) {
+        // Animation complete — snap back to neutral and clear state.
+        // Use recoilBaseY (stored at factory construction time) so barrels
+        // return to their original rest position, not absolute 0. (Finding G-2)
+        for (const name of barrelNames) {
+          const b = group.getObjectByName(name) as THREE.Mesh | undefined;
+          if (b) b.position.y = (b.userData['recoilBaseY'] as number | undefined) ?? 0;
+        }
+        group.userData['recoilStart'] = undefined;
+        group.userData['recoilDuration'] = undefined;
+        continue;
+      }
+
+      // Normalised time [0..1]; easeOutCubic = 1 - (1 - t)^3
+      const raw = elapsed / recoilDuration;
+      const eased = 1 - Math.pow(1 - raw, 3);
+
+      // Slide back relative to the barrel's rest position (recoilBaseY).
+      // Peak recoil at elapsed=0: position = baseY - distance.
+      // Returns to baseY as eased → 1. (Finding G-2: was absolute 0-based)
+      const recoilOffset = -distance * (1 - eased);
+
+      for (const name of barrelNames) {
+        const b = group.getObjectByName(name) as THREE.Mesh | undefined;
+        // Apply recoil only to visible barrels (invisible barrels are tier-gated
+        // and should not accumulate a position offset that would appear on reveal).
+        if (b?.visible) {
+          const baseY = (b.userData['recoilBaseY'] as number | undefined) ?? 0;
+          b.position.y = baseY + recoilOffset;
+        }
+      }
+    }
+  }
+
+  /**
+   * Advance per-frame tube-emit pulse animations on SPLASH towers.
+   *
+   * Called once per animation frame alongside `tickRecoilAnimations`. Each
+   * SPLASH tower group tracks which tube is currently emitting via
+   * `userData['emittingTubeIndex']`, `userData['tubeEmitStart']`, and
+   * `userData['tubeEmitDuration']`. This method fades the emissive intensity
+   * of the active tube from peak to zero over the emit duration, then clears
+   * the state when done.
+   *
+   * The drum group (named 'drum') is walked to locate the tube mesh because
+   * tubes are children of the drum and therefore rotate with it.
+   */
+  tickTubeEmits(towerMeshes: Map<string, THREE.Group>, nowSeconds: number): void {
+    for (const group of towerMeshes.values()) {
+      const tubeIdx = group.userData['emittingTubeIndex'] as number | undefined;
+      const emitStart = group.userData['tubeEmitStart'] as number | undefined;
+      const emitDur = group.userData['tubeEmitDuration'] as number | undefined;
+
+      if (tubeIdx === undefined || emitStart === undefined || emitDur === undefined) continue;
+
+      const elapsed = nowSeconds - emitStart;
+      const drum = group.getObjectByName('drum');
+      if (!drum) continue;
+
+      const tubeName = `tube${tubeIdx + 1}`;
+      const tubeMesh = drum.getObjectByName(tubeName) as THREE.Mesh | undefined;
+
+      if (!tubeMesh || !(tubeMesh.material instanceof THREE.MeshStandardMaterial)) continue;
+
+      if (elapsed < emitDur) {
+        const alpha = 1 - elapsed / emitDur;
+        tubeMesh.material.emissiveIntensity = alpha * SPLASH_TUBE_EMIT_CONFIG.emissiveMultiplier;
+      } else {
+        tubeMesh.material.emissiveIntensity = 0;
+        group.userData['emittingTubeIndex'] = undefined;
+        group.userData['tubeEmitStart'] = undefined;
+        group.userData['tubeEmitDuration'] = undefined;
+      }
+    }
+  }
+
+  /**
+   * Drive emitter-scale pulse animations on SLOW towers.
+   *
+   * Called once per animation frame alongside `tickRecoilAnimations` and
+   * `tickTubeEmits`. Each SLOW tower stores `userData['emitterPulseStart']`
+   * and `userData['emitterPulseStart']` when `fireTick` is called. This
+   * method scales the 'emitter' dish from 1.0 → SLOW_EMITTER_PULSE_FIRE.scaleMax
+   * (quick ease-out) → back to 1.0 over the pulse duration, then clears state.
+   */
+  tickEmitterPulses(towerMeshes: Map<string, THREE.Group>, nowSeconds: number): void {
+    for (const group of towerMeshes.values()) {
+      const pulseStart = group.userData['emitterPulseStart'] as number | undefined;
+      if (pulseStart === undefined) continue;
+
+      const elapsed = nowSeconds - pulseStart;
+      const emitter = group.getObjectByName('emitter') as THREE.Mesh | undefined;
+
+      if (elapsed >= SLOW_EMITTER_PULSE_FIRE.durationSec) {
+        // Pulse complete — restore neutral scale and clear state
+        if (emitter) emitter.scale.setScalar(1.0);
+        group.userData['emitterPulseStart'] = undefined;
+        continue;
+      }
+
+      if (!emitter) continue;
+
+      // Normalised time [0..1] over the fixed pulse duration constant; easeOutCubic
+      const raw = elapsed / SLOW_EMITTER_PULSE_FIRE.durationSec;
+      const eased = 1 - Math.pow(1 - raw, 3);
+
+      // Scale expands quickly to peak then eases back toward 1.0
+      const scale = SLOW_EMITTER_PULSE_FIRE.scaleMax
+        - (SLOW_EMITTER_PULSE_FIRE.scaleMax - 1.0) * eased;
+      emitter.scale.setScalar(scale);
+    }
+  }
+
+  /**
+   * Drive tier-up scale bounce animations.
+   *
+   * When `applyUpgradeVisuals` is called, it writes `userData['scaleAnimStart']`
+   * on the tower group with the current wall-clock time in seconds. This method
+   * reads that timestamp on each frame, computes elapsed time, and eases the
+   * group scale from TIER_UP_BOUNCE_CONFIG.peakScale → the pre-animation scale
+   * over TIER_UP_BOUNCE_CONFIG.durationSec. After the animation completes, the
+   * timestamp is cleared so future frames skip this group.
+   *
+   * The pre-animation scale is captured in `userData['scaleAnimBaseScale']` by
+   * applyUpgradeVisuals before writing the start timestamp, so the bounce always
+   * returns to whatever applyUpgradeVisuals set — not an assumed constant.
+   *
+   * Call once per animation frame with the current real-world time in seconds.
+   */
+  tickTierUpScale(towerMeshes: Map<string, THREE.Group>, nowSeconds: number): void {
+    for (const group of towerMeshes.values()) {
+      const animStart = group.userData['scaleAnimStart'] as number | undefined;
+      if (animStart === undefined) continue;
+
+      // If a sell animation has taken ownership of this group's transform, cede
+      // control immediately rather than fighting tickSellAnimations for scale
+      // ownership. tickSellAnimations will drive scale to 0 and dispose the group.
+      if (group.userData['selling']) {
+        group.userData['scaleAnimStart'] = undefined;
+        group.userData['scaleAnimBaseScale'] = undefined;
+        continue;
+      }
+
+      const elapsed = nowSeconds - animStart;
+      const baseScale = (group.userData['scaleAnimBaseScale'] as number | undefined) ?? 1.0;
+
+      if (elapsed >= TIER_UP_BOUNCE_CONFIG.durationSec) {
+        // Animation complete — snap to base scale and clear state.
+        group.scale.setScalar(baseScale);
+        group.userData['scaleAnimStart'] = undefined;
+        group.userData['scaleAnimBaseScale'] = undefined;
+        continue;
+      }
+
+      // easeOutCubic: starts fast (peak scale) then decelerates toward base
+      const raw = elapsed / TIER_UP_BOUNCE_CONFIG.durationSec;
+      const eased = 1 - Math.pow(1 - raw, 3);
+      const currentScale =
+        TIER_UP_BOUNCE_CONFIG.peakScale - (TIER_UP_BOUNCE_CONFIG.peakScale - baseScale) * eased;
+      group.scale.setScalar(currentScale);
+    }
+  }
+
+  /**
+   * Drive sell shrink-and-fade animations.
+   *
+   * When TowerMeshLifecycleService.removeMesh() is called with the animated flag,
+   * it writes `userData['sellingStart']` on the group with the current wall-clock
+   * time in seconds and sets `userData['selling'] = true`. This method reads those
+   * fields per frame, scaling the group from 1.0→ 0.0 over SELL_ANIM_CONFIG.durationSec
+   * while fading emissive intensity. When the animation completes, `onExpire` is
+   * called with the registry key so the caller can trigger actual disposal.
+   *
+   * Disposal safety: if the encounter tears down mid-animation (encounter restart
+   * or scene cleanup), `cleanupSellAnimations` can be called to immediate-dispose
+   * all selling groups without waiting for onExpire.
+   *
+   * Call once per animation frame with the current real-world time in seconds.
+   */
+  tickSellAnimations(
+    towerMeshes: Map<string, THREE.Group>,
+    nowSeconds: number,
+    onExpire: (key: string) => void,
+  ): void {
+    for (const [key, group] of towerMeshes.entries()) {
+      if (!group.userData['selling']) continue;
+
+      const sellStart = group.userData['sellingStart'] as number | undefined;
+      if (sellStart === undefined) continue;
+
+      // Snapshot original emissive intensities once on the first sell frame so
+      // the fade uses absolute assignment rather than multiplicative decay.
+      // Multiplicative decay is incorrect: each frame compounds the reduction,
+      // and idleTick/chargeTick (now blocked by the 'selling' guard in
+      // updateTowerAnimations) would previously re-inflate the value between frames,
+      // producing a noisy flicker rather than a smooth fade.
+      if (!group.userData['sellEmissiveOrigins']) {
+        const origins = new Map<string, number>();
+        group.traverse(child => {
+          if (!(child instanceof THREE.Mesh)) return;
+          const mats = getMaterials(child) as THREE.MeshStandardMaterial[];
+          for (const mat of mats) {
+            if (mat.emissiveIntensity !== undefined) {
+              origins.set(child.uuid + '_' + mat.uuid, mat.emissiveIntensity);
+            }
+          }
+        });
+        group.userData['sellEmissiveOrigins'] = origins;
+      }
+
+      const elapsed = nowSeconds - sellStart;
+
+      if (elapsed >= SELL_ANIM_CONFIG.durationSec) {
+        // Animation complete — clear snapshot and signal caller to dispose the group.
+        group.userData['selling'] = false;
+        group.userData['sellingStart'] = undefined;
+        group.userData['sellEmissiveOrigins'] = undefined;
+        onExpire(key);
+        continue;
+      }
+
+      // Normalized progress [0..1]; easeInCubic so the shrink accelerates
+      const raw = elapsed / SELL_ANIM_CONFIG.durationSec;
+      const eased = raw * raw * raw; // easeInCubic
+      const scale = 1.0 - eased * (1.0 - SELL_ANIM_CONFIG.finalScale);
+      group.scale.setScalar(scale);
+
+      // Fade out emissive using absolute assignment from the snapshotted originals
+      // so the value is deterministic regardless of frame rate.
+      const emissiveFade = 1.0 - eased;
+      const origins = group.userData['sellEmissiveOrigins'] as Map<string, number>;
+      group.traverse(child => {
+        if (!(child instanceof THREE.Mesh)) return;
+        const mats = getMaterials(child) as THREE.MeshStandardMaterial[];
+        for (const mat of mats) {
+          const key2 = child.uuid + '_' + mat.uuid;
+          const base = origins.get(key2);
+          if (base !== undefined) {
+            mat.emissiveIntensity = base * emissiveFade;
+          }
+        }
+      });
+    }
+  }
+
+  /**
+   * Drive selection-ring pulse animations.
+   *
+   * Iterates over the glowRings map (keyed by tower id). For each ring that
+   * has `userData['selected'] = true`, pulses its material opacity between
+   * SELECTION_PULSE_CONFIG.opacityMin and opacityMax on a sine wave with
+   * period SELECTION_PULSE_CONFIG.periodSec. Rings without the flag stay at
+   * their static opacity.
+   *
+   * Call once per animation frame with current wall-clock time in seconds.
+   */
+  tickSelectionPulse(glowRings: Map<string, THREE.Mesh>, nowSeconds: number): void {
+    const omega = (Math.PI * 2) / SELECTION_PULSE_CONFIG.periodSec;
+    const range = SELECTION_PULSE_CONFIG.opacityMax - SELECTION_PULSE_CONFIG.opacityMin;
+
+    for (const ring of glowRings.values()) {
+      if (!ring.userData['selected']) continue;
+      const mat = ring.material as THREE.MeshBasicMaterial;
+      mat.opacity =
+        SELECTION_PULSE_CONFIG.opacityMin + range * (0.5 + 0.5 * Math.sin(nowSeconds * omega));
+    }
+  }
+
+  /**
+   * Drive hover accent-light intensity lift.
+   *
+   * For each tower group that has `userData['hoverLift'] = true`, lifts its
+   * accent PointLight intensity by HOVER_LIFT_CONFIG.intensityMultiplier relative
+   * to the light's base intensity stored in `userData['accentLightBaseIntensity']`.
+   * When the flag is cleared, the light intensity is restored to the base value.
+   *
+   * The base intensity is captured on first call when the light is first seen, so
+   * this method is safe to call unconditionally every frame.
+   *
+   * Call once per animation frame.
+   */
+  tickHoverLift(towerMeshes: Map<string, THREE.Group>): void {
+    for (const group of towerMeshes.values()) {
+      const light = group.userData['accentLight'] as THREE.PointLight | undefined;
+      if (!light) continue;
+
+      // Capture base intensity once (written by attachAccentLight in the factory)
+      if (group.userData['accentLightBaseIntensity'] === undefined) {
+        group.userData['accentLightBaseIntensity'] = light.intensity;
+      }
+      const base = group.userData['accentLightBaseIntensity'] as number;
+      const hovered = group.userData['hoverLift'] as boolean | undefined;
+
+      light.intensity = hovered ? base * HOVER_LIFT_CONFIG.intensityMultiplier : base;
     }
   }
 

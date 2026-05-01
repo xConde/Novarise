@@ -1,5 +1,7 @@
 export * from './audio.constants';
 export * from './board.constants';
+export * from './tower-aim.constants';
+export * from './tower-anim.constants';
 export * from './camera.constants';
 export * from './combat.constants';
 export * from './damage-popup.constants';

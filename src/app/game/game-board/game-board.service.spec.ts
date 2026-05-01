@@ -770,6 +770,42 @@ describe('GameBoardService', () => {
       (mesh.material as THREE.Material).dispose();
     });
   });
+
+  // Pre-sprint-21 regression: two BASE tiles must NOT share a material
+  // instance. Pre-revert (Phase B sprint 14) had cached materials per
+  // BlockType, which aliased TileHighlightService's emissive mutation
+  // across every BASE tile.
+  describe('per-tile material isolation (pre-sprint-21 aliasing guard)', () => {
+    it('two BASE tile meshes get DIFFERENT material instances', () => {
+      const svc = new GameBoardService();
+      const board = createTestBoard(5, 5);
+      svc.importBoard(board, 5, 5);
+      const a = svc.createTileMesh(1, 1, BlockType.BASE);
+      const b = svc.createTileMesh(2, 2, BlockType.BASE);
+      expect(a.material).not.toBe(b.material);
+      a.geometry.dispose();
+      b.geometry.dispose();
+      (a.material as THREE.Material).dispose();
+      (b.material as THREE.Material).dispose();
+    });
+
+    it('mutating tile A emissive does NOT affect tile B (the bug TileHighlightService would have hit)', () => {
+      const svc = new GameBoardService();
+      const board = createTestBoard(5, 5);
+      svc.importBoard(board, 5, 5);
+      const a = svc.createTileMesh(1, 1, BlockType.BASE);
+      const b = svc.createTileMesh(2, 2, BlockType.BASE);
+      const aMat = a.material as THREE.MeshStandardMaterial;
+      const bMat = b.material as THREE.MeshStandardMaterial;
+      const bOriginalEmissive = bMat.emissive.getHex();
+      aMat.emissive.setHex(0x00ccaa); // simulate TileHighlightService highlight
+      expect(bMat.emissive.getHex()).toBe(bOriginalEmissive);
+      a.geometry.dispose();
+      b.geometry.dispose();
+      aMat.dispose();
+      bMat.dispose();
+    });
+  });
 });
 
 /**

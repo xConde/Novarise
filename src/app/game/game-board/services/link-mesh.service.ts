@@ -196,10 +196,13 @@ export class LinkMeshService implements OnDestroy {
 const LINK_CONFIG = {
   /** Cyan — matches the Conduit archetype accent. */
   spatialColor: 0x4ac4d4,
-  spatialOpacity: 0.55,
+  /** UX-34: opacity bumped 0.55 → 0.65 (was tuned pre-Phase-A; new
+   *  dark atmosphere reduced perceived saturation). */
+  spatialOpacity: 0.65,
   /** Amber — CONDUIT_BRIDGE virtual edges read as "synthetic" link. */
   virtualColor: 0xd4a44a,
-  virtualOpacity: 0.65,
+  /** UX-34: opacity bumped 0.65 → 0.75. */
+  virtualOpacity: 0.75,
   /** Line Y-offset above tower-top so it doesn't z-fight with the tile mesh. */
   verticalOffset: 0.3,
 } as const;

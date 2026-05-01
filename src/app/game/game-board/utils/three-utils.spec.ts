@@ -1,5 +1,102 @@
 import * as THREE from 'three';
-import { disposeMaterial, disposeMesh, disposeGroup, getMaterials } from './three-utils';
+import {
+  applyRendererPolicy,
+  clampPixelRatio,
+  disposeMaterial,
+  disposeMesh,
+  disposeGroup,
+  getMaterials,
+  RendererPolicy
+} from './three-utils';
+
+describe('applyRendererPolicy', () => {
+  let renderer: jasmine.SpyObj<THREE.WebGLRenderer> & {
+    shadowMap: { enabled: boolean; type: THREE.ShadowMapType };
+    localClippingEnabled: boolean;
+    toneMapping: THREE.ToneMapping;
+    toneMappingExposure: number;
+    outputColorSpace: THREE.ColorSpace;
+  };
+  const policy: RendererPolicy = {
+    maxPixelRatio: 2,
+    toneMappingExposure: 1.4,
+    shadowMapType: THREE.PCFSoftShadowMap,
+    toneMapping: THREE.ACESFilmicToneMapping,
+    outputColorSpace: THREE.SRGBColorSpace,
+    localClippingEnabled: true
+  };
+
+  beforeEach(() => {
+    renderer = {
+      setPixelRatio: jasmine.createSpy('setPixelRatio'),
+      setSize: jasmine.createSpy('setSize'),
+      shadowMap: { enabled: false, type: THREE.BasicShadowMap },
+      localClippingEnabled: false,
+      toneMapping: THREE.NoToneMapping,
+      toneMappingExposure: 1,
+      outputColorSpace: THREE.LinearSRGBColorSpace
+    } as unknown as typeof renderer;
+  });
+
+  it('caps pixel ratio at policy.maxPixelRatio when devicePixelRatio exceeds it', () => {
+    applyRendererPolicy(renderer, 800, 600, 3, policy);
+    expect(renderer.setPixelRatio).toHaveBeenCalledWith(2);
+  });
+
+  it('passes devicePixelRatio when below the cap', () => {
+    applyRendererPolicy(renderer, 800, 600, 1, policy);
+    expect(renderer.setPixelRatio).toHaveBeenCalledWith(1);
+  });
+
+  it('sets renderer size to width/height', () => {
+    applyRendererPolicy(renderer, 1920, 1080, 1, policy);
+    expect(renderer.setSize).toHaveBeenCalledWith(1920, 1080);
+  });
+
+  it('enables shadow map and applies policy.shadowMapType', () => {
+    applyRendererPolicy(renderer, 800, 600, 1, policy);
+    expect(renderer.shadowMap.enabled).toBeTrue();
+    expect(renderer.shadowMap.type).toBe(THREE.PCFSoftShadowMap);
+  });
+
+  it('applies tone mapping + exposure', () => {
+    applyRendererPolicy(renderer, 800, 600, 1, policy);
+    expect(renderer.toneMapping).toBe(THREE.ACESFilmicToneMapping);
+    expect(renderer.toneMappingExposure).toBe(1.4);
+  });
+
+  it('sets outputColorSpace to SRGBColorSpace (was unset on game renderer pre-Phase-A)', () => {
+    applyRendererPolicy(renderer, 800, 600, 1, policy);
+    expect(renderer.outputColorSpace).toBe(THREE.SRGBColorSpace);
+  });
+
+  it('enables localClippingEnabled when policy requests it', () => {
+    applyRendererPolicy(renderer, 800, 600, 1, policy);
+    expect(renderer.localClippingEnabled).toBeTrue();
+  });
+});
+
+describe('clampPixelRatio', () => {
+  it('returns the cap when devicePixelRatio exceeds it', () => {
+    expect(clampPixelRatio(3, 2)).toBe(2);
+  });
+
+  it('returns devicePixelRatio when below the cap', () => {
+    expect(clampPixelRatio(1, 2)).toBe(1);
+  });
+
+  it('returns devicePixelRatio when exactly equal to the cap', () => {
+    expect(clampPixelRatio(2, 2)).toBe(2);
+  });
+
+  it('handles fractional ratios above the cap', () => {
+    expect(clampPixelRatio(2.625, 2)).toBe(2);
+  });
+
+  it('handles fractional ratios below the cap', () => {
+    expect(clampPixelRatio(1.5, 2)).toBe(1.5);
+  });
+});
 
 describe('disposeMaterial', () => {
   it('calls dispose on a single Material', () => {
@@ -199,6 +296,57 @@ describe('disposeGroup', () => {
 
     try { lineGeo.dispose(); } catch { /* already disposed */ }
     try { lineMat.dispose(); } catch { /* already disposed */ }
+  });
+
+  it('disposes a shared LineBasicMaterial exactly once across N Line children (grid pattern)', () => {
+    const sharedMat = new THREE.LineBasicMaterial();
+    const lineGroup = new THREE.Group();
+    const geoms: THREE.BufferGeometry[] = [];
+    for (let i = 0; i < 5; i++) {
+      const g = new THREE.BufferGeometry();
+      geoms.push(g);
+      lineGroup.add(new THREE.Line(g, sharedMat));
+    }
+
+    spyOn(sharedMat, 'dispose');
+    disposeGroup(lineGroup);
+    expect(sharedMat.dispose).toHaveBeenCalledTimes(1);
+    sharedMat.dispose();
+    geoms.forEach(g => { try { g.dispose(); } catch { /* already */ } });
+  });
+
+  it('disposes a shared MeshStandardMaterial exactly once across N child Meshes (tower pattern)', () => {
+    const sharedMat = new THREE.MeshStandardMaterial();
+    const towerGroup = new THREE.Group();
+    const geoms: THREE.BufferGeometry[] = [];
+    for (let i = 0; i < 7; i++) {
+      const g = new THREE.BoxGeometry(1, 1, 1);
+      geoms.push(g);
+      towerGroup.add(new THREE.Mesh(g, sharedMat));
+    }
+
+    spyOn(sharedMat, 'dispose');
+    disposeGroup(towerGroup);
+    expect(sharedMat.dispose).toHaveBeenCalledTimes(1);
+    sharedMat.dispose();
+    geoms.forEach(g => { try { g.dispose(); } catch { /* already */ } });
+  });
+
+  it('disposes a shared geometry exactly once across N child Meshes', () => {
+    const sharedGeo = new THREE.BoxGeometry(1, 1, 1);
+    const towerGroup = new THREE.Group();
+    const mats: THREE.Material[] = [];
+    for (let i = 0; i < 4; i++) {
+      const m = new THREE.MeshBasicMaterial();
+      mats.push(m);
+      towerGroup.add(new THREE.Mesh(sharedGeo, m));
+    }
+
+    spyOn(sharedGeo, 'dispose');
+    disposeGroup(towerGroup);
+    expect(sharedGeo.dispose).toHaveBeenCalledTimes(1);
+    sharedGeo.dispose();
+    mats.forEach(m => m.dispose());
   });
 
   it('disposes mixed Mesh and Line descendants in a single traversal', () => {

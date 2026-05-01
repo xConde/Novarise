@@ -1948,3 +1948,662 @@ Phase 3 shipped the chip flip but never tested a neutral→conduit or cartograph
 - **WYRM_ASCENDANT wave placement:** currently in wave 10 alongside VEINSEEKER (hard cohabitation). If Phase 4 or balance PR adds wave 15/20 boss slots, migrate WYRM out. Tracked in the sprint-39 commit body TODO.
 
 **Verdict:** Phase 4 can proceed. The carryover list is **smaller** than Phase 2's close — Phase 3's red-team gate surfaced exactly one production-blocking bug (Finding 1), which was fixed this phase. The composition-spec lesson should become a Phase 4 entry criterion. The damage-stack refactor (critique #2) and the cliff-mesh-service extraction (critique #4) are polish backlog — neither gates Phase 4 primitives or card work.
+
+---
+
+## Red Team Critique — Phase A (Tower Polish Foundation) — 2026-04-30
+
+### Finding 1: TowerDecalLibraryService.dispose() never called — CanvasTexture leak on every encounter teardown (CRITICAL)
+
+**Location:** `tower-decal-library.service.ts` / `game-session.service.ts`
+
+**Risk:** `TowerDecalLibraryService` is component-scoped and provides a `dispose()` method that frees all cached `THREE.CanvasTexture` GPU allocations. However, nothing in `GameBoardComponent.ngOnDestroy()`, `cleanupGameObjects()`, or `GameSessionService.cleanupScene()` calls it. Every encounter teardown leaks up to 4 `CanvasTexture` objects (one per `DecalKey`). In a long run session with repeated encounter restarts, this compounds. The service's own JSDoc says "callers must NOT call `.dispose()` on the returned texture directly; call `this.dispose()` to tear down the whole library at encounter teardown" — which is exactly what the codebase was not doing.
+
+**Fix:** Added `TowerDecalLibraryService` as an `@Optional()` dependency in `GameSessionService`. Call `this.towerDecalLibrary?.dispose()` in `cleanupScene()` after `vfxPool.dispose()` (textures should release after all meshes referencing them are gone). Added regression spec: `should call towerDecalLibrary.dispose() during cleanupScene`.
+
+**Status:** Fixed in commit `da57b35`
+
+---
+
+### Finding 2: fireTick callback not isolated — a throwing hook halts the entire fireTurn pass (HIGH)
+
+**Location:** `tower-animation.service.ts:102`
+
+**Risk:** `triggerFire()` calls `fireTick(tower.mesh, duration)` with no try/catch. If any Phase B–G implementation registers a `fireTick` that throws (a common regression path when refactoring animation code), the exception propagates up through `TowerCombatService.fireTurn()` at the `this.towerAnimationService.triggerFire(tower)` call site. This terminates the entire `for (const tower of towerList)` loop mid-pass: every tower after the throwing one fails to fire that turn without any log or user-visible signal. Combat silently breaks. The existing test confirms "does not error when `fireTick` is absent" but has no coverage for a `fireTick` that throws.
+
+**Fix (not yet applied — Phase B entry criterion):** Wrap the `fireTick` invocation in `try/catch` and log a `console.error` (dev-only guard via `isDevMode()`) so the broken hook surfaces in development but does not interrupt combat for other towers. Alternatively, validate each `fireTick` at registration time (type + smoke test) and reject invalid registrations. The test to add: `it('isolates a throwing fireTick so other tower combat continues')` in `tower-animation.service.spec.ts`.
+
+---
+
+### Finding 3: idleTick/named-mesh traverse double-writes crystal position — comment contradicts code behavior (MEDIUM)
+
+**Location:** `tower-animation.service.ts:11–31`, `tower-animation.service.ts:38–48`
+
+**Risk:** The JSDoc says "bespoke animations [registered via `idleTick`] take priority over the generic ones below." The code does NOT implement that priority. `idleTick` runs first, but the named-mesh traverse runs unconditionally afterward with no guard. If a Phase B BASIC tower's `idleTick` sets `crystal.position.y = 1.35` (rest pose) and then the `'crystal'` branch immediately overwrites it with `TOWER_ANIM_CONFIG.crystalBaseY + sin(...)`, the `idleTick` result is silently discarded every frame. The effective winner is always the traverse — the opposite of what the comment promises. Phase B developers will register an `idleTick` that appears to work in isolation (unit test with a spy) but does nothing in production because the traverse stomps it.
+
+**Fix (not yet applied — Phase B entry criterion before any BASIC redesign sprint):** Either (a) skip the named-mesh case for a given child if `idleTick` is registered on the group (opt-out flag on `userData['skipLegacyAnims']`), or (b) add a guard inside the `'crystal'` case: `if (typeof group.userData['idleTick'] === 'function') break;`. Option (b) is surgical and lower-risk. The test to add: registers both an `idleTick` spy and adds a named `crystal` child; asserts that after `updateTowerAnimations`, the crystal's `position.y` reflects only the `idleTick` output, not the legacy traverse formula.
+
+---
+
+## Red Team Critique — Phase B (BASIC silhouette) — 2026-04-30
+
+### Finding 4: `tickRecoilAnimations` is never called — barrel recoil is dead code (CRITICAL)
+
+**Location:** `tower-animation.service.ts:212` / `game-render.service.ts:144–147`
+
+**Risk:** `TowerAnimationService.tickRecoilAnimations()` is the sole driver of barrel-recoil animation for the BASIC tower. `fireTick` writes `userData['recoilStart']` / `userData['recoilDuration']` but nothing reads them — `game-render.service.ts` calls `updateTowerAnimations`, `updateTilePulse`, and `updateMuzzleFlashes` on every frame, but `tickRecoilAnimations` is absent from that list. The barrel position never changes. The feature is completely silent: no visual, no error. The new spec in `tower-animation.service.spec.ts` verifies the method's internal math in isolation but does NOT assert that it is wired into the render loop, so the tests pass while the feature is dead in production. The test spy in `tower.spies.ts` does not include `tickRecoilAnimations`, so it would not be caught by component-level tests either.
+
+**Fix:** Call `this.towerAnimationService.tickRecoilAnimations(this.meshRegistry.towerMeshes, performance.now() / 1000)` in `GameRenderService.renderFrame()` after `updateTowerAnimations`. Add `tickRecoilAnimations` to `createTowerAnimationServiceSpy()` in `tower.spies.ts`. Add a spec in `game-render.service.spec.ts` asserting that `tickRecoilAnimations` is called on every render frame.
+
+**Status:** Fixed in commit `1e964ee`
+
+---
+
+### Finding 5: Tier-gated parts invisible after checkpoint save/resume — `revealTierParts` never called by the restore coordinator (HIGH)
+
+**Status:** Fixed in Phase C commit (feat/threejs-polish).
+
+**Location:** `checkpoint-restore-coordinator.service.ts` / `tower-upgrade-visual.service.ts`
+
+**Risk:** The restore coordinator (Step 4) calls `towerMeshFactory.createTowerMesh()` for each saved tower, then calls `towerCombatService.restoreTowers()` to rehydrate combat state including `level`. However, the mesh is built at T1 defaults — `barrelCap` and `pauldron` children have `visible = false` as set at creation. Neither the coordinator nor `restoreTowers` calls `towerUpgradeVisualService.revealTierParts()` afterward. A BASIC tower that was at level 2 or 3 when saved will render all T2/T3 parts as invisible after resume, while combat state correctly reflects the higher level. The mismatch lasts until the player upgrades the tower again.
+
+**Fix applied:** `CheckpointRestoreCoordinatorService` now injects `TowerUpgradeVisualService` and calls `applyUpgradeVisuals(mesh, tower.level, tower.specialization)` for each restored tower with `level > 1`. Applies scale + emissive boost + `revealTierParts` in one call, consistent with the live upgrade path. Also extended `revealTierParts` to honor `userData['maxTier']` (parts that should disappear at higher tiers). Three specs in `checkpoint-restore-coordinator.service.spec.ts` cover: level-2 restore (barrelCap visible), level-3 restore (call made), level-1 restore (no call).
+
+---
+
+### Finding 6: `reduce-motion` CSS class used to gate point lights — wrong signal, wrong scope (MEDIUM)
+
+**Location:** `tower-mesh-factory.service.ts:244–246`
+
+**Risk:** The accent `PointLight` is gated behind `document.body.classList.contains('reduce-motion')`. `reduce-motion` is a motion-accessibility preference (suppresses animation), not a performance-reduction flag. The plan doc explicitly says to check `runtime-mode.service.ts` for low-end detection. Checking `document.body` in a constructor-time factory method also couples the factory to DOM state at mesh-creation time — a tower placed after `reduce-motion` is toggled mid-session will behave differently than one placed before the toggle. `runtime-mode.service.ts` (or a `lowEndMode` injectable bool) is the correct signal: it's determined once at startup based on device capability, not per-frame DOM sniffing.
+
+**Fix (deferred — low production risk):** Inject `RuntimeModeService` (or a boolean token `IS_LOW_END`) into `TowerMeshFactoryService` and replace the `document.body` check with `this.runtimeMode.isLowEnd`. The deferred label is appropriate since (a) `reduce-motion` users likely appreciate the light skip, (b) the feature is cosmetic, and (c) `runtime-mode.service.ts` may not currently expose a `boolean` — wiring it requires an additional sprint. Track as Phase H (cohesion sprint 52) follow-up.
+
+---
+
+## Red Team Critique — Phase C (SNIPER silhouette) — 2026-04-30
+
+### Finding 7: `chargeTick` registered but never invoked — dead callback channel (MEDIUM)
+
+**Location:** `tower-mesh-factory.service.ts` SNIPER case / `tower-animation.service.ts:updateTowerAnimations`
+
+**Risk:** The SNIPER mesh registers `chargeTick` on `userData` (aliased to `idleTick` — scope lens pulse). `updateTowerAnimations` only checks `idleTick`; there is no callsite for `chargeTick`. Since `chargeTick` is currently aliased to `idleTick`, the lens still pulses in idle — so there is no visible regression. But the channel exists as an intentional API surface (the comment says "a future phase may wire this to real target-lock state"). Any future CHAIN/SLOW tower that registers `chargeTick` for a distinct animation (distinct from `idleTick`) will be silently ignored. The contract is undocumented and has no spec coverage.
+
+**Status:** Fixed in Phase F (CHAIN silhouette). `updateTowerAnimations` now invokes `chargeTick(group, t)` BEFORE `idleTick` for every tower group that registers it. CHAIN uses `chargeTick` for its sphere charge-discharge sine. Spec coverage added in `tower-animation.service.spec.ts`.
+
+---
+
+### Finding 8: `tickRecoilAnimations` ignores `userData['recoilDistance']` — SNIPER recoil always fires at BASIC distance (CRITICAL)
+
+**Location:** `tower-animation.service.ts:234`
+
+**Risk:** The SNIPER `fireTick` writes `recoilDistance = 0.08` to `userData`. `tickRecoilAnimations` hardcodes `BASIC_RECOIL_CONFIG.distance` (0.05u) and never reads `recoilDistance`. All SNIPER shots recoil at BASIC distance — the per-tower differentiation is silent. The three existing recoil specs only test the BASIC case and assert against `BASIC_RECOIL_CONFIG.distance`, so they cannot detect this.
+
+**Fix applied:** `tickRecoilAnimations` now reads `group.userData['recoilDistance'] ?? BASIC_RECOIL_CONFIG.distance`. Two new specs in `tower-animation.service.spec.ts`: (1) SNIPER override path uses 0.08u at t=0; (2) absent `recoilDistance` falls back to `BASIC_RECOIL_CONFIG.distance`. Fixed in commit `fb04703`.
+
+---
+
+### Finding 9: Scope lens mesh (`name='scope'`) missing `maxTier=1` — floats detached at T2+ (MEDIUM)
+
+**Location:** `tower-mesh-factory.service.ts` SNIPER case (lens mesh construction)
+
+**Risk:** The scope housing (`scopeMesh`) correctly carries `userData['maxTier'] = 1`, so `revealTierParts` hides it at T2. The lens disk (`lensMesh`, named `'scope'`) has no `maxTier` tag — `revealTierParts` leaves it visible. At T2+ the invisible housing is gone but the glowing lens disk remains floating in space. No spec tested the lens's `maxTier` because the spec only checked the housing. The upgrade-visual spec for `maxTier` behaviour validates the service logic correctly, but the factory spec didn't assert this field on the lens.
+
+**Fix applied:** Added `lensMesh.userData['maxTier'] = 1` immediately after lens mesh construction. Added a factory spec asserting `getObjectByName('scope').userData['maxTier'] === 1`. Fixed in commit `fb04703`.
+
+---
+
+## Red Team Critique — Phase D (SPLASH silhouette) — 2026-04-30
+
+### Finding 10: All 8 SPLASH tubes share one material — tickTubeEmits lights ALL tubes on every fire (CRITICAL)
+
+**Location:** `tower-mesh-factory.service.ts` SPLASH case, tube construction (~line 569–601)
+
+**Risk:** `getTowerMaterial(TowerType.SPLASH)` returns the registry-cached singleton (one `MeshStandardMaterial` instance). All 8 tube meshes were constructed with `new THREE.Mesh(tubeGeom, mat)` — the same reference. `tickTubeEmits` mutates `tubeMesh.material.emissiveIntensity` on the emitting tube, but since every tube shares that instance, **all 8 tubes light up simultaneously on every fire**. The round-robin cycling is entirely inert visually: no matter which tube index is selected, the glow appears on all of them. This also contaminates the muzzle-flash restore path: `startMuzzleFlash` saves `emissiveIntensity` per `(child.uuid, mat.uuid)` key; a shared material means the first tube's save clobbers the rest (all tubes write the same `mat.uuid`, so only the last write survives), and restore sets all tubes to the last-saved value.
+
+**Fix applied:** Each tube now calls `mat.clone()` at construction time, producing 8 independent `MeshStandardMaterial` instances. Clones are lightweight (same GPU shader/textures, only uniform state differs). Added regression spec: `'each tube has its own material instance (emissive isolation)'` asserts `tube1.material !== tube2.material`. Fixed in commit `668ada5`.
+
+---
+
+### Finding 11: fireTick round-robin skips hidden tubes silently — ~50% of shots produce no emit pulse at T1 (HIGH)
+
+**Location:** `tower-mesh-factory.service.ts` SPLASH `fireTick` closure (~line 691)
+
+**Risk:** The original implementation computed `nextIdx = counter % 8` and incremented unconditionally, then only set emit state if the tube was visible. At T1 there are only 4 visible tubes (indices 0–3); indices 4–7 are hidden. Over 8 consecutive fires the counter cycles 0→7, but 4 of those shots (`nextIdx` = 4, 5, 6, 7) find `tubeMesh.visible = false` and silently skip the emit state assignment. Result: the T1 SPLASH fires produce an emit pulse only ~50% of the time, making the animation feel broken rather than round-robin.
+
+**Fix applied:** `fireTick` now scans forward from `startIdx` (up to 8 steps) until it finds a visible tube, then sets `nextTubeIndex` past that found tube. No visible tube is silently consumed. A degenerate fallback (no visible tubes) still advances the counter. Added spec: `'fireTick skips hidden tubes and always emits from a visible tube'` — hides 6 of 8 tubes, starts counter past the visible pair, asserts emit lands on a visible index. Fixed in commit `668ada5`.
+
+---
+
+### Deferred Findings (non-critical, no fix this commit)
+
+- **Finding D-a (MEDIUM):** `heatVent` material (`emissiveIntensity: 0.9`) is NOT in `applyUpgradeVisuals`'s skip-set (`['tip', 'orb', 'scope']`). On T3 upgrade the ratchet overwrites the vent's intentional glow to `emissiveBase + 2 * emissiveIncrement`. Needs `'heatVent'` added to `animatedNames` in `tower-upgrade-visual.service.ts`. **Status:** Fixed in Phase E — `'heatVent'` and `'emitter'` (SLOW idle-driven mesh) both added to skip-set.
+- **Finding D-b (LOW):** `drumPrevT` uses the `t` parameter (from `time * msToSeconds`) while `drumSpinBoostUntil` uses `performance.now() / 1000` directly. Both are the same clock, so no current bug — but if `updateTowerAnimations` is ever called with a synthetic `time` in tests, boost detection will use wall clock vs test clock and produce wrong results. Track for Phase H cohesion sprint.
+
+---
+
+## Red Team Critique — Phase E (SLOW silhouette) — 2026-04-30
+
+### Finding 12: Shared emitter material across SLOW tower instances — muzzle-flash save/restore cross-contamination (CRITICAL)
+
+**Location:** `tower-mesh-factory.service.ts` SLOW case, `emitterMat` via `materialRegistry.getOrCreate('slow:emitter', ...)`
+
+**Risk:** `materialRegistry.getOrCreate` returns a singleton `MeshStandardMaterial` shared across every placed SLOW tower. `startMuzzleFlash` saves/restores `emissiveIntensity` using a `child.uuid + '_' + mat.uuid` key. Since all SLOW emitter meshes share the same `mat.uuid`, the emissive save from tower A captures a valid value, but if tower B fires before A's flash expires, B's save captures A's already-spiked intensity. When B's flash timer expires and it restores the shared material, `emissiveIntensity` is set to the spiked value, leaving the emitter permanently over-bright until the `idleTick` overwrites it on the next frame. With the `idleTick` running at 60 fps this is a one-frame glitch — but the contract violation is real and becomes a multi-frame artifact if `idleTick` is ever paused (e.g., when the game is paused mid-flash). Exact same class as Finding 10 (SPLASH tubes).
+
+**Fix applied:** Each SLOW tower instance gets a cloned material: `emitterMatBase` is still registered (reuses GPU shader), and `emitterMat = emitterMatBase.clone()` produces a unique instance per tower. Clone is lightweight — same textures/shader, independent uniform state. Regression spec: `'each SLOW tower instance gets its own emitter material'` asserts `emitter1.material !== emitter2.material`. Fixed in commit `0127817`.
+
+---
+
+### Finding 13: Magic number `1.2` (crystal bob speed) in idleTick closure (MEDIUM)
+
+**Location:** `tower-mesh-factory.service.ts` SLOW `idleTick`, line `Math.sin(t * 1.2) * 0.04`
+
+**Risk:** Violates the no-magic-numbers convention. The `0.04` amplitude and `1.2` rad/s frequency are tuning values that may need adjusting in Phase H animation-cohesion work. A designer who searches `SLOW_EMITTER_PULSE_CONFIG` in the constants file will not find the bob parameters, so the animation becomes untunable without reading the factory implementation.
+
+**Fix applied:** Added `crystalBobSpeed: 1.2` and `crystalBobAmplitude: 0.04` to `SLOW_EMITTER_PULSE_CONFIG`. Updated `idleTick` closure and spec comment to use the named constants. Fixed in same commit as Finding 12.
+
+---
+
+### Deferred Phase E Findings (no fix this commit)
+
+- **Finding E-a (LOW):** `tickEmitterPulses` reads `pulseDuration` from `userData` (validates `> 0`) but then ignores it — all timing comparisons use `SLOW_EMITTER_PULSE_FIRE.durationSec` directly. The stored value is a dead variable. No current bug since `fireTick` always passes `SLOW_EMITTER_PULSE_FIRE.durationSec`. Would become a silent regression if any caller sets a different duration. Track for Phase H cleanup: either remove the `pulseDuration` userData write, or use it in the timing comparisons.
+- **Finding E-b (LOW):** The `idleTick` `traverse` for T3 crystal bob runs every frame even when the `crystalCore` is hidden at T1/T2 — traverses the full group scene graph to find and skip the invisible node. Low cost with 5–6 children, but the pattern should be `getObjectByName('crystalCore')` (O(N) linear scan, same cost, cleaner intent) rather than `traverse` with an early-exit. Deferred to Phase H.
+- **Finding E-c (LOW):** The legacy `crystal` bob specs in `tower-animation.service.spec.ts` (lines 99–127) still test the legacy SLOW traverse path via synthetic groups with no `idleTick`. These remain valid (the legacy path still exists for unredesigned towers) but read confusingly alongside the new Phase E specs. Consider moving them to a dedicated `'legacy traverse — SLOW (pre-Phase-E)'` describe block with a comment explaining they test the fallback path, not the live mesh.
+
+---
+
+## Red Team Critique — Phase F (CHAIN silhouette) — 2026-04-30
+
+### Finding 14: Sphere emissive cross-talk — `startMuzzleFlash` snapshots a charge-phase value as "original" (CRITICAL)
+
+**Location:** `tower-animation.service.ts:startMuzzleFlash`, `tower-mesh-factory.service.ts` CHAIN `chargeTick`
+
+**Risk:** `chargeTick` drives `sphere.material.emissiveIntensity` every render frame between `CHAIN_CHARGE_CONFIG.emissiveMin` (0.4) and `emissiveMax` (1.4). `startMuzzleFlash` runs at combat resolution time (asynchronous from the render loop), traverses the group, and on first-flash saves the CURRENT `emissiveIntensity` of every mesh as the "original" to restore. Since the sphere's intensity is animated, the snapshot captures whatever charge phase happened to be active at fire time — anywhere from 0.4 to 1.4. When the flash timer expires, `updateMuzzleFlashes` restores that snapshot value, leaving the sphere stuck at a random charge intensity until `chargeTick` overwrites it on the next frame (one-frame glitch at 60fps; multi-frame if animation is paused mid-flash). Exact same class as Finding 12 (SLOW emitter). The comment in the original `fireTick` even said "The 'sphere' mesh is NOT in the 'tip' skip-set" without recognising this was a bug, not a feature.
+
+**Fix applied:** Added `'sphere'` to the skip-set in `startMuzzleFlash` alongside `'tip'`. `chargeTick` owns the sphere's emissive entirely; the muzzle flash must not snapshot or spike it. Regression specs: `'does NOT spike or snapshot the sphere mesh (CHAIN charge-up exemption)'` and `'restores non-sphere mesh correctly even when a sphere sibling is present (no key pollution)'`. Fixed in commit `58c141f`.
+
+---
+
+### Finding 15: Frame-rate-dependent orbit — `/ 60` hardcoded instead of real time (HIGH)
+
+**Location:** `tower-mesh-factory.service.ts` CHAIN `idleTick`, orbit angle update: `+ CHAIN_ORBIT_CONFIG.t2SpeedRadPerSec / 60`
+
+**Risk:** The `/ 60` assumes exactly 60fps. At 30fps the orbiting spheres rotate at half speed; at 144fps they rotate 2.4× faster. Every other animation in the codebase (recoil, tube-emit, emitter-pulse) uses real-time delta seconds. Agents flagged this themselves in the commit message but shipped it unresolved, suggesting they intended to fix it "later" — which is never a safe deferral for a frame-rate regression.
+
+**Fix applied:** Replaced accumulation math with direct wall-clock derivation: `angle = initPhase + speed * t` (where `t` is the accumulated seconds from `updateTowerAnimations`). This is idempotent, never drifts, and produces the same angle at `t=2.0` regardless of how many frames elapsed. Removed the now-stale `orbitAngle` mutable userData field from both orbit meshes. Regression spec: `'orbiting spheres produce frame-rate-independent positions'` — two groups arrive at `t=2.0` via different call patterns and assert identical XZ position. Fixed in same commit as Finding 14.
+
+---
+
+### Deferred Phase F Findings (no fix this commit)
+
+- **Finding F-a (LOW):** The legacy `'orb'` case in `tower-animation.service.ts:updateTowerAnimations` traverse (lines 62–68) is now dormant — no CHAIN tower has a child named `'orb'` after Phase F. It remains valid for any tower that still uses the old naming (none currently). Should be removed in Phase H cleanup to eliminate dead traverse work and confusion about which towers still use legacy hooks.
+- **Finding F-b (LOW):** `idleTick` electrode shimmer uses `child.position.x * 4.0` as a phase offset — `4.0` is a magic number. Should be named `CHAIN_ELECTRODE_CONFIG.shimmerPhaseScale` for tuning consistency. Deferred to Phase H.
+- **Finding F-c (LOW):** T2/T3 orbiting spheres advance their position in `idleTick` even when hidden (`orbit2?.visible` guard is present, correct). But the `visible = false` test is on the Mesh directly, not on the group parent — if a parent group were hidden instead, `orbit2.visible` would still be true. Not a current bug; the CHAIN group is always visible when placed. Note for Phase H if group-level visibility ever becomes a feature.
+- **Finding F-d (LOW):** `arcMat` (the idle arc cylinder material) is allocated raw without going through `materialRegistry`. It is per-instance and mutable (opacity changes per frame), so registry sharing would be incorrect. However, it is also not registered with the geometry registry for its `arcGeom`. Both are disposed correctly by `disposeGroup`'s full traverse (the protect predicate only skips registry-owned resources; `arcMat` is not registered, so it is disposed). No bug, but the comment in the factory should clarify this intentional pattern so future reviewers don't "fix" it by pushing `arcMat` through the registry.
+
+---
+
+## Red Team Critique — Phase G (MORTAR silhouette) — 2026-04-30
+
+### Finding G-1: MORTAR body material is registry-shared → muzzle-flash cross-talk between placed instances (HIGH)
+
+**Location:** `tower-mesh-factory.service.ts` MORTAR case; `tower-material.factory.ts:createTowerMaterial`
+
+**Risk:** `getTowerMaterial(TowerType.MORTAR)` calls `createTowerMaterial` which routes through `registry.getOrCreate('tower:MORTAR', ...)`, returning the same `MeshStandardMaterial` singleton for every MORTAR placed on the board. `startMuzzleFlash` mutates `mat.emissiveIntensity` on every mesh in the group. Since chassis, treads, vents, housing, and all barrel meshes share the one registry material, firing MORTAR-A spikes the emissive on MORTAR-B's body simultaneously (they share the same GPU uniform slot). `updateMuzzleFlashes` restores per-`(child.uuid + '_' + mat.uuid)` key; because all MORTAR meshes share `mat.uuid`, the last-writer wins and restore is nondeterministic. Same class as Finding 10 (SPLASH tubes) and Finding 12 (SLOW emitter). The body material need not be animated, but the save/restore path still corrupts across instances.
+
+**Status: Deferred.** The fix pattern is identical to prior findings (clone at construction: `mat.clone()` per tower instance). Given the MORTAR body has no idle-driven emissive animation, the one-frame contamination window is shorter than for CHAIN/SLOW — visible only if two MORTAR towers fire within a single `updateMuzzleFlashes` tick (~16ms). Deferred to Phase H cleanup sprint along with F-a, F-b, E-a, E-b, D-b.
+
+---
+
+### Finding G-2: `tickRecoilAnimations` writes absolute position.y = 0 at snap — destroys barrel rest position (CRITICAL)
+
+**Location:** `tower-animation.service.ts:tickRecoilAnimations` (snap-to-neutral path); `tower-mesh-factory.service.ts` MORTAR barrel construction
+
+**Risk:** All MORTAR barrels are positioned at `barrelLength / 2` in `barrelPivot` local space (CylinderGeometry origin is at its centre; `position.y = length/2` places the base at the pivot). The recoil tick used `b.position.y = -distance * (1 - eased)` (absolute from 0) during animation, and `b.position.y = 0` at snap. The result: at peak recoil the barrel teleports from `+0.275` to `−0.15` — a `0.425u` jump rather than the intended `0.15u` slide. At animation end it snaps to `y=0` rather than the rest position `+0.275`, leaving every barrel permanently half-embedded in the pivot origin until the next fire trigger. The bug affects all tier transitions (T1, T2, T3) and `dualBarrel`'s Z-offset is preserved through the snap but the Y is still wrong. BASIC and SNIPER barrels carry the same latent bug but are visually less obvious (smaller geometry, tip-only named mesh).
+
+**Fix applied:** Factory stores `userData['recoilBaseY']` on each barrel cylinder at construction time. `tickRecoilAnimations` now uses `baseY = b.userData['recoilBaseY'] ?? 0` as the neutral — in-flight: `b.position.y = baseY + recoilOffset`; snap: `b.position.y = baseY`. Existing tests (barrels at y=0) fall through the `?? 0` path unchanged. New specs: `'MORTAR barrel: respects recoilBaseY when snapping to neutral (Finding G-2)'` in `tower-animation.service.spec.ts`; three `recoilBaseY` assertions in `tower-mesh-factory.service.spec.ts`. Fixed in commit `[see hardening commit]`.
+
+---
+
+### Finding G-3: `dualBarrel` Z-offset uses wrong axis for "above the other" intent (MEDIUM)
+
+**Location:** `tower-mesh-factory.service.ts` line `dualBarrel.position.set(0, barrelT2Length/2, dualBarrelYOffset)` — the `dualBarrelYOffset = 0.14` is in barrelPivot **local Z**, not local Y.
+
+**Risk:** In `barrelPivot`'s local frame (rotated `−45°` around world X), local `+Z` maps to world `[0, −0.707, +0.707]` (down-and-forward), NOT "above". The comment says "second barrel sits above the first". At the −45° elevation, a displacement along local +Z shifts the second barrel slightly downward and forward in world space, not upward. The canonical "above" (perpendicular to bore axis, toward world +Y) requires components in both local +Y and −Z. Visually the two barrels still appear offset rather than coincident, so the silhouette reads as dual-barrel — but the axis is semantically wrong and will produce an unexpected visual if the barrel elevation angle ever changes. No player-visible crash; aesthetic accuracy issue.
+
+**Status: Deferred.** Axis-correct placement requires either: (a) moving the offset to local X (side-by-side, canonical dual-barrel read from above), or (b) computing the true "above-bore" vector. Phase H cohesion sprint should revisit alongside the side-by-side silhouette test (sprint 50 in the plan).
+
+---
+
+### Deferred Phase G Findings (cumulative backlog for Phase H)
+
+Priority order for Phase H cleanup:
+
+1. **G-1 (HIGH):** MORTAR body material clone — body has no animated emissive so risk window is narrow, but the contract violation is real. Fix: `mat.clone()` in MORTAR case, same as SPLASH tube fix.
+2. **G-3 (MEDIUM):** `dualBarrel` Z-offset axis — aesthetic bug in dual-barrel read. Fix: move offset to local X for a side-by-side placement, update constant name to `dualBarrelXOffset`.
+3. **F-b (LOW):** Electrode shimmer `4.0` magic number → `CHAIN_ELECTRODE_CONFIG.shimmerPhaseScale`.
+4. **F-a (LOW):** Remove dormant `'orb'` case from legacy traverse.
+5. **E-a (LOW):** `tickEmitterPulses` `pulseDuration` stored in userData but never read — remove or use.
+6. **E-b (LOW):** SLOW `idleTick` crystal traverse vs `getObjectByName` — clarify pattern.
+7. **E-c (LOW):** Legacy SLOW crystal bob specs — move to labelled describe block.
+8. **D-b (LOW):** `drumPrevT` vs `drumSpinBoostUntil` clock-source mismatch — annotate or unify.
+9. **F-c / F-d (LOW):** CHAIN orbit visibility edge-case + `arcMat` registry comment — annotate only.
+
+---
+
+## Red Team Critique — Phase H (cohesion + integration) — 2026-04-30
+
+### Finding H-1: F-a deferral rationale was incorrect — dead 'orb' code removed (MEDIUM)
+
+**Location:** `tower-animation.service.ts:62-68` (removed); `tower-animation.service.spec.ts:137-168` (removed); `effects.constants.ts:105-108` (removed)
+
+**Risk:** The agent deferred removing the `'orb'` traverse case, claiming legacy SPLASH specs depended on it. This is wrong: the specs (`makeTowerGroup(TowerType.SPLASH, 'orb')`) create a *synthetic* group with an 'orb'-named child — they test the `case 'orb'` branch directly but that branch can never fire for a real SPLASH tower (the Phase D redesign replaced the orb mesh with the drum/tube cluster; no mesh in the factory is named 'orb'). The specs were testing a code path that is permanently unreachable in production. The constants `orbPulseSpeed/Min/Max` in `effects.constants.ts` were also orphaned.
+
+**Fix applied:** Removed `case 'orb'` from the legacy traverse switch, deleted the two dead 'orb pulse' specs, and removed the three orphaned `orbPulse*` constants.
+
+**Note — wider legacy traverse concern (deferred):** Inspection reveals `case 'crystal'`, `case 'spark'`, `case 'spore'`, and `case 'tip'` in the same switch are also unreachable for real towers — no mesh in the factory bears any of those names post-Phase-D. The entire legacy traverse body is dead code for any tower with an `idleTick`. The per-tower idleTick migration pattern is correct; the legacy switch body should be removed wholesale in Phase I to eliminate confusion. MORTAR currently has no `idleTick` but also has no named children matching the switch cases, so the traverse fires but is a no-op. Deferring full removal to Phase I to avoid a wide sweep here.
+
+### Finding H-2: Stale JSDoc in tickEmitterPulses still referenced emitterPulseDuration (LOW)
+
+**Location:** `tower-animation.service.ts:335`
+
+**Risk:** The JSDoc comment for `tickEmitterPulses` still said `userData['emitterPulseDuration']` after the E-a cleanup removed that field. Future engineers reading the comment would write `emitterPulseDuration` into `userData`, introducing the exact dead write the fix was meant to remove.
+
+**Fix applied:** Updated the doc string to `userData['emitterPulseStart']` to match the actual implementation.
+
+### Finding H-3: MORTAR per-instance clone does not register with materialRegistry — disposal relies on full-traverse path (LOW, verified correct)
+
+**Location:** `tower-mesh-factory.service.ts:1259` (`const mortarMat = mat.clone()`)
+
+**Risk investigated:** `mortarMat` is a clone of the registry prototype — it is NOT tracked by `materialRegistry`. When `disposeGroup` runs with `buildDisposeProtect(geometryRegistry, materialRegistry)`, `isMaterial(mortarMat)` returns false, so the clone IS disposed. Because all MORTAR child meshes share the same `mortarMat` reference, `seenMaterials` in `disposeGroup` ensures single-dispose. The regression spec asserts tower-A's chassis material UUID !== tower-B's chassis material UUID. Verified: behavior is correct. Material-audit.md correctly notes "1 per-instance clone" for MORTAR.
+
+**Status: No action required.** Noting for Phase I material budget: up to ~80 MORTAR towers on a max board = 80 extra `MeshStandardMaterial` instances. Acceptable at this scale.
+
+### Finding H-4: Placement ghost (concern #10) — traverse is correct, no bug
+
+**Location:** `tower-preview.service.ts:99-113`
+
+**Claim verified:** `createPreviewMeshes` calls `ghostGroup.traverse((child) => { if (child instanceof THREE.Mesh) { child.material = mat; ... } })`. `traverse` is a depth-first full scene-graph walk, so nested groups (BASIC's `turretGroup/barrelGroup`, MORTAR's `barrelPivot`) are covered at all depths. The agent's claim that `Group.traverse covers nested groups` is correct. **No ghost overlay bug exists.**
+
+### Deferred to Phase I
+
+1. **H-1 residual (LOW):** Remove `case 'crystal'`, `case 'spark'`, `case 'spore'`, `case 'tip'` from legacy traverse switch — all are dead code post Phase-D. Full sweep deferred to Phase I closure sprint.
+2. **D-b (LOW):** Clock-source annotation for `drumSpinBoostUntil` vs `t` — annotation applied in Phase H, unification deferred.
+
+---
+
+## Red Team Critique — Phase I (animation polish) — 2026-04-30
+
+### Finding I-1: `tickSellAnimations` emissive fade is multiplicative — corrupts under concurrent idle/charge ticks (CRITICAL — FIXED)
+
+**Location:** `tower-animation.service.ts:tickSellAnimations` (emissive fade loop); `tower-animation.service.ts:updateTowerAnimations` (idle/charge dispatch)
+
+**Risk:** Two compounding bugs caused corrupted emissive during sell animation:
+1. The fade used `mat.emissiveIntensity *= emissiveFade` — multiplicative decay. Each frame compounds the reduction, so the result is frame-rate-dependent (60fps tower fades faster than 30fps tower). At 60fps over 400ms the value approaches 0 via `(1-eased)^N` not `(1-eased)` — the tower flickers dark almost immediately instead of fading smoothly.
+2. `updateTowerAnimations` invoked `idleTick`/`chargeTick` on selling groups BEFORE `tickSellAnimations` ran its decay. For CHAIN, `chargeTick` re-sets `sphere.emissiveIntensity` every frame via a sine wave. This exactly cancels the emissive fade on the sphere — the CHAIN sell animation was an indefinite emissive loop that never dimmed, broken at the GL level.
+
+**Fix applied (two changes):**
+- `updateTowerAnimations` now checks `group.userData['selling']` early and skips the group entirely, preventing idle/charge ticks from fighting the sell animation.
+- `tickSellAnimations` snapshots original emissiveIntensity values into `userData['sellEmissiveOrigins']` on the first sell frame and uses absolute assignment (`base * emissiveFade`) on every subsequent frame — deterministic, frame-rate-independent.
+
+**Tests added:** `'fade uses absolute emissive assignment — same result at two different frames (Finding I-1)'`, `'emissive reaches ~0 at animation end without compound undershoot'`, `'updateTowerAnimations skips selling groups — does not invoke idleTick'`.
+
+---
+
+### Finding I-2: CHAIN fireTick writes `recoilStart` but CHAIN has no 'barrel' mesh — recoil is a silent no-op (MEDIUM — FIXED)
+
+**Location:** `tower-mesh-factory.service.ts` CHAIN `fireTick`; `tower-animation.service.ts:tickRecoilAnimations`
+
+**Risk:** `tickRecoilAnimations` defaults the barrel name list to `['barrel']` when no `mortarBarrelNames` userData key is set. CHAIN has no child mesh named `'barrel'` — the geometry consists of a central post (unnamed), coil tori, floating sphere, and electrodes. The CHAIN fireTick set `recoilStart`, `recoilDuration`, and `recoilDistance` — documenting a "0.03u spark-kick recoil" that silently did nothing. Every fire event left stale `recoilStart` in userData with no visible effect.
+
+**Fix applied:** Replaced the CHAIN fireTick body with a no-op. The comment records the intent and defers CHAIN-specific recoil to Phase J when `CHAIN_BARREL_NAMES` can be defined pointing to the post or sphere as the recoil target. The muzzle-flash emissive spike from `startMuzzleFlash` remains the sole visual fire-signal for CHAIN.
+
+---
+
+### Finding I-3: `applyUpgradeVisuals` skip-set missing 'sphere' — CHAIN upgrade stomps chargeTick emissive (MEDIUM — FIXED)
+
+**Location:** `tower-upgrade-visual.service.ts:applyUpgradeVisuals` (animatedNames set)
+
+**Risk:** The skip-set was `['tip', 'scope', 'heatVent', 'emitter']`. The CHAIN `'sphere'` mesh is driven every frame by `chargeTick` (sine wave between `CHAIN_CHARGE_CONFIG.emissiveMin` and `emissiveMax`). When a CHAIN tower upgrades, `applyUpgradeVisuals` traverses the group and sets `sphere.material.emissiveIntensity = emissiveBase + (level-1) * emissiveIncrement` — a level-scaling constant overwriting the animated value. The chargeTick restores control on the next frame, but the snapshot taken by `startMuzzleFlash` (which fires on upgrade flash) could have captured the ratcheted value, causing a one-frame emissive spike on the sphere at each upgrade level. Same class as Finding 12/14 (save/restore cross-contamination).
+
+**Fix applied:** Added `'sphere'` to `animatedNames` in `applyUpgradeVisuals`. The sphere emissive is left exclusively to `chargeTick` throughout the tower lifetime.
+
+---
+
+### Finding I-4: SNIPER phantom yaw rotates the whole tower group, not a dedicated housing sub-group (LOW — deferred to Phase J)
+
+**Location:** `tower-mesh-factory.service.ts` SNIPER `idleTick`; `group.rotation.y` write
+
+**Risk:** The `±2° phantom-target tracking` rotates `group.rotation.y` — the entire tower including the tripod legs. For the current geometry (tripod + central post + scope-on-top), a whole-group yaw reads plausibly as "the whole tower rotates to track". However, the architectural intent was "scope tracks target" — the scope should rotate on its own sub-group while the tripod legs stay planted. As delivered, all three tripod struts swing in unison with the scope, which looks mechanical rather than precision-rifle. No crash; purely aesthetic.
+
+**Deferral justification:** Fixing requires extracting the scope + barrel + lens into a named `scopeGroup` child and rotating that instead of the root group. This is a geometry refactor touching `SNIPER_GEOM`, the factory, and potentially the bipod attachment — wider than a red-team fix. Phase J should scope the housing extraction alongside Sprint 62 (hover lift) when the SNIPER silhouette is revisited.
+
+---
+
+### Finding I-5: `tickTierUpScale` + sell-shrink racing on the same group — no conflict guard (LOW — deferred to Phase J)
+
+**Location:** `tower-animation.service.ts:tickTierUpScale`; `tower-animation.service.ts:tickSellAnimations`
+
+**Risk:** If a tower upgrades and is sold within `TIER_UP_BOUNCE_CONFIG.durationSec` (300ms), both ticks run on the same group simultaneously. `tickTierUpScale` writes `group.scale.setScalar(bounceScale)`. `tickSellAnimations` writes `group.scale.setScalar(shrinkScale)`. Whichever runs last in the animate loop wins — the result is a flickering scale that can flash unexpectedly large during shrink. No crash; cosmetic glitch only, and 300ms is an extremely narrow window.
+
+**Deferral justification:** Real play sessions rarely produce this race (sell a tower within 300ms of upgrading it). Fix: `tickTierUpScale` should check `group.userData['selling']` and clear `scaleAnimStart` early, deferring ownership to the sell animation. One-line fix for Phase J.
+
+---
+
+### Deferred to Phase J
+
+1. **I-4 (LOW):** SNIPER whole-group yaw — extract scope+barrel into `scopeGroup` sub-group for proper tracking motion.
+2. **I-5 (LOW):** `tickTierUpScale` + sell race — add `if (group.userData['selling']) { group.userData['scaleAnimStart'] = undefined; continue; }` guard.
+3. **H-1 residual (LOW):** Remove dead legacy traverse cases (`'crystal'`, `'spark'`, `'spore'`, `'tip'`).
+4. **D-b (LOW):** Unify `drumSpinBoostUntil` and `t` clock sources in SPLASH idleTick.
+
+---
+
+## Bug 1: Emissive Ratchet — 2026-04-30 (feat/threejs-polish)
+
+**Severity:** HIGH — visible to player in production. Turn 17 MORTAR appeared fully blown-out white. User report: "the more they fire the more brighter they're getting."
+
+**Root cause:** `TowerAnimationService.startMuzzleFlash` saved `mat.emissiveIntensity` at fire time rather than from a canonical baseline snapshot. Towers of the same type share a single body material via `MaterialRegistryService`. When two same-type towers fire in the same combat turn, the sequence is:
+
+1. Tower-A fires → saves `mat = 0.4`, spikes shared mat to `0.6`.
+2. Tower-B fires → saves `mat = 0.6` (already spiked by A!), spikes to `0.9`.
+3. Tower-A expires → restores mat to `0.4`.
+4. Tower-B expires → restores mat to `0.6` (elevated baseline — ratchet!).
+
+After 30 turns of two same-type towers: `0.4 × 1.5^30 ≈ 76 700×` baseline. Reproduction spec confirmed `Expected 76700 ≤ 0.42`.
+
+**Fix:** `TowerMeshFactoryService.snapshotEmissiveBaselines(group)` records `emissiveIntensity` per-mesh immediately at construction into `group.userData['emissiveBaselines']`. `startMuzzleFlash` reads from this snapshot instead of the current material value. All four `applyUpgradeVisuals` call sites re-snapshot after upgrade.
+
+**Files changed:** `tower.model.ts` (new `emissiveBaselines` field), `tower-mesh-factory.service.ts` (static `snapshotEmissiveBaselines`), `tower-animation.service.ts` (`startMuzzleFlash` fix), `game-board.component.ts` (2 upgrade paths), `card-play.service.ts` (RAZE spell path), `checkpoint-restore-coordinator.service.ts` (restore path).
+
+**New specs:** +11 across Sprint 1 canary, Sprint 4 per-type baseline invariant (6 towers × 10 cycles), Sprint 7 re-flash correctness, Sprint 8 sell-mid-flash, Sprint 9 sustained 50-turn simulation.
+
+---
+
+## Red Team Critique — Phase 0 (Emissive Ratchet) — 2026-04-30
+
+### Finding 1: SPLASH tube-emit animation cut short by muzzle-flash restore (MEDIUM)
+
+**Location:** `tower-mesh-factory.service.ts` — `snapshotEmissiveBaselines`; `tower-animation.service.ts` — `startMuzzleFlash` save traverse
+
+**Risk:** SPLASH tower `tube1`/`tube2`/… meshes were NOT excluded from `snapshotEmissiveBaselines` or from `startMuzzleFlash`'s save traverse. Each tube starts at `emissiveIntensity = 0` at construction; the snapshot records 0. `tickTubeEmits` (runs at frame line 150) raises a tube's emissive during a per-fire emit animation. `updateMuzzleFlashes` (runs at frame line 159, AFTER `tickTubeEmits`) restores the saved 0, zeroing the tube's emissive in the same frame the flash expires. Result: SPLASH tube-emit flickers are cut short whenever a muzzle flash and a tube-emit animation expire concurrently. Not a correctness regression on the ratchet fix itself, but a latent visual glitch introduced by the incomplete skip-set.
+
+**Fix:** Added `child.name.startsWith('tube')` guard to both `snapshotEmissiveBaselines` and `startMuzzleFlash`'s save traverse, mirroring the `'tip'` / `'sphere'` exclusions. Tubes are per-instance cloned materials so the original ratchet bug cannot apply to them — they were unnecessary cargo in the snapshot.
+
+**New spec:** `tower-animation.service.spec.ts` — "SPLASH tube-emit animation survives concurrent muzzle-flash expiry" — asserts that after a flash expires, `tube1.emissiveIntensity` retains its mid-emit value rather than being zeroed. Fixed in commit `ef9c96c`.
+
+**Deferred findings (not fixed this pass):**
+
+- **Finding 2 (LOW):** `emissiveBaselines` has dual storage: `PlacedTower.emissiveBaselines` field AND `group.userData['emissiveBaselines']`. After an upgrade, the code clears the PlacedTower field and refreshes userData. The PlacedTower field is checked first in `startMuzzleFlash` (`tower.emissiveBaselines ?? userData[...]`). If any future code path sets `PlacedTower.emissiveBaselines` without also refreshing userData, it becomes a stale stale-wins scenario. Risk is low today since the only writer clears both. No fix applied — document only.
+
+- **Finding 3 (LOW):** `applyUpgradeVisuals` internal skip-set (`tip`, `scope`, `heatVent`, `emitter`, `sphere`) is wider than `snapshotEmissiveBaselines` skip-set (`tip`, `sphere`, `tube*`). `scope`, `heatVent`, and `emitter` ARE captured in the snapshot. At snapshot time (immediately after construction or immediately after upgrade), these meshes are at their initial/stable values — not yet animated — so the snapshot is correct. This asymmetry is benign but creates a maintenance trap: if a future animation tick begins driving `scope` emissive before the snapshot is taken, the snapshot becomes stale. No fix applied — document only.
+
+**Lesson:** Any future code path that modifies shared material `emissiveIntensity` must either (a) use the snapshot from `emissiveBaselines` as source of truth, or (b) call `snapshotEmissiveBaselines` immediately after to update the stored baseline.
+
+---
+
+## Red Team Critique — Phase A (Aim foundation) — 2026-04-30
+
+### Finding A-1: `TargetPreviewService` uses L1 base stats — aim mismatches fire range for upgraded towers (HIGH — FIXED)
+
+**Location:** `target-preview.service.ts:getPreviewTarget` (was `TOWER_CONFIGS[tower.type]`)
+
+**Risk:** `getPreviewTarget` passed `TOWER_CONFIGS[tower.type]` (the L1 base config) to `findTarget`, while `fireTurn` uses `getEffectiveStats(tower.type, tower.level, tower.specialization)`. A T3 SNIPER with the ALPHA specialization has +20% range. With the old code, the aim subsystem would NOT aim at enemies in the bonus range band (they appear as out-of-range to aim but in-range to fire), and WOULD waste aim cycles on enemies just outside base range that are also out of fire range. For a T3 specialized SNIPER (the most likely target for aim polish), the visual aim and the actual shot diverge by 20–50% of the range radius — directly contradicting the plan's "teaches the targeting algorithm" design goal.
+
+**Fix:** Changed `TOWER_CONFIGS[tower.type]` → `getEffectiveStats(tower.type, tower.level, tower.specialization)` in `getPreviewTarget`. Import updated accordingly.
+
+**Tests added/updated:** `target-preview.service.spec.ts` — updated existing "passes the correct tower stats" spec to assert `getEffectiveStats` output; added "passes level-scaled stats for a L2 tower" and "passes specialization-boosted stats for a T3 specialized tower" — both assert that effective range is greater than L1 base and that `findTarget` receives the correct upgraded stats object.
+
+**Test delta:** +3 new specs, −1 stale spec (was asserting the wrong `TOWER_CONFIGS` reference) = net +2.
+
+---
+
+### Finding A-2: `noTargetGraceTime` accumulated but never consumed — dead state (CLOSED — Phase C sprint 40)
+
+**Location:** `tower-animation.service.ts:tickAim`
+
+**Fix:** `tickAim` now reads `noTargetGraceTime` and sets `userData['aimEngaged']` accordingly. `updateTowerAnimations` reads `aimEngaged` (not `currentAimTarget != null`) to gate idle suppression. Grace window = `AIM_FALLBACK_CONFIG.noTargetGraceSec` (0.5s). Tower holds last yaw during grace; idle resumes once grace expires. Cold-start (never aimed) correctly leaves `aimEngaged` false so idle is never spuriously suppressed.
+
+---
+
+### Finding A-3: Perf gate tests the loop overhead only — not the spatial-grid cost (LOW — documented)
+
+**Location:** `tower-animation.service.spec.ts` — "tickAim perf gate" describe block; `docs/towers/aim-perf-contingency.md`
+
+**Risk:** The perf spec spies `getPreviewTarget` to return a mock enemy immediately, bypassing `TowerCombatService.findTarget` and the `spatialGrid.queryRadius` call entirely. The 5ms budget covers 30 group iterations + `lerpYaw` math only. A slow spatial grid (e.g., after a Phase C real-service wire-in) would still pass the spec. The gate does not catch the performance bug it was designed to prevent.
+
+**No fix applied.** The perf contingency doc (`docs/towers/aim-perf-contingency.md`) already notes the round-robin fallback plan. Added a JSDoc comment to the perf gate spec clarifying the limitation. A meaningful perf gate needs `TowerCombatService` instantiated with a real spatial grid under load — suitable for Phase E's performance audit (sprint 37), not Phase A's unit scope.
+
+---
+
+## Red Team Critique — Phase B (Per-tower aim wiring) — 2026-04-30
+
+### Finding B-1: SNIPER `chargeTick = idleTick` — phantom drift overwrites `tickAim` yaw every frame (CRITICAL — FIXED)
+
+**Location:** `tower-mesh-factory.service.ts` — SNIPER case, `chargeTick` assignment (was `= towerGroup.userData['idleTick']`)
+
+**Risk:** `updateTowerAnimations` fires `chargeTick` unconditionally BEFORE checking `hasTarget`. The `hasTarget` guard only skips `idleTick`. When `hasTarget=true`, the call order per frame is:
+
+1. `tickAim` pre-pass (in `GameRenderService`) → writes `aimGroup.rotation.y = lerpYaw(...)`.
+2. `updateTowerAnimations → chargeTick` (= the old `idleTick`) → overwrites `aimGroup.rotation.y = sin(t) * amplitude` (the phantom drift).
+3. `idleTick` suppressed by `hasTarget` guard — but too late, the overwrite already happened at step 2.
+
+Result: when SNIPER has a target in range, `tickAim`'s lerpYaw result is immediately clobbered by the phantom drift on every frame. SNIPER appears to never aim. This is the primary aim mechanic broken for the most visually distinctive tower type. The bug was invisible to existing specs because the new Phase B specs only verified `idleTick` rotates `aimGroup` and `aimTick` doesn't throw — neither spec simulated the frame-order conflict.
+
+**Fix:** Split SNIPER `chargeTick` from `idleTick`. Extracted a `pulseScopeLens(group, t)` helper (the lens emissive pulse). `idleTick` calls `pulseScopeLens` + writes `aimGroup.rotation.y` (phantom drift). `chargeTick` calls `pulseScopeLens` only — no yaw write. Comment explains the reason.
+
+**Files changed:** `tower-mesh-factory.service.ts` (SNIPER case), `tower-mesh-factory.service.spec.ts` (+2 specs).
+
+**New specs:**
+- "chargeTick does NOT write aimGroup.rotation.y (B-1 regression: aim-fight guard)" — sets aimGroup.rotation.y to a known value, runs chargeTick, asserts value unchanged.
+- "chargeTick still pulses scope lens emissiveIntensity (emissive pulse survives split)" — asserts the lens emissive still modulates after the split.
+
+**Fixed in commit:** `c63b0b9`.
+
+**Deferred findings (not fixed this pass):**
+
+- **Finding B-2 (CLOSED — Phase C sprint 41):** Integration spec `target-preview-integration.spec.ts` now covers factory-built SNIPER T3 group: `applyUpgradeVisuals(group, 3)` → `stabilizer.visible === true` + T1 scope hidden. Spec also asserts idempotence (double-apply at T3 keeps stabilizer visible).
+
+- **Finding B-3 (CLOSED — Phase C sprint 40, same fix as A-2):** `noTargetGraceTime` is now consumed by `tickAim`. `aimEngaged` userData flag bridges the gap: set true on target-found, held true during grace window (< 0.5s), cleared to false when grace expires. `updateTowerAnimations` reads `aimEngaged` (not `currentAimTarget != null`) to gate idle-gesture suppression. 5 new specs covering all grace-timer states.
+
+- **Finding B-4 (LOW, cosmetic):** CHAIN orbiting spheres (orbitSphere2/3) are children of `chainYaw`. When `tickAim` yaws `chainYaw`, the orbital plane rotates with it. The orbit pattern is computed in `chainYaw`-local space, so the satellites orbit in a plane that is itself yawed toward the target. Cosmetically this means the orbit ring tilts to face the target side rather than being a fixed world-horizontal ring. The plan noted this as "orbit isn't truly their own" — cosmetic, acceptable, but should be evaluated in browser smoke test for Phase D visual review.
+
+---
+
+## Red Team Critique — Phase C (Planning-phase preview) — 2026-04-30
+
+### Finding C-1: `cleanup()` emits N `'remove'` events for N enemies — bulk-DIRTY_ALL storm (HIGH — FIXED)
+
+**Location:** `enemy.service.ts:cleanup()` — calls `removeEnemy(id, scene)` per enemy in a forEach loop; `removeEnemy` calls `this.enemiesChanged.next('remove')` unconditionally.
+
+**Risk:** During encounter teardown (or game restart), `cleanup()` loops over all living enemies and disposes each. With 20 enemies alive at wave-end, this fires 20 synchronous RxJS `next('remove')` events in one JS frame. Each event invokes `TargetPreviewService.wireEnemySubscription` callback, which calls `invalidate()`, which does `dirty.clear(); dirty.add(DIRTY_ALL)`. The result is 20 DIRTY_ALL set-operations in one frame. Although set-operations are idempotent (DIRTY_ALL is a singleton in the Set), 20 RxJS `next()` calls and 20 `invalidate()` dispatches burn CPU unnecessarily during teardown — exactly when the frame budget is tightest (disposal + scene removal). The comment in `aim-invalidation-sites.md` states "EnemyService emits one signal per turn-step, not per enemy" — correct for `stepEnemiesOneTurn`, but false for `cleanup()` and `updateDyingAnimations`. The documented contract was violated by the implementation.
+
+**Fix:** Extracted `removeEnemySilent(id, scene)` — identical to `removeEnemy` minus the `enemiesChanged.next('remove')` call. `cleanup()` now calls `removeEnemySilent` per enemy in the loop and fires a single `enemiesChanged.next('remove')` afterward (only if there were enemies). `removeEnemy` is unchanged for all other callers (individual death from `updateDyingAnimations`, `fireTurn` kill-confirm, etc.).
+
+**New specs** (`enemy.service.spec.ts`):
+- "emits exactly ONE remove event for N enemies during cleanup (Phase C Finding C-1)"
+- "emits no remove event when cleanup is called with no enemies"
+
+**Fixed in commit:** `2dd5a17`.
+
+---
+
+### Finding C-2: `tickPreviewCache()` never called — DIRTY_ALL sentinel accumulates (MEDIUM — FIXED)
+
+**Location:** `game-render.service.ts:animate()` — calls `tickAim` but not `tickPreviewCache` afterward; `target-preview.service.ts:tickPreviewCache()` — exists but has zero production callers.
+
+**Risk:** After a bulk invalidation (enemy spawn/move/remove), `invalidate()` adds the `DIRTY_ALL` sentinel to the dirty Set. Each subsequent `getPreviewTarget` call checks `dirty.has(DIRTY_ALL)`, recomputes, clears the per-key entry, but does NOT clear DIRTY_ALL. The comment in `getPreviewTarget` acknowledges: "leave DIRTY_ALL in the set — it will be cleared when `tickPreviewCache()` runs a full pass." But `tickPreviewCache()` was never wired into the render pump. Result: after the first enemy event, DIRTY_ALL persists until `clearAll()` is called (encounter teardown). Every `getPreviewTarget` call for the rest of the encounter recomputes (DIRTY_ALL is always set), defeating the caching model entirely. The per-key dirty entries added by tower-placement and targeting-mode hooks are redundant since DIRTY_ALL makes everything dirty anyway. This is a silent correctness degradation — no errors, just wasted `findTarget` calls every frame for every tower.
+
+**Fix:** Added `this.targetPreviewService?.tickPreviewCache()` immediately after `tickAim` in `game-render.service.ts:animate()`. `tickPreviewCache()` clears only the DIRTY_ALL sentinel (not per-key entries), so mid-frame per-tower invalidations from card-play or targeting-mode toggles are preserved until their next `getPreviewTarget` read.
+
+**New spec** (`target-preview-integration.spec.ts`):
+- "tickPreviewCache() clears DIRTY_ALL so a subsequent call uses cache (not recompute)" — full lifecycle: prime → bulk invalidation → recompute → `tickPreviewCache()` → cache hit on next read.
+
+**Fixed in commit:** `2dd5a17`.
+
+---
+
+### Finding C-3: Stale aim during STRONGEST/WEAKEST modes on mid-turn damage (LOW — documented, deferred)
+
+**Location:** `enemy.service.ts:damageEnemy()` — does NOT emit `enemiesChanged`.
+
+**Risk:** STRONGEST and WEAKEST targeting modes pick based on current enemy health. When `fireTurn` damages an enemy mid-combat (lowering it from highest-health to second-highest), `TargetPreviewService` does NOT recompute. The aim visual continues pointing at the damaged enemy (now second-highest), while the next `findTarget` call on the actual fire pass correctly picks the true strongest. One-turn visual mismatch — the tower aims at a target it will NOT fire at. The `aim-invalidation-sites.md` doc already documents this gap and the trade-off: adding `'damage'` emissions would fire dozens of times per turn-step (once per damage instance), costing more than the current over-invalidation-on-move approach.
+
+**No fix applied.** The visual inconsistency is one-frame and non-exploitable (targeting is correct at fire time). A future fix: add `'damage'` to the Subject and gate DIRTY_ALL in `wireEnemySubscription` behind a STRONGEST/WEAKEST mode check on the affected tower. Deferred to Phase D or E.
+
+**Deferred to Phase D.**
+
+---
+
+## Red Team Critique — Phase D (Cohesion + UX) — 2026-04-30
+
+### Finding D-1: `AimLineService.update()` rebuilds `CylinderGeometry` every frame unconditionally (CRITICAL — FIXED)
+
+**Location:** `aim-line.service.ts:119–126` — `this.lineGeo.dispose(); this.lineGeo = new THREE.CylinderGeometry(...)` inside `update()`, called once per animation frame from `GameRenderService.animate()`.
+
+**Risk:** The service comment promises "geometry is recreated only when the start or end position changes significantly". The implementation had no such guard — every frame while a tower was selected with an active target, the old `CylinderGeometry` was disposed and a new one allocated, even when the tower and enemy were completely stationary (the common case during the planning phase). At 60 fps with a tower selected, this is 60 GPU buffer allocations + 60 deallocations per second. The cost compounds with any browser GC pressure and drives fragmentation over long sessions. The class-level JSDoc was misleading — it described the intended design without actually implementing it.
+
+**Fix:** Added `lastStart: THREE.Vector3 | null` and `lastEnd: THREE.Vector3 | null` fields caching the endpoints from the last geometry build. Each `update()` call computes whether either endpoint has moved more than `AIM_LINE_CONFIG.rebuildThreshold` (0.01 world units) from the cached value. Only when the threshold is exceeded (or on first call) does the service dispose and rebuild the geometry. The mesh `position` and `quaternion` are always recomputed (cheap transform write, not a GPU allocation). The `rebuildThreshold` constant was added to `AIM_LINE_CONFIG` so it is configurable and named, not a magic number. `cleanup()` clears `lastStart`/`lastEnd` so a fresh encounter does not skip the first rebuild.
+
+**New specs** (`aim-line.service.spec.ts`):
+- "D-1: geometry is NOT rebuilt on second update() when endpoints are stationary" — calls `update()` twice with same enemy position; asserts `mesh.geometry === geoAfterFirst` (reference identity).
+- "D-1: geometry IS rebuilt when the target moves beyond the rebuild threshold" — moves enemy by 3 world units between calls; asserts geometry reference changed.
+- "D-1: cached endpoints are cleared by cleanup() so first update after restart rebuilds" — full cleanup → fresh service instance → update; asserts new geometry allocated.
+
+**Fixed in commit:** `3ee313b`.
+
+---
+
+### Finding D-2: `AimLineService` relies solely on `GameSessionService.cleanupScene()` — no `OnDestroy` safety net (MEDIUM — FIXED)
+
+**Location:** `aim-line.service.ts` — class declaration missing `implements OnDestroy`.
+
+**Risk:** `AimLineService` is component-scoped (provided in `GameBoardComponent.providers`). The intended teardown path is `GameSessionService.cleanupScene()` → `this.aimLineService?.cleanup()`. However, if the component unmounts via a route change that bypasses the normal `cleanupScene` call (e.g. a navigation guard that allows immediate exit, or a future refactor that reorders teardown), Angular will call `ngOnDestroy` on all component-scoped providers but the service has no `ngOnDestroy` — the line mesh stays in the scene and the GPU resources leak. The established pattern in this codebase (see `LinkMeshService`, `GeometryRegistryService`) is to implement both explicit `cleanup()`/`dispose()` AND `ngOnDestroy` — defense in depth. Missing it here was an omission.
+
+**Fix:** Added `implements OnDestroy` to the class and a `ngOnDestroy(): void { this.cleanup(); }` method. `cleanup()` is already idempotent, so double-calling (once from `cleanupScene`, once from Angular) is safe.
+
+**New spec** (`aim-line.service.spec.ts`):
+- "D-2: ngOnDestroy() removes the mesh from the scene (route-change safety)" — calls `update()` to add mesh, then `ngOnDestroy()`; asserts mesh removed from scene children.
+
+**Fixed in commit:** `3ee313b`.
+
+---
+
+### Finding D-3: `reduce-motion` checked twice per frame via raw DOM read — no shared cache (LOW — documented, deferred)
+
+**Location:** `game-render.service.ts:163` and `game-render.service.ts:174` — two separate `document.body.classList.contains('reduce-motion')` calls inside `animate()`, each firing every frame.
+
+**Risk:** Not a correctness issue — both reads will return the same value within a single frame. The concern is redundancy: the `reduce-motion` class is read in `tickAim` (line 163) and again for `aimLineService.update()` (line 174). A separate DOM classList read at ~60Hz is negligible individually, but the pattern is already repeated in `tower-mesh-factory.service.ts` (6 more sites), `screen-shake.service.ts` (1 site). The codebase has no `MotionPreferenceService` or equivalent cache. Consolidating into a single read per frame and passing it down would be cleaner, but the current approach is consistent with existing practice — no service for this exists, and introducing one for a single boolean isn't worth the DI overhead now.
+
+**No fix applied.** Deferred: the two reads in `game-render.service.ts` can be merged into a single `const reduceMotion = ...` extracted above both calls in a future cleanup sprint. Not blocking.
+
+---
+
+### Finding D-4: 5-tower stress spec uses distinct row/col but `previewSpy` returns a shared enemy reference — does not validate per-tower yaw (MEDIUM — acceptable, documented)
+
+**Location:** `aim-line.service.spec.ts` Sprint 45 stress test — `previewSpy.getPreviewTarget.and.returnValue(sharedEnemy)`.
+
+**Risk:** The spec asserts `getPreviewTarget` called 5 times and `aimEngaged === true` for all towers. It also asserts each tower's yaw converges to `atan2(dx, dz)` from its own world position — which IS correct because each tower's root group has a distinct `position.x` (0 through 4). However, the `spatialGrid.queryRadius` order-independence concern raised by the review protocol was actually a non-issue here: `TargetPreviewService` is mocked entirely via `previewSpy`. The spec doesn't exercise the real spatial grid — it validates that `tickAim` correctly iterates all 5 towers and computes independent yaws from independent world positions. The spatial grid is unit-tested separately in `target-preview.service.spec.ts`. The "order independence" question is answered: `tickAim` does a `Map.entries()` iteration (insertion-order deterministic), and each call to `getPreviewTarget` is independent (no shared mutable return array). No ordering risk.
+
+**No fix needed.** Documented for Phase E's full integration perf spec (sprint 37) which will exercise the real spatial grid under load.
+
+---
+
+## Final Pre-Merge Review — feat/threejs-polish — 2026-04-30
+
+### Scope verified
+
+- `git diff --stat main..HEAD`: 130 files changed, +19244/−1863 lines.
+- `git rev-list --count main..HEAD`: 128 commits.
+- Two major efforts: tower visual polish (70 sprints, Phases A–J) + tower aim/emissive-ratchet (50 sprints, Phases 0 + A–E). Each phase had its own per-phase red-team gate.
+
+### Cross-phase integration verifications run
+
+1. **BASIC (polish Phase B + aim Phase B):** `turretGroup` pre-existed from polish Phase B. Aim Phase B tags it via `aimYawSubgroupName = 'turret'` only — no geometry change. No conflict. `idleTick` swivel suppressed by `aimEngaged` guard. Verified in `tower-mesh-factory.service.ts` lines 126 + 276.
+
+2. **SNIPER (polish Phase C + aim Phase B Finding B-1):** Polish Phase C created the scoped-barrel geometry with all parts as direct children of `towerGroup`. Aim Phase B introduced `aimGroup` (new wrapper), re-parented scope/barrel/bipod/muzzle into it, and split `chargeTick` from `idleTick` (Finding B-1 fix). `chargeTick` now only pulses the scope lens emissive — no yaw write. `idleTick` does the phantom drift on `aimGroup.rotation.y`. `tickAim` also writes `aimGroup.rotation.y` — the split ensures no clobber. Verified at lines 351 + 503–555.
+
+3. **SPLASH (polish Phase D + aim Phase B):** `drumGroup` (named `'drum'`) is a direct child of `splashYaw` wrapper. Drum roll is around local Z (forward axis); yaw is around Y of `splashYaw` — they compose orthogonally. `drumPrevT`/`drumSpinBoostUntil` clock comment at line 771–774 correctly documents the wall-clock alignment. No fight.
+
+4. **All 6 yaw subgroup names** confirmed match the do-not-regress list: `turret`, `aimGroup`, `splashYaw`, `slowYaw`, `chainYaw`, `mortarYaw` — each with `aimYawSubgroupName` tag.
+
+5. **Default targeting mode change (commit 68efc67):** `DEFAULT_TARGETING_MODE` changed from `TargetingMode.NEAREST` → `TargetingMode.FIRST`. Verified: (a) checkpoint version NOT bumped — correct, `targetingMode` field on `PlacedTower` is serialized as a string value, so existing saves that have `"nearest"` restore correctly as NEAREST; new towers get FIRST. (b) Spec at line 219 says "should default to first targeting mode" and asserts `toBe(TargetingMode.FIRST)`. (c) Cycle comment at line 245 correctly says "Default is FIRST (index 2)". (d) Two combat specs that depended on the implicit NEAREST default were updated to set it explicitly. No stale "default is NEAREST" comments found.
+
+6. **`console.warn` in `tower-animation.service.ts:265`** — new on this branch. Fires only when `fireTick` callback throws. ESLint rule is `no-console: warn, { allow: ['error', 'warn'] }` — allowed. Not a lint violation. Appropriate defensive guard for user-data callback invocation.
+
+7. **TODO/FIXME/XXX grep:** Two pre-existing TODOs found in `wave.model.ts:109` (sprint 79 balance note) and `item.service.ts:222` (design note). Both were present before this branch opened. No new TODOs added on this branch.
+
+---
+
+### Finding F-1: MEMORY.md commit count stale — 157 vs 128 (LOW — Fixed)
+
+**Location:** `/Users/edconde/.claude/projects/-Users-edconde-dev-Novarise/memory/MEMORY.md` line 5
+
+**Risk:** MEMORY.md states "157 commits ahead of main" but `git rev-list --count main..HEAD` returns 128. The aim-plan close-out session wrote 128 as the branch state; the CURRENT STATE header was not updated after the final 5 commits (run-summary redesign + default-targeting-mode fix). Any future session opening MEMORY.md would start with a wrong anchor. The reference to "last commit: `f123c48`" is also stale — actual tip before this review is `68efc67`.
+
+**Fix:** Updated MEMORY.md to reflect 128 commits pre-review (will be 131 after the three commits from this review session). Updated last-commit reference.
+
+**Status:** Fixed in this commit.
+
+---
+
+### Finding F-2: PR_DRAFT.md missing — closer protocol requires it (LOW — Fixed)
+
+**Location:** Repo root — `PR_DRAFT.md` absent.
+
+**Risk:** The closer protocol explicitly requires a `PR_DRAFT.md` summarizing what shipped, the test delta, the browser smoke checklist references, deferred items, and do-not-regress notes. Without it, the PR author must reconstruct the summary from scratch across 128 commits and 14 docs. Direct time cost; no code risk.
+
+**Fix:** Created `PR_DRAFT.md` at repo root.
+
+**Status:** Fixed in this commit.
+
+---
+
+### Finding F-3: `emissiveBaselines` dual-storage maintenance trap (LOW — Documented, no fix)
+
+**Location:** `tower-animation.service.ts:302` — `tower.emissiveBaselines ?? userData['emissiveBaselines']`; `tower-mesh-factory.service.ts` — `snapshotEmissiveBaselines` writes both.
+
+**Risk:** `PlacedTower.emissiveBaselines` and `group.userData['emissiveBaselines']` are kept in sync by the same writer. The nullish-coalesce fallback means if any future code path sets the `PlacedTower` field without refreshing `userData`, the stale field wins. This was documented as "Finding 2 (LOW)" in the Phase 0 red-team close. No concrete failure path exists today — the only writer (`snapshotEmissiveBaselines`) clears both. The risk is a future code edit not knowing the invariant.
+
+**Fix:** None applied — the invariant is clearly documented in the Phase 0 red-team section of this audit. Added a JSDoc note to `startMuzzleFlash` naming the invariant.
+
+**Status:** Accepted / documented.
+
+---
+
+### Finding F-4: `drumSpinBoostUntil` uses `performance.now()` while `drumPrevT` uses render-loop `t` — clock skew under tab-background throttle (LOW — Documented, deferred)
+
+**Location:** `tower-mesh-factory.service.ts:776–781` — SPLASH `idleTick` closure.
+
+**Risk:** `t` is `time * msToSeconds` from `requestAnimationFrame`, which pauses or slows when the tab is hidden. `performance.now()` continues monotonically. If the tab is backgrounded mid-fire (RAF throttled to 1fps), `drumSpinBoostUntil` expires while `t` has barely advanced. On tab-restore, `isFireBoosted` is false but `deltaT` catches up the missed frames at once — a large spin step. Visually: drum snap-rotates forward on restore instead of smoothly continuing the fire boost. Not a correctness issue (no game logic is affected — drum spin is purely cosmetic). Already documented as deferred D-b in `tower-aim-close.md`.
+
+**Fix:** None applied. The comment at lines 771–774 correctly describes the alignment assumption. Tab-background snap-rotation is cosmetically negligible. Fix (clamp both to `performance.now()` or both to `t`) is in the D-b deferred backlog.
+
+**Status:** Deferred (cosmetic, tab-background only, documented).
+
+---
+
+### Finding F-5: `silhouette-after.md` and `baseline-audit.md` stale after aim Phase B geometry changes (LOW — Verified correct)
+
+**Location:** `docs/towers/silhouette-after.md`, `docs/towers/baseline-audit.md`.
+
+**Risk:** `baseline-audit.md` describes pre-redesign tower silhouettes. `silhouette-after.md` was written at Phase H describing post-polish shapes. Aim Phase B introduced new wrapper groups (`aimGroup`, `splashYaw`, `slowYaw`, `chainYaw`, `mortarYaw`) and re-parented meshes. Could those group additions have changed the rendered silhouette descriptions?
+
+**Verdict:** No. The yaw wrapper groups are THREE.Group objects with no geometry of their own. They have no visual representation. The mesh positions are unchanged — `aimGroup` is at the same Y as before; `mortarYaw` has no position offset (barrelPivot carries the offset). The silhouette descriptions in both docs remain accurate. No stale-doc issue.
+
+**Status:** Verified correct — no update needed.
+
+---
+
+## Deployment Checklist — feat/threejs-polish
+
+- [x] All red-team findings closed or explicitly deferred with rationale (F-1 through F-5 above; prior phase findings in phase-specific sections)
+- [x] All docs in `docs/towers/` verified accurate vs current code (integration-verification.md, aim-subgroup-audit.md, silhouette-after.md, baseline-audit.md — see F-5)
+- [x] MEMORY.md CURRENT STATE matches reality — commit count corrected from 157 → 128, last commit SHA updated
+- [x] `PR_DRAFT.md` exists at repo root with full summary
+- [x] `STRATEGIC_AUDIT.md` has Final Pre-Merge Review section (this section)
+- [x] 0 FAILED specs — 7374 SUCCESS / 1 skipped (verified via `npx ng test --watch=false --browsers=ChromeHeadless`)
+- [x] 0 lint errors — 2 pre-existing warnings in `card-play.service.ts` (lines 760, 769) exempt; `console.warn` in `tower-animation.service.ts:265` is allowed by `no-console: { allow: ['warn'] }` rule
+- [x] Production build clean — `npx ng build --configuration=production` completed successfully
+- [x] No new `console.log`/`debugger` statements — one `console.warn` added on branch is intentional defensive guard, ESLint-exempt
+- [x] Browser smoke checklist documented — polish: `docs/towers/browser-smoke-checklist.md` (30+ items); aim: `docs/towers/aim-browser-checklist.md`

@@ -1,11 +1,18 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_STATS } from '../models/enemy.model';
 import { HEALTH_BAR_CONFIG, SHIELD_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { BOSS_CROWN_CONFIG, SHIELD_BREAK_CONFIG, WYRM_ASCENDANT_VISUAL_CONFIG } from '../constants/effects.constants';
+import { GeometryRegistryService } from './geometry-registry.service';
+import { MaterialRegistryService } from './material-registry.service';
 
 @Injectable()
 export class EnemyMeshFactoryService {
+  constructor(
+    @Optional() private readonly geometryRegistry?: GeometryRegistryService,
+    @Optional() private readonly materialRegistry?: MaterialRegistryService,
+  ) {}
+
   /**
    * Create a 3D mesh for an enemy.
    * FLYING enemies use a flat diamond (kite) shape made of 2 triangles,
@@ -19,33 +26,19 @@ export class EnemyMeshFactoryService {
     let materialSide: THREE.Side = THREE.FrontSide;
 
     if (enemy.isFlying) {
-      // Diamond: 4 vertices forming a rhombus in the XZ plane, 2 triangles
-      const s = stats.size;
-      const diamondGeom = new THREE.BufferGeometry();
-      const vertices = new Float32Array([
-         0,  0, -s * 2,  // front tip
-         s,  0,  0,      // right
-         0,  0,  s * 2,  // back tip
-        -s,  0,  0       // left
-      ]);
-      const indices = new Uint16Array([0, 1, 3, 1, 2, 3]);
-      diamondGeom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-      diamondGeom.setIndex(new THREE.BufferAttribute(indices, 1));
-      diamondGeom.computeVertexNormals();
-      geometry = diamondGeom;
+      // Diamond geometry depends only on stats.size — cache per-type via registry.
+      geometry = this.materialRegistry
+        ? this.cachedFlyingGeometry(enemy.type, stats.size)
+        : this.makeFlyingGeometry(stats.size);
       materialSide = THREE.DoubleSide;
     } else {
       geometry = this.createEnemyGeometry(enemy.type, stats.size);
     }
 
-    const material = new THREE.MeshStandardMaterial({
-      color: stats.color,
-      emissive: stats.color,
-      emissiveIntensity: ENEMY_VISUAL_CONFIG.baseEmissive,
-      roughness: ENEMY_VISUAL_CONFIG.roughness,
-      metalness: ENEMY_VISUAL_CONFIG.metalness,
-      side: materialSide
-    });
+    // Enemy body material is per-instance — death fade mutates `transparent`
+    // and `opacity`, hit flash + status tinting mutate `emissive`. Caching
+    // would alias every enemy of the same type.
+    const material = this.makeEnemyBodyMaterial(stats.color, materialSide);
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(enemy.position.x, enemy.position.y, enemy.position.z);
@@ -57,12 +50,16 @@ export class EnemyMeshFactoryService {
     const barHeight = HEALTH_BAR_CONFIG.height;
     const barY = stats.size + HEALTH_BAR_CONFIG.yOffset;
 
-    const bgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
-    const bgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.bgColor, side: THREE.DoubleSide });
+    const bgGeometry = this.plane(barWidth, barHeight);
+    const bgMaterial = this.getOrCreateEffectMaterial(
+      `enemy:hpBg`,
+      () => new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.bgColor, side: THREE.DoubleSide }),
+    );
     const healthBarBg = new THREE.Mesh(bgGeometry, bgMaterial);
     healthBarBg.position.set(0, barY, 0);
 
-    const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
+    const fgGeometry = this.plane(barWidth, barHeight);
+    // Per-instance — color shifts per HP threshold (green/yellow/red).
     const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
     const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
     healthBarFg.position.set(0, barY + 0.001, 0);
@@ -79,13 +76,19 @@ export class EnemyMeshFactoryService {
 
       // Shield HP bar stacked above the health bar so absorbed damage is visible.
       const shieldBarY = barY + SHIELD_BAR_CONFIG.yOffsetAboveHealth;
-      const shieldBgGeom = new THREE.PlaneGeometry(SHIELD_BAR_CONFIG.width, SHIELD_BAR_CONFIG.height);
-      const shieldBgMat = new THREE.MeshBasicMaterial({ color: SHIELD_BAR_CONFIG.bgColor, side: THREE.DoubleSide });
+      const shieldBgGeom = this.plane(SHIELD_BAR_CONFIG.width, SHIELD_BAR_CONFIG.height);
+      const shieldBgMat = this.getOrCreateEffectMaterial(
+        `enemy:shieldBg`,
+        () => new THREE.MeshBasicMaterial({ color: SHIELD_BAR_CONFIG.bgColor, side: THREE.DoubleSide }),
+      );
       const shieldBarBg = new THREE.Mesh(shieldBgGeom, shieldBgMat);
       shieldBarBg.position.set(0, shieldBarY, 0);
 
-      const shieldFgGeom = new THREE.PlaneGeometry(SHIELD_BAR_CONFIG.width, SHIELD_BAR_CONFIG.height);
-      const shieldFgMat = new THREE.MeshBasicMaterial({ color: SHIELD_BAR_CONFIG.color, side: THREE.DoubleSide });
+      const shieldFgGeom = this.plane(SHIELD_BAR_CONFIG.width, SHIELD_BAR_CONFIG.height);
+      const shieldFgMat = this.getOrCreateEffectMaterial(
+        `enemy:shieldFg`,
+        () => new THREE.MeshBasicMaterial({ color: SHIELD_BAR_CONFIG.color, side: THREE.DoubleSide }),
+      );
       const shieldBarFg = new THREE.Mesh(shieldFgGeom, shieldFgMat);
       shieldBarFg.position.set(0, shieldBarY + 0.001, 0);
 
@@ -95,12 +98,10 @@ export class EnemyMeshFactoryService {
       mesh.userData['shieldBarFg'] = shieldBarFg;
     }
 
-    // Add crown ring for BOSS enemies
     if (enemy.type === EnemyType.BOSS) {
       this.createBossCrown(mesh, stats.size, stats.color);
     }
 
-    // Add eye-glow ring for WYRM_ASCENDANT (sprint 39)
     if (enemy.type === EnemyType.WYRM_ASCENDANT) {
       this.createWyrmEyeGlow(mesh, stats.size);
     }
@@ -115,90 +116,75 @@ export class EnemyMeshFactoryService {
   createEnemyGeometry(type: EnemyType, size: number): THREE.BufferGeometry {
     switch (type) {
       case EnemyType.FAST:
-        // Elongated capsule — streamlined for speed
-        return new THREE.CapsuleGeometry(size * 0.6, size * 1.2, 4, ENEMY_MESH_SEGMENTS);
+        // Capsule has unique geometry — registry doesn't expose it; fall through to fresh.
+        // CapsuleGeometry is rarely used elsewhere so the loss is small.
+        return this.cachedOrFreshCapsule(type, size);
 
       case EnemyType.HEAVY:
-        // Chunky cube — blocky and tanky
-        return new THREE.BoxGeometry(size * 1.6, size * 1.6, size * 1.6);
+        return this.box(size * 1.6, size * 1.6, size * 1.6);
 
       case EnemyType.SWIFT:
-        // Tetrahedron — angular, darting
-        return new THREE.TetrahedronGeometry(size * 1.2, 0);
+        return this.tet(size * 1.2, 0);
 
-      case EnemyType.BOSS: {
-        // Large sphere merged with torus crown for imposing look
-        // Use sphere as base — the crown ring is added as a child mesh in createBossCrown()
-        return new THREE.SphereGeometry(size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
-      }
+      case EnemyType.BOSS:
+        return this.sphere(size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
 
       case EnemyType.SHIELDED:
-        // Icosahedron — faceted, armored look
-        return new THREE.IcosahedronGeometry(size, 0);
+        return this.ico(size, 0);
 
       case EnemyType.SWARM:
-        // Octahedron — compact, gem-like
-        return new THREE.OctahedronGeometry(size, 0);
+        return this.oct(size, 0);
 
       case EnemyType.MINER:
-        // Chunky squat box — wider and taller than HEAVY, earthy and bulldozing
-        return new THREE.BoxGeometry(size * 1.2, size * 1.4, size * 1.2);
+        return this.box(size * 1.2, size * 1.4, size * 1.2);
 
       case EnemyType.UNSHAKEABLE:
-        // Faceted octahedron — rock-like silhouette, distinct from the cubic HEAVY
-        return new THREE.OctahedronGeometry(size, 0);
+        return this.oct(size, 0);
 
       case EnemyType.VEINSEEKER:
-        // Icosahedron (detail=0) — spiky crystalline-vein silhouette, distinct from
-        // SHIELDED (also icosahedron but with shield dome overlay). At detail=0 the
-        // 20 triangular faces read as angular and threatening, fitting a boss-variant.
-        return new THREE.IcosahedronGeometry(size, 0);
+        return this.ico(size, 0);
 
       case EnemyType.FLYING:
-        // Diamond geometry is built inline in createEnemyMesh for flying enemies;
-        // this branch is a safety fallback and should never be reached at runtime.
-        return new THREE.SphereGeometry(size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
+        // Defensive fallback (FLYING actually built inline in createEnemyMesh).
+        return this.sphere(size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
 
       case EnemyType.GLIDER:
-        // Sprint 37 — flat wing-like silhouette: thin wide box that reads as aerodynamic
-        // and low-profile, visually distinct from ground threats and flying diamond.
-        return new THREE.BoxGeometry(size * 2.4, size * 0.3, size * 1.0);
+        return this.box(size * 2.4, size * 0.3, size * 1.0);
 
       case EnemyType.TITAN:
-        // Sprint 38 — wide heavy cylinder: imposing bulk reads as elite / armored.
-        // Distinct from BOSS sphere and UNSHAKEABLE octahedron.
-        return new THREE.CylinderGeometry(size * 0.9, size * 1.1, size * 1.4, 8);
+        return this.cyl(size * 0.9, size * 1.1, size * 1.4, 8);
 
       case EnemyType.WYRM_ASCENDANT:
-        // Sprint 39 — tall narrow cylinder: towering presence reads as boss-counter / apex threat.
-        // Taller aspect ratio than TITAN to emphasise vertical dominance (it lives on Highground boards).
-        // Eye-glow ring added as a child mesh in createWyrmEyeGlow().
-        return new THREE.CylinderGeometry(size * 0.65, size * 0.80, size * 2.2, 10);
+        return this.cyl(size * 0.65, size * 0.80, size * 2.2, 10);
 
       case EnemyType.BASIC:
       default:
-        // Standard sphere
-        return new THREE.SphereGeometry(size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
+        return this.sphere(size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
     }
   }
 
-  /**
-   * Create and attach a torus crown ring to the Boss enemy mesh.
-   * Called after the mesh is created to add the distinctive crown.
-   */
   createBossCrown(mesh: THREE.Mesh, size: number, color: number): void {
-    const crownGeometry = new THREE.TorusGeometry(
-      size * BOSS_CROWN_CONFIG.radiusMultiplier,
-      size * BOSS_CROWN_CONFIG.tubeMultiplier,
-      BOSS_CROWN_CONFIG.radialSegments,
-      BOSS_CROWN_CONFIG.tubularSegments
-    );
+    const crownGeometry = this.geometryRegistry
+      ? this.geometryRegistry.getTorus(
+          size * BOSS_CROWN_CONFIG.radiusMultiplier,
+          size * BOSS_CROWN_CONFIG.tubeMultiplier,
+          BOSS_CROWN_CONFIG.radialSegments,
+          BOSS_CROWN_CONFIG.tubularSegments,
+        )
+      : new THREE.TorusGeometry(
+          size * BOSS_CROWN_CONFIG.radiusMultiplier,
+          size * BOSS_CROWN_CONFIG.tubeMultiplier,
+          BOSS_CROWN_CONFIG.radialSegments,
+          BOSS_CROWN_CONFIG.tubularSegments,
+        );
+    // Boss crown material is per-instance — hit flash + status tinting
+    // mutate `emissive` (see enemy-visual.service tintChildMeshes).
     const crownMaterial = new THREE.MeshStandardMaterial({
-      color: color,
+      color,
       emissive: color,
       emissiveIntensity: BOSS_CROWN_CONFIG.emissiveIntensity,
       roughness: BOSS_CROWN_CONFIG.roughness,
-      metalness: BOSS_CROWN_CONFIG.metalness
+      metalness: BOSS_CROWN_CONFIG.metalness,
     });
     const crown = new THREE.Mesh(crownGeometry, crownMaterial);
     crown.rotation.x = Math.PI / 2;
@@ -208,19 +194,22 @@ export class EnemyMeshFactoryService {
     mesh.userData['bossCrown'] = crown;
   }
 
-  /**
-   * Create and attach a glowing eye-ring to the WYRM_ASCENDANT mesh (sprint 39).
-   * A flat torus positioned near the upper third of the cylinder signals the
-   * boss's "awareness." Disposed with the parent mesh on enemy death/teardown
-   * because it is a child object — Three.js cleans it up via group.traverse.
-   */
   createWyrmEyeGlow(mesh: THREE.Mesh, size: number): void {
-    const eyeGeometry = new THREE.TorusGeometry(
-      size * WYRM_ASCENDANT_VISUAL_CONFIG.eyeRadiusMultiplier,
-      size * WYRM_ASCENDANT_VISUAL_CONFIG.eyeTubeMultiplier,
-      WYRM_ASCENDANT_VISUAL_CONFIG.eyeRadialSegments,
-      WYRM_ASCENDANT_VISUAL_CONFIG.eyeTubularSegments,
-    );
+    const eyeGeometry = this.geometryRegistry
+      ? this.geometryRegistry.getTorus(
+          size * WYRM_ASCENDANT_VISUAL_CONFIG.eyeRadiusMultiplier,
+          size * WYRM_ASCENDANT_VISUAL_CONFIG.eyeTubeMultiplier,
+          WYRM_ASCENDANT_VISUAL_CONFIG.eyeRadialSegments,
+          WYRM_ASCENDANT_VISUAL_CONFIG.eyeTubularSegments,
+        )
+      : new THREE.TorusGeometry(
+          size * WYRM_ASCENDANT_VISUAL_CONFIG.eyeRadiusMultiplier,
+          size * WYRM_ASCENDANT_VISUAL_CONFIG.eyeTubeMultiplier,
+          WYRM_ASCENDANT_VISUAL_CONFIG.eyeRadialSegments,
+          WYRM_ASCENDANT_VISUAL_CONFIG.eyeTubularSegments,
+        );
+    // Wyrm eye material is per-instance — same status-tint mutation surface
+    // as boss crown.
     const eyeMaterial = new THREE.MeshStandardMaterial({
       color: WYRM_ASCENDANT_VISUAL_CONFIG.eyeColor,
       emissive: WYRM_ASCENDANT_VISUAL_CONFIG.eyeColor,
@@ -235,15 +224,15 @@ export class EnemyMeshFactoryService {
     mesh.userData['wyrmEyeGlow'] = eyeRing;
   }
 
-  /**
-   * Create a semi-transparent sphere to represent the active shield.
-   */
   createShieldMesh(enemySize: number): THREE.Mesh {
     const shieldRadius = enemySize * SHIELD_VISUAL_CONFIG.radiusMultiplier;
+    // Shield dome geometry + material are per-instance — both are explicitly
+    // disposed by EnemyHealthService.updateShieldBreakAnimations() when the
+    // shield-break fade completes. Sharing them would invalidate the cache.
     const shieldGeometry = new THREE.SphereGeometry(
       shieldRadius,
       SHIELD_VISUAL_CONFIG.segments,
-      SHIELD_VISUAL_CONFIG.segments
+      SHIELD_VISUAL_CONFIG.segments,
     );
     const shieldMaterial = new THREE.MeshStandardMaterial({
       color: SHIELD_VISUAL_CONFIG.color,
@@ -251,17 +240,11 @@ export class EnemyMeshFactoryService {
       emissiveIntensity: SHIELD_VISUAL_CONFIG.emissiveIntensity,
       transparent: true,
       opacity: SHIELD_VISUAL_CONFIG.opacity,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
     });
     return new THREE.Mesh(shieldGeometry, shieldMaterial);
   }
 
-  /**
-   * Start the shield break animation when shield HP reaches 0.
-   * The dome scales up and fades out over SHIELD_BREAK_CONFIG.duration seconds.
-   * Actual disposal happens in EnemyService.updateShieldBreakAnimations() when the
-   * timer expires.
-   */
   removeShieldMesh(enemy: Enemy): void {
     if (!enemy.mesh) return;
     const shieldMesh = enemy.mesh.userData['shieldMesh'] as THREE.Mesh | undefined;
@@ -271,12 +254,10 @@ export class EnemyMeshFactoryService {
     enemy.shieldBreakTimer = SHIELD_BREAK_CONFIG.duration;
   }
 
-  /**
-   * Create a scaled-down mesh for a mini-swarm enemy.
-   * Uses MINI_SWARM_STATS directly rather than ENEMY_STATS to produce the smaller visual.
-   */
   createMiniSwarmMesh(mini: Enemy): THREE.Mesh {
-    const geometry = new THREE.OctahedronGeometry(MINI_SWARM_STATS.size, 0);
+    const geometry = this.oct(MINI_SWARM_STATS.size, 0);
+    // Mini-swarm body material is per-instance — same mutation surface as
+    // regular enemy body (status tint, hit flash, death fade).
     const material = new THREE.MeshStandardMaterial({
       color: MINI_SWARM_STATS.color,
       emissive: MINI_SWARM_STATS.color,
@@ -289,17 +270,20 @@ export class EnemyMeshFactoryService {
     mesh.position.set(mini.position.x, mini.position.y, mini.position.z);
     mesh.castShadow = true;
 
-    // Small health bar
     const barWidth = HEALTH_BAR_CONFIG.width * 0.5;
     const barHeight = HEALTH_BAR_CONFIG.height;
     const barY = MINI_SWARM_STATS.size + HEALTH_BAR_CONFIG.yOffset;
 
-    const bgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
-    const bgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.bgColor, side: THREE.DoubleSide });
+    const bgGeometry = this.plane(barWidth, barHeight);
+    const bgMaterial = this.getOrCreateEffectMaterial(
+      `enemy:hpBg`,
+      () => new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.bgColor, side: THREE.DoubleSide }),
+    );
     const healthBarBg = new THREE.Mesh(bgGeometry, bgMaterial);
     healthBarBg.position.set(0, barY, 0);
 
-    const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
+    const fgGeometry = this.plane(barWidth, barHeight);
+    // Per-instance — color shifts per HP threshold (green/yellow/red).
     const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
     const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
     healthBarFg.position.set(0, barY + 0.001, 0);
@@ -309,5 +293,105 @@ export class EnemyMeshFactoryService {
     mesh.userData = { healthBarBg, healthBarFg };
 
     return mesh;
+  }
+
+  // ── Geometry shortcuts (registry-aware) ──────────────────────────────────
+
+  private box(w: number, h: number, d: number): THREE.BoxGeometry {
+    return this.geometryRegistry?.getBox(w, h, d) ?? new THREE.BoxGeometry(w, h, d);
+  }
+  private sphere(r: number, w: number, h: number): THREE.SphereGeometry {
+    return this.geometryRegistry?.getSphere(r, w, h) ?? new THREE.SphereGeometry(r, w, h);
+  }
+  private cyl(rt: number, rb: number, h: number, segs: number): THREE.CylinderGeometry {
+    return this.geometryRegistry?.getCylinder(rt, rb, h, segs) ?? new THREE.CylinderGeometry(rt, rb, h, segs);
+  }
+  private oct(r: number, detail: number): THREE.OctahedronGeometry {
+    return this.geometryRegistry?.getOctahedron(r, detail) ?? new THREE.OctahedronGeometry(r, detail);
+  }
+  private ico(r: number, detail: number): THREE.IcosahedronGeometry {
+    return this.geometryRegistry?.getIcosahedron(r, detail) ?? new THREE.IcosahedronGeometry(r, detail);
+  }
+  private tet(r: number, detail: number): THREE.TetrahedronGeometry {
+    return this.geometryRegistry?.getTetrahedron(r, detail) ?? new THREE.TetrahedronGeometry(r, detail);
+  }
+  private plane(w: number, h: number): THREE.PlaneGeometry {
+    return this.geometryRegistry?.getPlane(w, h) ?? new THREE.PlaneGeometry(w, h);
+  }
+
+  /**
+   * CapsuleGeometry isn't exposed by GeometryRegistry's typed methods.
+   * Use the generic getOrCreateCustom escape hatch.
+   */
+  private cachedOrFreshCapsule(type: EnemyType, size: number): THREE.CapsuleGeometry {
+    if (!this.geometryRegistry) {
+      return new THREE.CapsuleGeometry(size * 0.6, size * 1.2, 4, ENEMY_MESH_SEGMENTS);
+    }
+    return this.geometryRegistry.getOrCreateCustom(
+      `capsule:${type}:${size.toFixed(4)}`,
+      () => new THREE.CapsuleGeometry(size * 0.6, size * 1.2, 4, ENEMY_MESH_SEGMENTS),
+    );
+  }
+
+  /**
+   * Per-type FLYING diamond geometry via the generic registry escape hatch.
+   * Diamond is a custom BufferGeometry (not a typed primitive).
+   */
+  private cachedFlyingGeometry(type: EnemyType, size: number): THREE.BufferGeometry {
+    if (!this.geometryRegistry) {
+      return this.makeFlyingGeometry(size);
+    }
+    return this.geometryRegistry.getOrCreateCustom(
+      `diamond:${type}:${size.toFixed(4)}`,
+      () => this.makeFlyingGeometry(size),
+    );
+  }
+  private makeFlyingGeometry(size: number): THREE.BufferGeometry {
+    const s = size;
+    const diamondGeom = new THREE.BufferGeometry();
+    const vertices = new Float32Array([
+       0,  0, -s * 2,
+       s,  0,  0,
+       0,  0,  s * 2,
+      -s,  0,  0,
+    ]);
+    const indices = new Uint16Array([0, 1, 3, 1, 2, 3]);
+    diamondGeom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    diamondGeom.setIndex(new THREE.BufferAttribute(indices, 1));
+    diamondGeom.computeVertexNormals();
+    return diamondGeom;
+  }
+
+  /**
+   * Per-enemy-type body material. Color comes from ENEMY_STATS;
+   * materialSide differs between FLYING (DoubleSide) and grounded (FrontSide).
+   * Cached separately per side because that flag baked into the shader.
+   */
+  /**
+   * Per-instance enemy body material.
+   *
+   * NOT cached via MaterialRegistry: status-effect tinting (EnemyVisualService),
+   * hit flash (EnemyHealthService.startHitFlash), and death fade
+   * (EnemyHealthService.setMeshTransparent + opacity ramp) all mutate this
+   * material's `emissive` / `transparent` / `opacity`. A shared cached
+   * instance would alias every living enemy of the same type.
+   */
+  private makeEnemyBodyMaterial(color: number, side: THREE.Side): THREE.MeshStandardMaterial {
+    return new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: ENEMY_VISUAL_CONFIG.baseEmissive,
+      roughness: ENEMY_VISUAL_CONFIG.roughness,
+      metalness: ENEMY_VISUAL_CONFIG.metalness,
+      side,
+    });
+  }
+
+  private getOrCreateEffectMaterial<T extends THREE.Material>(
+    key: string,
+    factory: () => T,
+  ): T {
+    if (!this.materialRegistry) return factory();
+    return this.materialRegistry.getOrCreate(key, factory);
   }
 }

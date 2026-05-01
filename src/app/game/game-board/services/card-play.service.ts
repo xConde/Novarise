@@ -8,6 +8,7 @@ import { GameStatsService } from './game-stats.service';
 import { GameBoardService } from '../game-board.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { TowerUpgradeVisualService } from './tower-upgrade-visual.service';
+import { TowerMeshFactoryService } from './tower-mesh-factory.service';
 import { AudioService } from './audio.service';
 import { SceneService } from './scene.service';
 import { TowerCombatService } from './tower-combat.service';
@@ -37,7 +38,10 @@ import { MutationOp } from './path-mutation.types';
 import { ElevationOp } from './elevation.types';
 import { getCardDefinition, getEffectiveEnergyCost } from '../../../run/constants/card-definitions';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
-import { disposeGroup } from '../utils/three-utils';
+import { buildDisposeProtect, disposeGroup } from '../utils/three-utils';
+import { GeometryRegistryService } from './geometry-registry.service';
+import { MaterialRegistryService } from './material-registry.service';
+import { TargetPreviewService } from './target-preview.service';
 
 /**
  * Upgraded CARTOGRAPHER_SEAL refunds this many energy on the first terraform
@@ -144,6 +148,16 @@ export class CardPlayService {
      * @Optional() — when absent, bridge_towers is a no-op (energy still consumed).
      */
     @Optional() private towerGraphService?: TowerGraphService,
+    // @Optional() — Phase B sprint 14. Used to protect registry-shared
+    // resources when card effects dispose tower meshes.
+    @Optional() private geometryRegistry?: GeometryRegistryService,
+    @Optional() private materialRegistry?: MaterialRegistryService,
+    /**
+     * @Optional() — aim-cache invalidation after tower mutation cards
+     * (FORTIFY). When absent (test beds without full providers), invalidation
+     * is skipped; aim cache simply becomes stale until the next enemy event.
+     */
+    @Optional() private targetPreviewService?: TargetPreviewService,
   ) {}
 
   /**
@@ -799,11 +813,18 @@ export class CardPlayService {
       const towerMesh = this.meshRegistry.towerMeshes.get(key);
       if (towerMesh) {
         this.towerUpgradeVisualService.applyUpgradeVisuals(towerMesh, target.level + 1, undefined);
+        // Refresh emissive baselines after the upgrade changes material intensity.
+        TowerMeshFactoryService.snapshotEmissiveBaselines(towerMesh);
       }
 
       // Invalidate muzzle flash saved emissive — upgrade changed the baseline.
       target.originalEmissiveIntensity = undefined;
       target.muzzleFlashTimer = undefined;
+      target.emissiveBaselines = undefined; // will be re-read from mesh userData on next fire
+
+      // Invalidate aim cache — range may have grown after the free upgrade
+      // (Sprint 38: tower-mutation card hook).
+      this.targetPreviewService?.invalidate(key);
     }
 
     this.callbacks?.onRefreshUI();
@@ -835,7 +856,8 @@ export class CardPlayService {
     // Dispose and remove mesh
     const towerMesh = this.meshRegistry.towerMeshes.get(key);
     if (towerMesh) {
-      disposeGroup(towerMesh, this.sceneService.getScene());
+      disposeGroup(towerMesh, this.sceneService.getScene(),
+        buildDisposeProtect(this.geometryRegistry, this.materialRegistry));
       this.meshRegistry.towerMeshes.delete(key);
       this.meshRegistry.rebuildTowerChildrenArray();
     }

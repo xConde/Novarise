@@ -1,7 +1,7 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG, GROUND_EFFECT_Y } from '../constants/combat.constants';
-import { disposeMesh, disposeMaterial } from '../utils/three-utils';
+import { VfxPoolService } from './vfx-pool.service';
 
 /** A chain arc line that persists for a short visual duration before removal. */
 export interface ChainArcEntry {
@@ -22,12 +22,20 @@ export interface MortarZoneMeshEntry {
  * - Chain lightning arc lines (ChainArcEntry[])
  * - Mortar blast zone circle meshes (MortarZoneMeshEntry[])
  *
- * Call updateVisuals() each frame to expire objects, and cleanup() on destroy/restart.
+ * Phase B sprint 18: visual primitives are acquired from VfxPoolService
+ * (which itself routes shared resources through MaterialRegistry +
+ * GeometryRegistry) instead of allocating fresh per call.
+ *
+ * Call updateVisuals() each frame to expire arcs.
+ * Call tickMortarZoneVisualsForTurn() each turn to expire zones.
+ * Call cleanup() on destroy/restart.
  */
 @Injectable()
 export class CombatVFXService {
   private chainArcs: ChainArcEntry[] = [];
   private mortarZoneMeshes: MortarZoneMeshEntry[] = [];
+
+  constructor(@Optional() private readonly vfxPool?: VfxPoolService) {}
 
   /**
    * Creates a zigzag chain lightning arc line from (fromX,fromZ) to (toX,toZ) and adds it to the scene.
@@ -45,7 +53,7 @@ export class CombatVFXService {
     const segs = CHAIN_LIGHTNING_CONFIG.zigzagSegments;
     const jitter = CHAIN_LIGHTNING_CONFIG.zigzagJitter;
     const arcY = GROUND_EFFECT_Y + CHAIN_LIGHTNING_CONFIG.arcHeightOffset;
-    const vertices = new Float32Array((segs + 1) * 3);
+    const vertexCount = segs + 1;
 
     const dirX = toX - fromX;
     const dirZ = toZ - fromZ;
@@ -53,34 +61,43 @@ export class CombatVFXService {
     const perpX = -dirZ / len;
     const perpZ = dirX / len;
 
-    for (let i = 0; i <= segs; i++) {
-      const t = i / segs;
-      const offset = (i === 0 || i === segs) ? 0 : (Math.random() - 0.5) * 2 * jitter;
-      vertices[i * 3]     = fromX + dirX * t + perpX * offset;
-      vertices[i * 3 + 1] = arcY;
-      vertices[i * 3 + 2] = fromZ + dirZ * t + perpZ * offset;
+    const writeArcVertices = (positions: Float32Array): void => {
+      for (let i = 0; i < vertexCount; i++) {
+        const t = i / segs;
+        const offset = (i === 0 || i === segs) ? 0 : (Math.random() - 0.5) * 2 * jitter;
+        positions[i * 3]     = fromX + dirX * t + perpX * offset;
+        positions[i * 3 + 1] = arcY;
+        positions[i * 3 + 2] = fromZ + dirZ * t + perpZ * offset;
+      }
+    };
+
+    let line: THREE.Line;
+    if (this.vfxPool) {
+      const acquired = this.vfxPool.acquireArc(vertexCount, arcColor, CHAIN_LIGHTNING_CONFIG.arcOpacity);
+      writeArcVertices(acquired.positions);
+      acquired.markPositionsDirty();
+      line = acquired.line;
+    } else {
+      // Fallback for flat test beds without VfxPool.
+      const positions = new Float32Array(vertexCount * 3);
+      writeArcVertices(positions);
+      const arcGeom = new THREE.BufferGeometry();
+      arcGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const arcMat = new THREE.LineBasicMaterial({
+        color: arcColor,
+        transparent: true,
+        opacity: CHAIN_LIGHTNING_CONFIG.arcOpacity,
+      });
+      line = new THREE.Line(arcGeom, arcMat);
     }
 
-    const arcGeom = new THREE.BufferGeometry();
-    arcGeom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-    const arcMat = new THREE.LineBasicMaterial({
-      color: arcColor,
-      transparent: true,
-      opacity: CHAIN_LIGHTNING_CONFIG.arcOpacity
-    });
-    const arc = new THREE.Line(arcGeom, arcMat);
-    scene.add(arc);
+    scene.add(line);
     const now = performance.now();
-    this.chainArcs.push({ line: arc, expiresAt: now + CHAIN_LIGHTNING_CONFIG.arcLifetime * 1000 });
+    this.chainArcs.push({ line, expiresAt: now + CHAIN_LIGHTNING_CONFIG.arcLifetime * 1000 });
   }
 
   /**
    * Creates a mortar blast zone circle mesh at (impactX, impactZ) and adds it to the scene.
-   * Returns the mesh so TowerCombatService can correlate with its data record if needed.
-   * The visual persists until `tickMortarZoneVisualsForTurn` expires it at turn >= currentTurn + dotDuration,
-   * matching the turn-based DoT zone lifetime exactly.
-   *
-   * @param currentTurn The turn on which the zone is created (from CombatLoopService.getTurnNumber()).
    */
   createMortarZoneMesh(
     impactX: number,
@@ -90,14 +107,24 @@ export class CombatVFXService {
     scene: THREE.Scene,
     currentTurn: number,
   ): THREE.Mesh {
-    const geometry = new THREE.CircleGeometry(blastRadius, MORTAR_VISUAL_CONFIG.zoneSegments);
-    const material = new THREE.MeshBasicMaterial({
-      color: MORTAR_VISUAL_CONFIG.zoneColor,
-      transparent: true,
-      opacity: MORTAR_VISUAL_CONFIG.zoneOpacity,
-      side: THREE.DoubleSide
-    });
-    const mesh = new THREE.Mesh(geometry, material);
+    let mesh: THREE.Mesh;
+    if (this.vfxPool) {
+      mesh = this.vfxPool.acquireZone(
+        blastRadius,
+        MORTAR_VISUAL_CONFIG.zoneSegments,
+        MORTAR_VISUAL_CONFIG.zoneColor,
+        MORTAR_VISUAL_CONFIG.zoneOpacity,
+      );
+    } else {
+      const geometry = new THREE.CircleGeometry(blastRadius, MORTAR_VISUAL_CONFIG.zoneSegments);
+      const material = new THREE.MeshBasicMaterial({
+        color: MORTAR_VISUAL_CONFIG.zoneColor,
+        transparent: true,
+        opacity: MORTAR_VISUAL_CONFIG.zoneOpacity,
+        side: THREE.DoubleSide,
+      });
+      mesh = new THREE.Mesh(geometry, material);
+    }
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.set(impactX, GROUND_EFFECT_Y, impactZ);
     scene.add(mesh);
@@ -106,8 +133,9 @@ export class CombatVFXService {
   }
 
   /**
-   * Expires and disposes chain arcs whose real-time wall-clock has elapsed.
-   * Call once per RAF frame from game-board.component.ts.animate().
+   * Expires chain arcs whose real-time wall-clock has elapsed.
+   * Pool-owned arcs release back to the pool; fallback-allocated arcs
+   * dispose their geometry + material individually.
    */
   updateVisuals(scene: THREE.Scene): void {
     const now = performance.now();
@@ -115,8 +143,7 @@ export class CombatVFXService {
     for (const arc of this.chainArcs) {
       if (now >= arc.expiresAt) {
         scene.remove(arc.line);
-        arc.line.geometry.dispose();
-        disposeMaterial(arc.line.material);
+        this.releaseArc(arc.line);
       } else {
         survivingArcs.push(arc);
       }
@@ -125,17 +152,14 @@ export class CombatVFXService {
   }
 
   /**
-   * Expires and disposes mortar zone meshes whose turn count has elapsed.
-   * Call once per turn after CombatLoopService.resolveTurn() completes.
-   *
-   * @param turnNumber The current turn number (from CombatLoopService.getTurnNumber()).
+   * Expires mortar zone meshes whose turn count has elapsed.
    */
   tickMortarZoneVisualsForTurn(turnNumber: number, scene: THREE.Scene): void {
     const survivingZones: MortarZoneMeshEntry[] = [];
     for (const zone of this.mortarZoneMeshes) {
       if (turnNumber >= zone.expiresOnTurn) {
         scene.remove(zone.mesh);
-        disposeMesh(zone.mesh);
+        this.releaseZone(zone.mesh);
       } else {
         survivingZones.push(zone);
       }
@@ -145,34 +169,54 @@ export class CombatVFXService {
 
   /**
    * Disposes all mortar zone meshes without touching chain arcs.
-   * Call from TowerCombatService.clearMortarZonesForWaveEnd() so zones from
-   * wave N do not bleed into wave N+1.
+   * Call from TowerCombatService.clearMortarZonesForWaveEnd().
    */
   clearMortarZoneMeshes(scene: THREE.Scene): void {
     for (const zone of this.mortarZoneMeshes) {
       scene.remove(zone.mesh);
-      disposeMesh(zone.mesh);
+      this.releaseZone(zone.mesh);
     }
     this.mortarZoneMeshes = [];
   }
 
   /**
-   * Disposes all tracked visual objects.
-   * Call from TowerCombatService.cleanup() on restart and ngOnDestroy.
+   * Disposes all tracked visual objects. Call from TowerCombatService.cleanup().
+   * Pool itself is disposed separately by GameSessionService.cleanupScene().
    */
   cleanup(scene: THREE.Scene): void {
     for (const arc of this.chainArcs) {
       scene.remove(arc.line);
-      arc.line.geometry.dispose();
-      disposeMaterial(arc.line.material);
+      this.releaseArc(arc.line);
     }
     this.chainArcs = [];
 
     for (const zone of this.mortarZoneMeshes) {
       scene.remove(zone.mesh);
-      disposeMesh(zone.mesh);
+      this.releaseZone(zone.mesh);
     }
     this.mortarZoneMeshes = [];
+  }
+
+  // ---- Internals ----
+
+  private releaseArc(line: THREE.Line): void {
+    if (this.vfxPool) {
+      this.vfxPool.releaseArc(line);
+      return;
+    }
+    line.geometry.dispose();
+    const m = line.material as THREE.Material | THREE.Material[];
+    if (Array.isArray(m)) m.forEach(x => x.dispose()); else m.dispose();
+  }
+
+  private releaseZone(mesh: THREE.Mesh): void {
+    if (this.vfxPool) {
+      this.vfxPool.releaseZone(mesh);
+      return;
+    }
+    mesh.geometry.dispose();
+    const m = mesh.material as THREE.Material | THREE.Material[];
+    if (Array.isArray(m)) m.forEach(x => x.dispose()); else m.dispose();
   }
 
   // ---- Test accessors ----

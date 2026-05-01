@@ -216,11 +216,11 @@ describe('TowerCombatService', () => {
   // --- Targeting Modes ---
 
   describe('targeting modes', () => {
-    it('should default to nearest targeting mode', () => {
+    it('should default to first targeting mode', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
       const tower = service.getTower(`${TOWER_ROW}-${TOWER_COL}`)!;
       expect(tower.targetingMode).toBe(DEFAULT_TARGETING_MODE);
-      expect(tower.targetingMode).toBe(TargetingMode.NEAREST);
+      expect(tower.targetingMode).toBe(TargetingMode.FIRST);
     });
 
     it('should set targeting mode via setTargetingMode', () => {
@@ -242,13 +242,13 @@ describe('TowerCombatService', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
       const key = `${TOWER_ROW}-${TOWER_COL}`;
 
-      // Default is NEAREST (index 0) → cycles: FARTHEST, FIRST, LAST, STRONGEST, WEAKEST, wraps to NEAREST
-      expect(service.cycleTargetingMode(key)).toBe(TargetingMode.FARTHEST);
-      expect(service.cycleTargetingMode(key)).toBe(TargetingMode.FIRST);
+      // Default is FIRST (index 2) → cycles: LAST, STRONGEST, WEAKEST, NEAREST, FARTHEST, wraps to FIRST
       expect(service.cycleTargetingMode(key)).toBe(TargetingMode.LAST);
       expect(service.cycleTargetingMode(key)).toBe(TargetingMode.STRONGEST);
       expect(service.cycleTargetingMode(key)).toBe(TargetingMode.WEAKEST);
-      expect(service.cycleTargetingMode(key)).toBe(TargetingMode.NEAREST); // wraps around
+      expect(service.cycleTargetingMode(key)).toBe(TargetingMode.NEAREST);
+      expect(service.cycleTargetingMode(key)).toBe(TargetingMode.FARTHEST);
+      expect(service.cycleTargetingMode(key)).toBe(TargetingMode.FIRST); // wraps around
     });
 
     it('should return null for cycleTargetingMode on non-existent tower', () => {
@@ -257,7 +257,7 @@ describe('TowerCombatService', () => {
 
     it('findTarget with nearest returns closest enemy', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-      // Default mode is 'nearest' — no need to set
+      service.setTargetingMode(`${TOWER_ROW}-${TOWER_COL}`, TargetingMode.NEAREST);
 
       // Close enemy
       const close = createEnemy('close', TOWER_WORLD_X + 0.5, TOWER_WORLD_Z, 50);
@@ -392,6 +392,78 @@ describe('TowerCombatService', () => {
       const upgraded = service.upgradeTower(key);
       expect(upgraded).toBeTrue();
       expect(service.getTower(key)!.targetingMode).toBe(TargetingMode.STRONGEST);
+    });
+
+    describe('findTarget — side-effect-free contract', () => {
+      // findTarget is now public so the aim subsystem can call it every frame.
+      // These specs assert it is purely read-only: repeated calls must not
+      // mutate enemy state or change which enemy is returned.
+      //
+      // Setup pattern: call fireTurn once to populate the spatial grid, using
+      // enemies with high health so the initial fire doesn't kill them. Then
+      // call findTarget directly and assert idempotence.
+
+      it('calling findTarget three times with the same inputs returns the same enemy each time', () => {
+        service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+        const key = `${TOWER_ROW}-${TOWER_COL}`;
+        service.setTargetingMode(key, TargetingMode.NEAREST);
+
+        // Very high health so the initial fireTurn call does not kill the enemy
+        const enemy = createEnemy('e1', TOWER_WORLD_X + 1, TOWER_WORLD_Z, 100_000);
+        enemyMap.set('e1', enemy);
+
+        // fireTurn populates the spatial grid so findTarget can query it
+        service.fireTurn(mockScene, TURN_1);
+
+        const tower = service.getTower(key)!;
+        const stats = TOWER_CONFIGS[TowerType.BASIC];
+
+        const r1 = service.findTarget(tower, stats);
+        const r2 = service.findTarget(tower, stats);
+        const r3 = service.findTarget(tower, stats);
+
+        expect(r1).toBe(r2);
+        expect(r2).toBe(r3);
+        expect(r1?.id).toBe('e1');
+      });
+
+      it('calling findTarget does not mutate enemy health', () => {
+        service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+        const key = `${TOWER_ROW}-${TOWER_COL}`;
+
+        const enemy = createEnemy('e2', TOWER_WORLD_X + 0.5, TOWER_WORLD_Z, 100_000);
+        enemyMap.set('e2', enemy);
+
+        service.fireTurn(mockScene, TURN_1);
+
+        const healthAfterFire = enemy.health;
+
+        const tower = service.getTower(key)!;
+        const stats = TOWER_CONFIGS[TowerType.BASIC];
+
+        service.findTarget(tower, stats);
+        service.findTarget(tower, stats);
+        service.findTarget(tower, stats);
+
+        // Health must not have changed at all from the findTarget calls
+        expect(enemy.health).toBe(healthAfterFire);
+      });
+
+      it('calling findTarget with an out-of-range enemy returns null', () => {
+        service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+        const key = `${TOWER_ROW}-${TOWER_COL}`;
+
+        // BASIC range=3 world units; place enemy far outside range
+        const far = createEnemy('eFar', TOWER_WORLD_X + 50, TOWER_WORLD_Z, 100_000);
+        enemyMap.set('eFar', far);
+
+        service.fireTurn(mockScene, TURN_1);
+
+        const tower = service.getTower(key)!;
+        const stats = TOWER_CONFIGS[TowerType.BASIC];
+
+        expect(service.findTarget(tower, stats)).toBeNull();
+      });
     });
   });
 
@@ -1774,6 +1846,9 @@ describe('TowerCombatService', () => {
       // SNIPER tower and BASIC tower, each at different rows so firing order is deterministic
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SNIPER, new THREE.Group());
       service.registerTower(TOWER_ROW + 1, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      // Pin to NEAREST so each tower picks the spatially-closer enemy deterministically.
+      service.setTargetingMode(`${TOWER_ROW}-${TOWER_COL}`, TargetingMode.NEAREST);
+      service.setTargetingMode(`${TOWER_ROW + 1}-${TOWER_COL}`, TargetingMode.NEAREST);
 
       const sniperEnemy = createEnemy('se', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
       const basicEnemy = createEnemy('be', TOWER_WORLD_X, TOWER_WORLD_Z + 0.01, 10000);
@@ -5293,6 +5368,9 @@ describe('TowerCombatService HARMONIC', () => {
     // BASIC should now fire with SPLASH's splashRadius as the "secondary source".
     service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
     service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.SPLASH, new THREE.Group());
+    // Pin to NEAREST so BASIC reliably picks `mainEnemy` (its closest target).
+    service.setTargetingMode(`${BASE_ROW}-${BASE_COL}`, TargetingMode.NEAREST);
+    service.setTargetingMode(`${BASE_ROW}-${BASE_COL + 1}`, TargetingMode.NEAREST);
 
     // Tier 2 = upgraded. hasActiveModifier still true for existing gate logic.
     cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>

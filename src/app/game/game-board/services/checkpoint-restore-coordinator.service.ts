@@ -32,6 +32,7 @@ import { DeckService } from '../../../run/services/deck.service';
 import { BlockType } from '../models/game-board-tile';
 import { GamePhase } from '../models/game-state.model';
 import { BOARD_CONFIG } from '../constants/board.constants';
+import { TowerUpgradeVisualService } from './tower-upgrade-visual.service';
 
 export interface RestoreOptions {
   /**
@@ -116,6 +117,7 @@ export class CheckpointRestoreCoordinatorService {
     private relicService: RelicService,
     private cardEffectService: CardEffectService,
     private deckService: DeckService,
+    private towerUpgradeVisualService: TowerUpgradeVisualService,
   ) {}
 
   restore(options: RestoreOptions): void {
@@ -175,8 +177,11 @@ export class CheckpointRestoreCoordinatorService {
           mutation.priorType,
         );
 
-        // Swap the Three.js mesh to match restored tile type
-        this.pathMutationService.swapMesh(mutation.row, mutation.col, targetType, scene);
+        // Swap the Three.js mesh to match restored tile type. Pass `mutation.op`
+        // so swapMesh routes through TerraformMaterialPoolService for the
+        // teal/amber/red/violet tint — without it, restored mutations render
+        // as plain BASE/WALL tiles (Phase C sprint 30 red-team finding).
+        this.pathMutationService.swapMesh(mutation.row, mutation.col, targetType, scene, mutation.op);
       }
       // Invalidate path cache once after all mutations are replayed
       if (checkpoint.pathMutations.mutations.length > 0) {
@@ -229,6 +234,26 @@ export class CheckpointRestoreCoordinatorService {
         this.gameBoardService.forceSetTower(tower.row, tower.col, tower.type);
       }
       this.towerCombatService.restoreTowers(checkpoint.towers, towerMeshes);
+
+      // Re-apply tier-part visibility + scale + emissive boost for towers above level 1.
+      // Meshes are built at T1 defaults (tier-gated parts hidden). The combat-service
+      // restore correctly sets each tower's level, but the mesh does not reflect it until
+      // we call applyUpgradeVisuals here.
+      for (const tower of checkpoint.towers) {
+        if (tower.level > 1) {
+          const mesh = towerMeshes.get(tower.id);
+          if (mesh) {
+            this.towerUpgradeVisualService.applyUpgradeVisuals(
+              mesh, tower.level, tower.specialization,
+            );
+            // Refresh emissive baselines after applyUpgradeVisuals changes
+            // material intensity, so the next muzzle flash saves the
+            // post-upgrade baseline rather than the pre-upgrade value.
+            TowerMeshFactoryService.snapshotEmissiveBaselines(mesh);
+          }
+        }
+      }
+
       this.meshRegistry.rebuildTowerChildrenArray();
 
       // Step 4.5: Rebuild the tower adjacency graph from the restored placedTowers.

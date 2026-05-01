@@ -18,7 +18,7 @@ export const TARGETING_MODES: TargetingMode[] = [
   TargetingMode.STRONGEST,
   TargetingMode.WEAKEST,
 ];
-export const DEFAULT_TARGETING_MODE: TargetingMode = TargetingMode.NEAREST;
+export const DEFAULT_TARGETING_MODE: TargetingMode = TargetingMode.FIRST;
 
 export const TARGETING_MODE_LABELS: Record<TargetingMode, string> = {
   [TargetingMode.NEAREST]: 'Nearest',
@@ -93,6 +93,16 @@ export interface PlacedTower {
   /** Per-mesh snapshot of emissiveIntensity before the flash was applied, keyed by mesh uuid. */
   originalEmissiveIntensity?: Map<string, number>;
   /**
+   * Canonical emissive-intensity baselines recorded when the mesh was first built
+   * (and refreshed after upgrades). Keyed by `child.uuid + '_' + mat.uuid`.
+   *
+   * `startMuzzleFlash` reads from this map instead of from the current material
+   * value, preventing shared-material cross-talk: when two towers of the same
+   * type fire in the same turn the second tower would otherwise snapshot the
+   * already-spiked material and permanently elevate the baseline (ratchet bug).
+   */
+  emissiveBaselines?: Map<string, number>;
+  /**
    * The combat turn number on which this tower was placed. Set by
    * TowerCombatService.registerTower() using the caller-supplied turn number.
    * Defaults to 0 for towers placed before combat begins (setup phase).
@@ -114,28 +124,28 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
     range: 3,
     cost: 50,
     splashRadius: 0,
-    color: 0xd47a3a
+    color: 0x9a6238
   },
   [TowerType.SNIPER]: {
     damage: 80,
     range: 8,
     cost: 125,
     splashRadius: 0,
-    color: 0x7a5ac4
+    color: 0x6a5290
   },
   [TowerType.SPLASH]: {
     damage: 15,
     range: 3.5,
     cost: 75,
     splashRadius: 1.5,
-    color: 0x4ac47a
+    color: 0x3e8a5a
   },
   [TowerType.SLOW]: {
     damage: 0,
     range: 2.5,
     cost: 75,
     splashRadius: 0,
-    color: 0x4488ff,
+    color: 0x4870b8,
     slowFactor: 0.5,
     // SLOW status duration is governed by STATUS_EFFECT_CONFIGS[StatusEffectType.SLOW].duration (turns)
   },
@@ -144,7 +154,7 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
     range: 3,
     cost: 120,
     splashRadius: 0,
-    color: 0xffdd00,
+    color: 0xa88840,
     chainCount: 3,
     chainRange: 2
   },
@@ -153,7 +163,7 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
     range: 4,
     cost: 140,
     splashRadius: 0,
-    color: 0xff6622,
+    color: 0x8a5230,
     blastRadius: 1.5,
     dotDuration: 3,
     dotDamage: 5,

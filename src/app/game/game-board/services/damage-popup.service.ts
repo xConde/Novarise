@@ -1,16 +1,20 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { DAMAGE_POPUP_CONFIG } from '../constants/damage-popup.constants';
+import { TextSpritePoolService } from './text-sprite-pool.service';
 
 interface DamagePopup {
   sprite: THREE.Sprite;
-  texture: THREE.CanvasTexture;
   age: number;
 }
 
 @Injectable()
 export class DamagePopupService {
   private popups: DamagePopup[] = [];
+
+  constructor(
+    @Optional() private readonly spritePool?: TextSpritePoolService,
+  ) {}
 
   /**
    * Spawn a floating damage number at the given world position.
@@ -22,15 +26,6 @@ export class DamagePopupService {
     scene: THREE.Scene,
     isShieldHit = false
   ): void {
-    const canvas = document.createElement('canvas');
-    canvas.width = DAMAGE_POPUP_CONFIG.canvasWidth;
-    canvas.height = DAMAGE_POPUP_CONFIG.canvasHeight;
-
-    const ctx = canvas.getContext('2d');
-    if (ctx === null) {
-      return;
-    }
-
     const label = `${Math.round(damage)}`;
     const textColor = isShieldHit
       ? DAMAGE_POPUP_CONFIG.shieldColor
@@ -38,39 +33,15 @@ export class DamagePopupService {
         ? DAMAGE_POPUP_CONFIG.criticalColor
         : DAMAGE_POPUP_CONFIG.normalColor;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.font = `bold ${DAMAGE_POPUP_CONFIG.fontSize}px ${DAMAGE_POPUP_CONFIG.fontFamily}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    const sprite = this.acquireSprite(label, textColor);
+    if (!sprite) return;
 
-    ctx.strokeStyle = DAMAGE_POPUP_CONFIG.strokeColor;
-    ctx.lineWidth = DAMAGE_POPUP_CONFIG.strokeWidth;
-    ctx.strokeText(label, canvas.width / 2, canvas.height / 2);
-
-    ctx.fillStyle = textColor;
-    ctx.fillText(label, canvas.width / 2, canvas.height / 2);
-
-    const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({
-      map: texture,
-      transparent: true,
-      opacity: 1,
-      depthTest: false,
-    });
-
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(DAMAGE_POPUP_CONFIG.spriteScale, DAMAGE_POPUP_CONFIG.spriteScale / 2, 1);
-    // Offset slightly upward and add random x jitter to prevent overlap
     const jitterX = (Math.random() - 0.5) * DAMAGE_POPUP_CONFIG.jitterRange;
     sprite.position.set(position.x + jitterX, position.y + DAMAGE_POPUP_CONFIG.spawnHeightOffset, position.z);
-
     scene.add(sprite);
-    this.popups.push({ sprite, texture, age: 0 });
+    this.popups.push({ sprite, age: 0 });
   }
 
-  /**
-   * Advance all active popups. They rise upward and fade out.
-   */
   update(deltaTime: number): void {
     if (deltaTime <= 0) {
       return;
@@ -93,21 +64,18 @@ export class DamagePopupService {
     }
 
     for (const popup of expired) {
-      this.disposePopup(popup);
+      this.releasePopup(popup);
     }
 
     this.popups = alive;
   }
 
-  /**
-   * Dispose all active popups and clear.
-   */
   cleanup(scene?: THREE.Scene): void {
     for (const popup of this.popups) {
-      if (scene !== undefined) {
+      if (scene !== undefined && popup.sprite.parent === scene) {
         scene.remove(popup.sprite);
       }
-      this.disposePopup(popup);
+      this.releasePopup(popup);
     }
     this.popups = [];
   }
@@ -116,12 +84,59 @@ export class DamagePopupService {
     return this.popups.length;
   }
 
-  private disposePopup(popup: DamagePopup): void {
-    const parent = popup.sprite.parent;
-    if (parent !== null) {
-      parent.remove(popup.sprite);
+  private acquireSprite(label: string, textColor: string): THREE.Sprite | null {
+    if (this.spritePool) {
+      return this.spritePool.acquire({
+        text: label,
+        textColor,
+        strokeColor: DAMAGE_POPUP_CONFIG.strokeColor,
+        strokeWidth: DAMAGE_POPUP_CONFIG.strokeWidth,
+        font: `bold ${DAMAGE_POPUP_CONFIG.fontSize}px ${DAMAGE_POPUP_CONFIG.fontFamily}`,
+        canvasWidth: DAMAGE_POPUP_CONFIG.canvasWidth,
+        canvasHeight: DAMAGE_POPUP_CONFIG.canvasHeight,
+        scaleX: DAMAGE_POPUP_CONFIG.spriteScale,
+        scaleY: DAMAGE_POPUP_CONFIG.spriteScale / 2,
+      });
     }
-    popup.texture.dispose();
-    popup.sprite.material.dispose();
+    return this.fallbackBuildSprite(label, textColor);
+  }
+
+  private releasePopup(popup: DamagePopup): void {
+    if (this.spritePool) {
+      this.spritePool.release(popup.sprite);
+      return;
+    }
+    const parent = popup.sprite.parent;
+    if (parent !== null) parent.remove(popup.sprite);
+    const mat = popup.sprite.material as THREE.SpriteMaterial;
+    mat.map?.dispose();
+    mat.dispose();
+  }
+
+  private fallbackBuildSprite(label: string, textColor: string): THREE.Sprite | null {
+    const canvas = document.createElement('canvas');
+    canvas.width = DAMAGE_POPUP_CONFIG.canvasWidth;
+    canvas.height = DAMAGE_POPUP_CONFIG.canvasHeight;
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) return null;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font = `bold ${DAMAGE_POPUP_CONFIG.fontSize}px ${DAMAGE_POPUP_CONFIG.fontFamily}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeStyle = DAMAGE_POPUP_CONFIG.strokeColor;
+    ctx.lineWidth = DAMAGE_POPUP_CONFIG.strokeWidth;
+    ctx.strokeText(label, canvas.width / 2, canvas.height / 2);
+    ctx.fillStyle = textColor;
+    ctx.fillText(label, canvas.width / 2, canvas.height / 2);
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      opacity: 1,
+      depthTest: false,
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(DAMAGE_POPUP_CONFIG.spriteScale, DAMAGE_POPUP_CONFIG.spriteScale / 2, 1);
+    return sprite;
   }
 }

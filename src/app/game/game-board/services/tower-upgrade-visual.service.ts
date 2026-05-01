@@ -48,8 +48,12 @@ export class TowerUpgradeVisualService {
   /**
    * Add a glow ring at the base of an upgraded tower.
    * towerId is used to track and replace existing rings.
+   *
+   * UX-9 red-team fix: optional `elevation` parameter so the ring sits
+   * on top of raised Highground tiles instead of buried inside them.
+   * Defaults to 0 for non-elevated tiles (no behaviour change).
    */
-  addGlowRing(towerId: string, position: { x: number; z: number }, scene: THREE.Scene): void {
+  addGlowRing(towerId: string, position: { x: number; z: number }, scene: THREE.Scene, elevation = 0): void {
     // Remove existing ring for this tower if any
     this.removeGlowRing(towerId, scene);
 
@@ -64,7 +68,7 @@ export class TowerUpgradeVisualService {
 
     const ring = new THREE.Mesh(geometry, material);
     ring.rotation.x = -Math.PI / 2; // Lay flat on ground
-    ring.position.set(position.x, 0.02, position.z);
+    ring.position.set(position.x, 0.02 + elevation, position.z);
 
     scene.add(ring);
     this.glowRings.set(towerId, ring);
@@ -145,14 +149,33 @@ export class TowerUpgradeVisualService {
 
   /**
    * Apply level-based scale AND emissive boost to a tower mesh group.
-   * Skips 'tip' and 'orb' children whose emissive is driven per-frame by TowerAnimationService.
+   * Skips 'tip', 'scope', 'heatVent', 'emitter' children whose emissive is
+   * driven per-frame by TowerAnimationService.
    * Call this after a successful upgrade (L1→L2 or L2→L3).
+   *
+   * Also reveals any tier-gated mesh children tagged with `userData['minTier']`
+   * so T2/T3 detail parts become visible at the correct level.
+   *
+   * Triggers a brief scale-bounce animation: the group jumps to 1.1× of the
+   * target scale and eases back over ~300 ms via TowerAnimationService.tickTierUpScale.
+   * The base scale is stored in `userData['scaleAnimBaseScale']` and the start
+   * timestamp in `userData['scaleAnimStart']` so tickTierUpScale can drive it
+   * without requiring a reference to this service.
    */
   applyUpgradeVisuals(towerGroup: THREE.Group, newLevel: number, specialization?: TowerSpecialization): void {
     const scale = TOWER_VISUAL_CONFIG.scaleBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
     towerGroup.scale.set(scale, scale, scale);
 
-    const animatedNames = new Set(['tip', 'orb']);
+    // 'tip', 'scope', 'heatVent', 'emitter', 'sphere' are driven per-frame by
+    // animation ticks — skip them here so the emissive boost doesn't override
+    // their per-frame values.  heatVent (SPLASH T3) and emitter (SLOW idle)
+    // both have intentional emissive intensities that must not be ratcheted.
+    // 'sphere' (CHAIN charge-up mesh) is driven every frame by chargeTick;
+    // snapshotting the current animated value as the "base" would restore the
+    // sphere to a random charge phase instead of a stable baseline — same
+    // class as the save/restore contamination in startMuzzleFlash (Finding 12/14).
+    // Note: 'orb' removed from skip-set — no current tower uses that name.
+    const animatedNames = new Set(['tip', 'scope', 'heatVent', 'emitter', 'sphere']);
     towerGroup.traverse(child => {
       if (
         child instanceof THREE.Mesh &&
@@ -164,21 +187,63 @@ export class TowerUpgradeVisualService {
       }
     });
 
+    this.revealTierParts(towerGroup, newLevel);
+
     if (specialization) {
       this.applySpecializationVisual(towerGroup, specialization);
     }
+
+    // Trigger scale-bounce: capture the final target scale so tickTierUpScale
+    // can ease back to it after the peak. Set the group to peak scale immediately;
+    // the tick will animate it back down each frame.
+    towerGroup.userData['scaleAnimBaseScale'] = scale;
+    towerGroup.userData['scaleAnimStart'] = performance.now() / 1000;
+    towerGroup.scale.setScalar(scale * 1.1); // jump to peak immediately
+  }
+
+  /**
+   * Walk a tower group and set each child's visibility based on its
+   * `userData['minTier']` and `userData['maxTier']` tags.
+   *
+   * - `minTier`: child is hidden below this level and revealed at or above it.
+   *   e.g. `minTier = 2` → hidden at T1, visible at T2+.
+   * - `maxTier`: child is visible up to and including this level, then hidden
+   *   above it. e.g. `maxTier = 1` → visible at T1, hidden at T2+.
+   *   This supports "replaced by a better part" patterns where a T1 mesh
+   *   should disappear once its T2 counterpart is revealed.
+   *
+   * Children with neither tag are unaffected.
+   *
+   * Build all tier parts at tower creation time — this keeps the disposal
+   * contract simple (one group, dispose once) while allowing progressive
+   * reveal through upgrades.
+   */
+  revealTierParts(towerGroup: THREE.Group, level: number): void {
+    towerGroup.traverse(child => {
+      const minTier = child.userData['minTier'] as number | undefined;
+      const maxTier = child.userData['maxTier'] as number | undefined;
+
+      if (minTier !== undefined && maxTier !== undefined) {
+        child.visible = minTier <= level && level <= maxTier;
+      } else if (minTier !== undefined) {
+        child.visible = minTier <= level;
+      } else if (maxTier !== undefined) {
+        child.visible = level <= maxTier;
+      }
+    });
   }
 
   /**
    * Apply ALPHA (warm orange) or BETA (cool blue) emissive tint to all MeshStandardMaterial
-   * children in the tower group. Skips 'tip' and 'orb' mesh names whose emissive is
+   * children in the tower group. Skips 'tip' mesh names whose emissive is
    * driven per-frame by TowerAnimationService.
+   * Note: 'orb' removed — no current tower uses that mesh name.
    */
   applySpecializationVisual(towerGroup: THREE.Group, spec: TowerSpecialization): void {
     const config = spec === TowerSpecialization.ALPHA
       ? SPECIALIZATION_VISUAL_CONFIG.alpha
       : SPECIALIZATION_VISUAL_CONFIG.beta;
-    const animatedNames = new Set(['tip', 'orb']);
+    const animatedNames = new Set(['tip']);
     towerGroup.traverse(child => {
       if (child instanceof THREE.Mesh && !animatedNames.has(child.name)) {
         const materials = getMaterials(child);

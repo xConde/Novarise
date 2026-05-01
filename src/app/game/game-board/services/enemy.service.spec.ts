@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { EnemyService } from './enemy.service';
 import { Enemy } from '../models/enemy.model';
+import { HEALTH_BAR_CONFIG } from '../constants/ui.constants';
 
 interface TestableEnemyService {
   executeRepath(enemy: Enemy): void;
@@ -1007,7 +1008,10 @@ describe('EnemyService', () => {
 
       const healthBarFg = enemy.mesh!.userData['healthBarFg'] as THREE.Mesh;
       const mat = healthBarFg.material as THREE.MeshBasicMaterial;
-      expect(mat.color.getHex()).toBe(0x00ff00);
+      // UX-14: HP bar colors softened from neon (0x00ff00) to readable
+      // (0x4cd66c). Spec asserts the live HEALTH_BAR_CONFIG value, not a
+      // hardcoded magic number, so future tone-tweaks won't break the test.
+      expect(mat.color.getHex()).toBe(HEALTH_BAR_CONFIG.colorGreen);
     });
 
     it('should show yellow color between 30% and 60% health', () => {
@@ -1018,7 +1022,7 @@ describe('EnemyService', () => {
 
       const healthBarFg = enemy.mesh!.userData['healthBarFg'] as THREE.Mesh;
       const mat = healthBarFg.material as THREE.MeshBasicMaterial;
-      expect(mat.color.getHex()).toBe(0xffff00);
+      expect(mat.color.getHex()).toBe(HEALTH_BAR_CONFIG.colorYellow);
     });
 
     it('should show red color below 30% health', () => {
@@ -1029,7 +1033,7 @@ describe('EnemyService', () => {
 
       const healthBarFg = enemy.mesh!.userData['healthBarFg'] as THREE.Mesh;
       const mat = healthBarFg.material as THREE.MeshBasicMaterial;
-      expect(mat.color.getHex()).toBe(0xff0000);
+      expect(mat.color.getHex()).toBe(HEALTH_BAR_CONFIG.colorRed);
     });
 
     it('should clamp health bar at zero for dead enemies', () => {
@@ -1180,6 +1184,35 @@ describe('EnemyService', () => {
       const newEnemy = service.spawnEnemy(EnemyType.FAST, mockScene);
       expect(newEnemy).toBeTruthy();
       expect(service.getEnemies().size).toBe(1);
+    });
+
+    it('emits exactly ONE remove event for N enemies during cleanup (Phase C Finding C-1)', () => {
+      // Bulk cleanup must not fire N DIRTY_ALL invalidations on TargetPreviewService.
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+      service.spawnEnemy(EnemyType.HEAVY, mockScene);
+
+      let removeCount = 0;
+      const sub = service.getEnemiesChanged().subscribe(type => {
+        if (type === 'remove') removeCount++;
+      });
+
+      service.cleanup(mockScene);
+      sub.unsubscribe();
+
+      expect(removeCount).toBe(1);
+    });
+
+    it('emits no remove event when cleanup is called with no enemies', () => {
+      let removeCount = 0;
+      const sub = service.getEnemiesChanged().subscribe(type => {
+        if (type === 'remove') removeCount++;
+      });
+
+      service.cleanup(mockScene);
+      sub.unsubscribe();
+
+      expect(removeCount).toBe(0);
     });
   });
 
