@@ -283,6 +283,13 @@ $card-type-colors: (
 
 // Art zone foundation — top portion of the card is a pseudo-element layer
 // with a radial gradient per card type. Creates a colored "art splash" visual identity.
+//
+// Layer order (first = top):
+//   1. Archetype backdrop pattern (var(--card-backdrop-image), bound per-card)
+//   2. Per-type radial gradient glow (overridden in each .card--{type}::before rule)
+//
+// background-size controls the tile repeat size for the SVG patterns.
+// background-repeat defaults to repeat, which is correct for tile patterns.
 .card::before {
   content: '';
   position: absolute;
@@ -292,7 +299,12 @@ $card-type-colors: (
   height: var(--card-art-zone-height);
   pointer-events: none;
   z-index: 0;
-  background: radial-gradient(ellipse at 50% 60%, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
+  // Backdrop pattern (layer 1) + fallback base gradient (layer 2).
+  // Per-type rules below override this with their own gradient as layer 2.
+  background-image: var(--card-backdrop-image, none),
+    radial-gradient(ellipse at 50% 60%, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
+  background-size: auto, cover;
+  background-repeat: repeat, no-repeat;
   transition: opacity var(--transition-fast) ease;
 }
 
@@ -337,56 +349,73 @@ $card-type-colors: (
 // Per-type art-zone gradients — each card type gets a distinct radial glow.
 
 // Fallback for browsers that don't support color-mix() (Safari < 16.2, Firefox < 113)
+// Keep the backdrop pattern layer even in the fallback — var(--card-backdrop-image)
+// degrades gracefully to 'none' when the property is unset.
 @supports not (background: color-mix(in srgb, red 50%, transparent)) {
   .card--tower::before {
-    background: radial-gradient(
-      ellipse at 50% 60%,
-      rgba(255, 102, 0, var(--card-art-tower-opacity-inner)) 0%,
-      rgba(255, 102, 0, var(--card-art-tower-opacity-outer)) 65%,
-      transparent 100%
-    );
+    background-image: var(--card-backdrop-image, none),
+      radial-gradient(
+        ellipse at 50% 60%,
+        rgba(255, 102, 0, var(--card-art-tower-opacity-inner)) 0%,
+        rgba(255, 102, 0, var(--card-art-tower-opacity-outer)) 65%,
+        transparent 100%
+      );
   }
   .card--upgraded::before {
-    background: radial-gradient(ellipse at 50% 30%, rgba(255, 215, 0, 0.2) 0%, transparent 60%);
+    background-image: var(--card-backdrop-image, none),
+      radial-gradient(ellipse at 50% 30%, rgba(255, 215, 0, 0.2) 0%, transparent 60%);
   }
 }
 
 .card--tower::before {
   // Uses per-tower-type accent (--card-tower-accent bound per card in HTML),
   // falling back to the generic tower color if not set.
-  background: radial-gradient(
-    ellipse at 50% 60%,
-    color-mix(in srgb, var(--card-tower-accent, var(--tower-color-basic)) 50%, transparent) 0%,
-    color-mix(in srgb, var(--card-tower-accent, var(--tower-color-basic)) 10%, transparent) 65%,
-    transparent 100%
-  );
+  // Layer 1: archetype backdrop pattern. Layer 2: type radial gradient.
+  background-image: var(--card-backdrop-image, none),
+    radial-gradient(
+      ellipse at 50% 60%,
+      color-mix(in srgb, var(--card-tower-accent, var(--tower-color-basic)) 50%, transparent) 0%,
+      color-mix(in srgb, var(--card-tower-accent, var(--tower-color-basic)) 10%, transparent) 65%,
+      transparent 100%
+    );
+  background-size: auto, cover;
+  background-repeat: repeat, no-repeat;
 }
 
 .card--spell::before {
-  background: radial-gradient(
-    ellipse at 50% 60%,
-    rgba(0, 255, 255, var(--card-art-spell-opacity-inner)) 0%,
-    rgba(0, 255, 255, var(--card-art-spell-opacity-outer)) 65%,
-    transparent 100%
-  );
+  background-image: var(--card-backdrop-image, none),
+    radial-gradient(
+      ellipse at 50% 60%,
+      rgba(0, 255, 255, var(--card-art-spell-opacity-inner)) 0%,
+      rgba(0, 255, 255, var(--card-art-spell-opacity-outer)) 65%,
+      transparent 100%
+    );
+  background-size: auto, cover;
+  background-repeat: repeat, no-repeat;
 }
 
 .card--modifier::before {
-  background: radial-gradient(
-    ellipse at 50% 60%,
-    rgba(140, 90, 200, var(--card-art-modifier-opacity-inner)) 0%,
-    rgba(140, 90, 200, var(--card-art-modifier-opacity-outer)) 65%,
-    transparent 100%
-  );
+  background-image: var(--card-backdrop-image, none),
+    radial-gradient(
+      ellipse at 50% 60%,
+      rgba(140, 90, 200, var(--card-art-modifier-opacity-inner)) 0%,
+      rgba(140, 90, 200, var(--card-art-modifier-opacity-outer)) 65%,
+      transparent 100%
+    );
+  background-size: auto, cover;
+  background-repeat: repeat, no-repeat;
 }
 
 .card--utility::before {
-  background: radial-gradient(
-    ellipse at 50% 60%,
-    rgba(80, 255, 136, var(--card-art-utility-opacity-inner)) 0%,
-    rgba(80, 255, 136, var(--card-art-utility-opacity-outer)) 65%,
-    transparent 100%
-  );
+  background-image: var(--card-backdrop-image, none),
+    radial-gradient(
+      ellipse at 50% 60%,
+      rgba(80, 255, 136, var(--card-art-utility-opacity-inner)) 0%,
+      rgba(80, 255, 136, var(--card-art-utility-opacity-outer)) 65%,
+      transparent 100%
+    );
+  background-size: auto, cover;
+  background-repeat: repeat, no-repeat;
 }
 
 // Expose per-type accent as a CSS custom property for hover glow + upgraded blend.
@@ -733,9 +762,11 @@ body.reduce-motion .card--frame-utility.card--pending { animation: none; }
     inset 0 0 0.4rem var(--card-upgraded-glow-inner),
     0 0 var(--card-glow-blur) var(--card-glow-color);
 
-  // Blend art zone toward gold to signal power-up while preserving type identity
+  // Blend art zone toward gold to signal power-up while preserving type identity.
+  // Backdrop pattern (layer 1) → gold upgrade glow (layer 2) → type glow (layer 3).
   &::before {
-    background:
+    background-image:
+      var(--card-backdrop-image, none),
       radial-gradient(
         ellipse at 50% 30%,
         rgba(255, 215, 0, 0.2) 0%,
@@ -747,6 +778,8 @@ body.reduce-motion .card--frame-utility.card--pending { animation: none; }
         color-mix(in srgb, var(--card-type-color, rgba(255, 255, 255, 0.2)) 10%, transparent) 65%,
         transparent 100%
       );
+    background-size: auto, cover, cover;
+    background-repeat: repeat, no-repeat, no-repeat;
   }
 }
 

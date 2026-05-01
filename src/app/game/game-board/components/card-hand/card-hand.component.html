@@ -49,7 +49,8 @@
       [attr.aria-disabled]="!card.canPlay"
       [style.--card-tower-accent]="getTowerAccentColor(card)"
       [style.--archetype-trim-color]="getArchetypeTrimColor(card)"
-      [style.--archetype-trim-color-strong]="getArchetypeTrimColorStrong(card)">
+      [style.--archetype-trim-color-strong]="getArchetypeTrimColorStrong(card)"
+      [style.--card-backdrop-image]="getArchetypeBackdropVar(card)">
 
       <!-- Cost pill — value + "Energy" as one inline-flex chip so it reads as a single element.
            Shows effectiveEnergyCost (post-relic discount, e.g. WORLD_SPIRIT). -->

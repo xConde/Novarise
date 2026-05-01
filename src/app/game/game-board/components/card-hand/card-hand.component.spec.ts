@@ -1153,6 +1153,72 @@ describe('CardHandComponent', () => {
     });
   });
 
+  // ── S22-S25 Phase C — Archetype backdrop bindings ────────────────────────
+
+  describe('getArchetypeBackdropVar', () => {
+    function makeCard(cardId: CardId): HandCard {
+      const def = getCardDefinition(cardId);
+      return {
+        instance: makeInstance(cardId),
+        definition: def,
+        canPlay: true,
+        effectiveEnergyCost: def.energyCost,
+        goldCost: null,
+      };
+    }
+
+    it('returns the cartographer backdrop var for a cartographer card (DETOUR)', () => {
+      const card = makeCard(CardId.DETOUR);
+      expect(component.getArchetypeBackdropVar(card)).toBe('var(--card-backdrop-cartographer)');
+    });
+
+    it('returns the highground backdrop var for a highground card (HIGH_PERCH)', () => {
+      const card = makeCard(CardId.HIGH_PERCH);
+      expect(component.getArchetypeBackdropVar(card)).toBe('var(--card-backdrop-highground)');
+    });
+
+    it('returns the conduit backdrop var for a conduit card (HANDSHAKE)', () => {
+      const card = makeCard(CardId.HANDSHAKE);
+      expect(component.getArchetypeBackdropVar(card)).toBe('var(--card-backdrop-conduit)');
+    });
+
+    it('returns the neutral backdrop var for a neutral card (TOWER_BASIC)', () => {
+      const card = makeCard(CardId.TOWER_BASIC);
+      expect(component.getArchetypeBackdropVar(card)).toBe('var(--card-backdrop-neutral)');
+    });
+
+    it('returns the neutral backdrop var for siegeworks (fallback — Phase 5 unscoped)', () => {
+      // TOWER_MORTAR is neutral archetype; we verify the fallback branch with a direct
+      // definition override since no siegeworks card exists in the current card pool.
+      const card = makeCard(CardId.TOWER_BASIC);
+      const siegeworksDef = { ...card.definition, archetype: 'siegeworks' as const };
+      const siegeworksCard: HandCard = { ...card, definition: siegeworksDef };
+      expect(component.getArchetypeBackdropVar(siegeworksCard)).toBe('var(--card-backdrop-neutral)');
+    });
+
+    it('--card-backdrop-image style is bound on every rendered card', () => {
+      const hand = [
+        makeInstance(CardId.TOWER_BASIC),  // neutral
+        makeInstance(CardId.DETOUR),        // cartographer
+        makeInstance(CardId.HIGH_PERCH),    // highground
+        makeInstance(CardId.HANDSHAKE),     // conduit
+      ];
+      component.deckState = makeDeckState(hand);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      expect(cards.length).toBe(4);
+      cards.forEach((cardEl, idx) => {
+        const backdropImage = cardEl.style.getPropertyValue('--card-backdrop-image');
+        expect(backdropImage)
+          .withContext(`card[${idx}] should have --card-backdrop-image bound`)
+          .toBeTruthy();
+      });
+    });
+  });
+
   describe('perf probe — mixed 10-card hand layout cost', () => {
     function buildMixed10(): CardInstance[] {
       const ids: CardId[] = [
