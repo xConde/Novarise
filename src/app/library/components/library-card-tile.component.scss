@@ -440,7 +440,7 @@
   &:focus-visible {
     box-shadow: none !important;
     filter:
-      drop-shadow(0 0 min(6px, var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
+      drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
       brightness(1.06);
   }
 }
@@ -468,7 +468,7 @@
   &:focus-visible {
     box-shadow: none !important;
     filter:
-      drop-shadow(0 0 min(6px, var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
+      drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
       brightness(1.06);
   }
 }
@@ -494,7 +494,7 @@
   &:focus-visible {
     box-shadow: none !important;
     filter:
-      drop-shadow(0 0 min(6px, var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
+      drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
       brightness(1.06);
   }
 }
@@ -521,7 +521,7 @@
   &:focus-visible {
     box-shadow: none !important;
     filter:
-      drop-shadow(0 0 min(6px, var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
+      drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
       brightness(1.06);
   }
 }

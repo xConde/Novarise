@@ -99,3 +99,23 @@ All four frame classes are applied correctly at any ChromeHeadless viewport size
 1. **Manual smoke:** Verify filter composition on framed hover in real browser (both `drop-shadow` and `brightness` on same `filter:` line in Computed Styles).
 2. **Manual smoke:** Inspect fan seam between Modifier and Utility at 10-card density — confirm Finding C-1 gap is acceptable or schedule a clip-path adjustment.
 3. **Manual smoke:** Verify all four frame silhouettes at mobile width (3.75rem) in DevTools device emulation.
+
+## Phase B cleanup — S17 resolution
+
+**Items shipped in S17 code:**
+
+1. **DONE — Tile hover blur tokenized.** Added `--card-tile-glow-blur: 6px` to `_card-tokens.scss`. All 4 framed-tile hover rules in `library-card-tile.component.scss` now reference `min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max))`. Card-draft framed hovers had already used `var(--card-glow-blur)` via the same `min()` path; no `6px` literal existed there.
+
+2. **DONE — `.card--pending` `!important` cascade removed.** `.card--pending` in `card-hand.component.scss` no longer uses `!important` on `filter`, `box-shadow`, `border-top-color`, or `border-left-color`. The 4 framed-pending selectors (`.card--frame-*.card--pending`) drop their `!important` as well — two-class specificity (0,2,0) wins over the one-class base (0,1,0) without coercion. Keyframes still animate the correct properties per path: `card-pending-pulse` animates `box-shadow` for unframed cards; `card-frame-*-pending-pulse` animate `filter` for framed cards. No behavior change — the cascade now expresses the intent structurally.
+
+3. **DONE — Card-draft literals tokenized.** Added `--card-glow-blur-rare-tile: 0.7rem` to `_card-tokens.scss`. `card-draft` rare blur now references `var(--card-glow-blur-rare-tile)` instead of the literal. Hover `brightness(1.06)` literal replaced with `var(--card-hover-brightness)` (1.08 in tokens — see note). The draft was using `1.06`; hand uses `1.08`. On review, the 2% difference is not a deliberate design choice — it was an untracked deviation introduced in S16. Normalizing to `1.08` (the token value) is the correct call.
+
+4. **DONE — Card-draft framed selected glow redirected to `drop-shadow`.** Added 4 two-class selectors (`.card-draft__card--frame-*.card-draft__card--selected`) that suppress `box-shadow` and apply `filter: drop-shadow(...)` so the gold selection glow follows the polygon silhouette. The `filter !important` is load-bearing: the frame base rules use `box-shadow: none !important`, and the `--selected` base uses `box-shadow !important` — without `filter !important` on the override, the two `!important` box-shadow declarations fight and source order would let `--selected` leak a rectangular shadow on framed cards.
+
+5. **DONE — Doc updated.**
+
+**Items still deferred to S18 browser smoke (Karma cannot verify these):**
+
+- Rare-shimmer `::after` containment inside polygon silhouette — requires real GPU rasterization trace.
+- Modifier–Utility fan seam at 10-card density (Finding C-1) — requires real viewport pixel access.
+- All four frame silhouettes at `3.75rem` mobile width — requires DevTools device emulation.

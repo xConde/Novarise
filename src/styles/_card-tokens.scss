@@ -156,6 +156,14 @@
 
   --card-tile-hover-lift: -2px;  // translateY on hover (px intentional — same scale as border-top)
 
+  // Hover glow blur for tile and draft framed cards (distinct from hand --card-glow-blur).
+  // 6px preserves the existing framed-tile drop-shadow radius.
+  --card-tile-glow-blur: 6px;
+
+  // Rare rarity glow blur for draft and tile cards. Slightly wider than hand
+  // cards (0.6rem) to account for the larger face. 0.7rem preserves existing behavior.
+  --card-glow-blur-rare-tile: 0.7rem;
+
   --card-tile-rare-shimmer-duration:         3s;
   --card-tile-rare-shimmer-duration-reduced: 0ms;
 

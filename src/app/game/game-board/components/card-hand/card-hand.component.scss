@@ -518,9 +518,10 @@ body.reduce-motion .card--rare::after { animation: none; background-position: 0 
 }
 
 // Pending framed tower — keep the gold pulse glow via drop-shadow.
+// Two-class specificity (0,2,0) beats .card--pending (0,1,0) without !important.
 .card--frame-tower.card--pending {
-  box-shadow: none !important;
-  filter: drop-shadow(0 0 0.75rem var(--game-gold-a50)) brightness(var(--card-pending-brightness)) !important;
+  box-shadow: none;
+  filter: drop-shadow(0 0 0.75rem var(--game-gold-a50)) brightness(var(--card-pending-brightness));
   animation: card-frame-tower-pending-pulse var(--card-pending-pulse-duration) ease-in-out infinite;
 }
 
@@ -569,8 +570,8 @@ body.reduce-motion .card--frame-tower.card--pending { animation: none; }
 }
 
 .card--frame-spell.card--pending {
-  box-shadow: none !important;
-  filter: drop-shadow(0 0 0.75rem var(--game-gold-a50)) brightness(var(--card-pending-brightness)) !important;
+  box-shadow: none;
+  filter: drop-shadow(0 0 0.75rem var(--game-gold-a50)) brightness(var(--card-pending-brightness));
   animation: card-frame-spell-pending-pulse var(--card-pending-pulse-duration) ease-in-out infinite;
 }
 
@@ -613,8 +614,8 @@ body.reduce-motion .card--frame-spell.card--pending { animation: none; }
 }
 
 .card--frame-modifier.card--pending {
-  box-shadow: none !important;
-  filter: drop-shadow(0 0 0.75rem var(--game-gold-a50)) brightness(var(--card-pending-brightness)) !important;
+  box-shadow: none;
+  filter: drop-shadow(0 0 0.75rem var(--game-gold-a50)) brightness(var(--card-pending-brightness));
   animation: card-frame-modifier-pending-pulse var(--card-pending-pulse-duration) ease-in-out infinite;
 }
 
@@ -661,8 +662,8 @@ body.reduce-motion .card--frame-modifier.card--pending { animation: none; }
 }
 
 .card--frame-utility.card--pending {
-  box-shadow: none !important;
-  filter: drop-shadow(0 0 0.75rem var(--game-gold-a50)) brightness(var(--card-pending-brightness)) !important;
+  box-shadow: none;
+  filter: drop-shadow(0 0 0.75rem var(--game-gold-a50)) brightness(var(--card-pending-brightness));
   animation: card-frame-utility-pending-pulse var(--card-pending-pulse-duration) ease-in-out infinite;
 }
 
@@ -744,15 +745,17 @@ body.reduce-motion .card--frame-utility.card--pending { animation: none; }
   }
 }
 
-// Pending card (active placement mode) — glowing border, no lift (avoids clipping)
+// Pending card (active placement mode) — glowing border, no lift (avoids clipping).
+// No !important here — framed variants (.card--frame-*.card--pending) win by
+// two-class specificity (0,2,0) over this one-class rule (0,1,0).
 .card--pending {
-  filter: brightness(var(--card-pending-brightness)) !important;
+  filter: brightness(var(--card-pending-brightness));
   z-index: 2;
   box-shadow:
     0 0 1rem var(--game-gold-a50),
-    0 0.75rem 2rem rgba(0, 0, 0, 0.6) !important;
-  border-top-color: var(--game-gold) !important;
-  border-left-color: var(--game-gold) !important;
+    0 0.75rem 2rem rgba(0, 0, 0, 0.6);
+  border-top-color: var(--game-gold);
+  border-left-color: var(--game-gold);
   animation: card-pending-pulse var(--card-pending-pulse-duration) ease-in-out infinite;
 }
 

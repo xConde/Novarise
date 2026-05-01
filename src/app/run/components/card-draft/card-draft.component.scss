@@ -150,8 +150,8 @@
   // Framed cards (.card-draft__card--frame-*): box-shadow is suppressed;
   // filter:drop-shadow reads these same vars so polygons glow at the outline.
   //
-  // Draft rare glow uses 0.7rem blur — slightly stronger than card-hand's
-  // 0.6rem to account for the larger draft card face. Uncommon stays at 0.5rem.
+  // Draft rare glow uses --card-glow-blur-rare-tile (0.7rem) — slightly stronger
+  // than card-hand's 0.6rem to account for the larger draft card face. Uncommon stays at 0.5rem.
 
   &--rarity-uncommon {
     --card-glow-color: var(--card-rarity-uncommon-glow-outer);
@@ -162,12 +162,17 @@
 
   &--rarity-rare {
     --card-glow-color: var(--card-rarity-rare-glow-outer);
-    --card-glow-blur: 0.7rem;
+    --card-glow-blur: var(--card-glow-blur-rare-tile);
     border-color: var(--card-rarity-rare-border);
     box-shadow: 0 0 var(--card-glow-blur) var(--card-glow-color);
   }
 
   // ── Selected state ─────────────────────────────────────────────────────
+  //
+  // Unframed cards: box-shadow draws the gold glow. This is the default path.
+  // Framed cards: box-shadow is suppressed by the frame selectors below
+  //   (box-shadow: none !important). The .card-draft__card--frame-*--selected
+  //   overrides redirect to filter:drop-shadow so the glow follows the polygon.
 
   &--selected {
     border-color: var(--game-gold-a50) !important;
@@ -204,7 +209,7 @@
   box-shadow: none !important;
   filter:
     drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
-    brightness(1.06);
+    brightness(var(--card-hover-brightness));
 }
 
 .card-draft__card--frame-spell {
@@ -222,7 +227,7 @@
   box-shadow: none !important;
   filter:
     drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
-    brightness(1.06);
+    brightness(var(--card-hover-brightness));
 }
 
 .card-draft__card--frame-modifier {
@@ -240,7 +245,7 @@
   box-shadow: none !important;
   filter:
     drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
-    brightness(1.06);
+    brightness(var(--card-hover-brightness));
 }
 
 .card-draft__card--frame-utility {
@@ -258,7 +263,28 @@
   box-shadow: none !important;
   filter:
     drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
-    brightness(1.06);
+    brightness(var(--card-hover-brightness));
+}
+
+// ── Framed selected state ─────────────────────────────────────────────────────
+//
+// The base --selected rule uses box-shadow !important, which on framed cards
+// would draw a rectangular glow outside the clipped polygon silhouette.
+// These overrides redirect the selected glow to filter:drop-shadow so it follows
+// the clip-path outline. border-color + background are kept from the base rule
+// (they are unaffected by clip-path).
+//
+// Two-class specificity (0,2,0) beats --selected (0,1,0). !important on the
+// filter line is needed because the frame base rules set box-shadow: none !important
+// and the --selected rule sets box-shadow !important — we need to win that race
+// while keeping the glow on the polygon shape.
+
+.card-draft__card--frame-tower.card-draft__card--selected,
+.card-draft__card--frame-spell.card-draft__card--selected,
+.card-draft__card--frame-modifier.card-draft__card--selected,
+.card-draft__card--frame-utility.card-draft__card--selected {
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 min(0.75rem, var(--card-frame-drop-shadow-blur-max)) var(--game-gold-a50)) !important;
 }
 
 // ── Card inner elements ───────────────────────────────────────────────────────
