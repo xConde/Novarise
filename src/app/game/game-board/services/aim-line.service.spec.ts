@@ -226,6 +226,131 @@ describe('AimLineService', () => {
       service.cleanup();
     }).not.toThrow();
   });
+
+  // ── Finding D-1: geometry rebuild guard (per-frame allocation fix) ──────────
+
+  it('D-1: geometry is NOT rebuilt on second update() when endpoints are stationary', () => {
+    const tower = makePlacedTower(7, 7);
+    const group = new THREE.Group();
+    group.position.set(0, 0, 0);
+    const enemy = createTestEnemy('e5', 3, 0);
+    enemy.position.x = 3;
+    enemy.position.z = 0;
+    group.userData['currentAimTarget'] = enemy;
+    groups.push(group);
+
+    service = buildService(tower, group, '7-7');
+    service.update(); // first call — builds geometry
+
+    const scene = scenes[0];
+    const mesh = scene.children.find(c => c instanceof THREE.Mesh) as THREE.Mesh;
+    expect(mesh).toBeDefined();
+    const geoAfterFirst = mesh.geometry;
+
+    service.update(); // second call — endpoints unchanged, should reuse geometry
+
+    expect(mesh.geometry).toBe(geoAfterFirst); // same object reference = no rebuild
+  });
+
+  it('D-1: geometry IS rebuilt when the target moves beyond the rebuild threshold', () => {
+    const tower = makePlacedTower(8, 8);
+    const group = new THREE.Group();
+    group.position.set(0, 0, 0);
+    const enemy = createTestEnemy('e6', 3, 0);
+    enemy.position.x = 3;
+    enemy.position.z = 0;
+    group.userData['currentAimTarget'] = enemy;
+    groups.push(group);
+
+    service = buildService(tower, group, '8-8');
+    service.update();
+
+    const scene = scenes[0];
+    const mesh = scene.children.find(c => c instanceof THREE.Mesh) as THREE.Mesh;
+    const geoAfterFirst = mesh.geometry;
+
+    // Move the enemy target well past the rebuild threshold.
+    enemy.position.x = 6;
+    group.userData['currentAimTarget'] = enemy;
+    service.update();
+
+    expect(mesh.geometry).not.toBe(geoAfterFirst); // new geometry = rebuild fired
+  });
+
+  it('D-1: cached endpoints are cleared by cleanup() so first update after restart rebuilds', () => {
+    const tower = makePlacedTower(9, 9);
+    const group = new THREE.Group();
+    group.position.set(0, 0, 0);
+    const enemy = createTestEnemy('e7', 3, 0);
+    enemy.position.x = 3;
+    enemy.position.z = 0;
+    group.userData['currentAimTarget'] = enemy;
+    groups.push(group);
+
+    // Use a fresh scene for the post-cleanup update so the mesh re-attaches.
+    const sc1 = makeScene();
+    const sc2 = makeScene();
+    scenes.push(sc1, sc2);
+
+    // First encounter
+    TestBed.configureTestingModule({
+      providers: [
+        AimLineService,
+        { provide: BoardMeshRegistryService, useValue: makeMeshRegistry(group, '9-9') },
+        { provide: TowerSelectionService, useValue: makeSelectionService(tower) },
+        { provide: SceneService, useValue: makeSceneService(sc1) },
+      ],
+    });
+    service = TestBed.inject(AimLineService);
+    service.update();
+
+    const mesh1 = sc1.children.find(c => c instanceof THREE.Mesh) as THREE.Mesh;
+    const geoAfterFirst = mesh1?.geometry;
+
+    service.cleanup(); // clears lastStart / lastEnd
+
+    // Second encounter — same group/position but cleanup should have reset cache.
+    // Reconfigure to point at sc2 so ensureMesh re-adds the mesh.
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        AimLineService,
+        { provide: BoardMeshRegistryService, useValue: makeMeshRegistry(group, '9-9') },
+        { provide: TowerSelectionService, useValue: makeSelectionService(tower) },
+        { provide: SceneService, useValue: makeSceneService(sc2) },
+      ],
+    });
+    service = TestBed.inject(AimLineService);
+    service.update();
+
+    const mesh2 = sc2.children.find(c => c instanceof THREE.Mesh) as THREE.Mesh;
+    // New service instance has no prior cache — geometry was built fresh.
+    expect(mesh2).toBeDefined();
+    expect(mesh2?.geometry).not.toBe(geoAfterFirst);
+  });
+
+  // ── Finding D-2: OnDestroy delegates to cleanup() ───────────────────────────
+
+  it('D-2: ngOnDestroy() removes the mesh from the scene (route-change safety)', () => {
+    const tower = makePlacedTower(10, 10);
+    const group = new THREE.Group();
+    group.position.set(0, 0, 0);
+    const enemy = createTestEnemy('e8', 4, 0);
+    enemy.position.x = 4;
+    enemy.position.z = 0;
+    group.userData['currentAimTarget'] = enemy;
+    groups.push(group);
+
+    service = buildService(tower, group, '10-10');
+    service.update(); // add mesh to scene
+
+    const scene = scenes[0];
+    expect(scene.children.find(c => c instanceof THREE.Mesh)).toBeDefined();
+
+    service.ngOnDestroy(); // Angular lifecycle teardown
+
+    expect(scene.children.find(c => c instanceof THREE.Mesh)).toBeUndefined();
+  });
 });
 
 // ── Sprint 43: selection-aim cohesion ────────────────────────────────────────

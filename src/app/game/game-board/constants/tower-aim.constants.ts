@@ -50,4 +50,11 @@ export const AIM_LINE_CONFIG = {
   segments: 4,
   /** Vertical offset above the tile surface so the line clears geometry. */
   yOffset: 0.6,
+  /**
+   * Minimum endpoint movement (world units) required to rebuild the cylinder
+   * geometry. Below this threshold the existing geometry is reused; only the
+   * mesh transform is updated. Prevents per-frame GPU allocations when tower
+   * and target are stationary (the common case during planning).
+   */
+  rebuildThreshold: 0.01,
 } as const;

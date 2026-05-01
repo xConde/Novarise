@@ -2452,3 +2452,57 @@ Result: when SNIPER has a target in range, `tickAim`'s lerpYaw result is immedia
 **No fix applied.** The visual inconsistency is one-frame and non-exploitable (targeting is correct at fire time). A future fix: add `'damage'` to the Subject and gate DIRTY_ALL in `wireEnemySubscription` behind a STRONGEST/WEAKEST mode check on the affected tower. Deferred to Phase D or E.
 
 **Deferred to Phase D.**
+
+---
+
+## Red Team Critique — Phase D (Cohesion + UX) — 2026-04-30
+
+### Finding D-1: `AimLineService.update()` rebuilds `CylinderGeometry` every frame unconditionally (CRITICAL — FIXED)
+
+**Location:** `aim-line.service.ts:119–126` — `this.lineGeo.dispose(); this.lineGeo = new THREE.CylinderGeometry(...)` inside `update()`, called once per animation frame from `GameRenderService.animate()`.
+
+**Risk:** The service comment promises "geometry is recreated only when the start or end position changes significantly". The implementation had no such guard — every frame while a tower was selected with an active target, the old `CylinderGeometry` was disposed and a new one allocated, even when the tower and enemy were completely stationary (the common case during the planning phase). At 60 fps with a tower selected, this is 60 GPU buffer allocations + 60 deallocations per second. The cost compounds with any browser GC pressure and drives fragmentation over long sessions. The class-level JSDoc was misleading — it described the intended design without actually implementing it.
+
+**Fix:** Added `lastStart: THREE.Vector3 | null` and `lastEnd: THREE.Vector3 | null` fields caching the endpoints from the last geometry build. Each `update()` call computes whether either endpoint has moved more than `AIM_LINE_CONFIG.rebuildThreshold` (0.01 world units) from the cached value. Only when the threshold is exceeded (or on first call) does the service dispose and rebuild the geometry. The mesh `position` and `quaternion` are always recomputed (cheap transform write, not a GPU allocation). The `rebuildThreshold` constant was added to `AIM_LINE_CONFIG` so it is configurable and named, not a magic number. `cleanup()` clears `lastStart`/`lastEnd` so a fresh encounter does not skip the first rebuild.
+
+**New specs** (`aim-line.service.spec.ts`):
+- "D-1: geometry is NOT rebuilt on second update() when endpoints are stationary" — calls `update()` twice with same enemy position; asserts `mesh.geometry === geoAfterFirst` (reference identity).
+- "D-1: geometry IS rebuilt when the target moves beyond the rebuild threshold" — moves enemy by 3 world units between calls; asserts geometry reference changed.
+- "D-1: cached endpoints are cleared by cleanup() so first update after restart rebuilds" — full cleanup → fresh service instance → update; asserts new geometry allocated.
+
+**Fixed in commit:** TBD (this commit).
+
+---
+
+### Finding D-2: `AimLineService` relies solely on `GameSessionService.cleanupScene()` — no `OnDestroy` safety net (MEDIUM — FIXED)
+
+**Location:** `aim-line.service.ts` — class declaration missing `implements OnDestroy`.
+
+**Risk:** `AimLineService` is component-scoped (provided in `GameBoardComponent.providers`). The intended teardown path is `GameSessionService.cleanupScene()` → `this.aimLineService?.cleanup()`. However, if the component unmounts via a route change that bypasses the normal `cleanupScene` call (e.g. a navigation guard that allows immediate exit, or a future refactor that reorders teardown), Angular will call `ngOnDestroy` on all component-scoped providers but the service has no `ngOnDestroy` — the line mesh stays in the scene and the GPU resources leak. The established pattern in this codebase (see `LinkMeshService`, `GeometryRegistryService`) is to implement both explicit `cleanup()`/`dispose()` AND `ngOnDestroy` — defense in depth. Missing it here was an omission.
+
+**Fix:** Added `implements OnDestroy` to the class and a `ngOnDestroy(): void { this.cleanup(); }` method. `cleanup()` is already idempotent, so double-calling (once from `cleanupScene`, once from Angular) is safe.
+
+**New spec** (`aim-line.service.spec.ts`):
+- "D-2: ngOnDestroy() removes the mesh from the scene (route-change safety)" — calls `update()` to add mesh, then `ngOnDestroy()`; asserts mesh removed from scene children.
+
+**Fixed in commit:** TBD (this commit).
+
+---
+
+### Finding D-3: `reduce-motion` checked twice per frame via raw DOM read — no shared cache (LOW — documented, deferred)
+
+**Location:** `game-render.service.ts:163` and `game-render.service.ts:174` — two separate `document.body.classList.contains('reduce-motion')` calls inside `animate()`, each firing every frame.
+
+**Risk:** Not a correctness issue — both reads will return the same value within a single frame. The concern is redundancy: the `reduce-motion` class is read in `tickAim` (line 163) and again for `aimLineService.update()` (line 174). A separate DOM classList read at ~60Hz is negligible individually, but the pattern is already repeated in `tower-mesh-factory.service.ts` (6 more sites), `screen-shake.service.ts` (1 site). The codebase has no `MotionPreferenceService` or equivalent cache. Consolidating into a single read per frame and passing it down would be cleaner, but the current approach is consistent with existing practice — no service for this exists, and introducing one for a single boolean isn't worth the DI overhead now.
+
+**No fix applied.** Deferred: the two reads in `game-render.service.ts` can be merged into a single `const reduceMotion = ...` extracted above both calls in a future cleanup sprint. Not blocking.
+
+---
+
+### Finding D-4: 5-tower stress spec uses distinct row/col but `previewSpy` returns a shared enemy reference — does not validate per-tower yaw (MEDIUM — acceptable, documented)
+
+**Location:** `aim-line.service.spec.ts` Sprint 45 stress test — `previewSpy.getPreviewTarget.and.returnValue(sharedEnemy)`.
+
+**Risk:** The spec asserts `getPreviewTarget` called 5 times and `aimEngaged === true` for all towers. It also asserts each tower's yaw converges to `atan2(dx, dz)` from its own world position — which IS correct because each tower's root group has a distinct `position.x` (0 through 4). However, the `spatialGrid.queryRadius` order-independence concern raised by the review protocol was actually a non-issue here: `TargetPreviewService` is mocked entirely via `previewSpy`. The spec doesn't exercise the real spatial grid — it validates that `tickAim` correctly iterates all 5 towers and computes independent yaws from independent world positions. The spatial grid is unit-tested separately in `target-preview.service.spec.ts`. The "order independence" question is answered: `tickAim` does a `Map.entries()` iteration (insertion-order deterministic), and each call to `getPreviewTarget` is independent (no shared mutable return array). No ordering risk.
+
+**No fix needed.** Documented for Phase E's full integration perf spec (sprint 37) which will exercise the real spatial grid under load.

@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@angular/core';
+import { Injectable, OnDestroy, Optional } from '@angular/core';
 import * as THREE from 'three';
 
 import { TOWER_CONFIGS, TowerType } from '../models/tower.model';
@@ -18,9 +18,10 @@ import { SceneService } from './scene.service';
  *
  * Component-scoped — provided in `GameBoardComponent.providers`.
  * Disposed via `cleanup()`, called from `GameSessionService.cleanupScene()`.
+ * Also implements `OnDestroy` as a safety net for route-change teardown.
  */
 @Injectable()
-export class AimLineService {
+export class AimLineService implements OnDestroy {
   private lineMesh: THREE.Mesh | null = null;
   private lineGeo: THREE.CylinderGeometry | null = null;
   private lineMat: THREE.MeshBasicMaterial | null = null;
@@ -28,12 +29,27 @@ export class AimLineService {
   /** Scene the line mesh has been added to; used for safe removal. */
   private attachedScene: THREE.Scene | null = null;
 
+  /**
+   * Cached endpoints from the last geometry build. When the new start/end
+   * are within `AIM_LINE_CONFIG.rebuildThreshold` of the cached values, the
+   * geometry is reused as-is — only position/quaternion are updated. This
+   * prevents a per-frame CylinderGeometry allocation + GPU upload when the
+   * tower and target are both stationary (the common case during planning).
+   */
+  private lastStart: THREE.Vector3 | null = null;
+  private lastEnd: THREE.Vector3 | null = null;
+
   constructor(
     // @Optional() so flat test beds that don't provide these still compile.
     @Optional() private meshRegistry?: BoardMeshRegistryService,
     @Optional() private selectionService?: TowerSelectionService,
     @Optional() private sceneService?: SceneService,
   ) {}
+
+  /** Angular lifecycle hook — delegates to cleanup() for route-change safety. */
+  ngOnDestroy(): void {
+    this.cleanup();
+  }
 
   /**
    * Called once per animation frame after `tickAim`. Reads the currently
@@ -115,17 +131,30 @@ export class AimLineService {
       // Update color in case selection changed tower type.
       this.lineMat.color.setHex(color);
 
-      // Rebuild geometry for the new length; cheaper than repositioning via matrix.
-      this.lineGeo.dispose();
-      this.lineGeo = new THREE.CylinderGeometry(
-        AIM_LINE_CONFIG.radius,
-        AIM_LINE_CONFIG.radius,
-        length,
-        AIM_LINE_CONFIG.segments,
-      );
-      this.lineMesh.geometry = this.lineGeo;
+      // Rebuild geometry only when an endpoint has moved beyond the rebuild
+      // threshold. Under steady aim the tower and target are stationary across
+      // many frames — reusing the existing geometry avoids a per-frame
+      // CylinderGeometry allocation and GPU buffer upload (Finding D-1).
+      const needsRebuild =
+        !this.lastStart ||
+        !this.lastEnd ||
+        start.distanceTo(this.lastStart) > AIM_LINE_CONFIG.rebuildThreshold ||
+        end.distanceTo(this.lastEnd) > AIM_LINE_CONFIG.rebuildThreshold;
 
-      // Position the cylinder at the midpoint, oriented along the aim vector.
+      if (needsRebuild) {
+        this.lineGeo.dispose();
+        this.lineGeo = new THREE.CylinderGeometry(
+          AIM_LINE_CONFIG.radius,
+          AIM_LINE_CONFIG.radius,
+          length,
+          AIM_LINE_CONFIG.segments,
+        );
+        this.lineMesh.geometry = this.lineGeo;
+        this.lastStart = start.clone();
+        this.lastEnd = end.clone();
+      }
+
+      // Always recompute position/quaternion — transform is cheap, geometry is not.
       const mid = start.clone().lerp(end, 0.5);
       this.lineMesh.position.copy(mid);
 
@@ -155,6 +184,9 @@ export class AimLineService {
     }
     this.lineMesh = null;
     this.attachedScene = null;
+    // Clear cached endpoints so a fresh encounter does not skip the first rebuild.
+    this.lastStart = null;
+    this.lastEnd = null;
   }
 
   // ── Private ──────────────────────────────────────────────────────────────
