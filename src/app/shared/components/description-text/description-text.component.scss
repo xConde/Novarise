@@ -1,0 +1,39 @@
+// DescriptionTextComponent — inline keyword icon rendering
+//
+// The host element is an inline-level container so it flows naturally inside
+// a <p> or tooltip without forcing a block layout shift.
+
+:host {
+  display: inline;
+}
+
+.desc-text {
+  // Inline so the component can be dropped inside <p> tags without breaking
+  // their flow.  Children are also inline so icons sit on the text baseline.
+  display: inline;
+  line-height: inherit;
+}
+
+.desc-text__icon {
+  // Inline-flex to vertically center the SVG against the text cap-height.
+  // vertical-align: middle aligns the icon to the midpoint of the adjacent
+  // text; -0.1em nudges it down so it sits closer to the text baseline rather
+  // than floating above it.  This is the standard "baseline nudge" pattern for
+  // inline SVG icons (cap-height ≈ 0.7em, icon center at 0.5em → delta ≈ 0.1em).
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  position: relative;
+  top: -0.1em;
+  margin-inline: 0.15em;
+  line-height: 0;
+
+  // Tint per keyword — mirrors the tint tokens used in _card-tokens.scss
+  // for the card-face keyword badge row.
+  &--terraform { color: var(--keyword-color-terraform, var(--theme-cyan)); }
+  &--link      { color: var(--keyword-color-link,      var(--theme-purple-light)); }
+  &--innate    { color: var(--keyword-color-innate,    var(--action-success)); }
+  &--retain    { color: var(--keyword-color-retain,    #ffaa66); }
+  &--ethereal  { color: var(--keyword-color-ethereal,  #cc99ff); }
+  &--exhaust   { color: var(--keyword-color-exhaust,   #ff8866); }
+}

@@ -9,6 +9,7 @@ import {
 } from '../../run/models/card.model';
 import { TowerType } from '../../game/game-board/models/tower.model';
 import { MODIFIER_STAT } from '../../run/constants/modifier-stat.constants';
+import { DescriptionTextComponent } from '@shared/components/description-text/description-text.component';
 
 describe('CardDetailModalComponent', () => {
   let fixture: ComponentFixture<CardDetailModalComponent>;
@@ -59,6 +60,7 @@ describe('CardDetailModalComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       declarations: [CardDetailModalComponent],
+      imports: [DescriptionTextComponent],
     }).compileComponents();
 
     fixture = TestBed.createComponent(CardDetailModalComponent);

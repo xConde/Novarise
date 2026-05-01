@@ -4,6 +4,7 @@ import { CardDetailComponent } from './card-detail.component';
 import { HandCard } from '../card-hand/card-hand.component';
 import { CardId } from '../../../../run/models/card.model';
 import { getCardDefinition } from '../../../../run/constants/card-definitions';
+import { DescriptionTextComponent } from '@shared/components/description-text/description-text.component';
 
 function makeHandCard(cardId: CardId, overrides: Partial<HandCard> = {}): HandCard {
   const definition = getCardDefinition(cardId);
@@ -24,7 +25,7 @@ describe('CardDetailComponent', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       declarations: [CardDetailComponent],
-      imports: [CommonModule],
+      imports: [CommonModule, DescriptionTextComponent],
     });
     fixture = TestBed.createComponent(CardDetailComponent);
     component = fixture.componentInstance;

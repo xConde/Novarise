@@ -1,0 +1,16 @@
+<span class="desc-text" [attr.aria-label]="description">
+  <ng-container *ngFor="let seg of segments">
+    <ng-container *ngIf="isIcon(seg); else textBlock">
+      <!-- Inline keyword icon. aria-hidden because the wrapping span already
+           carries the full description via aria-label. The title attribute
+           lets sighted users hover for the keyword name. -->
+      <span class="desc-text__icon"
+            [ngClass]="'desc-text__icon--' + seg.name"
+            [title]="seg.label"
+            aria-hidden="true">
+        <app-icon [name]="iconName(seg)" [size]="iconSize"></app-icon>
+      </span>
+    </ng-container>
+    <ng-template #textBlock>{{ textValue(seg) }}</ng-template>
+  </ng-container>
+</span>

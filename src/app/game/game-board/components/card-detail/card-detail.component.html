@@ -48,13 +48,17 @@
       <div class="card-detail__desc-block">
         <h3 class="card-detail__desc-label">{{ card.instance.upgraded ? 'Effect' : 'Current effect' }}</h3>
         <p class="card-detail__desc">
-          {{ card.instance.upgraded ? upgradedDescription : definition.description }}
+          <app-description-text
+            [description]="card.instance.upgraded ? upgradedDescription : definition.description">
+          </app-description-text>
         </p>
       </div>
       <div class="card-detail__desc-block card-detail__desc-block--upgraded"
            *ngIf="hasUpgrade && !card.instance.upgraded">
         <h3 class="card-detail__desc-label card-detail__desc-label--upgraded">After upgrade</h3>
-        <p class="card-detail__desc card-detail__desc--upgraded">{{ upgradedDescription }}</p>
+        <p class="card-detail__desc card-detail__desc--upgraded">
+          <app-description-text [description]="upgradedDescription"></app-description-text>
+        </p>
       </div>
     </section>
 

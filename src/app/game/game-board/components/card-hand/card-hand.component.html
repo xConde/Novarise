@@ -164,7 +164,9 @@
       </span>
       <span *ngIf="hoveredCard.instance.upgraded" class="card-tooltip__upgraded">+upgraded</span>
     </div>
-    <p class="card-tooltip__description">{{ hoverTooltipDescription(hoveredCard) }}</p>
+    <p class="card-tooltip__description">
+      <app-description-text [description]="hoverTooltipDescription(hoveredCard)"></app-description-text>
+    </p>
     <div *ngIf="hoverTooltipKeywords(hoveredCard).length > 0" class="card-tooltip__keywords">
       <span *ngFor="let kw of hoverTooltipKeywords(hoveredCard)" class="card-tooltip__keyword">{{ kw }}</span>
     </div>
