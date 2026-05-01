@@ -59,6 +59,14 @@
         <span class="card__cost-label">Energy</span>
       </span>
 
+      <!-- Archetype sub-icon glyph — top-left of art zone, below cost pill.
+           Purely decorative; reinforces archetype identity alongside the trim
+           ring and backdrop pattern. aria-hidden — screen readers get the
+           archetype from the card aria-label. -->
+      <span class="card__archetype-glyph" aria-hidden="true">
+        <app-icon [name]="getArchetypeIconName(card)" [size]="24"></app-icon>
+      </span>
+
       <!-- Upgraded indicator -->
       <span class="card__upgraded-badge" *ngIf="card.instance.upgraded" aria-hidden="true">+</span>
 

@@ -1252,6 +1252,60 @@ describe('CardHandComponent', () => {
     });
   });
 
+  // ── S39 — archetype sub-icon glyph ────────────────────────────────────────
+
+  describe('getArchetypeIconName', () => {
+    function makeHandCardWithArchetype(
+      cardId: CardId,
+      archetype: CardDefinition['archetype'],
+    ): HandCard {
+      const def = { ...getCardDefinition(cardId), archetype } as CardDefinition;
+      return {
+        instance: makeInstance(cardId),
+        definition: def,
+        canPlay: true,
+        effectiveEnergyCost: 1,
+        goldCost: null,
+      };
+    }
+
+    it('returns arch-cartographer for cartographer archetype', () => {
+      const card = makeHandCardWithArchetype(CardId.SCOUT_AHEAD, 'cartographer');
+      expect(component.getArchetypeIconName(card)).toBe('arch-cartographer');
+    });
+
+    it('returns arch-highground for highground archetype', () => {
+      const card = makeHandCardWithArchetype(CardId.RAISE_PLATFORM, 'highground');
+      expect(component.getArchetypeIconName(card)).toBe('arch-highground');
+    });
+
+    it('returns arch-conduit for conduit archetype', () => {
+      const card = makeHandCardWithArchetype(CardId.HANDSHAKE, 'conduit');
+      expect(component.getArchetypeIconName(card)).toBe('arch-conduit');
+    });
+
+    it('returns arch-neutral for neutral archetype', () => {
+      const card = makeHandCardWithArchetype(CardId.GOLD_RUSH, 'neutral');
+      expect(component.getArchetypeIconName(card)).toBe('arch-neutral');
+    });
+
+    it('returns arch-neutral for siegeworks archetype (deferred Phase 5)', () => {
+      const card = makeHandCardWithArchetype(CardId.TOWER_BASIC, 'siegeworks');
+      expect(component.getArchetypeIconName(card)).toBe('arch-neutral');
+    });
+
+    it('renders .card__archetype-glyph element with aria-hidden for each card', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.SCOUT_AHEAD)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const glyph = fixture.nativeElement.querySelector('.card__archetype-glyph') as HTMLElement;
+      expect(glyph).toBeTruthy();
+      expect(glyph.getAttribute('aria-hidden')).toBe('true');
+    });
+  });
+
   describe('perf probe — mixed 10-card hand layout cost', () => {
     function buildMixed10(): CardInstance[] {
       const ids: CardId[] = [

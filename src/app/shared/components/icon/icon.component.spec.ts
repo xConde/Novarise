@@ -215,4 +215,49 @@ describe('IconComponent', () => {
       });
     });
   });
+
+  describe('archetype sub-icons (arch-*)', () => {
+    const ARCH_ICON_NAMES: IconName[] = [
+      'arch-cartographer', 'arch-highground', 'arch-conduit', 'arch-neutral',
+    ];
+
+    it('all 4 archetype icons are registered in ICON_REGISTRY', () => {
+      for (const name of ARCH_ICON_NAMES) {
+        expect(ICON_REGISTRY[name])
+          .withContext(`"${name}" missing from ICON_REGISTRY`)
+          .toBeDefined();
+      }
+    });
+
+    it('all 4 archetype icons use strokeWidth 1.5 and stroke="currentColor"', () => {
+      for (const name of ARCH_ICON_NAMES) {
+        expect(ICON_REGISTRY[name].strokeWidth)
+          .withContext(`strokeWidth mismatch for "${name}"`)
+          .toBe('1.5');
+        expect(ICON_REGISTRY[name].stroke)
+          .withContext(`stroke mismatch for "${name}"`)
+          .toBe('currentColor');
+        expect(ICON_REGISTRY[name].fill)
+          .withContext(`fill mismatch for "${name}"`)
+          .toBe('none');
+      }
+    });
+
+    it('each archetype icon renders an SVG without error', () => {
+      for (const name of ARCH_ICON_NAMES) {
+        component.name = name;
+        component.ngOnChanges();
+        fixture.detectChanges();
+        const svg = fixture.nativeElement.querySelector('svg');
+        expect(svg).withContext(`SVG missing for archetype icon "${name}"`).toBeTruthy();
+      }
+    });
+
+    it('IconName union contains all 4 archetype icon names', () => {
+      for (const name of ARCH_ICON_NAMES) {
+        const typed: IconName = name;
+        expect(typed).toBe(name);
+      }
+    });
+  });
 });

@@ -193,5 +193,46 @@
       <svg:path d="M15,18 C15,15 17,15 17,12 C17,9 15,9 15,6"/>
     </ng-container>
 
+    <!-- Archetype sub-icons (24×24, stroke 1.5, no fill) -->
+
+    <!-- arch-cartographer: compass rose — N/S/E/W cardinal ticks + center circle.
+         Communicates survey / orientation / map-reading at a glance. -->
+    <ng-container *ngSwitchCase="'arch-cartographer'">
+      <svg:circle cx="12" cy="12" r="3"/>
+      <svg:line x1="12" y1="2"  x2="12" y2="7"/>
+      <svg:line x1="12" y1="17" x2="12" y2="22"/>
+      <svg:line x1="2"  y1="12" x2="7"  y2="12"/>
+      <svg:line x1="17" y1="12" x2="22" y2="12"/>
+      <svg:line x1="5"  y1="5"  x2="8"  y2="8"/>
+      <svg:line x1="16" y1="16" x2="19" y2="19"/>
+      <svg:line x1="19" y1="5"  x2="16" y2="8"/>
+      <svg:line x1="5"  y1="19" x2="8"  y2="16"/>
+    </ng-container>
+
+    <!-- arch-highground: mountain peak — two overlapping triangular ridges.
+         Reads as elevation / terrain peak without needing fine detail. -->
+    <ng-container *ngSwitchCase="'arch-highground'">
+      <svg:polyline points="2,19 9,7 16,19"/>
+      <svg:polyline points="10,19 16,10 22,19"/>
+    </ng-container>
+
+    <!-- arch-conduit: 3-node triangle link — three circles joined by lines.
+         Matches the kw-link vocabulary (stroked circles as network nodes). -->
+    <ng-container *ngSwitchCase="'arch-conduit'">
+      <svg:circle cx="12" cy="5"  r="2"/>
+      <svg:circle cx="5"  cy="19" r="2"/>
+      <svg:circle cx="19" cy="19" r="2"/>
+      <svg:line x1="12" y1="7"  x2="6"  y2="17"/>
+      <svg:line x1="12" y1="7"  x2="18" y2="17"/>
+      <svg:line x1="7"  y1="19" x2="17" y2="19"/>
+    </ng-container>
+
+    <!-- arch-neutral: crosshatch corner mark — two diagonal intersecting lines.
+         Blueprint / schematic feel; quietest of the four by intent. -->
+    <ng-container *ngSwitchCase="'arch-neutral'">
+      <svg:line x1="4"  y1="4"  x2="20" y2="20"/>
+      <svg:line x1="20" y1="4"  x2="4"  y2="20"/>
+    </ng-container>
+
   </ng-container>
 </svg>

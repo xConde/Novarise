@@ -22,6 +22,7 @@ import { getCardDefinition, getEffectiveEnergyCost } from '../../../../run/const
 import { TOWER_CONFIGS, TowerType } from '../../models/tower.model';
 import { RelicService } from '../../../../run/services/relic.service';
 import { ARCHETYPE_DISPLAY } from '../../../../run/constants/archetype.constants';
+import { IconName } from '../../../../shared/components/icon/icon-registry';
 
 /** Pre-computed view model for a single card in hand. */
 export interface HandCard {
@@ -497,6 +498,23 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
     if (card.definition.ethereal) words.push('Ethereal');
     if (card.definition.exhaust) words.push('Exhaust');
     return words.length > 0 ? `Keywords: ${words.join(', ')}` : '';
+  }
+
+  /**
+   * Returns the icon name for the per-archetype sub-icon glyph shown in the
+   * top-left of the card art zone. Neutral cards receive their own glyph
+   * (crosshatch) rather than no glyph — absence of decoration would be
+   * invisible against the dark backdrop.
+   */
+  getArchetypeIconName(card: HandCard): IconName {
+    switch (card.definition.archetype) {
+      case 'cartographer': return 'arch-cartographer';
+      case 'highground':   return 'arch-highground';
+      case 'conduit':      return 'arch-conduit';
+      case 'neutral':
+      case 'siegeworks':
+      default:             return 'arch-neutral';
+    }
   }
 
   getCardTypeClass(type: CardType): string {
