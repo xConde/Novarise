@@ -2506,3 +2506,104 @@ Result: when SNIPER has a target in range, `tickAim`'s lerpYaw result is immedia
 **Risk:** The spec asserts `getPreviewTarget` called 5 times and `aimEngaged === true` for all towers. It also asserts each tower's yaw converges to `atan2(dx, dz)` from its own world position — which IS correct because each tower's root group has a distinct `position.x` (0 through 4). However, the `spatialGrid.queryRadius` order-independence concern raised by the review protocol was actually a non-issue here: `TargetPreviewService` is mocked entirely via `previewSpy`. The spec doesn't exercise the real spatial grid — it validates that `tickAim` correctly iterates all 5 towers and computes independent yaws from independent world positions. The spatial grid is unit-tested separately in `target-preview.service.spec.ts`. The "order independence" question is answered: `tickAim` does a `Map.entries()` iteration (insertion-order deterministic), and each call to `getPreviewTarget` is independent (no shared mutable return array). No ordering risk.
 
 **No fix needed.** Documented for Phase E's full integration perf spec (sprint 37) which will exercise the real spatial grid under load.
+
+---
+
+## Final Pre-Merge Review — feat/threejs-polish — 2026-04-30
+
+### Scope verified
+
+- `git diff --stat main..HEAD`: 130 files changed, +19244/−1863 lines.
+- `git rev-list --count main..HEAD`: 128 commits.
+- Two major efforts: tower visual polish (70 sprints, Phases A–J) + tower aim/emissive-ratchet (50 sprints, Phases 0 + A–E). Each phase had its own per-phase red-team gate.
+
+### Cross-phase integration verifications run
+
+1. **BASIC (polish Phase B + aim Phase B):** `turretGroup` pre-existed from polish Phase B. Aim Phase B tags it via `aimYawSubgroupName = 'turret'` only — no geometry change. No conflict. `idleTick` swivel suppressed by `aimEngaged` guard. Verified in `tower-mesh-factory.service.ts` lines 126 + 276.
+
+2. **SNIPER (polish Phase C + aim Phase B Finding B-1):** Polish Phase C created the scoped-barrel geometry with all parts as direct children of `towerGroup`. Aim Phase B introduced `aimGroup` (new wrapper), re-parented scope/barrel/bipod/muzzle into it, and split `chargeTick` from `idleTick` (Finding B-1 fix). `chargeTick` now only pulses the scope lens emissive — no yaw write. `idleTick` does the phantom drift on `aimGroup.rotation.y`. `tickAim` also writes `aimGroup.rotation.y` — the split ensures no clobber. Verified at lines 351 + 503–555.
+
+3. **SPLASH (polish Phase D + aim Phase B):** `drumGroup` (named `'drum'`) is a direct child of `splashYaw` wrapper. Drum roll is around local Z (forward axis); yaw is around Y of `splashYaw` — they compose orthogonally. `drumPrevT`/`drumSpinBoostUntil` clock comment at line 771–774 correctly documents the wall-clock alignment. No fight.
+
+4. **All 6 yaw subgroup names** confirmed match the do-not-regress list: `turret`, `aimGroup`, `splashYaw`, `slowYaw`, `chainYaw`, `mortarYaw` — each with `aimYawSubgroupName` tag.
+
+5. **Default targeting mode change (commit 68efc67):** `DEFAULT_TARGETING_MODE` changed from `TargetingMode.NEAREST` → `TargetingMode.FIRST`. Verified: (a) checkpoint version NOT bumped — correct, `targetingMode` field on `PlacedTower` is serialized as a string value, so existing saves that have `"nearest"` restore correctly as NEAREST; new towers get FIRST. (b) Spec at line 219 says "should default to first targeting mode" and asserts `toBe(TargetingMode.FIRST)`. (c) Cycle comment at line 245 correctly says "Default is FIRST (index 2)". (d) Two combat specs that depended on the implicit NEAREST default were updated to set it explicitly. No stale "default is NEAREST" comments found.
+
+6. **`console.warn` in `tower-animation.service.ts:265`** — new on this branch. Fires only when `fireTick` callback throws. ESLint rule is `no-console: warn, { allow: ['error', 'warn'] }` — allowed. Not a lint violation. Appropriate defensive guard for user-data callback invocation.
+
+7. **TODO/FIXME/XXX grep:** Two pre-existing TODOs found in `wave.model.ts:109` (sprint 79 balance note) and `item.service.ts:222` (design note). Both were present before this branch opened. No new TODOs added on this branch.
+
+---
+
+### Finding F-1: MEMORY.md commit count stale — 157 vs 128 (LOW — Fixed)
+
+**Location:** `/Users/edconde/.claude/projects/-Users-edconde-dev-Novarise/memory/MEMORY.md` line 5
+
+**Risk:** MEMORY.md states "157 commits ahead of main" but `git rev-list --count main..HEAD` returns 128. The aim-plan close-out session wrote 128 as the branch state; the CURRENT STATE header was not updated after the final 5 commits (run-summary redesign + default-targeting-mode fix). Any future session opening MEMORY.md would start with a wrong anchor. The reference to "last commit: `f123c48`" is also stale — actual tip before this review is `68efc67`.
+
+**Fix:** Updated MEMORY.md to reflect 128 commits pre-review (will be 131 after the three commits from this review session). Updated last-commit reference.
+
+**Status:** Fixed in this commit.
+
+---
+
+### Finding F-2: PR_DRAFT.md missing — closer protocol requires it (LOW — Fixed)
+
+**Location:** Repo root — `PR_DRAFT.md` absent.
+
+**Risk:** The closer protocol explicitly requires a `PR_DRAFT.md` summarizing what shipped, the test delta, the browser smoke checklist references, deferred items, and do-not-regress notes. Without it, the PR author must reconstruct the summary from scratch across 128 commits and 14 docs. Direct time cost; no code risk.
+
+**Fix:** Created `PR_DRAFT.md` at repo root.
+
+**Status:** Fixed in this commit.
+
+---
+
+### Finding F-3: `emissiveBaselines` dual-storage maintenance trap (LOW — Documented, no fix)
+
+**Location:** `tower-animation.service.ts:302` — `tower.emissiveBaselines ?? userData['emissiveBaselines']`; `tower-mesh-factory.service.ts` — `snapshotEmissiveBaselines` writes both.
+
+**Risk:** `PlacedTower.emissiveBaselines` and `group.userData['emissiveBaselines']` are kept in sync by the same writer. The nullish-coalesce fallback means if any future code path sets the `PlacedTower` field without refreshing `userData`, the stale field wins. This was documented as "Finding 2 (LOW)" in the Phase 0 red-team close. No concrete failure path exists today — the only writer (`snapshotEmissiveBaselines`) clears both. The risk is a future code edit not knowing the invariant.
+
+**Fix:** None applied — the invariant is clearly documented in the Phase 0 red-team section of this audit. Added a JSDoc note to `startMuzzleFlash` naming the invariant.
+
+**Status:** Accepted / documented.
+
+---
+
+### Finding F-4: `drumSpinBoostUntil` uses `performance.now()` while `drumPrevT` uses render-loop `t` — clock skew under tab-background throttle (LOW — Documented, deferred)
+
+**Location:** `tower-mesh-factory.service.ts:776–781` — SPLASH `idleTick` closure.
+
+**Risk:** `t` is `time * msToSeconds` from `requestAnimationFrame`, which pauses or slows when the tab is hidden. `performance.now()` continues monotonically. If the tab is backgrounded mid-fire (RAF throttled to 1fps), `drumSpinBoostUntil` expires while `t` has barely advanced. On tab-restore, `isFireBoosted` is false but `deltaT` catches up the missed frames at once — a large spin step. Visually: drum snap-rotates forward on restore instead of smoothly continuing the fire boost. Not a correctness issue (no game logic is affected — drum spin is purely cosmetic). Already documented as deferred D-b in `tower-aim-close.md`.
+
+**Fix:** None applied. The comment at lines 771–774 correctly describes the alignment assumption. Tab-background snap-rotation is cosmetically negligible. Fix (clamp both to `performance.now()` or both to `t`) is in the D-b deferred backlog.
+
+**Status:** Deferred (cosmetic, tab-background only, documented).
+
+---
+
+### Finding F-5: `silhouette-after.md` and `baseline-audit.md` stale after aim Phase B geometry changes (LOW — Verified correct)
+
+**Location:** `docs/towers/silhouette-after.md`, `docs/towers/baseline-audit.md`.
+
+**Risk:** `baseline-audit.md` describes pre-redesign tower silhouettes. `silhouette-after.md` was written at Phase H describing post-polish shapes. Aim Phase B introduced new wrapper groups (`aimGroup`, `splashYaw`, `slowYaw`, `chainYaw`, `mortarYaw`) and re-parented meshes. Could those group additions have changed the rendered silhouette descriptions?
+
+**Verdict:** No. The yaw wrapper groups are THREE.Group objects with no geometry of their own. They have no visual representation. The mesh positions are unchanged — `aimGroup` is at the same Y as before; `mortarYaw` has no position offset (barrelPivot carries the offset). The silhouette descriptions in both docs remain accurate. No stale-doc issue.
+
+**Status:** Verified correct — no update needed.
+
+---
+
+## Deployment Checklist — feat/threejs-polish
+
+- [x] All red-team findings closed or explicitly deferred with rationale (F-1 through F-5 above; prior phase findings in phase-specific sections)
+- [x] All docs in `docs/towers/` verified accurate vs current code (integration-verification.md, aim-subgroup-audit.md, silhouette-after.md, baseline-audit.md — see F-5)
+- [x] MEMORY.md CURRENT STATE matches reality — commit count corrected from 157 → 128, last commit SHA updated
+- [x] `PR_DRAFT.md` exists at repo root with full summary
+- [x] `STRATEGIC_AUDIT.md` has Final Pre-Merge Review section (this section)
+- [x] 0 FAILED specs — 7374 SUCCESS / 1 skipped (verified via `npx ng test --watch=false --browsers=ChromeHeadless`)
+- [x] 0 lint errors — 2 pre-existing warnings in `card-play.service.ts` (lines 760, 769) exempt; `console.warn` in `tower-animation.service.ts:265` is allowed by `no-console: { allow: ['warn'] }` rule
+- [x] Production build clean — `npx ng build --configuration=production` completed successfully
+- [x] No new `console.log`/`debugger` statements — one `console.warn` added on branch is intentional defensive guard, ESLint-exempt
+- [x] Browser smoke checklist documented — polish: `docs/towers/browser-smoke-checklist.md` (30+ items); aim: `docs/towers/aim-browser-checklist.md`
