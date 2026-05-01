@@ -21,6 +21,7 @@ import {
 import { getCardDefinition, getEffectiveEnergyCost } from '../../../../run/constants/card-definitions';
 import { TOWER_CONFIGS, TowerType } from '../../models/tower.model';
 import { RelicService } from '../../../../run/services/relic.service';
+import { ARCHETYPE_DISPLAY } from '../../../../run/constants/archetype.constants';
 
 /** Pre-computed view model for a single card in hand. */
 export interface HandCard {
@@ -130,6 +131,27 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
       case TowerType.MORTAR:  return 'var(--tower-color-mortar)';
       default: return null;
     }
+  }
+
+  /**
+   * CSS var() reference for the archetype trim color (rest state).
+   * Resolved by the browser from :root tokens set in _card-tokens.scss.
+   * Bound to --archetype-trim-color on each card element.
+   */
+  getArchetypeTrimColor(card: HandCard): string {
+    const archetype = card.definition.archetype;
+    const trimVar = ARCHETYPE_DISPLAY[archetype]?.trimVar ?? '--card-trim-neutral';
+    return `var(${trimVar})`;
+  }
+
+  /**
+   * CSS var() reference for the archetype trim color (hover/selected state).
+   * Bound to --archetype-trim-color-strong on each card element.
+   */
+  getArchetypeTrimColorStrong(card: HandCard): string {
+    const archetype = card.definition.archetype;
+    const trimVarStrong = ARCHETYPE_DISPLAY[archetype]?.trimVarStrong ?? '--card-trim-neutral-strong';
+    return `var(${trimVarStrong})`;
   }
 
   /**

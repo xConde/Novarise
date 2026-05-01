@@ -478,7 +478,14 @@
   --card-trim-siegeworks-strong: #d48a8a;
   --card-trim-siegeworks-bg:     rgba(184, 106, 106, 0.06);
 
-  // Trim drop-shadow blur radii (filter:drop-shadow path in S21+)
+  // Trim inset box-shadow widths — thin ring at rest, slightly thicker on hover.
+  // 2px default: visible against the dark card bg without competing with the
+  // polygon silhouette detail. 3px hover: signals interactivity without
+  // overwhelming the frame's edge work.
+  --card-trim-width:       2px;
+  --card-trim-width-hover: 3px;
+
+  // Trim drop-shadow blur radii (reserved for future ambient glow pass)
   --card-trim-blur:        0.4rem;
   --card-trim-blur-strong: 0.6rem;
 

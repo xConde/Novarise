@@ -12,6 +12,7 @@ import {
 } from '../../../../run/models/card.model';
 import { getCardDefinition } from '../../../../run/constants/card-definitions';
 import { CardDefinition } from '../../../../run/models/card.model';
+import { ARCHETYPE_DISPLAY } from '../../../../run/constants/archetype.constants';
 
 // Minimal deck state helpers ────────────────────────────────────────────────
 
@@ -1077,6 +1078,78 @@ describe('CardHandComponent', () => {
 
       const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
       expect(cards.length).toBe(4);
+    });
+  });
+
+  // ── S21 Phase C — Archetype trim color bindings ───────────────────────────
+
+  describe('getArchetypeTrimColor', () => {
+    function makeCard(cardId: CardId): HandCard {
+      const def = getCardDefinition(cardId);
+      return {
+        instance: makeInstance(cardId),
+        definition: def,
+        canPlay: true,
+        effectiveEnergyCost: def.energyCost,
+        goldCost: null,
+      };
+    }
+
+    it('returns var(--card-trim-neutral) for a neutral card (TOWER_BASIC)', () => {
+      const card = makeCard(CardId.TOWER_BASIC);
+      expect(component.getArchetypeTrimColor(card)).toBe('var(--card-trim-neutral)');
+    });
+
+    it('returns var(--card-trim-cartographer) for a cartographer card (DETOUR)', () => {
+      const card = makeCard(CardId.DETOUR);
+      expect(component.getArchetypeTrimColor(card)).toBe('var(--card-trim-cartographer)');
+    });
+
+    it('returns var(--card-trim-highground) for a highground card (HIGH_PERCH)', () => {
+      const card = makeCard(CardId.HIGH_PERCH);
+      expect(component.getArchetypeTrimColor(card)).toBe('var(--card-trim-highground)');
+    });
+
+    it('returns var(--card-trim-conduit) for a conduit card (HANDSHAKE)', () => {
+      const card = makeCard(CardId.HANDSHAKE);
+      expect(component.getArchetypeTrimColor(card)).toBe('var(--card-trim-conduit)');
+    });
+
+    it('getArchetypeTrimColorStrong returns the strong variant matching ARCHETYPE_DISPLAY', () => {
+      const archetypeCases: Array<{ cardId: CardId; archetype: keyof typeof ARCHETYPE_DISPLAY }> = [
+        { cardId: CardId.TOWER_BASIC, archetype: 'neutral' },
+        { cardId: CardId.DETOUR,      archetype: 'cartographer' },
+        { cardId: CardId.HIGH_PERCH,  archetype: 'highground' },
+        { cardId: CardId.HANDSHAKE,   archetype: 'conduit' },
+      ];
+      archetypeCases.forEach(({ cardId, archetype }) => {
+        const card = makeCard(cardId);
+        const expected = `var(${ARCHETYPE_DISPLAY[archetype].trimVarStrong})`;
+        expect(component.getArchetypeTrimColorStrong(card))
+          .withContext(`${archetype} strong trim var mismatch`)
+          .toBe(expected);
+      });
+    });
+
+    it('--archetype-trim-color style is bound on each rendered card', () => {
+      const hand = [
+        makeInstance(CardId.TOWER_BASIC),  // neutral
+        makeInstance(CardId.DETOUR),        // cartographer
+      ];
+      component.deckState = makeDeckState(hand);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      expect(cards.length).toBe(2);
+      // Each card should have --archetype-trim-color set in its inline style
+      cards.forEach((cardEl, idx) => {
+        const trimColor = cardEl.style.getPropertyValue('--archetype-trim-color');
+        expect(trimColor)
+          .withContext(`card[${idx}] should have --archetype-trim-color bound`)
+          .toBeTruthy();
+      });
     });
   });
 

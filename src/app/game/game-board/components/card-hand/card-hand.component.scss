@@ -499,19 +499,21 @@ body.reduce-motion .card--rare::after { animation: none; background-position: 0 
     transform var(--transition-fast) ease,
     filter var(--transition-fast) ease,
     opacity var(--transition-fast) ease,
-    clip-path var(--transition-fast) ease;
-  // Redirect rarity glow: box-shadow doesn't follow clip-path outline.
-  box-shadow: none !important;
+    clip-path var(--transition-fast) ease,
+    box-shadow var(--transition-fast) ease;
+  // Rarity glow redirected to filter:drop-shadow — box-shadow doesn't follow
+  // clip-path outlines. Archetype trim uses inset box-shadow which DOES clip
+  // naturally to the polygon, so we can reinstate box-shadow here for trim only.
+  // The inset shadow falls back to neutral if --archetype-trim-color is not bound.
+  box-shadow: inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral));
   // Drop-shadow follows the polygon. Cap at --card-frame-drop-shadow-blur-max (8px).
-  // Blur is driven by --card-glow-blur (set by rarity selectors above).
-  // 8px cap: if glow-blur resolves > 8px this inline clamp wins via specificity.
   filter: drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color));
 }
 
-// Hover brightness must compose with drop-shadow in a single filter: declaration.
-// Two filter: rules on the same element — last wins, the first is silently dropped.
+// Hover: swap to the strong trim color + slightly thicker border for the
+// "hoverable" signal. Brightness composes with drop-shadow in a single filter.
 .card--frame-tower.card--playable:hover {
-  box-shadow: none !important;
+  box-shadow: inset 0 0 0 var(--card-trim-width-hover, 3px) var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
   filter:
     drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
     brightness(var(--card-hover-brightness));
@@ -557,13 +559,14 @@ body.reduce-motion .card--frame-tower.card--pending { animation: none; }
     transform var(--transition-fast) ease,
     filter var(--transition-fast) ease,
     opacity var(--transition-fast) ease,
-    clip-path var(--transition-fast) ease;
-  box-shadow: none !important;
+    clip-path var(--transition-fast) ease,
+    box-shadow var(--transition-fast) ease;
+  box-shadow: inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral));
   filter: drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color));
 }
 
 .card--frame-spell.card--playable:hover {
-  box-shadow: none !important;
+  box-shadow: inset 0 0 0 var(--card-trim-width-hover, 3px) var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
   filter:
     drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
     brightness(var(--card-hover-brightness));
@@ -601,13 +604,14 @@ body.reduce-motion .card--frame-spell.card--pending { animation: none; }
     transform var(--transition-fast) ease,
     filter var(--transition-fast) ease,
     opacity var(--transition-fast) ease,
-    clip-path var(--transition-fast) ease;
-  box-shadow: none !important;
+    clip-path var(--transition-fast) ease,
+    box-shadow var(--transition-fast) ease;
+  box-shadow: inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral));
   filter: drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color));
 }
 
 .card--frame-modifier.card--playable:hover {
-  box-shadow: none !important;
+  box-shadow: inset 0 0 0 var(--card-trim-width-hover, 3px) var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
   filter:
     drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
     brightness(var(--card-hover-brightness));
@@ -649,13 +653,14 @@ body.reduce-motion .card--frame-modifier.card--pending { animation: none; }
     transform var(--transition-fast) ease,
     filter var(--transition-fast) ease,
     opacity var(--transition-fast) ease,
-    clip-path var(--transition-fast) ease;
-  box-shadow: none !important;
+    clip-path var(--transition-fast) ease,
+    box-shadow var(--transition-fast) ease;
+  box-shadow: inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral));
   filter: drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color));
 }
 
 .card--frame-utility.card--playable:hover {
-  box-shadow: none !important;
+  box-shadow: inset 0 0 0 var(--card-trim-width-hover, 3px) var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
   filter:
     drop-shadow(0 0 min(var(--card-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--card-glow-color))
     brightness(var(--card-hover-brightness));
