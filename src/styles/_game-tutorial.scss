@@ -73,16 +73,19 @@
   transform: translateX(-50%);
 }
 
-/* Strategy tip cards — centered, below nav bar (~3rem) */
+/* Strategy tip cards — center-screen. Tips are informational (not
+   anchored to a specific UI element), so center-screen is the cleanest
+   placement that doesn't collide with HUD chrome at the top or the
+   card-hand at the bottom. */
 .tutorial-card--tip_placement,
 .tutorial-card--tip_wave_preview,
 .tutorial-card--tip_upgrade,
 .tutorial-card--is-tip {
-  top: max(4rem, var(--spacing-xl, 2rem));
+  top: 50%;
   left: 50%;
   right: auto;
   bottom: auto;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
 }
 
 /* Fix 5: CSS triangle arrows connecting card to its target element */
