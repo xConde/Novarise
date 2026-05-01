@@ -191,3 +191,65 @@ either:
 - [ ] Card-draft cards do NOT yet show archetype trim or backdrop
       (deferred from Phase C; planned for a future sprint). Type frame
       silhouette is correct (Phase B work). No regression here.
+
+---
+
+# Phase D additions (after Phase C items)
+
+## Keyword icon badges (card-hand)
+
+- [ ] Cards with `terraform` flag (Cartographer + Highground): cyan
+      terraform mountain+arrow icon visible on card face
+- [ ] Cards with `link` flag (Conduit): violet link node-line icon
+      visible on card face
+- [ ] Cards with `innate` flag: lime green star icon
+- [ ] Cards with `retain` flag: amber padlock-on-card icon
+- [ ] Cards with `ethereal` flag: pale violet vapor wisps icon
+- [ ] Cards with `exhaust` flag: orange-red card-with-X icon
+- [ ] Multiple-keyword cards (e.g., a Conduit card with link + exhaust):
+      both badges visible side-by-side, no crowding
+- [ ] Keyword badges at ~14px size are recognizable, NOT just colored
+      blobs
+
+## Inline keyword icons in description text
+
+- [ ] Open card-hand tooltip on a card with a `{kw-*}` token in
+      description (e.g., LAST_STAND with "Restore 5 lives. {kw-exhaust}.")
+- [ ] Inline icon renders inline with text, baseline aligned
+- [ ] No doubled periods, no weird spacing, no missing letters
+- [ ] Same check in card-detail modal (right-click a card)
+- [ ] Same check in library card-detail modal
+
+## Type icon refresh
+
+- [ ] Tower card type-icon (crosshair) at 20px in card-hand: readable
+      as a target reticle
+- [ ] Spell card type-icon (bolt) at 20px: readable as lightning
+- [ ] Spell type-icon at 12px in tooltip: still readable as lightning
+      (this is the S38 honest-flag — bolt was the hardest refresh)
+- [ ] Modifier card type-icon (shield) at 20px: clear shield
+- [ ] Utility card type-icon (gear) at 20px: gear teeth visible
+- [ ] All 4 type icons share visual vocabulary with keyword icons
+
+## Archetype sub-icons
+
+- [ ] Cartographer cards: compass rose visible at top-left of art zone
+      (50% opacity, green-teal). Compass tick marks readable, NOT a smear
+- [ ] Highground cards: mountain ridge silhouette visible (terracotta)
+- [ ] Conduit cards: 3-node link triangle visible (violet)
+- [ ] Neutral cards: crosshatch X mark visible (charcoal-silver, very
+      subtle)
+- [ ] Sub-icon does NOT visually conflict with the leftmost character
+      of long card names (e.g., CARTOGRAPHER_SEAL)
+- [ ] Mobile (≤480px): sub-icon hidden cleanly, no broken layout
+
+## Decorative density check (the big one)
+
+- [ ] Examine a Cartographer rare card with a keyword: does the layered
+      identity (frame silhouette + trim ring + backdrop pattern + sub-icon
+      + keyword badge + cost + type icon + upgrade badge + name +
+      description) feel cohesive or busy?
+- [ ] If "busy": which signal feels redundant? Trim + backdrop + sub-icon
+      is a triple archetype signal. Sub-icon at 50% opacity is the most
+      removable layer if needed.
+
