@@ -24,6 +24,7 @@ import { GamePhase } from '../models/game-state.model';
 import { PHYSICS_CONFIG } from '../constants/physics.constants';
 import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 import { CombatFrameResult } from '../models/combat-frame.model';
+import { AimLineService } from './aim-line.service';
 import type { ChallengeDefinition } from '../../../run/data/challenges';
 
 /**
@@ -77,6 +78,9 @@ export class GameRenderService {
     // @Optional() — not provided in GameRenderService test beds. tickAim
     // degrades gracefully to a no-op when the service is absent.
     @Optional() private targetPreviewService?: TargetPreviewService,
+    // @Optional() — aim-line cylinder for selected tower. update() is a no-op
+    // when the service is absent so test beds without full provider lists work.
+    @Optional() private aimLineService?: AimLineService,
   ) {}
 
   /** Initialize the render service. Call in ngAfterViewInit. */
@@ -163,6 +167,12 @@ export class GameRenderService {
     // each read once, which may take many frames for towers not yet in towerMeshes.
     // (Phase C red-team Finding C-2.)
     this.targetPreviewService?.tickPreviewCache();
+    // Update aim-line cylinder for the selected tower. Runs after tickAim so
+    // currentAimTarget on each group is current. Hides automatically when
+    // no tower is selected or no target is found.
+    const currentReduceMotion =
+      typeof document !== 'undefined' && document.body.classList.contains('reduce-motion');
+    this.aimLineService?.update(currentReduceMotion);
     this.towerAnimationService.updateTowerAnimations(this.meshRegistry.towerMeshes, time);
     this.towerAnimationService.tickRecoilAnimations(this.meshRegistry.towerMeshes, nowSeconds);
     this.towerAnimationService.tickTubeEmits(this.meshRegistry.towerMeshes, nowSeconds);

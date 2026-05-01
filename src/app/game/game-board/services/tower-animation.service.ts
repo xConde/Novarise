@@ -174,12 +174,16 @@ export class TowerAnimationService {
         // No in-range target: clear the aim slot and advance the grace timer.
         // aimEngaged stays true while the tower is within the grace window so
         // idleTick does not interrupt the last yaw (Sprint 40 — fixes A-2/B-3).
+        // Under reduce-motion the grace period is zero: idle resumes immediately.
         group.userData['currentAimTarget'] = null;
+        const graceCap = reduceMotion
+          ? AIM_FALLBACK_CONFIG.reduceMotionGraceSec
+          : AIM_FALLBACK_CONFIG.noTargetGraceSec;
         const grace = (group.userData['noTargetGraceTime'] as number | undefined) ?? 0;
         const newGrace = grace + deltaTime;
-        if (newGrace >= AIM_FALLBACK_CONFIG.noTargetGraceSec) {
+        if (newGrace >= graceCap) {
           // Grace window expired: release aim hold so idle gesture resumes.
-          group.userData['noTargetGraceTime'] = AIM_FALLBACK_CONFIG.noTargetGraceSec;
+          group.userData['noTargetGraceTime'] = graceCap;
           group.userData['aimEngaged'] = false;
         } else {
           group.userData['noTargetGraceTime'] = newGrace;

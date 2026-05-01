@@ -32,4 +32,22 @@ export const AIM_FALLBACK_CONFIG = {
    * snap-to-idle when an enemy is killed.
    */
   noTargetGraceSec: 0.5,
+  /**
+   * Grace period when reduce-motion is active. Set to zero so idle gesture
+   * resumes immediately rather than holding a static yaw — avoids any
+   * lingering perception of motion for motion-sensitive users.
+   */
+  reduceMotionGraceSec: 0,
+} as const;
+
+/** Visual parameters for the selected-tower aim line indicator. */
+export const AIM_LINE_CONFIG = {
+  /** Radius of the cylinder used to draw the aim line. */
+  radius: 0.02,
+  /** Opacity of the aim-line material (0 = invisible, 1 = fully opaque). */
+  opacity: 0.45,
+  /** Radial segments for the cylinder geometry (low = flat-shaded, cheap). */
+  segments: 4,
+  /** Vertical offset above the tile surface so the line clears geometry. */
+  yOffset: 0.6,
 } as const;

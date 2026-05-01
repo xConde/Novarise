@@ -36,6 +36,7 @@ import { TextSpritePoolService } from './text-sprite-pool.service';
 import { GoldPopupService } from './gold-popup.service';
 import { VfxPoolService } from './vfx-pool.service';
 import { TowerDecalLibraryService } from './tower-decal-library.service';
+import { AimLineService } from './aim-line.service';
 import { buildDisposeProtect, disposeGroup } from '../utils/three-utils';
 
 /**
@@ -88,6 +89,9 @@ export class GameSessionService {
     // @Optional() — Phase A tower polish. Caches CanvasTextures; dispose()
     // must be called at encounter teardown to release GPU texture memory.
     @Optional() private towerDecalLibrary?: TowerDecalLibraryService,
+    // @Optional() — aim-line cylinder for selected tower; cleanup() removes
+    // the mesh from the scene and disposes geometry + material.
+    @Optional() private aimLineService?: AimLineService,
   ) {}
 
   /**
@@ -181,6 +185,9 @@ export class GameSessionService {
     // Clean up upgrade flash/glow ring effects
     this.towerUpgradeVisualService.cleanup(scene);
 
+    // Dispose aim-line cylinder (mesh + geometry + material). Must run before
+    // tower mesh disposal in case the line references the same scene context.
+    this.aimLineService?.cleanup();
 
     // Dispose tower meshes — protect registry-owned geometry/material so
     // single-mesh disposal doesn't break the cache. Registries themselves
