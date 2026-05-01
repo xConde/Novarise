@@ -325,3 +325,54 @@ either:
 - [ ] Modal at mobile width: layout intact, no horizontal scroll
 - [ ] Pile inspector: rows still readable
 
+
+---
+
+# Phase G additions (after Phase F items)
+
+## Flavor text rendering
+
+- [ ] Open card-hand tooltip on any card — flavor line appears
+      below description, italic, muted, in straight quotes
+- [ ] Same in card-detail modal (right-click on card)
+- [ ] Same in library card-detail-modal (Codex view)
+- [ ] Flavor does NOT appear on the card face in card-hand (only in
+      tooltip)
+- [ ] Flavor does NOT appear in pile-inspector / card-draft /
+      library tile (intentional — detail surfaces only)
+
+## Flavor readability
+
+- [ ] At 50% opacity, flavor is readable but doesn't compete with
+      description text
+- [ ] If 50% opacity is too faint in any specific surface (e.g.,
+      against a busy backdrop), flag for bumping to 60-65% in the
+      `--card-flavor-color` token
+- [ ] Italic style differentiates from upright description
+
+## Voice spot-check
+
+- [ ] Read 5 random cards across archetypes — does the voice feel
+      consistent? Military-industrial-with-sci-fi-accents register
+- [ ] Cartographer cards: surveyor/explorer voice ("The path is
+      whatever the map says it is.")
+- [ ] Highground cards: climber/sentinel voice ("From above, the
+      battle is always smaller.")
+- [ ] Conduit cards: engineer/network voice ("Two conduits make a
+      pair. Three make a network.")
+- [ ] H3 keyword cards: keyword-as-metaphor (PHANTOM_GOLD:
+      "Spend it before it forgets to exist.")
+
+## Honest line revisions to verify
+
+These 3 lines were flagged by the writing agent — confirm whether
+they read OK in real card context or need revision:
+
+- [ ] CLIFFSIDE — "A horizontal ridge. The towers look down the
+      barrel." Does "down the barrel" read as towers ABOVE the
+      action (correct) or AT the wrong end of a gun (incorrect)?
+- [ ] COLLAPSE — "The ground does not care about their schedule."
+      Functional but dry; could be more cartographer-voiced.
+- [ ] GRAVITY_WELL — "A trench is only a disadvantage if you dug
+      it wrong." Borderline quippy for the register.
+
