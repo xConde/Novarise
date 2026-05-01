@@ -546,6 +546,33 @@
   }
 }
 
+/* --- Tower footprint preview (tile) --- */
+//
+// Flat outlined square centered at the bottom of tower tiles.
+// Positioned in the dead-air strip below the footer border, above the tile edge.
+// Color inherits --tile-tower-accent (bound inline) so per-subtype tints flow through.
+// Suppressed on desaturated (undiscovered) tiles via *ngIf in the template.
+// z-index: 2 — same layer as the cost/icon chrome, above the ::before art bloom.
+
+.tile__footprint {
+  position: absolute;
+  bottom: var(--spacing-xs);
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--card-footprint-size-tile, 1.5rem);
+  height: var(--card-footprint-size-tile, 1.5rem);
+  color: var(--tile-tower-accent, var(--card-type-tower));
+  opacity: var(--card-footprint-opacity, 0.65);
+  pointer-events: none;
+  z-index: 2;
+
+  svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+}
+
 /* --- Reduce-motion --- */
 
 body.reduce-motion .tile,

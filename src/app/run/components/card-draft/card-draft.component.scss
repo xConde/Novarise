@@ -379,6 +379,33 @@
   font-weight: 900;
 }
 
+// ── Tower footprint preview ───────────────────────────────────────────────────
+//
+// Flat outlined square centered at the bottom of tower draft cards.
+// Positioned absolute so it does not affect the flex column layout.
+// Uses --card-type-tower (generic orange) — card-draft has no per-subtype
+// accent binding. Color is intentionally lower-key than the card-hand version
+// where per-subtype tints make it more salient.
+
+.card-draft__footprint {
+  position: absolute;
+  bottom: var(--spacing-xs);
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--card-footprint-size-tile, 1.5rem);
+  height: var(--card-footprint-size-tile, 1.5rem);
+  color: var(--card-type-tower);
+  opacity: var(--card-footprint-opacity, 0.65);
+  pointer-events: none;
+  z-index: 1;
+
+  svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+}
+
 // ── Skip button ───────────────────────────────────────────────────────────────
 
 .card-draft__skip-btn {

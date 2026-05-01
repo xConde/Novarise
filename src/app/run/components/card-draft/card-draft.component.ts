@@ -15,6 +15,8 @@ export class CardDraftComponent {
   @Output() cardPicked = new EventEmitter<CardReward>();
   @Output() skipped = new EventEmitter<void>();
 
+  readonly CardType = CardType;
+
   selectedCard: CardId | null = null;
 
   get resolvedCards(): Array<{ reward: CardReward; definition: CardDefinition }> {

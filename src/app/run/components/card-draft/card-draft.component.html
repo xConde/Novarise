@@ -34,6 +34,18 @@
       <!-- Rarity label -->
       <span class="card-draft__rarity">{{ item.definition.rarity }}</span>
 
+      <!-- Footprint preview — tower cards only. Flat outlined square communicates
+           "this card places a tower on a board tile." Purely decorative.
+           Uses generic tower accent — card-draft does not bind per-subtype vars. -->
+      <span *ngIf="item.definition.type === CardType.TOWER"
+            class="card-draft__footprint"
+            aria-hidden="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="4" width="16" height="16" rx="1"
+                stroke="currentColor" stroke-width="1.5" fill="none"/>
+        </svg>
+      </span>
+
       <!-- Selected indicator -->
       <span class="card-draft__check" *ngIf="selectedCard === item.reward.cardId" aria-hidden="true">
         <app-icon name="check" [size]="14"></app-icon>

@@ -338,4 +338,41 @@ describe('LibraryCardTileComponent', () => {
       expect(btn.classList.contains('tile--frame-utility')).toBe(true);
     });
   });
+
+  describe('tower footprint preview', () => {
+    it('renders .tile__footprint on tower cards', () => {
+      component.definition = towerDef;
+      refresh();
+      const fp = fixture.nativeElement.querySelector('.tile__footprint');
+      expect(fp).toBeTruthy();
+    });
+
+    it('does NOT render .tile__footprint on non-tower cards', () => {
+      component.definition = spellDef;
+      refresh();
+      expect(fixture.nativeElement.querySelector('.tile__footprint')).toBeFalsy();
+
+      component.definition = modifierDef;
+      refresh();
+      expect(fixture.nativeElement.querySelector('.tile__footprint')).toBeFalsy();
+
+      component.definition = utilityDef;
+      refresh();
+      expect(fixture.nativeElement.querySelector('.tile__footprint')).toBeFalsy();
+    });
+
+    it('does NOT render .tile__footprint on desaturated tower tiles', () => {
+      component.definition = towerDef;
+      component.desaturated = true;
+      refresh();
+      expect(fixture.nativeElement.querySelector('.tile__footprint')).toBeFalsy();
+    });
+
+    it('footprint SVG is aria-hidden', () => {
+      component.definition = towerDef;
+      refresh();
+      const fp = fixture.nativeElement.querySelector('.tile__footprint');
+      expect(fp?.getAttribute('aria-hidden')).toBe('true');
+    });
+  });
 });

@@ -72,4 +72,16 @@
     <span class="tile__rarity tile__rarity--{{ definition.rarity }}">{{ definition.rarity }}</span>
   </div>
 
+  <!-- Footprint preview — tower cards only. Flat outlined square communicates
+       "this card places a tower on a board tile." Purely decorative.
+       Color flows through --tile-tower-accent (bound inline for per-subtype tint). -->
+  <span *ngIf="definition.type === CardType.TOWER && !desaturated"
+        class="tile__footprint"
+        aria-hidden="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="4" width="16" height="16" rx="1"
+            stroke="currentColor" stroke-width="1.5" fill="none"/>
+    </svg>
+  </span>
+
 </button>

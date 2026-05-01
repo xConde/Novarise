@@ -534,9 +534,11 @@
 
   // === Tower footprint preview ===
   // Small outlined square at the bottom of tower cards — "this card places 1 tile."
-  // Suppressed on mobile via media query in card-hand.component.scss.
-  --card-footprint-size:    1.2rem;
-  --card-footprint-opacity: 0.65;
+  // --card-footprint-size: card-hand (6.25rem face). Suppressed on mobile.
+  // --card-footprint-size-tile: library-card-tile + card-draft (220×320 face, more room).
+  --card-footprint-size:      1.2rem;
+  --card-footprint-size-tile: 1.5rem;
+  --card-footprint-opacity:   0.65;
 
 
   // === Keyword icon tints ===
