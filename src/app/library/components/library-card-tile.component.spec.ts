@@ -10,6 +10,7 @@ import {
 } from '../../run/models/card.model';
 import { TowerType } from '../../game/game-board/models/tower.model';
 import { MODIFIER_STAT } from '../../run/constants/modifier-stat.constants';
+import { ARCHETYPE_DISPLAY } from '../../run/constants/archetype.constants';
 
 describe('LibraryCardTileComponent', () => {
   let fixture: ComponentFixture<LibraryCardTileComponent>;
@@ -199,6 +200,47 @@ describe('LibraryCardTileComponent', () => {
     refresh();
     const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
     expect(btn.classList.contains('tile--desaturated')).toBe(true);
+  });
+
+  describe('archetype trim and backdrop bindings', () => {
+    it('archetypeTrimColor returns neutral var for neutral cards', () => {
+      component.definition = towerDef; // archetype: 'neutral'
+      expect(component.archetypeTrimColor).toBe(`var(${ARCHETYPE_DISPLAY['neutral'].trimVar})`);
+    });
+
+    it('archetypeTrimColor returns conduit var for conduit cards', () => {
+      component.definition = modifierDef; // archetype: 'conduit'
+      expect(component.archetypeTrimColor).toBe(`var(${ARCHETYPE_DISPLAY['conduit'].trimVar})`);
+    });
+
+    it('archetypeTrimColorStrong returns conduit strong var for conduit cards', () => {
+      component.definition = modifierDef;
+      expect(component.archetypeTrimColorStrong).toBe(`var(${ARCHETYPE_DISPLAY['conduit'].trimVarStrong})`);
+    });
+
+    it('archetypeBackdropVar returns conduit backdrop for conduit cards', () => {
+      component.definition = modifierDef;
+      expect(component.archetypeBackdropVar).toBe('var(--card-backdrop-conduit)');
+    });
+
+    it('archetypeBackdropVar returns neutral backdrop for neutral cards', () => {
+      component.definition = towerDef;
+      expect(component.archetypeBackdropVar).toBe('var(--card-backdrop-neutral)');
+    });
+
+    it('binds --archetype-trim-color style on the tile button', () => {
+      component.definition = modifierDef; // conduit
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.style.getPropertyValue('--archetype-trim-color')).toContain('card-trim-conduit');
+    });
+
+    it('binds --card-backdrop-image style on the tile button', () => {
+      component.definition = modifierDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.style.getPropertyValue('--card-backdrop-image')).toContain('card-backdrop-conduit');
+    });
   });
 
   describe('frame class binding', () => {

@@ -16,6 +16,9 @@
   [class.tile--frame-modifier]="definition.type === CardType.MODIFIER"
   [class.tile--frame-utility]="definition.type === CardType.UTILITY"
   [style.--tile-tower-accent]="towerAccent"
+  [style.--archetype-trim-color]="archetypeTrimColor"
+  [style.--archetype-trim-color-strong]="archetypeTrimColorStrong"
+  [style.--card-backdrop-image]="archetypeBackdropVar"
   (click)="onClick()"
   [attr.aria-label]="desaturated
     ? 'Undiscovered ' + definition.rarity + ' ' + definition.type + ' — ' + definition.energyCost + ' energy.'

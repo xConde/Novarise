@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { PileInspectorComponent } from './pile-inspector.component';
 import { CardId, CardInstance } from '../../../../run/models/card.model';
+import { ARCHETYPE_DISPLAY } from '../../../../run/constants/archetype.constants';
 
 function makeInstance(cardId: CardId, upgraded = false, suffix = ''): CardInstance {
   return { instanceId: `inst_${cardId}${suffix}`, cardId, upgraded };
@@ -105,6 +106,36 @@ describe('PileInspectorComponent', () => {
       const event = { target: innerEl, currentTarget: outerEl } as MouseEvent;
       component.onBackdropClick(event);
       expect(component.close).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('archetype trim binding', () => {
+    it('getArchetypeTrimVar returns neutral var for neutral cards', () => {
+      component.pile = [makeInstance(CardId.TOWER_BASIC)];
+      const groups = component.groupedCards;
+      const result = component.getArchetypeTrimVar(groups[0]);
+      expect(result).toBe(`var(${ARCHETYPE_DISPLAY['neutral'].trimVar})`);
+    });
+
+    it('getArchetypeTrimVar returns cartographer var for cartographer cards', () => {
+      component.pile = [makeInstance(CardId.SCOUT_AHEAD)];
+      const groups = component.groupedCards;
+      const result = component.getArchetypeTrimVar(groups[0]);
+      expect(result).toBe(`var(${ARCHETYPE_DISPLAY['cartographer'].trimVar})`);
+    });
+
+    it('getArchetypeTrimVar returns conduit var for conduit cards', () => {
+      component.pile = [makeInstance(CardId.HANDSHAKE)];
+      const groups = component.groupedCards;
+      const result = component.getArchetypeTrimVar(groups[0]);
+      expect(result).toBe(`var(${ARCHETYPE_DISPLAY['conduit'].trimVar})`);
+    });
+
+    it('binds --archetype-trim-color on each card row', () => {
+      component.pile = [makeInstance(CardId.SCOUT_AHEAD)];
+      fixture.detectChanges();
+      const row = fixture.nativeElement.querySelector('.pile-inspector__card') as HTMLElement;
+      expect(row.style.getPropertyValue('--archetype-trim-color')).toContain('card-trim-cartographer');
     });
   });
 

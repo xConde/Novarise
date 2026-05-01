@@ -42,33 +42,56 @@
     border-color var(--card-tile-transition-duration) ease,
     box-shadow var(--card-tile-transition-duration) ease,
     filter var(--card-tile-transition-duration) ease;
-  box-shadow: 0 0 0 1px transparent, 0 0 0 transparent;
 
-  /* Art zone — faint radial bloom tinted by --tile-accent. */
+  /* Art zone — archetype backdrop pattern (first layer) + faint radial bloom
+     tinted by --tile-accent (second layer). Pattern is most visible at the
+     periphery where the gradient is transparent. */
   &::before {
     content: '';
     position: absolute;
     inset: 0;
-    background:
+    background-image:
+      var(--card-backdrop-image, none),
       radial-gradient(
         ellipse at 50% 30%,
         color-mix(in srgb, var(--tile-accent) 25%, transparent) 0%,
         transparent 60%
       );
+    background-size: 80px 80px, cover;
     pointer-events: none;
     opacity: 0.75;
   }
 
-  /* Safari <16.2 color-mix fallback — use rgba(...) on the accent at ~25%. */
+  /* Safari <16.2 color-mix fallback. Backdrop pattern still renders;
+     only the radial gradient loses color-mix. */
   @supports not (background: color-mix(in srgb, red 25%, transparent)) {
     &::before {
-      background:
+      background-image:
+        var(--card-backdrop-image, none),
         radial-gradient(
           ellipse at 50% 30%,
           rgba(255, 255, 255, 0.1) 0%,
           transparent 60%
         );
+      background-size: 80px 80px, cover;
     }
+  }
+
+  // Archetype trim: inset box-shadow so it follows the polygon clip-path on
+  // framed tiles. Neutral (2px) / hover-strong (3px) widths mirror card-hand.
+  box-shadow:
+    0 0 0 1px transparent,
+    inset 0 0 0 2px var(--archetype-trim-color, var(--card-trim-neutral));
+
+  &:hover,
+  &:focus-visible {
+    transform: translateY(var(--card-tile-hover-lift));
+    border-color: var(--tile-accent);
+    box-shadow:
+      0 0 0 1px var(--tile-accent),
+      0 6px 20px -8px var(--tile-glow),
+      inset 0 0 0 3px var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
+    outline: none;
   }
 
   /* CRT-ish scanline texture */
@@ -85,16 +108,6 @@
         rgba(255, 255, 255, 0.015) 3px
       );
     pointer-events: none;
-  }
-
-  &:hover,
-  &:focus-visible {
-    transform: translateY(var(--card-tile-hover-lift));
-    border-color: var(--tile-accent);
-    box-shadow:
-      0 0 0 1px var(--tile-accent),
-      0 6px 20px -8px var(--tile-glow);
-    outline: none;
   }
 
   &:active {
@@ -129,8 +142,8 @@
 }
 
 @keyframes tile-rare-shimmer {
-  0%, 100% { box-shadow: 0 0 0 1px transparent, 0 0 10px -6px var(--tile-glow); }
-  50%      { box-shadow: 0 0 0 1px transparent, 0 0 18px -4px var(--tile-glow); }
+  0%, 100% { box-shadow: 0 0 0 1px transparent, 0 0 10px -6px var(--tile-glow), inset 0 0 0 2px var(--archetype-trim-color, var(--card-trim-neutral)); }
+  50%      { box-shadow: 0 0 0 1px transparent, 0 0 18px -4px var(--tile-glow), inset 0 0 0 2px var(--archetype-trim-color, var(--card-trim-neutral)); }
 }
 
 /* --- Upgraded + desaturated modes --- */
@@ -182,6 +195,9 @@
         transparent 6px 14px
       );
   }
+
+  // Suppress archetype trim — identity signals are hidden on undiscovered cards.
+  box-shadow: none;
 
   &:hover, &:focus-visible {
     border-color: rgba(150, 140, 180, 0.5);
@@ -430,15 +446,16 @@
     transform var(--card-tile-transition-duration) ease-out,
     border-color var(--card-tile-transition-duration) ease,
     filter var(--card-tile-transition-duration) ease,
+    box-shadow var(--card-tile-transition-duration) ease,
     clip-path var(--card-tile-transition-duration) ease;
-  // Suppress box-shadow — clip-path clips at the bounding rect, not the polygon.
-  box-shadow: none !important;
-  // Default state: no glow (--tile-glow is transparent for common).
-  filter: drop-shadow(0 0 0 transparent);
+  // Outer box-shadow bleeds past the polygon bounding rect — redirect to filter.
+  // Inset box-shadow IS clipped naturally by clip-path, so we use it for trim.
+  box-shadow: inset 0 0 0 2px var(--archetype-trim-color, var(--card-trim-neutral));
+  filter: drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow));
 
   &:hover,
   &:focus-visible {
-    box-shadow: none !important;
+    box-shadow: inset 0 0 0 3px var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
     filter:
       drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
       brightness(1.06);
@@ -460,13 +477,14 @@
     transform var(--card-tile-transition-duration) ease-out,
     border-color var(--card-tile-transition-duration) ease,
     filter var(--card-tile-transition-duration) ease,
+    box-shadow var(--card-tile-transition-duration) ease,
     clip-path var(--card-tile-transition-duration) ease;
-  box-shadow: none !important;
-  filter: drop-shadow(0 0 0 transparent);
+  box-shadow: inset 0 0 0 2px var(--archetype-trim-color, var(--card-trim-neutral));
+  filter: drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow));
 
   &:hover,
   &:focus-visible {
-    box-shadow: none !important;
+    box-shadow: inset 0 0 0 3px var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
     filter:
       drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
       brightness(1.06);
@@ -486,13 +504,14 @@
     transform var(--card-tile-transition-duration) ease-out,
     border-color var(--card-tile-transition-duration) ease,
     filter var(--card-tile-transition-duration) ease,
+    box-shadow var(--card-tile-transition-duration) ease,
     clip-path var(--card-tile-transition-duration) ease;
-  box-shadow: none !important;
-  filter: drop-shadow(0 0 0 transparent);
+  box-shadow: inset 0 0 0 2px var(--archetype-trim-color, var(--card-trim-neutral));
+  filter: drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow));
 
   &:hover,
   &:focus-visible {
-    box-shadow: none !important;
+    box-shadow: inset 0 0 0 3px var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
     filter:
       drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
       brightness(1.06);
@@ -513,13 +532,14 @@
     transform var(--card-tile-transition-duration) ease-out,
     border-color var(--card-tile-transition-duration) ease,
     filter var(--card-tile-transition-duration) ease,
+    box-shadow var(--card-tile-transition-duration) ease,
     clip-path var(--card-tile-transition-duration) ease;
-  box-shadow: none !important;
-  filter: drop-shadow(0 0 0 transparent);
+  box-shadow: inset 0 0 0 2px var(--archetype-trim-color, var(--card-trim-neutral));
+  filter: drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow));
 
   &:hover,
   &:focus-visible {
-    box-shadow: none !important;
+    box-shadow: inset 0 0 0 3px var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
     filter:
       drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
       brightness(1.06);

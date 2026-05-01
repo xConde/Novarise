@@ -95,6 +95,10 @@
   font-size: var(--font-size-xs);
   color: var(--text-color);
   gap: var(--spacing-xs);
+  // Left-edge archetype stripe: inset shadow so it layers inside the existing
+  // border without overriding it. Upgraded gold border can still show on all
+  // four edges; the 3px inset stripe is a separate layer inside the box.
+  box-shadow: inset 3px 0 0 var(--archetype-trim-color, var(--card-trim-neutral));
 
   &--upgraded {
     border-color: rgba(255, 215, 0, 0.4);
