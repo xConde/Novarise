@@ -5,7 +5,8 @@ export type IconName =
   | 'cart' | 'check' | 'card' | 'moon' | 'kills'
   | 'draw-pile' | 'discard' | 'exhaust' | 'crosshair' | 'bolt' | 'shield'
   | 'node-combat' | 'node-elite' | 'node-boss'
-  | 'node-rest' | 'node-shop' | 'node-event' | 'node-unknown';
+  | 'node-rest' | 'node-shop' | 'node-event' | 'node-unknown'
+  | 'kw-terraform' | 'kw-link' | 'kw-exhaust' | 'kw-retain' | 'kw-innate' | 'kw-ethereal';
 
 export interface IconDef {
   readonly viewBox: string;
@@ -44,4 +45,10 @@ export const ICON_REGISTRY: Record<IconName, IconDef> = {
   'node-shop':     { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '2.5' },
   'node-event':    { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '3' },
   'node-unknown':  { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '3' },
+  'kw-terraform':  { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '1.5' },
+  'kw-link':       { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '1.5' },
+  'kw-exhaust':    { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '1.5' },
+  'kw-retain':     { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '1.5' },
+  'kw-innate':     { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '1.5' },
+  'kw-ethereal':   { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '1.5' },
 };
