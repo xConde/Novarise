@@ -234,5 +234,23 @@
       <svg:line x1="20" y1="4"  x2="4"  y2="20"/>
     </ng-container>
 
+    <!-- tower-art: generic turret silhouette — hexagonal base, vertical body,
+         dome-like turret head, antenna/barrel at top. Tinted via currentColor
+         so the per-tower-type accent color flows through (orange BASIC etc).
+         Displayed large in the card art zone. -->
+    <ng-container *ngSwitchCase="'tower-art'">
+      <!-- Base platform (hex top + foot) -->
+      <svg:polyline points="3,21 7,18 17,18 21,21"/>
+      <!-- Tower body -->
+      <svg:rect x="9" y="10" width="6" height="8"/>
+      <!-- Turret head (dome) -->
+      <svg:path d="M8 10 A4 3 0 0 1 16 10"/>
+      <!-- Cannon / antenna -->
+      <svg:line x1="12" y1="7" x2="12" y2="3"/>
+      <!-- Window slits on body -->
+      <svg:line x1="11" y1="13" x2="13" y2="13"/>
+      <svg:line x1="11" y1="15" x2="13" y2="15"/>
+    </ng-container>
+
   </ng-container>
 </svg>

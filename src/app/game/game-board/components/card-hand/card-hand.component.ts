@@ -147,8 +147,9 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
    */
   energyPips: readonly number[] = [];
 
-  // Expose enum to template
+  // Expose enums to template
   readonly CardType = CardType;
+  readonly CardRarity = CardRarity;
 
   // Sprint 36 — card-play lift animation
   /** instanceId of the card currently animating out (lift + fade). Null when no animation is running. */

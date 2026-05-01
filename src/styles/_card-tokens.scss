@@ -23,10 +23,11 @@
   --card-min-height-tablet:  8rem;
   --card-min-height-mobile:  6rem;
 
-  // padding-top reserves space for the cost pip + corner icon
-  --card-padding-top-desktop: 2.4rem;
-  --card-padding-top-tablet:  2rem;
-  --card-padding-top-mobile:  1.6rem;
+  // padding-top reserves space for the cost pip + corner icon + art zone
+  // (the large per-type art icon sits at top:2.6rem with 2.5rem height).
+  --card-padding-top-desktop: 5.3rem;
+  --card-padding-top-tablet:  4.5rem;
+  --card-padding-top-mobile:  3.9rem;
 
   // padding-bottom — instance dot was removed at S76, but a small
   // bottom strip keeps the keyword-badge row breathable.
