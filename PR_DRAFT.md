@@ -1,8 +1,8 @@
 # PR Draft — feat/threejs-polish
 
 **Target branch:** main
-**Commits:** 131 ahead of main
-**Files changed:** 130 files, +19244/−1863 lines
+**Commits:** 129 ahead of main
+**Files changed:** 131 files, +19512/−1863 lines
 **Test count:** 7374 passing / 0 failed / 1 skipped (was 6973 at branch start; +401 net)
 
 ---
@@ -163,5 +163,7 @@ Two checklists must be completed before merging:
 ## On merge
 
 Delete both plan docs per their cleanup-on-close instructions:
-- `.claude/tasks/project_tower_polish_plan.md`
-- `.claude/tasks/project_tower_aim_plan.md`
+- `~/.claude/projects/-Users-edconde-dev-Novarise/memory/project_tower_polish_plan.md`
+- `~/.claude/projects/-Users-edconde-dev-Novarise/memory/project_tower_aim_plan.md`
+
+And remove their pointer lines from `~/.claude/projects/-Users-edconde-dev-Novarise/memory/MEMORY.md`.
