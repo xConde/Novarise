@@ -7,8 +7,7 @@ export type IconName =
   | 'node-combat' | 'node-elite' | 'node-boss'
   | 'node-rest' | 'node-shop' | 'node-event' | 'node-unknown'
   | 'kw-terraform' | 'kw-link' | 'kw-exhaust' | 'kw-retain' | 'kw-innate' | 'kw-ethereal'
-  | 'arch-cartographer' | 'arch-highground' | 'arch-conduit' | 'arch-neutral'
-  | 'tower-art';
+  | 'arch-cartographer' | 'arch-highground' | 'arch-conduit' | 'arch-neutral';
 
 export interface IconDef {
   readonly viewBox: string;
@@ -57,9 +56,4 @@ export const ICON_REGISTRY: Record<IconName, IconDef> = {
   'arch-highground':    { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
   'arch-conduit':       { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
   'arch-neutral':       { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
-  // Tower-art — generic turret silhouette displayed at large size in the
-  // card art zone for tower cards. Tinted via currentColor so the per-tower
-  // accent color (orange BASIC / purple SNIPER / lime SPLASH / blue SLOW /
-  // yellow CHAIN / red-orange MORTAR) flows through.
-  'tower-art':          { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
 };

@@ -71,17 +71,6 @@
         <app-icon *ngIf="card.definition.type === CardType.UTILITY" name="gear" [size]="20"></app-icon>
       </span>
 
-      <!-- Card art — large per-type icon in the upper "art zone." Towers show
-           a turret silhouette tinted by --card-tower-accent (the per-tower-type
-           color); spell/modifier/utility cards show their type icon at large
-           size. Gives every card a visual focal point. -->
-      <span class="card__art-icon" aria-hidden="true">
-        <app-icon *ngIf="card.definition.type === CardType.TOWER" name="tower-art" [size]="40"></app-icon>
-        <app-icon *ngIf="card.definition.type === CardType.SPELL" name="bolt" [size]="40"></app-icon>
-        <app-icon *ngIf="card.definition.type === CardType.MODIFIER" name="shield" [size]="40"></app-icon>
-        <app-icon *ngIf="card.definition.type === CardType.UTILITY" name="gear" [size]="40"></app-icon>
-      </span>
-
       <!-- Card name -->
       <span class="card__name">{{ card.definition.name }}</span>
 

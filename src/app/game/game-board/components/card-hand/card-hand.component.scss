@@ -785,36 +785,6 @@ body.reduce-motion .card-hand { animation: none; }
   box-shadow: 0 0 0.5rem var(--game-gold-a40);
 }
 
-// Art icon — large per-type silhouette in the upper "art zone." Towers
-// show a turret silhouette in the per-tower-type accent color; spell /
-// modifier / utility cards show their type icon at the same size.
-// Gives every card a visual focal point above the name.
-.card__art-icon {
-  position: absolute;
-  top: 2.6rem;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 2.5rem;
-  height: 2.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--card-tower-accent, var(--card-type-tower));
-  opacity: 0.9;
-  pointer-events: none;
-  z-index: 1; // above art-zone gradient, below scan-line ::after
-
-  @media (max-width: 480px) {
-    top: 1.9rem;
-    width: 1.8rem;
-    height: 1.8rem;
-  }
-}
-
-.card--spell .card__art-icon    { color: var(--card-type-spell); }
-.card--modifier .card__art-icon { color: var(--card-type-modifier); }
-.card--utility .card__art-icon  { color: var(--card-type-utility); }
-
 // Upgraded "+" badge — top-right corner
 .card__upgraded-badge {
   position: absolute;
