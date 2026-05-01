@@ -55,13 +55,13 @@
   transform: translateX(-50%);
 }
 
-/* start_wave: left of the setup panel, arrow points RIGHT toward panel */
+/* start_wave: below the End Turn button at top-center, arrow points UP */
 .tutorial-card--start_wave {
-  top: auto;
-  bottom: 4rem;
-  right: 22rem; /* just left of the setup panel (~18rem wide + gap) */
-  left: auto;
-  transform: none;
+  top: 9rem;
+  bottom: auto;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
 }
 
 /* upgrade_tower: above the tower bar, centered */
@@ -98,16 +98,16 @@
   border-top: 8px solid var(--theme-purple);
 }
 
-/* start_wave card is left of the setup panel → arrow points RIGHT */
+/* start_wave card sits below the End Turn button → arrow points UP */
 .tutorial-card--start_wave::after {
   content: '';
   position: absolute;
-  right: -8px;
-  top: 50%;
-  transform: translateY(-50%);
-  border-top: 8px solid transparent;
-  border-bottom: 8px solid transparent;
-  border-left: 8px solid var(--theme-purple);
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 8px solid var(--theme-purple);
 }
 
 /* upgrade_tower card sits above the tower bar → arrow points DOWN */
