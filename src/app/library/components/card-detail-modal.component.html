@@ -93,6 +93,13 @@
       </article>
     </section>
 
+    <!-- Flavor text — lore / personality; hidden when undefined -->
+    <p *ngIf="definition.flavorText"
+       class="modal__flavor"
+       [attr.aria-label]="'Flavor: ' + definition.flavorText">
+      "{{ definition.flavorText }}"
+    </p>
+
     <!-- Balance numbers -->
     <section class="modal__balance" aria-label="Balance numbers">
       <h3 class="modal__section-title">Balance</h3>

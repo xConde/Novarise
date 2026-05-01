@@ -313,6 +313,14 @@
   border-radius: var(--border-radius-sm);
 }
 
+.card-detail__flavor {
+  margin: var(--card-flavor-margin-top) 0 0;
+  font-size: var(--card-flavor-font-size);
+  line-height: var(--card-flavor-line-height);
+  color: var(--card-flavor-color);
+  font-style: italic;
+}
+
 // ── Footer ────────────────────────────────────────────────
 
 .card-detail__footer {

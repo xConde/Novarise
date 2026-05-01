@@ -247,6 +247,14 @@ export interface CardDefinition {
    * (telemetry payload, card-crafting state, etc.) — in that case bump.
    */
   readonly archetype: CardArchetype;
+
+  /**
+   * Optional flavor / lore text shown in detail surfaces (tooltip, card-detail
+   * modal, library card-detail-modal). Plain text only — no keyword tokens.
+   * Max 80 chars enforced at spec level. Undefined on cards that have not yet
+   * received flavor; the UI suppresses the element entirely when absent.
+   */
+  readonly flavorText?: string;
 }
 
 export type CardEffect =

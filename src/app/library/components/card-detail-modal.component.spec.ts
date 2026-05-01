@@ -275,4 +275,31 @@ describe('CardDetailModalComponent', () => {
       expect(component.isTowerCard).toBeFalse();
     });
   });
+
+  describe('flavor text display', () => {
+    it('renders .modal__flavor when flavorText is set', () => {
+      component.definition = { ...towerDef, flavorText: 'Test flavor' };
+      refresh();
+
+      const flavor = fixture.nativeElement.querySelector('.modal__flavor') as HTMLElement;
+      expect(flavor).not.toBeNull();
+      expect(flavor.textContent).toContain('Test flavor');
+    });
+
+    it('does NOT render .modal__flavor when flavorText is undefined', () => {
+      component.definition = towerDef;
+      refresh();
+
+      const flavor = fixture.nativeElement.querySelector('.modal__flavor');
+      expect(flavor).toBeNull();
+    });
+
+    it('aria-label on flavor element prefixes with "Flavor: "', () => {
+      component.definition = { ...towerDef, flavorText: 'Test flavor' };
+      refresh();
+
+      const flavor = fixture.nativeElement.querySelector('.modal__flavor') as HTMLElement;
+      expect(flavor.getAttribute('aria-label')).toBe('Flavor: Test flavor');
+    });
+  });
 });

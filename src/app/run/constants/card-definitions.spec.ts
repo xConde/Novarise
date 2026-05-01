@@ -1333,4 +1333,29 @@ describe('CARD_DEFINITIONS', () => {
       }
     });
   });
+
+  // ── flavorText length guard ──────────────────────────────────────────────
+  describe('flavorText', () => {
+    it('every flavorText, when present, is 80 characters or fewer', () => {
+      for (const def of Object.values(CARD_DEFINITIONS)) {
+        if (def.flavorText !== undefined) {
+          expect(def.flavorText.length).toBeLessThanOrEqual(
+            80,
+            `${def.id} flavorText exceeds 80 chars (${def.flavorText.length}): "${def.flavorText}"`,
+          );
+        }
+      }
+    });
+
+    it('no flavorText is empty string (use undefined to omit, not empty)', () => {
+      for (const def of Object.values(CARD_DEFINITIONS)) {
+        if (def.flavorText !== undefined) {
+          expect(def.flavorText.trim().length).toBeGreaterThan(
+            0,
+            `${def.id} has an empty flavorText — use undefined instead`,
+          );
+        }
+      }
+    });
+  });
 });

@@ -341,6 +341,15 @@
   color: var(--text-color);
 }
 
+.modal__flavor {
+  margin: var(--card-flavor-margin-top) var(--spacing-md) 0;
+  font-size: var(--card-flavor-font-size);
+  line-height: var(--card-flavor-line-height);
+  color: var(--card-flavor-color);
+  font-style: italic;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
 /* --- Balance table --- */
 
 .modal__balance {

@@ -190,6 +190,11 @@
     <div *ngIf="hoverTooltipKeywords(hoveredCard).length > 0" class="card-tooltip__keywords">
       <span *ngFor="let kw of hoverTooltipKeywords(hoveredCard)" class="card-tooltip__keyword">{{ kw }}</span>
     </div>
+    <p *ngIf="hoveredCard.definition.flavorText"
+       class="card-tooltip__flavor"
+       [attr.aria-label]="'Flavor: ' + hoveredCard.definition.flavorText">
+      "{{ hoveredCard.definition.flavorText }}"
+    </p>
   </div>
 
 </div>

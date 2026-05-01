@@ -267,4 +267,40 @@ describe('CardDetailComponent', () => {
       expect(chips[0].textContent?.toLowerCase()).toContain('energy');
     });
   });
+
+  describe('flavor text display', () => {
+    it('renders .card-detail__flavor when flavorText is set', () => {
+      const def = getCardDefinition(CardId.GOLD_RUSH);
+      component.card = makeHandCard(CardId.GOLD_RUSH, {
+        definition: { ...def, flavorText: 'Test flavor' },
+      });
+      fixture.detectChanges();
+
+      const flavor = (fixture.nativeElement as HTMLElement)
+        .querySelector<HTMLElement>('.card-detail__flavor');
+      expect(flavor).not.toBeNull();
+      expect(flavor?.textContent).toContain('Test flavor');
+    });
+
+    it('does NOT render .card-detail__flavor when flavorText is undefined', () => {
+      component.card = makeHandCard(CardId.GOLD_RUSH);
+      fixture.detectChanges();
+
+      const flavor = (fixture.nativeElement as HTMLElement)
+        .querySelector('.card-detail__flavor');
+      expect(flavor).toBeNull();
+    });
+
+    it('aria-label on flavor element prefixes with "Flavor: "', () => {
+      const def = getCardDefinition(CardId.GOLD_RUSH);
+      component.card = makeHandCard(CardId.GOLD_RUSH, {
+        definition: { ...def, flavorText: 'Test flavor' },
+      });
+      fixture.detectChanges();
+
+      const flavor = (fixture.nativeElement as HTMLElement)
+        .querySelector<HTMLElement>('.card-detail__flavor');
+      expect(flavor?.getAttribute('aria-label')).toBe('Flavor: Test flavor');
+    });
+  });
 });

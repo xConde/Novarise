@@ -99,6 +99,11 @@
           <app-description-text [description]="upgradedDescription"></app-description-text>
         </p>
       </div>
+      <p *ngIf="definition.flavorText"
+         class="card-detail__flavor"
+         [attr.aria-label]="'Flavor: ' + definition.flavorText">
+        "{{ definition.flavorText }}"
+      </p>
     </section>
 
     <!-- Footer hint -->

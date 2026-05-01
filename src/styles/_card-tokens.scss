@@ -541,6 +541,15 @@
   --card-footprint-opacity:   0.65;
 
 
+  // === Card flavor ===
+  // Italic, slightly muted lore text below description in detail surfaces.
+  // Does not render in-hand or on library tiles — detail surfaces only.
+  --card-flavor-color:       rgba(220, 220, 230, 0.50);
+  --card-flavor-font-size:   0.7rem;
+  --card-flavor-line-height: 1.3;
+  --card-flavor-margin-top:  0.5rem;
+
+
   // === Keyword icon tints ===
   // Applied via color: in .card__keyword--{name} rules.
   // Icons use currentColor so each badge inherits the per-keyword hue.

@@ -678,6 +678,55 @@ describe('CardHandComponent', () => {
       // Should anchor below (bottom + gap), not negative
       expect(top).toBeGreaterThanOrEqual(110);
     });
+
+    describe('flavor text display', () => {
+      function makeCardWithFlavor(flavorText: string): HandCard {
+        const def = getCardDefinition(CardId.TOWER_BASIC);
+        return {
+          instance: { cardId: CardId.TOWER_BASIC, instanceId: 'flavor-inst', upgraded: false },
+          definition: { ...def, flavorText },
+          canPlay: true,
+          effectiveEnergyCost: def.energyCost,
+          goldCost: null,
+        };
+      }
+
+      function makeCardNoFlavor(): HandCard {
+        const def = getCardDefinition(CardId.TOWER_BASIC);
+        return {
+          instance: { cardId: CardId.TOWER_BASIC, instanceId: 'no-flavor-inst', upgraded: false },
+          definition: { ...def },
+          canPlay: true,
+          effectiveEnergyCost: def.energyCost,
+          goldCost: null,
+        };
+      }
+
+      it('renders .card-tooltip__flavor when flavorText is set', () => {
+        component.hoveredCard = makeCardWithFlavor('Test flavor');
+        fixture.detectChanges();
+
+        const flavor = fixture.nativeElement.querySelector('.card-tooltip__flavor') as HTMLElement;
+        expect(flavor).not.toBeNull();
+        expect(flavor.textContent).toContain('Test flavor');
+      });
+
+      it('does NOT render .card-tooltip__flavor when flavorText is undefined', () => {
+        component.hoveredCard = makeCardNoFlavor();
+        fixture.detectChanges();
+
+        const flavor = fixture.nativeElement.querySelector('.card-tooltip__flavor');
+        expect(flavor).toBeNull();
+      });
+
+      it('aria-label on flavor element prefixes with "Flavor: "', () => {
+        component.hoveredCard = makeCardWithFlavor('Test flavor');
+        fixture.detectChanges();
+
+        const flavor = fixture.nativeElement.querySelector('.card-tooltip__flavor') as HTMLElement;
+        expect(flavor.getAttribute('aria-label')).toBe('Flavor: Test flavor');
+      });
+    });
   });
 
   describe('frame class binding', () => {
