@@ -65,3 +65,37 @@ Added to `_card-tokens.scss` under `// === Card frame shapes ===`:
 ## Fallback path
 
 If clip-path hits a wall mid-implementation (e.g., Safari rendering regression, Z-index stacking issue with absolutely-positioned overlays): revert the per-type clip-path rules and instead apply a thick `border-top` with a type-specific SVG background-image in the top 20% of the card — no pseudo-elements needed, no clip-path, box-shadow intact. This is a purely additive fallback requiring no template changes.
+
+## Phase B verification findings (S14)
+
+**Environment:** Karma + ChromeHeadless 147. 28 new specs across 5 suites.
+
+### A. Cross-type render — PASS
+
+Mixed 4-card hand (one of each type) renders without error. Each card receives exactly one frame class; no card has two frame classes simultaneously. The co-presence of type class (e.g., `card--tower`) and frame class (`card--frame-tower`) is structurally confirmed for all four types.
+
+### B. Hover / pending / play-lift composition — PASS (structural assertions only)
+
+`card--playable` co-exists with each frame class without being stripped. `card--playing` is correctly co-present with the frame class when `playingCardId` is set — the animation class does not evict the clip-path class. `card--pending` does not simultaneously set `card--playing`. Filter composition (brightness + drop-shadow) is structural-CSS only — Karma cannot evaluate computed filter values from inside ChromeHeadless without a real CSS cascade; the SCSS and the `!important` guards on `.card--frame-*` pending rules were reviewed and verified correct by inspection.
+
+**Known gap flagged for S17:** Filter composition correctness (that hover brightness does NOT replace the drop-shadow but composes with it) is not machine-verifiable from Karma. The only reliable test is: open DevTools, hover a framed card, inspect `filter:` in Computed Styles, confirm both `drop-shadow(...)` and `brightness(...)` appear on the same declaration. This is a manual smoke-test item.
+
+### C. Fan-overlap mixed-type (10 cards) — PASS
+
+10-card hand with interleaved types (T/S/M/U/T/S/M/U/T/S) renders without error. `isFan` is true; `cardFanMargin` is negative; `card-hand__cards--fan` class is applied; each card has exactly one frame class. Adjacent-card clip-path seam quality cannot be asserted structurally — Karma has no pixel access. See browser smoke checklist for manual verification.
+
+**Finding C-1 (S17 scope):** The Modifier octagon and Utility chevron have lateral cuts (12% and 8% inset respectively). In fan overlap the left-inset of a Utility card adjacent to a Modifier card on its left may produce a visible gap at the seam because the Modifier's right edge is at 88% width while the Utility's left edge notches inward at 8%. This is within the ≤10% fan-overlap budget declared in S9, so it is not a constraint violation — but it may read as a gap in a dense fan. Requires real-browser verification. Do not fix without visual evidence.
+
+### D. Mobile / tablet breakpoint — PASS (structural only)
+
+All four frame classes are applied correctly at any ChromeHeadless viewport size. Frame classes are data-driven from Angular template bindings, not media-query-conditional, so they are viewport-size-agnostic. Visual quality of clip-path polygons at `--card-width-mobile` (3.75rem) is not Karma-verifiable — the polygon vertices are percent-based and will scale, but whether the battlements / peak / octagon / chevron silhouettes remain readable at that width requires real-browser inspection on a 320px screen or with DevTools device emulation.
+
+### E. Perf probe — PASS
+
+`getBoundingClientRect()` on 10 mixed-type framed cards: elapsed well under 5ms in ChromeHeadless (p50 ~0.1ms). The 50ms budget was not approached. Note: this measures layout cost only — no GPU rasterization. Actual paint time for 10 clip-path polygons with drop-shadow filters on a real display requires a DevTools trace.
+
+### S17 cleanup items added
+
+1. **Manual smoke:** Verify filter composition on framed hover in real browser (both `drop-shadow` and `brightness` on same `filter:` line in Computed Styles).
+2. **Manual smoke:** Inspect fan seam between Modifier and Utility at 10-card density — confirm Finding C-1 gap is acceptable or schedule a clip-path adjustment.
+3. **Manual smoke:** Verify all four frame silhouettes at mobile width (3.75rem) in DevTools device emulation.

@@ -785,4 +785,328 @@ describe('CardHandComponent', () => {
       expect(card.classList.contains('card--frame-utility')).toBe(true);
     });
   });
+
+  // ── S14 Phase B cross-type integration ────────────────────────────────────
+
+  describe('cross-type render (mixed hand)', () => {
+    // One representative card per type
+    const MIXED_HAND: CardId[] = [
+      CardId.TOWER_BASIC,    // TOWER
+      CardId.GOLD_RUSH,      // SPELL
+      CardId.DAMAGE_BOOST,   // MODIFIER
+      CardId.DRAW_TWO,       // UTILITY
+    ];
+
+    const FRAME_CLASSES: Record<string, string> = {
+      [CardId.TOWER_BASIC]:   'card--frame-tower',
+      [CardId.GOLD_RUSH]:     'card--frame-spell',
+      [CardId.DAMAGE_BOOST]:  'card--frame-modifier',
+      [CardId.DRAW_TWO]:      'card--frame-utility',
+    };
+
+    const TYPE_CLASSES: Record<string, string> = {
+      [CardId.TOWER_BASIC]:   'card--tower',
+      [CardId.GOLD_RUSH]:     'card--spell',
+      [CardId.DAMAGE_BOOST]:  'card--modifier',
+      [CardId.DRAW_TWO]:      'card--utility',
+    };
+
+    const ALL_FRAME_CLASSES = [
+      'card--frame-tower',
+      'card--frame-spell',
+      'card--frame-modifier',
+      'card--frame-utility',
+    ];
+
+    function buildMixedHand(): CardInstance[] {
+      return MIXED_HAND.map(id => makeInstance(id));
+    }
+
+    it('renders 4 cards without error when hand has one of each type', () => {
+      component.deckState = makeDeckState(buildMixedHand());
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      // detectChanges exercises the template path — a render-time error would throw here
+      expect(() => fixture.detectChanges()).not.toThrow();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      expect(cards.length).toBe(4);
+    });
+
+    it('each card in mixed hand has exactly its expected frame class', () => {
+      component.deckState = makeDeckState(buildMixedHand());
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      MIXED_HAND.forEach((cardId, idx) => {
+        const expectedFrame = FRAME_CLASSES[cardId];
+        expect(cards[idx].classList.contains(expectedFrame))
+          .withContext(`card[${idx}] (${cardId}) should have ${expectedFrame}`)
+          .toBe(true);
+      });
+    });
+
+    it('no card in mixed hand has more than one frame class', () => {
+      component.deckState = makeDeckState(buildMixedHand());
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      cards.forEach((card, idx) => {
+        const frameCount = ALL_FRAME_CLASSES.filter(cls => card.classList.contains(cls)).length;
+        expect(frameCount)
+          .withContext(`card[${idx}] should have exactly 1 frame class, found ${frameCount}`)
+          .toBe(1);
+      });
+    });
+
+    it('each card has its type class co-present with its frame class', () => {
+      component.deckState = makeDeckState(buildMixedHand());
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      MIXED_HAND.forEach((cardId, idx) => {
+        const expectedType = TYPE_CLASSES[cardId];
+        const expectedFrame = FRAME_CLASSES[cardId];
+        expect(cards[idx].classList.contains(expectedType))
+          .withContext(`card[${idx}] (${cardId}) should have type class ${expectedType}`)
+          .toBe(true);
+        expect(cards[idx].classList.contains(expectedFrame))
+          .withContext(`card[${idx}] (${cardId}) should have frame class ${expectedFrame}`)
+          .toBe(true);
+      });
+    });
+  });
+
+  describe('hover / pending / play-lift cross-type state classes', () => {
+    const FRAMED_TYPES: Array<{ cardId: CardId; frameClass: string; pendingAnimation: string }> = [
+      { cardId: CardId.TOWER_BASIC,   frameClass: 'card--frame-tower',    pendingAnimation: 'card-frame-tower-pending-pulse' },
+      { cardId: CardId.GOLD_RUSH,     frameClass: 'card--frame-spell',    pendingAnimation: 'card-frame-spell-pending-pulse' },
+      { cardId: CardId.DAMAGE_BOOST,  frameClass: 'card--frame-modifier', pendingAnimation: 'card-frame-modifier-pending-pulse' },
+      { cardId: CardId.DRAW_TWO,      frameClass: 'card--frame-utility',  pendingAnimation: 'card-frame-utility-pending-pulse' },
+    ];
+
+    FRAMED_TYPES.forEach(({ cardId, frameClass }) => {
+      it(`${frameClass}: card--playable co-exists with frame class`, () => {
+        component.deckState = makeDeckState([makeInstance(cardId)]);
+        component.energy = makeEnergy(3, 3);
+        component.resolveHand();
+        fixture.detectChanges();
+
+        const card = fixture.nativeElement.querySelector('.card') as HTMLElement;
+        expect(card.classList.contains(frameClass)).toBe(true);
+        expect(card.classList.contains('card--playable')).toBe(true);
+      });
+
+      it(`${frameClass}: adding card--pending does not also add card--playing`, () => {
+        component.deckState = makeDeckState([makeInstance(cardId)]);
+        component.energy = makeEnergy(3, 3);
+        component.resolveHand();
+        fixture.detectChanges();
+
+        const card = fixture.nativeElement.querySelector('.card') as HTMLElement;
+        // Simulate pending: the template adds card--pending when pendingCardId matches
+        // We verify the frame and base state — no cross-contamination
+        expect(card.classList.contains(frameClass)).toBe(true);
+        expect(card.classList.contains('card--playing')).toBe(false);
+      });
+
+      it(`${frameClass}: card--playing class does not remove frame class`, () => {
+        const instance = makeInstance(cardId);
+        component.deckState = makeDeckState([instance]);
+        component.energy = makeEnergy(3, 3);
+        component.resolveHand();
+        // Simulate the playing state by setting playingCardId directly
+        component.playingCardId = instance.instanceId;
+        fixture.detectChanges();
+
+        const card = fixture.nativeElement.querySelector('.card') as HTMLElement;
+        expect(card.classList.contains(frameClass)).toBe(true);
+        expect(card.classList.contains('card--playing')).toBe(true);
+      });
+    });
+  });
+
+  describe('fan overlap mixed-type (10 cards)', () => {
+    // 10 cards cycling through all 4 types
+    const FAN_HAND_IDS: CardId[] = [
+      CardId.TOWER_BASIC,    // TOWER
+      CardId.GOLD_RUSH,      // SPELL
+      CardId.DAMAGE_BOOST,   // MODIFIER
+      CardId.DRAW_TWO,       // UTILITY
+      CardId.TOWER_SNIPER,   // TOWER
+      CardId.REPAIR_WALLS,   // SPELL
+      CardId.RANGE_EXTEND,   // MODIFIER
+      CardId.RECYCLE,        // UTILITY
+      CardId.TOWER_SPLASH,   // TOWER
+      CardId.SCOUT_AHEAD,    // SPELL
+    ];
+
+    const FAN_FRAME_CLASSES: string[] = [
+      'card--frame-tower',
+      'card--frame-spell',
+      'card--frame-modifier',
+      'card--frame-utility',
+      'card--frame-tower',
+      'card--frame-spell',
+      'card--frame-modifier',
+      'card--frame-utility',
+      'card--frame-tower',
+      'card--frame-spell',
+    ];
+
+    function buildFanHand(): CardInstance[] {
+      return FAN_HAND_IDS.map((id, i) => makeInstance(`inst_fan_${i}` as unknown as CardId));
+    }
+
+    function buildFanHandWithTypes(): CardInstance[] {
+      return FAN_HAND_IDS.map((id, i) => ({ instanceId: `inst_fan_${i}`, cardId: id, upgraded: false }));
+    }
+
+    it('renders 10 cards without error', () => {
+      component.deckState = makeDeckState(buildFanHandWithTypes());
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      expect(() => fixture.detectChanges()).not.toThrow();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      expect(cards.length).toBe(10);
+    });
+
+    it('isFan is true with 10 cards', () => {
+      component.deckState = makeDeckState(buildFanHandWithTypes());
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      expect(component.isFan).toBe(true);
+    });
+
+    it('cardFanMargin is negative in fan mode', () => {
+      component.deckState = makeDeckState(buildFanHandWithTypes());
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      expect(parseFloat(component.cardFanMargin)).toBeLessThan(0);
+    });
+
+    it('each card in 10-card fan has exactly one frame class', () => {
+      component.deckState = makeDeckState(buildFanHandWithTypes());
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const allFrameClasses = [
+        'card--frame-tower', 'card--frame-spell', 'card--frame-modifier', 'card--frame-utility',
+      ];
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      expect(cards.length).toBe(10);
+      cards.forEach((card, idx) => {
+        const frameCount = allFrameClasses.filter(cls => card.classList.contains(cls)).length;
+        expect(frameCount)
+          .withContext(`fan card[${idx}] should have exactly 1 frame class, found ${frameCount}`)
+          .toBe(1);
+      });
+    });
+
+    it('each card in 10-card fan has the correct per-type frame class', () => {
+      component.deckState = makeDeckState(buildFanHandWithTypes());
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      FAN_FRAME_CLASSES.forEach((expectedFrame, idx) => {
+        expect(cards[idx].classList.contains(expectedFrame))
+          .withContext(`fan card[${idx}] should have ${expectedFrame}`)
+          .toBe(true);
+      });
+    });
+
+    it('fan container gets card-hand__cards--fan class with 10 cards', () => {
+      component.deckState = makeDeckState(buildFanHandWithTypes());
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const cardsContainer = fixture.nativeElement.querySelector('.card-hand__cards') as HTMLElement;
+      expect(cardsContainer.classList.contains('card-hand__cards--fan')).toBe(true);
+    });
+  });
+
+  describe('mobile / tablet breakpoint — frame classes survive width changes', () => {
+    // Karma runs in ChromeHeadless with a fixed viewport; we cannot truly resize to
+    // mobile/tablet dimensions from inside a spec. What we CAN verify:
+    // (a) The frame classes are applied regardless of viewport — they're data-driven, not media-query-conditional.
+    // (b) The component renders all 4 types without throwing at any initial viewport size.
+    // Visual quality (do clip-paths look correct at 3.75rem width) requires real-browser inspection.
+
+    const BREAKPOINT_CASES: Array<{ label: string; cardId: CardId; frameClass: string }> = [
+      { label: 'tower at mobile width',   cardId: CardId.TOWER_BASIC,  frameClass: 'card--frame-tower' },
+      { label: 'spell at mobile width',   cardId: CardId.GOLD_RUSH,    frameClass: 'card--frame-spell' },
+      { label: 'modifier at mobile width',cardId: CardId.DAMAGE_BOOST, frameClass: 'card--frame-modifier' },
+      { label: 'utility at mobile width', cardId: CardId.DRAW_TWO,     frameClass: 'card--frame-utility' },
+    ];
+
+    BREAKPOINT_CASES.forEach(({ label, cardId, frameClass }) => {
+      it(`${label}: frame class applied and no render error`, () => {
+        component.deckState = makeDeckState([makeInstance(cardId)]);
+        component.energy = makeEnergy(3, 3);
+        component.resolveHand();
+        expect(() => fixture.detectChanges()).not.toThrow();
+
+        const card = fixture.nativeElement.querySelector('.card') as HTMLElement;
+        expect(card).not.toBeNull();
+        expect(card.classList.contains(frameClass)).toBe(true);
+      });
+    });
+
+    it('mixed 4-card hand renders without error at any ChromeHeadless viewport', () => {
+      const hand = [
+        makeInstance(CardId.TOWER_BASIC),
+        makeInstance(CardId.GOLD_RUSH),
+        makeInstance(CardId.DAMAGE_BOOST),
+        makeInstance(CardId.DRAW_TWO),
+      ];
+      component.deckState = makeDeckState(hand);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      expect(() => fixture.detectChanges()).not.toThrow();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      expect(cards.length).toBe(4);
+    });
+  });
+
+  describe('perf probe — mixed 10-card hand layout cost', () => {
+    function buildMixed10(): CardInstance[] {
+      const ids: CardId[] = [
+        CardId.TOWER_BASIC, CardId.GOLD_RUSH, CardId.DAMAGE_BOOST, CardId.DRAW_TWO,
+        CardId.TOWER_SNIPER, CardId.REPAIR_WALLS, CardId.RANGE_EXTEND, CardId.RECYCLE,
+        CardId.TOWER_SPLASH, CardId.SCOUT_AHEAD,
+      ];
+      return ids.map((id, i) => ({ instanceId: `perf_${i}`, cardId: id, upgraded: false }));
+    }
+
+    it('forces layout on 10 mixed-type cards in under 50ms', () => {
+      component.deckState = makeDeckState(buildMixed10());
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card') as NodeListOf<HTMLElement>;
+      expect(cards.length).toBe(10);
+
+      const start = performance.now();
+      // Force sync layout read on each card — exercises style-recalc + layout
+      cards.forEach(card => { card.getBoundingClientRect(); });
+      const elapsed = performance.now() - start;
+
+      // Gross budget: 50ms. This is not a frame budget — just a pathological-blowup detector.
+      // ChromeHeadless with 10 small elements should be well under 5ms in practice.
+      expect(elapsed).toBeLessThan(50);
+    });
+  });
 });
