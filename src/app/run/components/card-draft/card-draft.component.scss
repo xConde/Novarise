@@ -448,3 +448,9 @@
     &:hover:not(:disabled) { transform: none; }
   }
 }
+
+body.reduce-motion .card-draft__card {
+  animation: none;
+  transition: none;
+  &:hover:not(:disabled) { transform: none; }
+}

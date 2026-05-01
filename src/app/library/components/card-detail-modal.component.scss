@@ -85,6 +85,9 @@
   to   { transform: translateY(0);     opacity: 1; }
 }
 
+body.reduce-motion .backdrop { animation: none; }
+body.reduce-motion .modal { animation: none; }
+
 /* --- Branding art strip --- */
 //
 // Thin strip at the top of the modal that hosts the archetype backdrop pattern,
