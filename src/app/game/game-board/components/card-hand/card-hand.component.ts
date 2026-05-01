@@ -22,6 +22,7 @@ import { getCardDefinition, getEffectiveEnergyCost } from '../../../../run/const
 import { TOWER_CONFIGS, TowerType } from '../../models/tower.model';
 import { RelicService } from '../../../../run/services/relic.service';
 import { ARCHETYPE_DISPLAY } from '../../../../run/constants/archetype.constants';
+import { TowerThumbnailService } from '@core/services/tower-thumbnail.service';
 
 /** Pre-computed view model for a single card in hand. */
 export interface HandCard {
@@ -53,7 +54,10 @@ const MAX_ENERGY_PIPS = 6;
   styleUrls: ['./card-hand.component.scss'],
 })
 export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
-  constructor(@Optional() private relicService: RelicService | null = null) {}
+  constructor(
+    @Optional() private relicService: RelicService | null = null,
+    @Optional() private towerThumbnailService: TowerThumbnailService | null = null,
+  ) {}
 
   @Input() deckState!: DeckState;
   @Input() energy!: EnergyState;
@@ -99,7 +103,19 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
-   * Sprint 12 — Per-tower-type accent color.
+   * Returns a PNG data URL rendered from the actual in-game tower mesh for
+   * tower cards, or null for non-tower cards.  Null is also returned when the
+   * thumbnail service is unavailable (e.g., WebGL missing in test environments).
+   */
+  getTowerThumbnailUrl(card: HandCard): string | null {
+    if (!this.towerThumbnailService) return null;
+    if (!('towerType' in card.definition.effect)) return null;
+    const towerType = (card.definition.effect as { type: 'tower'; towerType: TowerType }).towerType;
+    return this.towerThumbnailService.getThumbnail(towerType);
+  }
+
+  /**
+   * Per-tower-type accent color.
    * Returns a CSS variable string referencing the tower-type accent color
    * (e.g., 'var(--tower-color-sniper)'). Bound to --card-tower-accent on the
    * card element so the art-zone gradient reads the correct per-type color.

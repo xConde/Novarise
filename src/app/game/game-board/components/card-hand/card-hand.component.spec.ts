@@ -13,6 +13,7 @@ import {
 import { getCardDefinition } from '../../../../run/constants/card-definitions';
 import { CardDefinition } from '../../../../run/models/card.model';
 import { ARCHETYPE_DISPLAY } from '../../../../run/constants/archetype.constants';
+import { TowerType } from '../../models/tower.model';
 
 // Minimal deck state helpers ────────────────────────────────────────────────
 
@@ -1293,6 +1294,98 @@ describe('CardHandComponent', () => {
       // Gross budget: 50ms. This is not a frame budget — just a pathological-blowup detector.
       // ChromeHeadless with 10 small elements should be well under 5ms in practice.
       expect(elapsed).toBeLessThan(50);
+    });
+  });
+
+  // ── Tower thumbnail wiring ────────────────────────────────────────────────
+
+  describe('getTowerThumbnailUrl', () => {
+    function makeTowerHandCard(cardId: CardId): HandCard {
+      const def = getCardDefinition(cardId);
+      return {
+        instance: { cardId, instanceId: `thumb_${cardId}`, upgraded: false },
+        definition: def,
+        canPlay: true,
+        effectiveEnergyCost: def.energyCost,
+        goldCost: 50,
+      };
+    }
+
+    function makeSpellHandCard(): HandCard {
+      const def = getCardDefinition(CardId.GOLD_RUSH);
+      return {
+        instance: { cardId: CardId.GOLD_RUSH, instanceId: 'thumb_spell', upgraded: false },
+        definition: def,
+        canPlay: true,
+        effectiveEnergyCost: def.energyCost,
+        goldCost: null,
+      };
+    }
+
+    it('returns null for non-tower cards', () => {
+      const card = makeSpellHandCard();
+      const result = component.getTowerThumbnailUrl(card);
+      expect(result).toBeNull();
+    });
+
+    it('returns null when towerThumbnailService is not injected (test env with null service)', () => {
+      // The @Optional() injection means the service may be null in test environments.
+      (component as unknown as { towerThumbnailService: null }).towerThumbnailService = null;
+      const card = makeTowerHandCard(CardId.TOWER_BASIC);
+      expect(component.getTowerThumbnailUrl(card)).toBeNull();
+    });
+
+    it('returns a string or null for tower cards without throwing', () => {
+      const card = makeTowerHandCard(CardId.TOWER_BASIC);
+      expect(() => component.getTowerThumbnailUrl(card)).not.toThrow();
+      const result = component.getTowerThumbnailUrl(card);
+      // Either a data URL string or null (if WebGL unavailable in this env).
+      if (result !== null) {
+        expect(typeof result).toBe('string');
+      }
+    });
+
+    it('does not render .card__art-thumbnail for non-tower cards in the template', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.GOLD_RUSH)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const thumbnail = fixture.nativeElement.querySelector('.card__art-thumbnail');
+      expect(thumbnail).toBeNull();
+    });
+
+    it('renders .card__art-thumbnail for tower cards when service returns a URL', () => {
+      // Inject a fake TowerThumbnailService that always returns a data URL.
+      const fakeThumbnailService = {
+        getThumbnail: (_type: TowerType) => 'data:image/png;base64,fakedata',
+      };
+      (component as unknown as { towerThumbnailService: typeof fakeThumbnailService }).towerThumbnailService = fakeThumbnailService;
+
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const thumbnail = fixture.nativeElement.querySelector('.card__art-thumbnail') as HTMLImageElement;
+      expect(thumbnail).not.toBeNull();
+      expect(thumbnail.getAttribute('src')).toContain('data:image/png');
+      expect(thumbnail.getAttribute('aria-hidden')).toBe('true');
+    });
+
+    it('does NOT render .card__art-thumbnail for tower cards when service returns null', () => {
+      const nullThumbnailService = {
+        getThumbnail: (_type: TowerType) => null,
+      };
+      (component as unknown as { towerThumbnailService: typeof nullThumbnailService }).towerThumbnailService = nullThumbnailService;
+
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      fixture.detectChanges();
+
+      const thumbnail = fixture.nativeElement.querySelector('.card__art-thumbnail');
+      expect(thumbnail).toBeNull();
     });
   });
 });

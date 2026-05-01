@@ -803,6 +803,30 @@ body.reduce-motion .card-hand { animation: none; }
   }
 }
 
+// Tower mesh thumbnail — rendered PNG from the actual in-game 3-D model.
+// Flow item so it pushes the card name down; only renders on tower cards.
+// object-fit: contain preserves the transparent background from the offscreen render.
+.card__art-thumbnail {
+  display: block;
+  width: 4rem;
+  height: 4rem;
+  object-fit: contain;
+  pointer-events: none;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1; // above art-zone ::before, same layer as other card children
+
+  @media (max-width: 768px) {
+    width: 3.2rem;
+    height: 3.2rem;
+  }
+
+  @media (max-width: 480px) {
+    width: 2.2rem;
+    height: 2.2rem;
+  }
+}
+
 // Card name — first flow item after the top padding reserved for cost pill.
 // The old `margin-top: 55%` (push name below old art zone) was removed now
 // that the card is a normal flex-column: pill is absolute, name is flow.

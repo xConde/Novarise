@@ -81,14 +81,14 @@ interface SampleCard {
 const SAMPLE: SampleCard[] = [
   {
     cardId: CardId.TOWER_BASIC,
-    label: 'neutral tower (TOWER_BASIC, starter, innate)',
+    label: 'neutral tower (TOWER_BASIC, starter — keyword badges suppressed for starters at S77)',
     archetype: 'neutral',
     trimFrag: 'card-trim-neutral',
     backdropFrag: 'card-backdrop-neutral',
     handFrameClass: 'card--frame-tower',
     tileFrameClass: 'tile--frame-tower',
     isTower: true,
-    hasKeywords: true, // innate keyword
+    hasKeywords: false, // starter rarity hides keyword badges in card-hand (S77)
   },
   {
     cardId: CardId.GOLD_RUSH,

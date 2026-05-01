@@ -71,6 +71,15 @@
         <app-icon *ngIf="card.definition.type === CardType.UTILITY" name="gear" [size]="20"></app-icon>
       </span>
 
+      <!-- Tower mesh thumbnail — rendered from the actual in-game 3-D model.
+           Flow item so it pushes the name down naturally; only present on tower
+           cards when the thumbnail service has a URL. -->
+      <img *ngIf="card.definition.type === CardType.TOWER && getTowerThumbnailUrl(card)"
+           class="card__art-thumbnail"
+           [src]="getTowerThumbnailUrl(card)!"
+           alt=""
+           aria-hidden="true">
+
       <!-- Card name -->
       <span class="card__name">{{ card.definition.name }}</span>
 
