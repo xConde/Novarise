@@ -71,14 +71,13 @@ export class TowerThumbnailService implements OnDestroy {
 
       this.scene.add(ambient, key, fill, rim);
 
-      // Camera: nearly head-on with a slight 3/4 from the right + small
-      // elevation so the tower faces the viewer. FOV tightened to 28° for a
-      // tighter "telephoto" frame — fills more of the canvas with the tower
-      // body and reduces perspective distortion. Camera pulled closer
-      // (z 3.0 → 2.6) for additional zoom.
-      this.camera = new THREE.PerspectiveCamera(28, 1, 0.1, 100);
-      this.camera.position.set(0.7, 1.6, 2.6);
-      this.camera.lookAt(0, 0.55, 0);
+      // Camera: head-on, mid-tower height, modest elevation. The tower
+      // mesh is rotated 45° around Y in renderTower() so the front-right
+      // quarter faces the camera (showing barrel length + front face).
+      // FOV 30° — slight telephoto, fills the canvas with the tower body.
+      this.camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+      this.camera.position.set(0, 1.4, 2.6);
+      this.camera.lookAt(0, 0.7, 0);
 
       this.initialized = true;
     } catch {
@@ -97,6 +96,11 @@ export class TowerThumbnailService implements OnDestroy {
       // gridToWorld(0, 0, 1, 1) = { x: -0.5*tileSize, z: -0.5*tileSize }
       // Re-center so the tower sits at world origin for framing.
       mesh.position.set(0, 0, 0);
+      // Rotate the tower so its front quarters toward the camera instead
+      // of the barrel pointing straight along +Z (which foreshortens to a
+      // dot on a head-on camera). 45° around Y exposes the barrel length
+      // and the front-right face simultaneously — reads as "facing us."
+      mesh.rotation.y = Math.PI / 4;
       this.scene.add(mesh);
       this.renderer.render(this.scene, this.camera);
       const url = this.renderer.domElement.toDataURL('image/png');

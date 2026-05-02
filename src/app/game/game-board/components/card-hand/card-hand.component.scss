@@ -837,7 +837,7 @@ body.reduce-motion .card-hand { animation: none; }
   top: 0;
   left: 0;
   right: 0;
-  height: 7rem;
+  height: 6rem;
   width: auto;       // auto with left:0 right:0 = fills width
   margin: 0;          // override flex-flow defaults
   object-fit: contain;
@@ -855,11 +855,11 @@ body.reduce-motion .card-hand { animation: none; }
   box-sizing: border-box;
 
   @media (max-width: 768px) {
-    height: 6rem;
+    height: 5.2rem;
   }
 
   @media (max-width: 480px) {
-    height: 4.2rem;
+    height: 3.6rem;
     padding: 0.2rem;
   }
 }
