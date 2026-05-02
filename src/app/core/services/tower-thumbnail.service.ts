@@ -97,11 +97,17 @@ export class TowerThumbnailService implements OnDestroy {
       // Re-center so the tower sits at world origin for framing.
       mesh.position.set(0, 0, 0);
       // Rotate 90° around Y so the barrel — built along +Z by the factory —
-      // now points along +X. With the camera head-on at +Z, the barrel
-      // sweeps left-right across the image: the classic TD "action-shot"
-      // profile pose. Body in 3/4 side view, weapon visibly aimed.
+      // now points along +X. Camera at +Z sees the barrel sweeping
+      // left-right across the image (classic TD action-shot profile).
       mesh.rotation.y = Math.PI / 2;
       this.scene.add(mesh);
+
+      // Auto-frame the camera to each tower's actual bounding box so every
+      // tower occupies the same fraction of the canvas regardless of its
+      // real-world size. Without this, BASIC (~0.4u tall) appears tiny in
+      // its frame while SNIPER (~1.5u tall) fills the canvas.
+      this.frameMeshToCamera(mesh);
+
       this.renderer.render(this.scene, this.camera);
       const url = this.renderer.domElement.toDataURL('image/png');
       return url;
@@ -113,6 +119,41 @@ export class TowerThumbnailService implements OnDestroy {
         disposeMeshGroup(mesh);
       }
     }
+  }
+
+  /**
+   * Reposition the camera so the given mesh fills a consistent fraction of
+   * the rendered canvas. Computes the mesh's world-space bounding box and
+   * places the camera at a distance proportional to the box's diagonal,
+   * looking at the box center. Shorter towers get a closer camera; taller
+   * towers get a farther camera. Result: all towers appear roughly equal
+   * "size" in their thumbnails.
+   */
+  private frameMeshToCamera(mesh: THREE.Object3D): void {
+    if (!this.camera) return;
+
+    const bbox = new THREE.Box3().setFromObject(mesh);
+    const center = bbox.getCenter(new THREE.Vector3());
+    const size = bbox.getSize(new THREE.Vector3());
+
+    // Largest visible dimension drives the framing. For action-shot pose
+    // (barrel along +X), width usually dominates; for tall sniper, height
+    // can rival it. Take max of width / height.
+    const maxDim = Math.max(size.x, size.y);
+
+    // Required camera distance for the mesh to fit FOV with padding.
+    // tan(fov/2) gives the half-height of the visible plane at distance 1.
+    // We want the mesh's half-size to fit, with 30% padding for breathing
+    // room around the silhouette.
+    const fovRad = (this.camera.fov * Math.PI) / 180;
+    const fitDistance = (maxDim * 0.5) / Math.tan(fovRad / 2);
+    const distance = fitDistance * 1.3; // 30% padding
+
+    // Slight upward bias (camera y above center) for a 3/4-from-above feel.
+    const cameraY = center.y + size.y * 0.25;
+
+    this.camera.position.set(0, cameraY, distance);
+    this.camera.lookAt(center.x, center.y, center.z);
   }
 
   ngOnDestroy(): void {
