@@ -824,13 +824,15 @@ body.reduce-motion .card-hand { animation: none; }
 }
 
 // Tower mesh thumbnail — rendered PNG from the actual in-game 3-D model.
-// Flow item dominating the top portion of the card. Only renders on tower
-// cards. The cost + upgrade chips float at top corners on z-index 2; the
-// thumbnail sits beneath them filling the upper card body.
-.card__art-thumbnail {
+// Big, framed art-zone box dominating the upper card body. The cost +
+// upgrade chips float at top corners on z-index 2 over the art frame.
+//
+// Specificity bump (.card .card__art-thumbnail) wins against `.card > *`
+// — same gotcha as cost / upgrade-badge per S81.
+.card .card__art-thumbnail {
   display: block;
-  width: 5.5rem;
-  height: 5rem;
+  width: 6rem;
+  height: 6rem;
   margin: 0 auto;
   object-fit: contain;
   pointer-events: none;
@@ -838,14 +840,25 @@ body.reduce-motion .card-hand { animation: none; }
   position: relative;
   z-index: 1; // above art-zone ::before, below cost + upgrade chips (z:2)
 
+  // Subtle inset frame so the thumbnail reads as a contained "art-zone box"
+  // rather than a loose image floating at the top of the card.
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(0, 0, 0, 0.10) 100%);
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.4rem;
+  padding: 0.25rem;
+  box-sizing: border-box;
+
   @media (max-width: 768px) {
-    width: 4.5rem;
-    height: 4.2rem;
+    width: 4.8rem;
+    height: 4.8rem;
   }
 
   @media (max-width: 480px) {
-    width: 3rem;
-    height: 2.8rem;
+    width: 3.2rem;
+    height: 3.2rem;
+    padding: 0.15rem;
   }
 }
 
