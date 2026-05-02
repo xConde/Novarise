@@ -2656,5 +2656,13 @@ Result: when SNIPER has a target in range, `tickAim`'s lerpYaw result is immedia
 
 ### Phase 3 — Hardening applied
 
-Picking **Finding 1** (HIGH) as the critical fix. Adding a parity spec to `icon.component.spec.ts` that validates render-time SVG primitive counts against the `EFFECT_ICON_PATHS` and `KEYWORD_ICON_PATHS` data file entries. See diff in next commit.
+Picking **Finding 1** (HIGH) as the critical fix. Adding a parity spec to `icon.component.spec.ts` that validates render-time SVG primitive counts against the `EFFECT_ICON_PATHS` and `KEYWORD_ICON_PATHS` data file entries. Shipped in commit `f0c649a` — 18 new parity specs (6 keyword + 12 effect), 7763 SUCCESS / 0 FAILED.
+
+## Deployment Checklist — feat/card-branding
+
+- [x] Step 1: Fix in-scope lint warnings (6 unused imports across 3 spec files; 2 console.debug in card-play.service.ts are pre-existing on `main`, documented exempt in prior PR's deployment checklist) — 8→2 warnings, 2 remaining are documented exempts
+- [x] Step 2: Apply Finding 2 fix — added gated `console.warn` to `TowerThumbnailService` init + render catch blocks. Per-type `renderFailed` Set guards against warn-spam if one tower's render keeps failing. 9/9 service specs still pass.
+- [x] Step 3: Full test suite green — 7763 SUCCESS / 0 FAILED / 1 skipped
+- [x] Step 4: Production build clean — `ng build --configuration=production` completed in 6.5s with no errors
+- [x] Step 5: PR_DRAFT.md updated with red-team + closer summary (next commit)
 
