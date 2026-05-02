@@ -141,16 +141,17 @@ export class TowerThumbnailService implements OnDestroy {
     // can rival it. Take max of width / height.
     const maxDim = Math.max(size.x, size.y);
 
-    // Required camera distance for the mesh to fit FOV with padding.
-    // tan(fov/2) gives the half-height of the visible plane at distance 1.
-    // We want the mesh's half-size to fit, with 30% padding for breathing
-    // room around the silhouette.
+    // Tight framing — tower fills the canvas with a hint of breathing room.
+    // 1.05 = 5% padding (was 1.3 = 30%). Tighter framing recovers the
+    // hero-shot flavor lost when the auto-frame uniformized everything.
     const fovRad = (this.camera.fov * Math.PI) / 180;
     const fitDistance = (maxDim * 0.5) / Math.tan(fovRad / 2);
-    const distance = fitDistance * 1.3; // 30% padding
+    const distance = fitDistance * 1.05;
 
-    // Slight upward bias (camera y above center) for a 3/4-from-above feel.
-    const cameraY = center.y + size.y * 0.25;
+    // Stronger upward bias for a 3/4-from-above hero angle. Camera sits
+    // ~40% of the mesh height above center, giving a downward tilt that
+    // shows turret tops + barrel profile dramatically.
+    const cameraY = center.y + size.y * 0.4;
 
     this.camera.position.set(0, cameraY, distance);
     this.camera.lookAt(center.x, center.y, center.z);
