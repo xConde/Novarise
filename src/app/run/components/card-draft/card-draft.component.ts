@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { CardDefinition, CardId, CardRarity, CardType } from '../../models/card.model';
+import { CardDefinition, CardId, CardRarity, CardType, EffectGlyphName } from '../../models/card.model';
 import { CardReward } from '../../models/encounter.model';
 import { getCardDefinition } from '../../constants/card-definitions';
 
@@ -14,6 +14,8 @@ export class CardDraftComponent {
   @Input() skipGoldAmount = 0;
   @Output() cardPicked = new EventEmitter<CardReward>();
   @Output() skipped = new EventEmitter<void>();
+
+  readonly CardType = CardType;
 
   selectedCard: CardId | null = null;
 
@@ -39,5 +41,22 @@ export class CardDraftComponent {
 
   getRarityClass(rarity: CardRarity): string {
     return `card-draft__card--rarity-${rarity}`;
+  }
+
+  getFrameClass(type: CardType): string {
+    return `card-draft__card--frame-${type}`;
+  }
+
+  /** Primary effect glyph for non-tower cards in the draft. */
+  getPrimaryGlyph(definition: CardDefinition): EffectGlyphName | null {
+    const g = definition.effectGlyph;
+    if (!g) return null;
+    return Array.isArray(g) ? g[0] : g;
+  }
+
+  /** Secondary glyph for 2-tuple effectGlyph cards. */
+  getSecondaryGlyph(definition: CardDefinition): EffectGlyphName | null {
+    const g = definition.effectGlyph;
+    return Array.isArray(g) ? g[1] : null;
   }
 }

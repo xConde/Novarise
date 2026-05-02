@@ -16,11 +16,14 @@ import {
   CardRarity,
   CardType,
   DeckState,
+  EffectGlyphName,
   EnergyState,
 } from '../../../../run/models/card.model';
 import { getCardDefinition, getEffectiveEnergyCost } from '../../../../run/constants/card-definitions';
 import { TOWER_CONFIGS, TowerType } from '../../models/tower.model';
 import { RelicService } from '../../../../run/services/relic.service';
+import { ARCHETYPE_DISPLAY } from '../../../../run/constants/archetype.constants';
+import { TowerThumbnailService } from '@core/services/tower-thumbnail.service';
 
 /** Pre-computed view model for a single card in hand. */
 export interface HandCard {
@@ -52,7 +55,10 @@ const MAX_ENERGY_PIPS = 6;
   styleUrls: ['./card-hand.component.scss'],
 })
 export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
-  constructor(@Optional() private relicService: RelicService | null = null) {}
+  constructor(
+    @Optional() private relicService: RelicService | null = null,
+    @Optional() private towerThumbnailService: TowerThumbnailService | null = null,
+  ) {}
 
   @Input() deckState!: DeckState;
   @Input() energy!: EnergyState;
@@ -98,21 +104,40 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
-   * Deterministic hue (0-359) derived from the card instance id.
-   * Used to tint the instance-identifier dot so duplicate cards in the
-   * hand (e.g., 5× Basic Tower) are still visually distinguishable.
+   * Returns a PNG data URL rendered from the actual in-game tower mesh for
+   * tower cards, or null for non-tower cards.  Null is also returned when the
+   * thumbnail service is unavailable (e.g., WebGL missing in test environments).
    */
-  instanceHue(instanceId: string): number {
-    let hash = 0;
-    for (let i = 0; i < instanceId.length; i++) {
-      hash = (hash * 31 + instanceId.charCodeAt(i)) >>> 0;
-    }
-    // Prime-mix to spread similar instance ids across the hue wheel
-    return (hash * 137) % 360;
+  getTowerThumbnailUrl(card: HandCard): string | null {
+    if (!this.towerThumbnailService) return null;
+    if (!('towerType' in card.definition.effect)) return null;
+    const towerType = (card.definition.effect as { type: 'tower'; towerType: TowerType }).towerType;
+    return this.towerThumbnailService.getThumbnail(towerType);
   }
 
   /**
-   * Sprint 12 — Per-tower-type accent color.
+   * Returns the primary effect glyph for a non-tower card, or null when the
+   * card has no `effectGlyph` mapping. The glyph is rendered hero-size in the
+   * art zone (mirrors the tower-thumbnail slot).
+   */
+  getPrimaryGlyph(card: HandCard): EffectGlyphName | null {
+    const glyph = card.definition.effectGlyph;
+    if (!glyph) return null;
+    return Array.isArray(glyph) ? glyph[0] : glyph;
+  }
+
+  /**
+   * Returns the secondary effect glyph (small bottom-right accent) when the
+   * card's `effectGlyph` is a 2-tuple, otherwise null.
+   */
+  getSecondaryGlyph(card: HandCard): EffectGlyphName | null {
+    const glyph = card.definition.effectGlyph;
+    if (!Array.isArray(glyph)) return null;
+    return glyph[1];
+  }
+
+  /**
+   * Per-tower-type accent color.
    * Returns a CSS variable string referencing the tower-type accent color
    * (e.g., 'var(--tower-color-sniper)'). Bound to --card-tower-accent on the
    * card element so the art-zone gradient reads the correct per-type color.
@@ -133,14 +158,36 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
+   * CSS var() reference for the archetype trim color (rest state).
+   * Resolved by the browser from :root tokens set in _card-tokens.scss.
+   * Bound to --archetype-trim-color on each card element.
+   */
+  getArchetypeTrimColor(card: HandCard): string {
+    const archetype = card.definition.archetype;
+    const trimVar = ARCHETYPE_DISPLAY[archetype]?.trimVar ?? '--card-trim-neutral';
+    return `var(${trimVar})`;
+  }
+
+  /**
+   * CSS var() reference for the archetype trim color (hover/selected state).
+   * Bound to --archetype-trim-color-strong on each card element.
+   */
+  getArchetypeTrimColorStrong(card: HandCard): string {
+    const archetype = card.definition.archetype;
+    const trimVarStrong = ARCHETYPE_DISPLAY[archetype]?.trimVarStrong ?? '--card-trim-neutral-strong';
+    return `var(${trimVarStrong})`;
+  }
+
+  /**
    * Array used to render energy pips in the template.
    * Length = energy.max (capped at MAX_ENERGY_PIPS); filled vs empty
    * determined by index vs energy.current in the template.
    */
   energyPips: readonly number[] = [];
 
-  // Expose enum to template
+  // Expose enums to template
   readonly CardType = CardType;
+  readonly CardRarity = CardRarity;
 
   // Sprint 36 — card-play lift animation
   /** instanceId of the card currently animating out (lift + fade). Null when no animation is running. */
@@ -444,12 +491,15 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
-   * Screen-reader label for the keyword-badge row. Expands the compact
-   * I/R/Et/Ex letters into full words so assistive tech announces e.g.
-   * "Keywords: Innate, Exhaust" instead of reading the letters individually.
+   * Screen-reader label for the keyword-badge row. Announces all active
+   * keywords as full words so assistive tech reads e.g. "Keywords: Innate, Exhaust"
+   * rather than icon descriptions. Badge icons are decorative; the wrapping
+   * span carries the semantics via aria-label.
    */
   keywordAriaLabel(card: HandCard): string {
     const words: string[] = [];
+    if (card.definition.terraform) words.push('Terraform');
+    if (card.definition.link) words.push('Link');
     if (card.definition.innate) words.push('Innate');
     if (card.definition.retain) words.push('Retain');
     if (card.definition.ethereal) words.push('Ethereal');

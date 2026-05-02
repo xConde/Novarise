@@ -14,9 +14,12 @@ import {
   CardDefinition,
   CardEffect,
   CardType,
+  EffectGlyphName,
 } from '../../run/models/card.model';
 import { TOWER_CONFIGS, TowerType } from '../../game/game-board/models/tower.model';
 import { FocusTrap } from '@shared/utils/focus-trap.util';
+import { ARCHETYPE_DISPLAY } from '../../run/constants/archetype.constants';
+import { IconName } from '../../shared/components/icon/icon-registry';
 
 interface BalanceRow {
   readonly label: string;
@@ -193,6 +196,55 @@ export class CardDetailModalComponent implements AfterViewInit, OnDestroy {
   /** Effect type label for the header badge (e.g. 'modifier' → 'Modifier'). */
   effectTypeLabel(effect: CardEffect): string {
     return effect.type.replace('_', ' ');
+  }
+
+  /** CSS var() for the archetype trim ring (inset box-shadow on modal shell). */
+  get archetypeTrimColor(): string {
+    const archetype = this.definition.archetype ?? 'neutral';
+    const trimVar = ARCHETYPE_DISPLAY[archetype]?.trimVar ?? '--card-trim-neutral';
+    return `var(${trimVar})`;
+  }
+
+  /** CSS var() for the archetype backdrop pattern in the header strip. */
+  get archetypeBackdropVar(): string {
+    switch (this.definition.archetype) {
+      case 'cartographer': return 'var(--card-backdrop-cartographer)';
+      case 'highground':   return 'var(--card-backdrop-highground)';
+      case 'conduit':      return 'var(--card-backdrop-conduit)';
+      case 'neutral':
+      case 'siegeworks':
+      default:             return 'var(--card-backdrop-neutral)';
+    }
+  }
+
+  /** Icon name for the archetype sub-icon glyph. */
+  get archetypeIconName(): IconName {
+    switch (this.definition.archetype) {
+      case 'cartographer': return 'arch-cartographer';
+      case 'highground':   return 'arch-highground';
+      case 'conduit':      return 'arch-conduit';
+      case 'neutral':
+      case 'siegeworks':
+      default:             return 'arch-neutral';
+    }
+  }
+
+  /** True when the card places a tower (footprint preview should render). */
+  get isTowerCard(): boolean {
+    return this.definition.type === CardType.TOWER;
+  }
+
+  /** Primary effect glyph for non-tower cards (rendered in the modal art-strip). */
+  get primaryGlyph(): EffectGlyphName | null {
+    const g = this.definition.effectGlyph;
+    if (!g) return null;
+    return Array.isArray(g) ? g[0] : g;
+  }
+
+  /** Secondary glyph as a small accent when effectGlyph is a 2-tuple. */
+  get secondaryGlyph(): EffectGlyphName | null {
+    const g = this.definition.effectGlyph;
+    return Array.isArray(g) ? g[1] : null;
   }
 }
 

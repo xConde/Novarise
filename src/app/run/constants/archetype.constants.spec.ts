@@ -1,4 +1,4 @@
-import { ARCHETYPE_DISPLAY } from './archetype.constants';
+import { ARCHETYPE_DISPLAY, getArchetypeTrimVar } from './archetype.constants';
 import { CardArchetype } from '../models/card.model';
 
 describe('ARCHETYPE_DISPLAY', () => {
@@ -37,5 +37,29 @@ describe('ARCHETYPE_DISPLAY', () => {
       expect(ARCHETYPE_DISPLAY[arch].color.length).toBeGreaterThan(0);
       expect(ARCHETYPE_DISPLAY[arch].accent.length).toBeGreaterThan(0);
     }
+  });
+
+  it('every archetype has trimVar and trimVarStrong defined', () => {
+    for (const arch of ALL_ARCHETYPES) {
+      expect(ARCHETYPE_DISPLAY[arch].trimVar.length).toBeGreaterThan(0);
+      expect(ARCHETYPE_DISPLAY[arch].trimVarStrong.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('every trimVar starts with --card-trim-', () => {
+    for (const arch of ALL_ARCHETYPES) {
+      expect(ARCHETYPE_DISPLAY[arch].trimVar).toMatch(/^--card-trim-/);
+      expect(ARCHETYPE_DISPLAY[arch].trimVarStrong).toMatch(/^--card-trim-/);
+    }
+  });
+});
+
+describe('getArchetypeTrimVar', () => {
+  it('returns the correct trimVar for cartographer', () => {
+    expect(getArchetypeTrimVar('cartographer')).toBe('--card-trim-cartographer');
+  });
+
+  it('returns the correct trimVar for neutral', () => {
+    expect(getArchetypeTrimVar('neutral')).toBe('--card-trim-neutral');
   });
 });

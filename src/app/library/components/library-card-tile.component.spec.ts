@@ -10,6 +10,7 @@ import {
 } from '../../run/models/card.model';
 import { TowerType } from '../../game/game-board/models/tower.model';
 import { MODIFIER_STAT } from '../../run/constants/modifier-stat.constants';
+import { ARCHETYPE_DISPLAY } from '../../run/constants/archetype.constants';
 
 describe('LibraryCardTileComponent', () => {
   let fixture: ComponentFixture<LibraryCardTileComponent>;
@@ -29,7 +30,20 @@ describe('LibraryCardTileComponent', () => {
     rarity: CardRarity.STARTER,
     energyCost: 1,
     upgraded: false,
+    archetype: 'neutral',
     effect: { type: 'tower', towerType: TowerType.BASIC },
+  };
+
+  const spellDef: CardDefinition = {
+    id: CardId.GOLD_RUSH,
+    name: 'Gold Rush',
+    description: 'Gain 40 gold.',
+    type: CardType.SPELL,
+    rarity: CardRarity.COMMON,
+    energyCost: 1,
+    upgraded: false,
+    archetype: 'neutral',
+    effect: { type: 'spell', spellId: 'gold_rush', value: 40 },
   };
 
   const modifierDef: CardDefinition = {
@@ -55,6 +69,20 @@ describe('LibraryCardTileComponent', () => {
     },
     archetype: 'conduit',
     link: true,
+  };
+
+  const utilityDef: CardDefinition = {
+    id: CardId.DRAW_TWO,
+    name: 'Quick Draw',
+    description: 'Draw 2 cards.',
+    upgradedDescription: 'Draw 3 cards.',
+    type: CardType.UTILITY,
+    rarity: CardRarity.COMMON,
+    energyCost: 1,
+    upgraded: false,
+    archetype: 'neutral',
+    effect: { type: 'utility', utilityId: 'draw', value: 2 },
+    upgradedEffect: { type: 'utility', utilityId: 'draw', value: 3 },
   };
 
   beforeEach(async () => {
@@ -172,5 +200,179 @@ describe('LibraryCardTileComponent', () => {
     refresh();
     const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
     expect(btn.classList.contains('tile--desaturated')).toBe(true);
+  });
+
+  describe('archetype trim and backdrop bindings', () => {
+    it('archetypeTrimColor returns neutral var for neutral cards', () => {
+      component.definition = towerDef; // archetype: 'neutral'
+      expect(component.archetypeTrimColor).toBe(`var(${ARCHETYPE_DISPLAY['neutral'].trimVar})`);
+    });
+
+    it('archetypeTrimColor returns conduit var for conduit cards', () => {
+      component.definition = modifierDef; // archetype: 'conduit'
+      expect(component.archetypeTrimColor).toBe(`var(${ARCHETYPE_DISPLAY['conduit'].trimVar})`);
+    });
+
+    it('archetypeTrimColorStrong returns conduit strong var for conduit cards', () => {
+      component.definition = modifierDef;
+      expect(component.archetypeTrimColorStrong).toBe(`var(${ARCHETYPE_DISPLAY['conduit'].trimVarStrong})`);
+    });
+
+    it('archetypeBackdropVar returns conduit backdrop for conduit cards', () => {
+      component.definition = modifierDef;
+      expect(component.archetypeBackdropVar).toBe('var(--card-backdrop-conduit)');
+    });
+
+    it('archetypeBackdropVar returns neutral backdrop for neutral cards', () => {
+      component.definition = towerDef;
+      expect(component.archetypeBackdropVar).toBe('var(--card-backdrop-neutral)');
+    });
+
+    it('binds --archetype-trim-color style on the tile button', () => {
+      component.definition = modifierDef; // conduit
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.style.getPropertyValue('--archetype-trim-color')).toContain('card-trim-conduit');
+    });
+
+    it('binds --card-backdrop-image style on the tile button', () => {
+      component.definition = modifierDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.style.getPropertyValue('--card-backdrop-image')).toContain('card-backdrop-conduit');
+    });
+  });
+
+  describe('frame class binding', () => {
+    it('applies tile--frame-tower to tower-type cards', () => {
+      component.definition = towerDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--frame-tower')).toBe(true);
+    });
+
+    it('does NOT apply tile--frame-tower to non-tower cards', () => {
+      component.definition = modifierDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--frame-tower')).toBe(false);
+    });
+
+    it('tower tile has tile--tower alongside tile--frame-tower', () => {
+      component.definition = towerDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--tower')).toBe(true);
+      expect(btn.classList.contains('tile--frame-tower')).toBe(true);
+    });
+  });
+
+  describe('spell frame class binding', () => {
+    it('applies tile--frame-spell to spell-type cards', () => {
+      component.definition = spellDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--frame-spell')).toBe(true);
+    });
+
+    it('does NOT apply tile--frame-spell to non-spell cards', () => {
+      component.definition = towerDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--frame-spell')).toBe(false);
+    });
+
+    it('spell tile has tile--spell alongside tile--frame-spell', () => {
+      component.definition = spellDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--spell')).toBe(true);
+      expect(btn.classList.contains('tile--frame-spell')).toBe(true);
+    });
+  });
+
+  describe('modifier frame class binding', () => {
+    it('applies tile--frame-modifier to modifier-type cards', () => {
+      component.definition = modifierDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--frame-modifier')).toBe(true);
+    });
+
+    it('does NOT apply tile--frame-modifier to non-modifier cards', () => {
+      component.definition = spellDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--frame-modifier')).toBe(false);
+    });
+
+    it('modifier tile has tile--modifier alongside tile--frame-modifier', () => {
+      component.definition = modifierDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--modifier')).toBe(true);
+      expect(btn.classList.contains('tile--frame-modifier')).toBe(true);
+    });
+  });
+
+  describe('utility frame class binding', () => {
+    it('applies tile--frame-utility to utility-type cards', () => {
+      component.definition = utilityDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--frame-utility')).toBe(true);
+    });
+
+    it('does NOT apply tile--frame-utility to non-utility cards', () => {
+      component.definition = towerDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--frame-utility')).toBe(false);
+    });
+
+    it('utility tile has tile--utility alongside tile--frame-utility', () => {
+      component.definition = utilityDef;
+      refresh();
+      const btn = fixture.nativeElement.querySelector('button.tile') as HTMLElement;
+      expect(btn.classList.contains('tile--utility')).toBe(true);
+      expect(btn.classList.contains('tile--frame-utility')).toBe(true);
+    });
+  });
+
+  describe('tower footprint preview', () => {
+    it('renders .tile__footprint on tower cards', () => {
+      component.definition = towerDef;
+      refresh();
+      const fp = fixture.nativeElement.querySelector('.tile__footprint');
+      expect(fp).toBeTruthy();
+    });
+
+    it('does NOT render .tile__footprint on non-tower cards', () => {
+      component.definition = spellDef;
+      refresh();
+      expect(fixture.nativeElement.querySelector('.tile__footprint')).toBeFalsy();
+
+      component.definition = modifierDef;
+      refresh();
+      expect(fixture.nativeElement.querySelector('.tile__footprint')).toBeFalsy();
+
+      component.definition = utilityDef;
+      refresh();
+      expect(fixture.nativeElement.querySelector('.tile__footprint')).toBeFalsy();
+    });
+
+    it('does NOT render .tile__footprint on desaturated tower tiles', () => {
+      component.definition = towerDef;
+      component.desaturated = true;
+      refresh();
+      expect(fixture.nativeElement.querySelector('.tile__footprint')).toBeFalsy();
+    });
+
+    it('footprint SVG is aria-hidden', () => {
+      component.definition = towerDef;
+      refresh();
+      const fp = fixture.nativeElement.querySelector('.tile__footprint');
+      expect(fp?.getAttribute('aria-hidden')).toBe('true');
+    });
   });
 });

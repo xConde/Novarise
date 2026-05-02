@@ -1,0 +1,583 @@
+// === Card surface design tokens ===
+// All custom properties that govern card rendering across card-hand, card-detail,
+// pile-inspector, card-draft, card-library-tile, and card-detail-modal.
+// Consuming SCSS files reference these vars; raw values are defined once here.
+//
+// Reduce-motion hooks:
+//   --card-pending-pulse-duration, --card-play-animation-duration,
+//   --card-rare-shimmer-duration, --card-tile-rare-shimmer-duration, and
+//   --card-modal-enter-duration all have a *-reduced companion set to 0ms.
+//   Implement the reduce-motion overrides in the consuming files (sprint 4+).
+
+:root {
+
+  // === Card sizing (hand) ===
+  // StS / Marvel Snap reference: cards feel substantial when they
+  // command screen real estate. Bumped 12% from initial sizing.
+
+  --card-width-desktop:      7rem;
+  --card-width-tablet:       6rem;
+  --card-width-mobile:       4rem;
+
+  // Cards sized to fit the absolute-pinned tower thumbnail (6rem
+  // desktop / 5.2rem tablet / 3.6rem mobile) at top, leaving room
+  // for name + gold-cost flow content below.
+  --card-min-height-desktop: 10rem;
+  --card-min-height-tablet:  8.8rem;
+  --card-min-height-mobile:  6.6rem;
+
+  // padding-top tracks thumbnail height + small gap before flow content.
+  --card-padding-top-desktop: 6.2rem;
+  --card-padding-top-tablet:  5.4rem;
+  --card-padding-top-mobile:  3.8rem;
+
+  // padding-bottom — instance dot was removed at S76, but a small
+  // bottom strip keeps the keyword-badge row breathable.
+  --card-padding-bottom-desktop: 0.6rem;
+  --card-padding-bottom-tablet:  0.5rem;
+  --card-padding-bottom-mobile:  0.4rem;
+
+  --card-padding-x-desktop: var(--spacing-xs);  // 0.3125rem
+  --card-padding-x-mobile:  0.25rem;
+
+  --card-border-radius: 0.5rem;  // 8px — friendlier corners than the prior 0.25rem
+
+  // Fan overlap margins — applied as negative left margin on non-first cards
+  --card-fan-margin-default: 0;       // set dynamically via [style] binding
+  --card-fan-margin-mobile:  -0.3rem;
+  --card-fan-margin-mobile-fan: -0.6rem;
+
+  // Minimum touch target (WCAG 44px)
+  --card-min-touch-width: 2.75rem;
+
+
+  // === Card background ===
+
+  --card-bg: rgba(10, 5, 20, 0.88);
+
+
+  // === Card type colors ===
+  // Aliases onto existing palette tokens so there is one definition to change.
+
+  --card-type-tower:    var(--tower-color-basic);  // #ff6600
+  --card-type-spell:    var(--theme-cyan);          // #00ffff
+  --card-type-modifier: var(--theme-purple);        // #6a4a8a
+  --card-type-utility:  var(--action-success);      // #50ff88
+
+
+  // === Card art zone ===
+  // Top 55% of the card; rendered as ::before pseudo-element.
+
+  // Match the absolute thumbnail height so the radial-gradient ::before
+  // extends through the full art-zone box. Mismatch produced a visible
+  // color-cutoff seam where the gradient ended early.
+  --card-art-zone-height: 6rem;
+
+  // Opacity values used in the per-type radial gradient stops (inner / outer)
+  --card-art-tower-opacity-inner:    0.28;
+  --card-art-tower-opacity-outer:    0.05;
+  --card-art-spell-opacity-inner:    0.22;
+  --card-art-spell-opacity-outer:    0.04;
+  --card-art-modifier-opacity-inner: 0.28;
+  --card-art-modifier-opacity-outer: 0.05;
+  --card-art-utility-opacity-inner:  0.22;
+  --card-art-utility-opacity-outer:  0.04;
+
+  // CRT scan-line texture (::after) — 1px horizontal lines
+  // Subtle HUD overlay; opacity tuned low so it doesn't compete with chrome.
+  --card-scanline-color:   rgba(255, 255, 255, 0.025);
+  --card-scanline-opacity: 0.25;
+
+
+  // === Card rarity treatment ===
+
+  --card-rarity-common-border:   rgba(255, 255, 255, 0.12);
+
+  --card-rarity-uncommon-border: rgba(100, 200, 255, 0.5);
+  --card-rarity-uncommon-glow-outer: rgba(100, 200, 255, 0.25);
+  --card-rarity-uncommon-glow-inner: rgba(100, 200, 255, 0.08);
+
+  --card-rarity-rare-border:     rgba(255, 215, 0, 0.6);
+  --card-rarity-rare-glow-outer: rgba(255, 215, 0, 0.35);
+  --card-rarity-rare-glow-inner: rgba(255, 215, 0, 0.12);
+
+  --card-rarity-rare-shimmer-duration: 3s;
+  // Reduce-motion hook — override to 0ms when prefers-reduced-motion is active
+  --card-rarity-rare-shimmer-duration-reduced: 0ms;
+
+
+  // === Card state ===
+
+  --card-hover-lift:        -0.5rem;
+  --card-hover-brightness:   1.08;
+
+  --card-unplayable-opacity:   0.55;
+  --card-unplayable-grayscale: 40%;
+  --card-unplayable-border:    rgba(255, 60, 60, 0.55);
+
+  --card-pending-brightness:         1.3;
+  --card-pending-pulse-duration:     1.5s;
+  --card-pending-pulse-duration-reduced: 0ms;
+
+
+  // === Card upgraded state ===
+
+  --card-upgraded-border-width: 0.25rem;
+  // Upgraded border color inherits from the card's type accent (--card-type-color)
+  // No separate color token needed — the type accent IS the upgraded border color.
+  --card-upgraded-glow-inner: rgba(255, 215, 0, 0.15);
+  --card-upgraded-glow-outer: rgba(255, 215, 0, 0.2);
+
+
+  // === Card transitions / animations ===
+
+  // Card-face hover/state transitions delegate to --transition-fast (0.2s)
+  // from _variables.scss — no separate token needed.
+
+  --card-play-animation-duration:         220ms;
+  --card-play-animation-duration-reduced: 0ms;
+
+  --card-tooltip-enter-duration:         120ms;
+  --card-tooltip-enter-duration-reduced: 0ms;
+
+  --card-modal-enter-duration:         150ms;
+  --card-modal-enter-duration-reduced: 0ms;
+
+
+  // === Card accent border widths ===
+  // Top + left edge accents; separate from global --border-width-thin.
+
+  --card-accent-border-width: 0.1875rem;  // 3px — top + left type accent
+
+
+  // === Library card tile sizing ===
+  // LibraryCardTileComponent uses a distinct larger format.
+
+  --card-tile-aspect-ratio: 22 / 32;  // 220:320 per spec
+  --card-tile-min-height:   280px;
+
+  // Tile type accent (CSS custom property bound per tile in the component)
+  // --tile-accent is component-scoped; tokens below define the per-type values
+  // that are assigned to it:
+  --card-tile-accent-tower:    var(--tower-color-basic);
+  --card-tile-accent-spell:    var(--theme-cyan);
+  --card-tile-accent-modifier: var(--theme-purple-light);
+  --card-tile-accent-utility:  var(--action-success);
+
+  --card-tile-hover-lift: -2px;  // translateY on hover (px intentional — same scale as border-top)
+
+  // Hover glow blur for tile and draft framed cards (distinct from hand --card-glow-blur).
+  // 6px preserves the existing framed-tile drop-shadow radius.
+  --card-tile-glow-blur: 6px;
+
+  // Rare rarity glow blur for draft and tile cards. Slightly wider than hand
+  // cards (0.6rem) to account for the larger face. 0.7rem preserves existing behavior.
+  --card-glow-blur-rare-tile: 0.7rem;
+
+  --card-tile-rare-shimmer-duration:         3s;
+  --card-tile-rare-shimmer-duration-reduced: 0ms;
+
+  --card-tile-transition-duration: 180ms;
+
+  // Rarity glow (--tile-glow component-scoped var; tokens define the values)
+  --card-tile-glow-default:  rgba(255, 255, 255, 0.08);
+  --card-tile-glow-uncommon: rgba(100, 200, 255, 0.3);
+  --card-tile-glow-rare:     rgba(255, 215, 0, 0.4);
+  --card-tile-glow-upgraded: rgba(180, 120, 255, 0.45);
+
+
+  // === Modal / inspector sizing ===
+  // Shared by card-detail, pile-inspector, and card-detail-modal.
+
+  --card-modal-backdrop-bg: rgba(0, 0, 0, 0.72);
+  --card-modal-backdrop-blur: 4px;
+
+  // card-detail modal
+  --card-detail-width: min(26rem, 92vw);
+  --card-detail-max-height: 80vh;
+
+  // pile-inspector modal
+  --card-pile-inspector-width: min(32rem, 92vw);
+  --card-pile-inspector-max-height: 80vh;
+
+  // card-detail-modal (/library)
+  --card-library-modal-width: min(920px, 100%);
+  --card-library-modal-max-height: 90vh;
+
+
+  // === Archetype badge colors ===
+  // Used in tile__archetype and modal__archetype modifiers.
+  // Shared across library-card-tile and card-detail-modal.
+
+  --card-archetype-cartographer: #a8d8ff;
+  --card-archetype-cartographer-border: rgba(120, 180, 255, 0.35);
+
+  --card-archetype-highground: #ffd8a8;
+  --card-archetype-highground-border: rgba(255, 180, 100, 0.35);
+
+  --card-archetype-conduit: #a8ffe0;
+  --card-archetype-conduit-border: rgba(100, 255, 200, 0.35);
+
+  --card-archetype-siegeworks: #ffa8a8;
+  --card-archetype-siegeworks-border: rgba(255, 120, 120, 0.35);
+
+
+  // === Card frame shapes (S9 decision: clip-path + filter:drop-shadow) ===
+  // Per-type clip-path silhouettes. Implemented in S10 (tower), S11 (spell),
+  // S12 (modifier), S13 (utility).
+  //
+  // Rules for all consumers (S10-S13):
+  //   1. clip-path invalidates box-shadow on the same element — use
+  //      filter:drop-shadow() instead for all rarity glows on shaped cards.
+  //   2. filter declarations MUST compose brightness + drop-shadow in a single
+  //      `filter:` property (e.g. `filter: brightness(1.08) drop-shadow(...)`).
+  //      Two separate filter declarations on the same element: last wins.
+  //   3. Cap drop-shadow blur radius at 8px to contain GPU rasterization cost.
+  //   4. Polygon vertices must keep .card__cost (top:0.3rem left:0.3rem pill)
+  //      and .card__type-icon (top:0.45rem right:0.4rem) fully inside the shape.
+  //   5. Fan overlap uses negative left margins — do NOT clip the left edge of
+  //      any silhouette so deeply that it visually amputates overlapping cards.
+  //
+  // Placeholder values: actual polygons are authored per-type in S10-S13.
+  // Format: polygon(<top-left x> <top-left y>, <top-right x> <top-right y>,
+  //                 <bottom-right x> <bottom-right y>, <bottom-left x> <bottom-left y>)
+
+  // Tower: trapezoidal top with stepped battlement notches at the top corners —
+  // evokes a tower floor-plan / parapet silhouette. Insets are kept within 5%
+  // so the cost pill (top:0.3rem left:0.3rem) and type icon (top:0.45rem right:0.4rem)
+  // remain inside the clipped region. The battlement notches (8%/13% steps) read
+  // as "structure" at hand-card size without eating the UI chrome corners.
+  //
+  // Hand cards (~100×136px):
+  //   top-left step-down at (0, 8%) then back at (13%, 0%)
+  //   top-right step-down at (87%, 0%) then (100%, 8%)
+  //   bottom corners: small chamfer for floor-plan feel
+  --card-frame-tower-clip: polygon(
+    0%   8%,      /* upper-left battlement base                */
+    8%   8%,      /* left notch inner-top                      */
+    8%   0%,      /* left notch outer-top                      */
+    13%  0%,      /* left notch outer-right                    */
+    13%  8%,      /* left notch inner-right                    */
+    87%  8%,      /* right notch inner-left                    */
+    87%  0%,      /* right notch outer-left                    */
+    92%  0%,      /* right notch outer-top                     */
+    92%  8%,      /* right notch inner-top                     */
+    100% 8%,      /* upper-right battlement base               */
+    100% 94%,     /* right edge                                */
+    96%  100%,    /* bottom-right chamfer                      */
+    4%   100%,    /* bottom-left chamfer                       */
+    0%   94%      /* left edge                                 */
+  );
+
+  // Tile variant (22/32 aspect — ~220×320px). At taller aspect the battlement
+  // notches (8% of height ≈ 25px) are more pronounced. Flatten to 5% height so
+  // they remain a subtle accent rather than dominating the tile header.
+  --card-frame-tower-clip--tile: polygon(
+    0%   5%,
+    8%   5%,
+    8%   0%,
+    13%  0%,
+    13%  5%,
+    87%  5%,
+    87%  0%,
+    92%  0%,
+    92%  5%,
+    100% 5%,
+    100% 97%,
+    97%  100%,
+    3%   100%,
+    0%   97%
+  );
+
+  // Spell: tapered obelisk peak at the top center — evokes "fires once / instant
+  // action" energy. Corners step down to 12% so the cost pill (top:0.3rem left:0.3rem)
+  // and type icon (top:0.45rem right:0.4rem) stay well inside the clip region.
+  // The peak occupies the center 30%–70% band (clear of both chrome corners).
+  // Slopes are gentle (4% shoulder at 25%/75%) to avoid a knife-edge that looks
+  // fragile at fan-overlap density. The bottom chamfers mirror Tower for visual
+  // consistency in the hand.
+  //
+  // Hand cards (~100×136px): peak at 0% height, shoulder at 4%, corners at 12%.
+  --card-frame-spell-clip: polygon(
+    0%   12%,     /* top-left corner — stepped down, cost pill clear */
+    25%  12%,     /* left shoulder base                              */
+    35%  4%,      /* left shoulder rise                              */
+    50%  0%,      /* center peak                                     */
+    65%  4%,      /* right shoulder rise                             */
+    75%  12%,     /* right shoulder base — type icon clear           */
+    100% 12%,     /* top-right corner                                */
+    100% 94%,     /* right edge                                      */
+    96%  100%,    /* bottom-right chamfer                            */
+    4%   100%,    /* bottom-left chamfer                             */
+    0%   94%      /* left edge                                       */
+  );
+
+  // Tile variant (22/32 aspect — ~220×320px). 12% of height ≈ 38px on a 320px
+  // tile — that's noticeably deep. Flatten corners to 8% and shoulder to 3%
+  // so the peak accent stays proportionate without dominating the card header.
+  --card-frame-spell-clip--tile: polygon(
+    0%   8%,
+    25%  8%,
+    35%  3%,
+    50%  0%,
+    65%  3%,
+    75%  8%,
+    100% 8%,
+    100% 97%,
+    97%  100%,
+    3%   100%,
+    0%   97%
+  );
+  // Modifier: 8-vertex octagonal medallion — equal 45° chamfers at all four
+  // corners evoke a coin, seal, or persistent-effect token. Reads as "soft /
+  // continuous" against Tower's battlements and Spell's peak.
+  //
+  // Corner depth: 12% (hand). Chrome verification:
+  //   Cost pill top-left (4.8%, 3.5%): top-left edge from (0%,12%) to (12%,0%),
+  //     cross product C(8.3-C) at C=12 → 12×(8.3-12)=-44.4 ≤ 0 → inside.
+  //   Type icon top-left (93.6%, 5.3%): top-right edge from (88%,0%) to (100%,12%),
+  //     cross C(11.7-C) at C=12 → 12×(11.7-12)=-3.6 ≤ 0 → inside (barely).
+  //   Upgraded badge top-right (96%, 2.4%): same edge, C(11.7-C)=-3.6 ≤ 0 → inside.
+  //   Fan-overlap left-edge: clip only occurs in top-left 12% zone (triangle);
+  //     the vertical left edge below y=12% is uncut — within ≤10% budget.
+  //
+  // 8 vertices are the honest choice at ~100×136px. A 16-vertex approximation
+  // produces visible facets (~1-2px spacing) at this scale; the deliberate
+  // octagon reads cleanly as "medallion / badge" without jagged artifact.
+  --card-frame-modifier-clip: polygon(
+    12%  0%,      /* top-left chamfer — right of cost pill                  */
+    88%  0%,      /* top-right chamfer — left of type icon                  */
+    100% 12%,     /* top-right corner                                        */
+    100% 88%,     /* bottom-right approach                                   */
+    88%  100%,    /* bottom-right chamfer                                    */
+    12%  100%,    /* bottom-left chamfer                                     */
+    0%   88%,     /* bottom-left corner                                      */
+    0%   12%      /* top-left corner                                         */
+  );
+
+  // Tile variant (22/32 aspect — ~220×320px). 12% of 320px = 38px — too deep
+  // on the taller face; the corner cuts would dominate the header strip.
+  // 9% corners give an equivalent visual weight: 9% of 320px ≈ 29px chamfer,
+  // proportionate to the 9% of 136px ≈ 12px used at hand size.
+  // Chrome at tile: cost/icon both at var(--spacing-sm) ≈ 8px. As percent:
+  //   x=3.6%, y=2.5% — well within the 9% safe zone.
+  --card-frame-modifier-clip--tile: polygon(
+    9%   0%,
+    91%  0%,
+    100% 9%,
+    100% 91%,
+    91%  100%,
+    9%   100%,
+    0%   91%,
+    0%   9%
+  );
+  // Utility: price-tag / tool-tag chevron — bilateral inset points on both
+  // vertical sides at lower-mid height. Evokes a resource tag, scroll pull-tab,
+  // or equipment label. Distinct from Tower (battlements top), Spell (top peak),
+  // and Modifier (full-perimeter octagon) — the only silhouette with mid-card
+  // lateral indentation.
+  //
+  // Chevron geometry: full-width top (0%–50%), then right edge cuts to (92%, 60%)
+  // and back to (100%, 70%) — a 8% inward V on the right side. Mirror on left.
+  // Bottom is full-width. Net effect: a banner / tag that appears "cinched" at
+  // the lower-middle — readable as "resource" or "utility object" at hand scale.
+  //
+  // Chrome verification (hand ~100×136px):
+  //   Cost pill (top:0.3rem left:0.3rem) → 4.8%, 3.5% — inside full-width top zone (0%–50%). Safe.
+  //   Type icon (top:0.45rem right:0.4rem) → 93.6%, 5.3% — top zone, no right-edge cut until 50%. Safe.
+  //   Upgraded badge (top:0.2rem right:0.25rem) → 97.5%, 1.5% — top zone. Safe.
+  //   Chevron right-edge cut occurs at 50%–70% of height; all chrome is above 50%. No conflict.
+  //
+  // Fan-overlap left-edge: left chevron cuts at most 8% inward at 60% height.
+  // Above y=50% and below y=70% the left edge is vertical (0%). Well within
+  // the ≤10% adjacent-neighbor amputation budget.
+  --card-frame-utility-clip: polygon(
+    0%   0%,      /* top-left — full width, cost pill safe                  */
+    100% 0%,      /* top-right — full width, type icon + badge safe         */
+    100% 50%,     /* right edge descends to chevron start                   */
+    92%  60%,     /* right chevron inward point — 8% cut                    */
+    100% 70%,     /* right edge resumes after chevron                       */
+    100% 100%,    /* bottom-right                                            */
+    0%   100%,    /* bottom-left                                             */
+    0%   70%,     /* left edge before chevron resumes                       */
+    8%   60%,     /* left chevron inward point — mirror right                */
+    0%   50%      /* left edge descends to chevron start                    */
+  );
+
+  // Tile variant (22/32 aspect — ~220×320px). Chevron at 50%/60%/70% of 320px
+  // puts the V-point at 192px height — lower-middle of tile, below the art strip.
+  // Shift to 55%/65%/75% to move it into the lower third, avoiding the card-art
+  // focal region while preserving the tag silhouette read on the taller face.
+  --card-frame-utility-clip--tile: polygon(
+    0%   0%,
+    100% 0%,
+    100% 55%,     /* right edge to chevron start                            */
+    92%  65%,     /* right chevron inward — 8% cut                          */
+    100% 75%,     /* right edge resumes                                     */
+    100% 100%,
+    0%   100%,
+    0%   75%,     /* left edge before chevron resumes                       */
+    8%   65%,     /* left chevron inward — mirror right                     */
+    0%   55%      /* left edge to chevron start                             */
+  );
+
+  // Drop-shadow cap — enforced in all per-type filter declarations
+  --card-frame-drop-shadow-blur-max: 8px;
+
+
+  // === Card shape badges ===
+  // Small silhouette badges used in pile-inspector rows to communicate card type
+  // at a glance. Uses the same clip-path tokens as the full card frames, scaled
+  // down to badge size. 20px chosen over 16px: at 16px the Tower battlement
+  // notches and Utility chevron V-points compress to <2px — not legible.
+  --card-shape-badge-size:    1.25rem;  // 20px
+  --card-shape-badge-opacity: 0.6;
+
+
+  // === Archetype trim ===
+  // The archetype trim sits between the frame silhouette (Phase B) and the
+  // rarity glow. It's a thin colored outline that follows the polygon via
+  // filter:drop-shadow — NOT a fill. Trim, not full-frame fill, prevents the
+  // hand from looking like a rainbow when archetypes mix.
+  //
+  // Color reasoning:
+  //   Cartographer: pulled from starter teal (#5a9a8a, ~168°) greener to ~155°
+  //     (#4a9a72) to open hue separation from Conduit. Both are low-saturation
+  //     on a dark bg; 60° gap compressed perceptually — widening to ~90° is
+  //     the honest fix. Maps/ink/survey-line read still holds at the greener hue.
+  //
+  //   Conduit: shifted from starter blue-violet (#6a7ab8, ~228°) to pure violet
+  //     (#7a6ab8, ~258°) to open distance from Cartographer and align closer to
+  //     the existing Conduit chip color (#c98cf0). Circuitry/link-node read
+  //     is stronger at violet than cornflower-blue.
+  //
+  //   Highground: slid warmer/more terracotta (#b8724a, ~22°) from starter ochre
+  //     (#b88c4a, ~36°). Rare-gold glow is pure yellow (~60°); keeping trim at
+  //     ~36° risked it reading as "slightly off gold" on rare cards. Terracotta
+  //     reads unambiguously as "stone/earth" even adjacent to the gold glow.
+  //
+  //   Neutral: brightened from starter #6a6a78 to #7a7a88 — the darker value
+  //     had negligible contrast against the near-black card bg (rgba 10,5,20).
+  //     Deliberate identity, not absence of color.
+  //
+  //   Siegeworks: retained red (#b86a6a) as-is — deferred, Phase 5 unscoped,
+  //     and red is maximally distinct from the other four.
+
+  // Cartographer — green-teal (maps, ink, survey lines)
+  --card-trim-cartographer:        #4a9a72;
+  --card-trim-cartographer-strong: #6ab890;  // hover/selected state
+  --card-trim-cartographer-bg:     rgba(74, 154, 114, 0.06);
+
+  // Highground — terracotta ochre (stone, elevation)
+  --card-trim-highground:        #b8724a;
+  --card-trim-highground-strong: #d49068;
+  --card-trim-highground-bg:     rgba(184, 114, 74, 0.06);
+
+  // Conduit — violet-blue (circuitry, link nodes)
+  --card-trim-conduit:        #7a6ab8;
+  --card-trim-conduit-strong: #9a8ad4;
+  --card-trim-conduit-bg:     rgba(122, 106, 184, 0.06);
+
+  // Neutral — charcoal-silver (deliberate identity, not "no trim")
+  --card-trim-neutral:        #7a7a88;
+  --card-trim-neutral-strong: #9a9aaa;
+  --card-trim-neutral-bg:     rgba(122, 122, 136, 0.04);
+
+  // Siegeworks — deferred, Phase 5
+  --card-trim-siegeworks:        #b86a6a;
+  --card-trim-siegeworks-strong: #d48a8a;
+  --card-trim-siegeworks-bg:     rgba(184, 106, 106, 0.06);
+
+  // Trim inset box-shadow widths — thin ring at rest, slightly thicker on hover.
+  // 2px default: visible against the dark card bg without competing with the
+  // polygon silhouette detail. 3px hover: signals interactivity without
+  // overwhelming the frame's edge work.
+  --card-trim-width:       2px;
+  --card-trim-width-hover: 3px;
+
+  // Trim drop-shadow blur radii (reserved for future ambient glow pass)
+  --card-trim-blur:        0.4rem;
+  --card-trim-blur-strong: 0.6rem;
+
+
+  // === Archetype backdrops ===
+  // Subtle repeating SVG pattern layered on top of the per-type radial gradient
+  // in the card art zone (::before pseudo). Each pattern is a small inline SVG
+  // tile; colors are embedded as hex (CSS vars can't reach inside data URLs).
+  // Colors match the archetype trim hex values defined above.
+  //
+  // Opacity is baked into the SVG stroke/fill attributes so the pattern blends
+  // correctly regardless of other opacity on the element. The per-archetype
+  // notes below describe the visual intent.
+  //
+  // Cartographer (#4a9a72): 3 gently curved survey lines on an 80×80px tile —
+  //   parallel Bézier waves suggest topographic contours from a hiking map.
+  //   Structured enough to read as "deliberate lines" but loose enough to feel
+  //   hand-drawn rather than mechanical.
+  //
+  // Highground (#b8724a): 3 concentric ellipses centered in the lower half of an
+  //   80×80px tile — the focal point sits below center so the "peak" reads as
+  //   elevation contours viewed from above. More structured than Cartographer's
+  //   flowing lines.
+  //
+  // Conduit (#7a6ab8): cross-grid (single H + single V line) with circle nodes
+  //   at the 4 corners and center intersection on a 40×40px tile — circuit-trace
+  //   topology, network nodes. Geometric and precise.
+  //
+  // Neutral (#7a7a88): 45° cross-hatch on a 40×40px tile — blueprint graph paper.
+  //   Two intersecting diagonal line pairs give a schematic / universal-template
+  //   read. Quietest of the four by design.
+
+  --card-backdrop-cartographer: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><path d='M0 20 Q20 15 40 22 Q60 29 80 24' fill='none' stroke='%234a9a72' stroke-width='0.7' opacity='0.55'/><path d='M0 40 Q20 35 40 42 Q60 49 80 44' fill='none' stroke='%234a9a72' stroke-width='0.7' opacity='0.55'/><path d='M0 60 Q20 55 40 62 Q60 69 80 64' fill='none' stroke='%234a9a72' stroke-width='0.7' opacity='0.55'/></svg>");
+  --card-backdrop-highground:   url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><ellipse cx='40' cy='55' rx='18' ry='12' fill='none' stroke='%23b8724a' stroke-width='0.7' opacity='0.55'/><ellipse cx='40' cy='55' rx='30' ry='20' fill='none' stroke='%23b8724a' stroke-width='0.7' opacity='0.55'/><ellipse cx='40' cy='55' rx='42' ry='28' fill='none' stroke='%23b8724a' stroke-width='0.7' opacity='0.55'/></svg>");
+  --card-backdrop-conduit:      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><path d='M20 0V40M0 20H40' stroke='%237a6ab8' stroke-width='0.5' opacity='0.4'/><circle cx='0' cy='0' r='1.2' fill='%237a6ab8' opacity='0.5'/><circle cx='40' cy='0' r='1.2' fill='%237a6ab8' opacity='0.5'/><circle cx='20' cy='20' r='1.8' fill='%237a6ab8' opacity='0.6'/><circle cx='0' cy='40' r='1.2' fill='%237a6ab8' opacity='0.5'/><circle cx='40' cy='40' r='1.2' fill='%237a6ab8' opacity='0.5'/></svg>");
+  --card-backdrop-neutral:      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><path d='M0 0L40 40M40 0L0 40M0 20L20 40M20 0L40 20M-20 0L0 20M0-20L20 0' stroke='%237a7a88' stroke-width='0.5' opacity='0.35'/></svg>");
+
+  // Global opacity multiplier for all archetype backdrops.
+  // Applied as a CSS filter or wrapper opacity — NOT as element opacity (which
+  // would affect the whole art zone). Instead the pattern opacity is pre-baked
+  // into the SVG attributes above; this token documents the design intent.
+  // Actual visual weight: pattern strokes at 0.35–0.55 × filter:opacity(0.12)
+  // on the ::before layer gives a net ~4–7% opacity relative to card bg.
+  --card-backdrop-opacity: 0.12;
+
+
+  // === Tower footprint preview ===
+  // Small outlined square at the bottom of tower cards — "this card places 1 tile."
+  // --card-footprint-size: card-hand (6.25rem face). Suppressed on mobile.
+  // --card-footprint-size-tile: library-card-tile + card-draft (220×320 face, more room).
+  --card-footprint-size:      1.2rem;
+  --card-footprint-size-tile: 1.5rem;
+  --card-footprint-opacity:   0.65;
+
+
+  // === Card flavor ===
+  // Italic, slightly muted lore text below description in detail surfaces.
+  // Does not render in-hand or on library tiles — detail surfaces only.
+  --card-flavor-color:       rgba(220, 220, 230, 0.50);
+  --card-flavor-font-size:   0.7rem;
+  --card-flavor-line-height: 1.3;
+  --card-flavor-margin-top:  0.5rem;
+
+
+  // === Keyword icon tints ===
+  // Applied via color: in .card__keyword--{name} rules.
+  // Icons use currentColor so each badge inherits the per-keyword hue.
+  // Chosen to contrast against the dark card bg (rgba 10,5,20) and be
+  // distinguishable at 14px icon size.
+  //
+  // terraform — cyan (matches theme-cyan, echoes the Cartographer archetype trim blue-green)
+  // link      — purple-light (matches Conduit archetype trim violet; echoes kw-link node circles)
+  // innate    — lime green (matches action-success; "always available" feel)
+  // retain    — warm amber (distinct from cyan/green/purple; "held back" warmth)
+  // ethereal  — pale violet (slightly lighter than --theme-purple-light; ghostly)
+  // exhaust   — orange-red (danger/consumption signal, warm complement to the red-pixel exhaust card icon)
+
+  --keyword-color-terraform: var(--theme-cyan);            // #00ffff
+  --keyword-color-link:      var(--theme-purple-light);    // ~#b482f0
+  --keyword-color-innate:    var(--action-success);        // #50ff88
+  --keyword-color-retain:    #ffaa66;                      // warm amber
+  --keyword-color-ethereal:  #cc99ff;                      // pale violet
+  --keyword-color-exhaust:   #ff8866;                      // orange-red
+
+}

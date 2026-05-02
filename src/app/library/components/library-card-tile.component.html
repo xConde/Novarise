@@ -11,7 +11,14 @@
   [class.tile--rare]="definition.rarity === 'rare'"
   [class.tile--upgraded]="showUpgraded && !desaturated && hasMeaningfulUpgrade"
   [class.tile--desaturated]="desaturated"
+  [class.tile--frame-tower]="definition.type === CardType.TOWER"
+  [class.tile--frame-spell]="definition.type === CardType.SPELL"
+  [class.tile--frame-modifier]="definition.type === CardType.MODIFIER"
+  [class.tile--frame-utility]="definition.type === CardType.UTILITY"
   [style.--tile-tower-accent]="towerAccent"
+  [style.--archetype-trim-color]="archetypeTrimColor"
+  [style.--archetype-trim-color-strong]="archetypeTrimColorStrong"
+  [style.--card-backdrop-image]="archetypeBackdropVar"
   (click)="onClick()"
   [attr.aria-label]="desaturated
     ? 'Undiscovered ' + definition.rarity + ' ' + definition.type + ' — ' + definition.energyCost + ' energy.'
@@ -37,6 +44,16 @@
 
   <!-- DISCOVERED body: name, archetype, description. -->
   <div *ngIf="!desaturated" class="tile__body">
+    <!-- Effect glyph — hero art for non-tower cards. Tower cards skip; the
+         tile__footprint outline at the bottom carries their identity. -->
+    <span *ngIf="definition.type !== CardType.TOWER && primaryGlyph"
+          class="tile__art-glyph"
+          aria-hidden="true">
+      <app-icon [name]="primaryGlyph" [size]="56"></app-icon>
+      <span *ngIf="secondaryGlyph" class="tile__art-glyph-secondary">
+        <app-icon [name]="secondaryGlyph" [size]="22"></app-icon>
+      </span>
+    </span>
     <h3 class="tile__name">{{ definition.name }}</h3>
     <span *ngIf="definition.archetype && definition.archetype !== 'neutral'"
           class="tile__archetype tile__archetype--{{ definition.archetype }}">
@@ -64,5 +81,17 @@
   <div *ngIf="desaturated" class="tile__footer tile__footer--silhouette" aria-hidden="true">
     <span class="tile__rarity tile__rarity--{{ definition.rarity }}">{{ definition.rarity }}</span>
   </div>
+
+  <!-- Footprint preview — tower cards only. Flat outlined square communicates
+       "this card places a tower on a board tile." Purely decorative.
+       Color flows through --tile-tower-accent (bound inline for per-subtype tint). -->
+  <span *ngIf="definition.type === CardType.TOWER && !desaturated"
+        class="tile__footprint"
+        aria-hidden="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="4" width="16" height="16" rx="1"
+            stroke="currentColor" stroke-width="1.5" fill="none"/>
+    </svg>
+  </span>
 
 </button>

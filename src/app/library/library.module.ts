@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 
 import { IconComponent } from '@shared/components/icon/icon.component';
+import { DescriptionTextComponent } from '@shared/components/description-text/description-text.component';
 import { CardLibraryComponent } from './card-library.component';
 import { LibraryCardTileComponent } from './components/library-card-tile.component';
 import { CardDetailModalComponent } from './components/card-detail-modal.component';
@@ -19,6 +20,7 @@ import { LibraryFiltersComponent } from './components/library-filters.component'
     CommonModule,
     RouterModule.forChild([{ path: '', component: CardLibraryComponent }]),
     IconComponent,
+    DescriptionTextComponent,
   ],
 })
 export class LibraryModule {}

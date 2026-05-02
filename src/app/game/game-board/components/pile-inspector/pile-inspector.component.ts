@@ -1,12 +1,15 @@
 import { Component, ElementRef, EventEmitter, HostListener, Input, OnInit, Output } from '@angular/core';
 import { CardInstance } from '../../../../run/models/card.model';
 import { getCardDefinition } from '../../../../run/constants/card-definitions';
+import { ARCHETYPE_DISPLAY } from '../../../../run/constants/archetype.constants';
 
 interface GroupedCard {
   cardId: string;
   name: string;
   count: number;
   upgraded: boolean;
+  type: string;
+  archetype: string;
 }
 
 /**
@@ -53,10 +56,22 @@ export class PileInspectorComponent implements OnInit {
           name: def.name + (inst.upgraded ? '+' : ''),
           count: 1,
           upgraded: inst.upgraded,
+          type: def.type,
+          archetype: def.archetype ?? 'neutral',
         });
       }
     }
     return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /**
+   * CSS var() reference for the archetype trim color bound to the row's
+   * left-edge border. Falls back to neutral for unmapped archetypes.
+   */
+  getArchetypeTrimVar(card: GroupedCard): string {
+    const archetype = (card.archetype ?? 'neutral') as keyof typeof ARCHETYPE_DISPLAY;
+    const trimVar = ARCHETYPE_DISPLAY[archetype]?.trimVar ?? '--card-trim-neutral';
+    return `var(${trimVar})`;
   }
 
   close(): void {

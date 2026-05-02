@@ -5,27 +5,30 @@
 .card-detail-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(4px);
+  background: var(--card-modal-backdrop-bg);
+  backdrop-filter: blur(var(--card-modal-backdrop-blur));
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: calc(var(--z-index-modal) + 10);
   cursor: pointer;
-  animation: card-detail-fade 0.15s ease-out;
+  animation: card-detail-fade var(--card-modal-enter-duration) ease-out;
 }
 
 .card-detail {
   cursor: default;
-  width: min(26rem, 92vw);
-  max-height: 80vh;
+  width: var(--card-detail-width);
+  max-height: var(--card-detail-max-height);
   display: flex;
   flex-direction: column;
   background: var(--panel-blue-bg, rgba(10, 20, 40, 0.95));
   border: var(--border-width-thin) solid rgba(255, 255, 255, 0.18);
-  border-radius: var(--border-radius-md);
+  border-radius: var(--border-radius-md); // card-detail uses global border-radius-md, not card-border-radius
   font-family: "Orbitron", sans-serif;
   overflow: hidden; // lets the per-type header tint own the top rounded corners
+  // Archetype trim ring — inset box-shadow follows the border-radius naturally.
+  // Bound per-card via [style.--archetype-trim-color] in the template.
+  box-shadow: inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral));
 }
 
 // Per-type accent — tints the header band so the modal is visually grounded
@@ -34,6 +37,114 @@
 .card-detail--spell { border-color: rgba(100, 220, 255, 0.5); }
 .card-detail--modifier { border-color: var(--theme-purple-light, rgba(180, 130, 240, 0.5)); }
 .card-detail--utility { border-color: var(--action-success, rgba(80, 255, 136, 0.5)); }
+
+// ── Art zone strip ────────────────────────────────────────────
+//
+// Hosts the archetype backdrop pattern + sub-icon + footprint.
+// The modal is NOT card-shaped — no clip-path — but the art zone gives
+// the same visual landmark as the art-zone on card-hand cards.
+// Backdrop pattern (--card-backdrop-image, bound per-card) sits in ::before.
+
+.card-detail__art-zone {
+  position: relative;
+  height: 3.5rem;
+  flex-shrink: 0;
+  overflow: hidden;
+
+  // Backdrop pattern (layer 1) + faint radial glow (layer 2).
+  // Mirrors the card-hand ::before approach but at the compact modal art height.
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      var(--card-backdrop-image, none),
+      radial-gradient(
+        ellipse at 50% 80%,
+        rgba(255, 255, 255, 0.04) 0%,
+        transparent 70%
+      );
+    background-size: auto, cover;
+    background-repeat: repeat, no-repeat;
+    pointer-events: none;
+  }
+}
+
+// Archetype sub-icon glyph — bottom-left of the art zone strip.
+// Mirrors card-hand top-left glyph; color flows from --archetype-trim-color.
+
+.card-detail__archetype-glyph {
+  position: absolute;
+  bottom: var(--spacing-xs);
+  left: var(--spacing-sm);
+  color: var(--archetype-trim-color, var(--card-trim-neutral));
+  opacity: 0.75;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+}
+
+// Tower footprint — bottom-right of the art zone strip, mirrors card-hand bottom strip.
+
+.card-detail__footprint {
+  position: absolute;
+  bottom: var(--spacing-xs);
+  right: var(--spacing-sm);
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--archetype-trim-color, var(--card-trim-neutral));
+  opacity: var(--card-footprint-opacity, 0.65);
+  pointer-events: none;
+  z-index: 1;
+
+  svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+}
+
+// Effect glyph — non-tower-card hero art. Sits centered-right in the art-zone
+// strip; color tracks the per-type accent applied via the .card-detail--<type>
+// modifier on the host (see typeClassSuffix getter).
+.card-detail__art-glyph {
+  position: absolute;
+  bottom: var(--spacing-xs);
+  right: var(--spacing-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  color: var(--card-type-spell);
+  z-index: 1;
+
+  app-icon {
+    opacity: 0.85;
+    filter: drop-shadow(0 0 6px currentColor);
+  }
+}
+
+.card-detail--spell    .card-detail__art-glyph { color: var(--card-type-spell); }
+.card-detail--modifier .card-detail__art-glyph { color: var(--card-type-modifier); }
+.card-detail--utility  .card-detail__art-glyph { color: var(--card-type-utility); }
+
+.card-detail__art-glyph-secondary {
+  position: absolute;
+  right: -0.85rem;
+  bottom: -0.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  padding: 0.12rem;
+
+  app-icon {
+    opacity: 0.95;
+    filter: none;
+  }
+}
 
 // ── Header ────────────────────────────────────────────────
 
@@ -100,7 +211,7 @@
   font-size: 1.25rem;
   line-height: 1;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast) ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -159,6 +270,9 @@
 }
 
 // ── Keywords ──────────────────────────────────────────────
+//
+// Keyword row uses icon badges (mirrors card-hand S36 treatment).
+// Text labels are surfaced via aria-label on each badge span.
 
 .card-detail__keywords {
   display: flex;
@@ -170,22 +284,24 @@
 }
 
 .card-detail__keyword {
-  font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-3xs);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 0.25rem 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
   border-radius: 999px;
   border: var(--border-width-thin) solid;
   background: rgba(10, 5, 20, 0.6);
   line-height: 1;
+  color: var(--keyword-color, rgba(255, 255, 255, 0.7));
 }
 
-.card-detail__keyword--innate   { color: var(--action-success);    border-color: rgba(80, 255, 136, 0.55); }
-.card-detail__keyword--retain   { color: var(--theme-cyan);        border-color: rgba(100, 220, 255, 0.55); }
-.card-detail__keyword--ethereal { color: var(--theme-purple-light);border-color: rgba(180, 130, 240, 0.55); }
-.card-detail__keyword--exhaust  { color: rgb(255, 120, 120);       border-color: rgba(255, 90, 90, 0.6); }
+.card-detail__keyword--terraform { color: var(--keyword-color-terraform); border-color: rgba(0, 255, 255, 0.4); }
+.card-detail__keyword--link      { color: var(--keyword-color-link);      border-color: rgba(180, 130, 240, 0.4); }
+.card-detail__keyword--innate    { color: var(--keyword-color-innate);    border-color: rgba(80, 255, 136, 0.4); }
+.card-detail__keyword--retain    { color: var(--keyword-color-retain);    border-color: rgba(255, 170, 102, 0.4); }
+.card-detail__keyword--ethereal  { color: var(--keyword-color-ethereal);  border-color: rgba(204, 153, 255, 0.4); }
+.card-detail__keyword--exhaust   { color: var(--keyword-color-exhaust);   border-color: rgba(255, 136, 102, 0.4); }
 
 // ── Body ──────────────────────────────────────────────────
 
@@ -239,6 +355,14 @@
   border-radius: var(--border-radius-sm);
 }
 
+.card-detail__flavor {
+  margin: var(--card-flavor-margin-top) 0 0;
+  font-size: var(--card-flavor-font-size);
+  line-height: var(--card-flavor-line-height);
+  color: var(--card-flavor-color);
+  font-style: italic;
+}
+
 // ── Footer ────────────────────────────────────────────────
 
 .card-detail__footer {
@@ -265,6 +389,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :root { --card-modal-enter-duration: var(--card-modal-enter-duration-reduced); }
   .card-detail-backdrop { animation: none; }
 }
 

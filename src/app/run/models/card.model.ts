@@ -236,7 +236,7 @@ export interface CardDefinition {
 
   /**
    * Phase 1 Sprint 8 — spatial archetype tag.
-   * Defaults to `'neutral'` when undefined. Drives reward-pool weighting via
+   * Required on every CardDefinition. Drives reward-pool weighting via
    * DeckService.getDominantArchetype().
    *
    * **Checkpoint migration note:** archetype/terraform/link live on
@@ -246,8 +246,36 @@ export interface CardDefinition {
    * UNLESS a future feature serializes a CardDefinition snapshot directly
    * (telemetry payload, card-crafting state, etc.) — in that case bump.
    */
-  readonly archetype?: CardArchetype;
+  readonly archetype: CardArchetype;
+
+  /**
+   * Optional flavor / lore text shown in detail surfaces (tooltip, card-detail
+   * modal, library card-detail-modal). Plain text only — no keyword tokens.
+   * Max 80 chars enforced at spec level. Undefined on cards that have not yet
+   * received flavor; the UI suppresses the element entirely when absent.
+   */
+  readonly flavorText?: string;
+
+  /**
+   * Hero-glyph identity for non-tower cards. Tower cards skip this field —
+   * they show a 3D mesh thumbnail rendered by `TowerThumbnailService`.
+   *
+   * Either a single glyph name OR a 2-tuple `[primary, secondary]`. When a
+   * tuple, primary renders at hero size and secondary as a small corner
+   * accent. Reuse of `kw-terraform` / `kw-link` is intentional: when a
+   * card's primary effect IS its keyword (Lay Tile, Handshake), the keyword
+   * icon doubles as the hero glyph and the small keyword-badge row is
+   * suppressed to avoid visual duplication.
+   */
+  readonly effectGlyph?: EffectGlyph;
 }
+
+export type EffectGlyphName =
+  | 'fx-damage' | 'fx-burn' | 'fx-poison' | 'fx-slow' | 'fx-heal' | 'fx-gold'
+  | 'fx-draw'   | 'fx-energy' | 'fx-buff'  | 'fx-scout' | 'fx-recycle'
+  | 'fx-link'   | 'kw-terraform' | 'kw-link';
+
+export type EffectGlyph = EffectGlyphName | readonly [EffectGlyphName, EffectGlyphName];
 
 export type CardEffect =
   | TowerCardEffect

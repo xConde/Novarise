@@ -1333,4 +1333,108 @@ describe('CARD_DEFINITIONS', () => {
       }
     });
   });
+
+  // ── flavorText — Phase G writing pass ───────────────────────────────────
+  describe('flavorText', () => {
+    it('is present on every card', () => {
+      Object.entries(CARD_DEFINITIONS).forEach(([id, def]) => {
+        expect(def.flavorText).withContext(id).toBeTruthy();
+      });
+    });
+
+    it('is at most 80 chars', () => {
+      Object.entries(CARD_DEFINITIONS).forEach(([id, def]) => {
+        expect(def.flavorText!.length).withContext(id).toBeLessThanOrEqual(80);
+      });
+    });
+
+    it('no flavorText is empty string (use undefined to omit, not empty)', () => {
+      for (const def of Object.values(CARD_DEFINITIONS)) {
+        if (def.flavorText !== undefined) {
+          expect(def.flavorText.trim().length).toBeGreaterThan(
+            0,
+            `${def.id} has an empty flavorText — use undefined instead`,
+          );
+        }
+      }
+    });
+
+    // Smoke: spot-check specific lines render exactly as written
+    it('TOWER_BASIC flavor matches expected text', () => {
+      expect(CARD_DEFINITIONS[CardId.TOWER_BASIC].flavorText)
+        .toBe("Cheap. Reliable. Fires at whatever's closest.");
+    });
+
+    it('PHANTOM_GOLD flavor matches expected text', () => {
+      expect(CARD_DEFINITIONS[CardId.PHANTOM_GOLD].flavorText)
+        .toBe('Spend it before it forgets to exist.');
+    });
+
+    it('CARTOGRAPHER_SEAL flavor matches expected text', () => {
+      expect(CARD_DEFINITIONS[CardId.CARTOGRAPHER_SEAL].flavorText)
+        .toBe('Every mark on this map stays.');
+    });
+
+    it('HIVE_MIND flavor matches expected text', () => {
+      expect(CARD_DEFINITIONS[CardId.HIVE_MIND].flavorText)
+        .toBe('The strongest node defines what every node becomes.');
+    });
+
+    it('KING_OF_THE_HILL flavor matches expected text', () => {
+      expect(CARD_DEFINITIONS[CardId.KING_OF_THE_HILL].flavorText)
+        .toBe('The peak answers to one tower. Make it worth it.');
+    });
+
+    it('WAR_FUND flavor matches expected text', () => {
+      expect(CARD_DEFINITIONS[CardId.WAR_FUND].flavorText)
+        .toBe('Held coin gathers no rust.');
+    });
+  });
+
+  describe('effectGlyph coverage (non-tower cards)', () => {
+    const VALID_GLYPHS = new Set([
+      'fx-damage', 'fx-burn', 'fx-poison', 'fx-slow', 'fx-heal', 'fx-gold',
+      'fx-draw', 'fx-energy', 'fx-buff', 'fx-scout', 'fx-recycle', 'fx-link',
+      'kw-terraform', 'kw-link',
+    ]);
+
+    it('every non-tower card declares an effectGlyph', () => {
+      const missing: string[] = [];
+      for (const def of Object.values(CARD_DEFINITIONS)) {
+        if (def.type === CardType.TOWER) continue;
+        if (!def.effectGlyph) missing.push(def.id);
+      }
+      expect(missing).withContext(`Missing glyphs: ${missing.join(', ')}`).toEqual([]);
+    });
+
+    it('no tower card declares an effectGlyph (3D thumbnails carry that surface)', () => {
+      const stragglers: string[] = [];
+      for (const def of Object.values(CARD_DEFINITIONS)) {
+        if (def.type === CardType.TOWER && def.effectGlyph) stragglers.push(def.id);
+      }
+      expect(stragglers).withContext(`Tower cards should not have glyphs: ${stragglers.join(', ')}`).toEqual([]);
+    });
+
+    it('every effectGlyph entry references a registered glyph name', () => {
+      const invalid: string[] = [];
+      for (const def of Object.values(CARD_DEFINITIONS)) {
+        const g = def.effectGlyph;
+        if (!g) continue;
+        const names = Array.isArray(g) ? g : [g];
+        for (const name of names) {
+          if (!VALID_GLYPHS.has(name)) invalid.push(`${def.id}:${name}`);
+        }
+      }
+      expect(invalid).withContext(`Unknown glyph names: ${invalid.join(', ')}`).toEqual([]);
+    });
+
+    it('2-tuple effectGlyph never duplicates the same glyph', () => {
+      const dupes: string[] = [];
+      for (const def of Object.values(CARD_DEFINITIONS)) {
+        const g = def.effectGlyph;
+        if (Array.isArray(g) && g[0] === g[1]) dupes.push(def.id);
+      }
+      expect(dupes).withContext(`Duplicate-tuple glyphs: ${dupes.join(', ')}`).toEqual([]);
+    });
+  });
 });

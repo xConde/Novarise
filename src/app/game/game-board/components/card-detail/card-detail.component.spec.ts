@@ -4,6 +4,8 @@ import { CardDetailComponent } from './card-detail.component';
 import { HandCard } from '../card-hand/card-hand.component';
 import { CardId } from '../../../../run/models/card.model';
 import { getCardDefinition } from '../../../../run/constants/card-definitions';
+import { DescriptionTextComponent } from '@shared/components/description-text/description-text.component';
+import { IconComponent } from '@shared/components/icon/icon.component';
 
 function makeHandCard(cardId: CardId, overrides: Partial<HandCard> = {}): HandCard {
   const definition = getCardDefinition(cardId);
@@ -24,7 +26,7 @@ describe('CardDetailComponent', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       declarations: [CardDetailComponent],
-      imports: [CommonModule],
+      imports: [CommonModule, DescriptionTextComponent, IconComponent],
     });
     fixture = TestBed.createComponent(CardDetailComponent);
     component = fixture.componentInstance;
@@ -101,7 +103,7 @@ describe('CardDetailComponent', () => {
       expect((fixture.nativeElement as HTMLElement).querySelector('.card-detail__keywords')).toBeNull();
     });
 
-    it('renders one chip per active keyword', () => {
+    it('renders one icon badge per active keyword', () => {
       const def = getCardDefinition(CardId.GOLD_RUSH);
       component.card = {
         instance: { cardId: CardId.GOLD_RUSH, instanceId: 'i', upgraded: false },
@@ -112,11 +114,12 @@ describe('CardDetailComponent', () => {
       };
       fixture.detectChanges();
 
-      const chips = (fixture.nativeElement as HTMLElement)
+      // Icon badges — count via class; aria-label carries the keyword name
+      const badges = (fixture.nativeElement as HTMLElement)
         .querySelectorAll<HTMLElement>('.card-detail__keyword');
-      expect(chips.length).toBe(3);
-      const labels = Array.from(chips).map(c => c.textContent?.trim());
-      expect(labels).toEqual(['Innate', 'Retain', 'Exhaust']);
+      expect(badges.length).toBe(3);
+      const ariaLabels = Array.from(badges).map(b => b.getAttribute('aria-label'));
+      expect(ariaLabels).toEqual(['Innate', 'Retain', 'Exhaust']);
     });
   });
 
@@ -179,6 +182,71 @@ describe('CardDetailComponent', () => {
     });
   });
 
+  describe('archetype branding', () => {
+    it('renders the art zone strip', () => {
+      component.card = makeHandCard(CardId.TOWER_BASIC, { goldCost: 50 });
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).querySelector('.card-detail__art-zone')).not.toBeNull();
+    });
+
+    it('renders the archetype sub-icon glyph', () => {
+      component.card = makeHandCard(CardId.TOWER_BASIC, { goldCost: 50 });
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).querySelector('.card-detail__archetype-glyph')).not.toBeNull();
+    });
+
+    it('renders footprint on tower cards', () => {
+      component.card = makeHandCard(CardId.TOWER_BASIC, { goldCost: 50 });
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).querySelector('.card-detail__footprint')).not.toBeNull();
+    });
+
+    it('does not render footprint on non-tower cards', () => {
+      component.card = makeHandCard(CardId.GOLD_RUSH);
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).querySelector('.card-detail__footprint')).toBeNull();
+    });
+
+    it('returns arch-cartographer icon for cartographer archetype', () => {
+      const def = getCardDefinition(CardId.GOLD_RUSH);
+      component.card = {
+        instance: { cardId: CardId.GOLD_RUSH, instanceId: 'i', upgraded: false },
+        definition: { ...def, archetype: 'cartographer' },
+        canPlay: true,
+        effectiveEnergyCost: def.energyCost,
+        goldCost: null,
+      };
+      expect(component.archetypeIconName).toBe('arch-cartographer');
+    });
+
+    it('returns arch-neutral icon for neutral archetype', () => {
+      component.card = makeHandCard(CardId.GOLD_RUSH);
+      expect(component.archetypeIconName).toBe('arch-neutral');
+    });
+
+    it('isTowerCard is true for tower cards', () => {
+      component.card = makeHandCard(CardId.TOWER_BASIC, { goldCost: 50 });
+      expect(component.isTowerCard).toBeTrue();
+    });
+
+    it('isTowerCard is false for non-tower cards', () => {
+      component.card = makeHandCard(CardId.GOLD_RUSH);
+      expect(component.isTowerCard).toBeFalse();
+    });
+
+    it('binds --archetype-trim-color style via archetypeTrimColor', () => {
+      const def = getCardDefinition(CardId.GOLD_RUSH);
+      component.card = {
+        instance: { cardId: CardId.GOLD_RUSH, instanceId: 'i', upgraded: false },
+        definition: { ...def, archetype: 'conduit' },
+        canPlay: true,
+        effectiveEnergyCost: def.energyCost,
+        goldCost: null,
+      };
+      expect(component.archetypeTrimColor).toBe('var(--card-trim-conduit)');
+    });
+  });
+
   describe('cost chip visibility', () => {
     it('shows the gold chip for tower cards (goldCost set)', () => {
       component.card = makeHandCard(CardId.TOWER_BASIC, { goldCost: 50 });
@@ -197,6 +265,45 @@ describe('CardDetailComponent', () => {
         .querySelectorAll<HTMLElement>('.card-detail__cost-chip');
       expect(chips.length).toBe(1);
       expect(chips[0].textContent?.toLowerCase()).toContain('energy');
+    });
+  });
+
+  describe('flavor text display', () => {
+    it('renders .card-detail__flavor when flavorText is set', () => {
+      const def = getCardDefinition(CardId.GOLD_RUSH);
+      component.card = makeHandCard(CardId.GOLD_RUSH, {
+        definition: { ...def, flavorText: 'Test flavor' },
+      });
+      fixture.detectChanges();
+
+      const flavor = (fixture.nativeElement as HTMLElement)
+        .querySelector<HTMLElement>('.card-detail__flavor');
+      expect(flavor).not.toBeNull();
+      expect(flavor?.textContent).toContain('Test flavor');
+    });
+
+    it('does NOT render .card-detail__flavor when flavorText is undefined', () => {
+      const def = getCardDefinition(CardId.GOLD_RUSH);
+      component.card = makeHandCard(CardId.GOLD_RUSH, {
+        definition: { ...def, flavorText: undefined },
+      });
+      fixture.detectChanges();
+
+      const flavor = (fixture.nativeElement as HTMLElement)
+        .querySelector('.card-detail__flavor');
+      expect(flavor).toBeNull();
+    });
+
+    it('aria-label on flavor element prefixes with "Flavor: "', () => {
+      const def = getCardDefinition(CardId.GOLD_RUSH);
+      component.card = makeHandCard(CardId.GOLD_RUSH, {
+        definition: { ...def, flavorText: 'Test flavor' },
+      });
+      fixture.detectChanges();
+
+      const flavor = (fixture.nativeElement as HTMLElement)
+        .querySelector<HTMLElement>('.card-detail__flavor');
+      expect(flavor?.getAttribute('aria-label')).toBe('Flavor: Test flavor');
     });
   });
 });

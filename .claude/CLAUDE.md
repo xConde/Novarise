@@ -47,6 +47,7 @@ Every numeric or color literal must be a named constant. No exceptions.
 - Game balance: `models/*.model.ts` (TOWER_CONFIGS, ENEMY_STATS, WAVE_DEFINITIONS)
 - Board/rendering: `constants/*.constants.ts` (create as needed per sprint)
 - CSS shared values: `:root` custom properties in `styles.css`
+- Card surface tokens: `src/styles/_card-tokens.scss` (sizing, rarity, state, animation, archetype badges)
 
 **Rules:**
 1. Config objects over flat constants — `CAMERA_CONFIG.fov`, not `CAMERA_FOV`

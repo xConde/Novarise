@@ -22,53 +22,76 @@
   flex-direction: column;
   align-items: flex-start;
   width: 100%;
-  aspect-ratio: 22 / 32;       /* 220:320 tiles per kickoff spec */
-  min-height: 280px;
+  aspect-ratio: var(--card-tile-aspect-ratio);
+  min-height: var(--card-tile-min-height);
   padding: var(--spacing-md) var(--spacing-sm) var(--spacing-sm);
   background: linear-gradient(
     150deg,
     rgba(18, 14, 28, 0.92) 0%,
     rgba(10, 7, 18, 0.95) 100%
   );
-  border: 1px solid var(--border-color-subtle);
-  border-top: 2px solid var(--tile-accent);
+  border: var(--border-width-thin) solid var(--border-color-subtle);
+  border-top: var(--border-width-medium) solid var(--tile-accent);
   border-radius: var(--border-radius-md);
   color: var(--text-color);
   font-family: "Orbitron", sans-serif;
   text-align: left;
   cursor: pointer;
   transition:
-    transform 180ms ease-out,
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    filter 180ms ease;
-  box-shadow: 0 0 0 1px transparent, 0 0 0 transparent;
+    transform var(--card-tile-transition-duration) ease-out,
+    border-color var(--card-tile-transition-duration) ease,
+    box-shadow var(--card-tile-transition-duration) ease,
+    filter var(--card-tile-transition-duration) ease;
 
-  /* Art zone — faint radial bloom tinted by --tile-accent. */
+  /* Art zone — archetype backdrop pattern (first layer) + faint radial bloom
+     tinted by --tile-accent (second layer). Pattern is most visible at the
+     periphery where the gradient is transparent. */
   &::before {
     content: '';
     position: absolute;
     inset: 0;
-    background:
+    background-image:
+      var(--card-backdrop-image, none),
       radial-gradient(
         ellipse at 50% 30%,
         color-mix(in srgb, var(--tile-accent) 25%, transparent) 0%,
         transparent 60%
       );
+    background-size: 80px 80px, cover;
     pointer-events: none;
     opacity: 0.75;
   }
 
-  /* Safari <16.2 color-mix fallback — use rgba(...) on the accent at ~25%. */
+  /* Safari <16.2 color-mix fallback. Backdrop pattern still renders;
+     only the radial gradient loses color-mix. */
   @supports not (background: color-mix(in srgb, red 25%, transparent)) {
     &::before {
-      background:
+      background-image:
+        var(--card-backdrop-image, none),
         radial-gradient(
           ellipse at 50% 30%,
           rgba(255, 255, 255, 0.1) 0%,
           transparent 60%
         );
+      background-size: 80px 80px, cover;
     }
+  }
+
+  // Archetype trim: inset box-shadow so it follows the polygon clip-path on
+  // framed tiles. Neutral (2px) / hover-strong (3px) widths mirror card-hand.
+  box-shadow:
+    0 0 0 1px transparent,
+    inset 0 0 0 2px var(--archetype-trim-color, var(--card-trim-neutral));
+
+  &:hover,
+  &:focus-visible {
+    transform: translateY(var(--card-tile-hover-lift));
+    border-color: var(--tile-accent);
+    box-shadow:
+      0 0 0 1px var(--tile-accent),
+      0 6px 20px -8px var(--tile-glow),
+      inset 0 0 0 3px var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
+    outline: none;
   }
 
   /* CRT-ish scanline texture */
@@ -87,16 +110,6 @@
     pointer-events: none;
   }
 
-  &:hover,
-  &:focus-visible {
-    transform: translateY(-2px);
-    border-color: var(--tile-accent);
-    box-shadow:
-      0 0 0 1px var(--tile-accent),
-      0 6px 20px -8px var(--tile-glow);
-    outline: none;
-  }
-
   &:active {
     transform: translateY(0);
   }
@@ -105,38 +118,38 @@
 /* --- Type accents — override --tile-accent --- */
 
 .tile--tower {
-  --tile-accent: var(--tile-tower-accent, var(--tower-color-basic));
+  --tile-accent: var(--tile-tower-accent, var(--card-tile-accent-tower));
 }
 .tile--spell {
-  --tile-accent: var(--theme-cyan);
+  --tile-accent: var(--card-tile-accent-spell);
 }
 .tile--modifier {
-  --tile-accent: var(--theme-purple-light);
+  --tile-accent: var(--card-tile-accent-modifier);
 }
 .tile--utility {
-  --tile-accent: var(--action-success);
+  --tile-accent: var(--card-tile-accent-utility);
 }
 
 /* --- Rarity glow --- */
 
 .tile--uncommon {
-  --tile-glow: rgba(100, 200, 255, 0.3);
+  --tile-glow: var(--card-tile-glow-uncommon);
 }
 .tile--rare {
-  --tile-glow: rgba(255, 215, 0, 0.4);
+  --tile-glow: var(--card-tile-glow-rare);
   border-top-width: 3px;
-  animation: tile-rare-shimmer 3s ease-in-out infinite;
+  animation: tile-rare-shimmer var(--card-tile-rare-shimmer-duration) ease-in-out infinite;
 }
 
 @keyframes tile-rare-shimmer {
-  0%, 100% { box-shadow: 0 0 0 1px transparent, 0 0 10px -6px var(--tile-glow); }
-  50%      { box-shadow: 0 0 0 1px transparent, 0 0 18px -4px var(--tile-glow); }
+  0%, 100% { box-shadow: 0 0 0 1px transparent, 0 0 10px -6px var(--tile-glow), inset 0 0 0 2px var(--archetype-trim-color, var(--card-trim-neutral)); }
+  50%      { box-shadow: 0 0 0 1px transparent, 0 0 18px -4px var(--tile-glow), inset 0 0 0 2px var(--archetype-trim-color, var(--card-trim-neutral)); }
 }
 
 /* --- Upgraded + desaturated modes --- */
 
 .tile--upgraded {
-  --tile-glow: rgba(180, 120, 255, 0.45);
+  --tile-glow: var(--card-tile-glow-upgraded);
 
   &::before {
     opacity: 1;
@@ -182,6 +195,9 @@
         transparent 6px 14px
       );
   }
+
+  // Suppress archetype trim — identity signals are hidden on undiscovered cards.
+  box-shadow: none;
 
   &:hover, &:focus-visible {
     border-color: rgba(150, 140, 180, 0.5);
@@ -252,7 +268,7 @@
   gap: 0.15rem;
   padding: 0.2rem 0.45rem;
   background: var(--game-gold-a15);
-  border: 1px solid var(--game-gold-a40);
+  border: var(--border-width-thin) solid var(--game-gold-a40);
   border-radius: var(--border-radius-sm);
   color: var(--game-gold);
   font-size: var(--font-size-base);
@@ -325,6 +341,47 @@
   color: var(--text-color);
 }
 
+/* Effect glyph — hero art for non-tower cards. Sits at the top of the
+   tile body, between the cost row and the name. Color tracks the per-type
+   accent variable so spell glyphs are cyan, modifier purple, utility green. */
+.tile__art-glyph {
+  position: relative;
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto var(--spacing-xs);
+  pointer-events: none;
+  color: var(--card-type-spell);
+
+  app-icon {
+    opacity: 0.8;
+    filter: drop-shadow(0 0 8px currentColor);
+  }
+}
+
+.tile.tile--frame-spell    .tile__art-glyph { color: var(--card-type-spell); }
+.tile.tile--frame-modifier .tile__art-glyph { color: var(--card-type-modifier); }
+.tile.tile--frame-utility  .tile__art-glyph { color: var(--card-type-utility); }
+
+.tile__art-glyph-secondary {
+  position: absolute;
+  right: -1.4rem;
+  bottom: -0.3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  padding: 0.18rem;
+
+  app-icon {
+    opacity: 0.95;
+    filter: none;
+  }
+}
+
 .tile__archetype {
   display: inline-block;
   align-self: flex-start;
@@ -335,14 +392,14 @@
   text-transform: uppercase;
   border-radius: var(--border-radius-sm);
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border-color-subtle);
+  border: var(--border-width-thin) solid var(--border-color-subtle);
   color: var(--theme-purple-mid);
 }
 
-.tile__archetype--cartographer { color: #a8d8ff; border-color: rgba(120, 180, 255, 0.35); }
-.tile__archetype--highground   { color: #ffd8a8; border-color: rgba(255, 180, 100, 0.35); }
-.tile__archetype--conduit      { color: #a8ffe0; border-color: rgba(100, 255, 200, 0.35); }
-.tile__archetype--siegeworks   { color: #ffa8a8; border-color: rgba(255, 120, 120, 0.35); }
+.tile__archetype--cartographer { color: var(--card-archetype-cartographer); border-color: var(--card-archetype-cartographer-border); }
+.tile__archetype--highground   { color: var(--card-archetype-highground);   border-color: var(--card-archetype-highground-border); }
+.tile__archetype--conduit      { color: var(--card-archetype-conduit);      border-color: var(--card-archetype-conduit-border); }
+.tile__archetype--siegeworks   { color: var(--card-archetype-siegeworks);   border-color: var(--card-archetype-siegeworks-border); }
 
 .tile__description {
   margin: 0;
@@ -371,7 +428,7 @@
   gap: var(--spacing-xs);
   margin-top: auto;
   padding-top: var(--spacing-xs);
-  border-top: 1px solid var(--border-color-subtle);
+  border-top: var(--border-width-thin) solid var(--border-color-subtle);
 }
 
 .tile__rarity {
@@ -390,7 +447,7 @@
   margin-left: auto;
   padding: 0.1rem 0.35rem;
   background: var(--game-gold-a08);
-  border: 1px solid var(--game-gold-a25);
+  border: var(--border-width-thin) solid var(--game-gold-a25);
   border-radius: var(--border-radius-sm);
   color: var(--game-gold);
   font-size: var(--font-size-3xs);
@@ -406,12 +463,155 @@
 .tile__keyword {
   padding: 0.1rem 0.35rem;
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border-color-subtle);
+  border: var(--border-width-thin) solid var(--border-color-subtle);
   border-radius: var(--border-radius-sm);
   font-size: var(--font-size-tiny);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--theme-purple-lighter);
+}
+
+/* --- Framed tile (Tower polygon silhouette) --- */
+//
+// Mirrors the framed-card system from card-hand, adapted for the tile's
+// 22/32 aspect ratio. Uses --card-frame-tower-clip--tile (tile-specific polygon
+// with shallower notches so they don't overpower the taller card face).
+//
+// Tile glow was previously box-shadow on :hover/:focus-visible. clip-path
+// invalidates box-shadow, so we redirect to filter:drop-shadow, composed
+// with brightness for hover.
+
+.tile--frame-tower {
+  clip-path: var(--card-frame-tower-clip--tile);
+  transition:
+    transform var(--card-tile-transition-duration) ease-out,
+    border-color var(--card-tile-transition-duration) ease,
+    filter var(--card-tile-transition-duration) ease,
+    box-shadow var(--card-tile-transition-duration) ease,
+    clip-path var(--card-tile-transition-duration) ease;
+  // Outer box-shadow bleeds past the polygon bounding rect — redirect to filter.
+  // Inset box-shadow IS clipped naturally by clip-path, so we use it for trim.
+  box-shadow: inset 0 0 0 2px var(--archetype-trim-color, var(--card-trim-neutral));
+  filter: drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow));
+
+  &:hover,
+  &:focus-visible {
+    box-shadow: inset 0 0 0 3px var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
+    filter:
+      drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
+      brightness(1.06);
+  }
+}
+
+// Rare shimmer animation on framed tile: the ::after pseudo is clipped by the
+// parent polygon in Blink, so no shimmer amputation. No special handling needed.
+
+/* --- Framed tile (Spell polygon silhouette) --- */
+//
+// Mirrors .tile--frame-tower pattern. Uses --card-frame-spell-clip--tile
+// (shallower corner steps — 8% instead of 12% — so the peak stays
+// proportionate on the taller 22/32 aspect without dominating the header).
+
+.tile--frame-spell {
+  clip-path: var(--card-frame-spell-clip--tile);
+  transition:
+    transform var(--card-tile-transition-duration) ease-out,
+    border-color var(--card-tile-transition-duration) ease,
+    filter var(--card-tile-transition-duration) ease,
+    box-shadow var(--card-tile-transition-duration) ease,
+    clip-path var(--card-tile-transition-duration) ease;
+  box-shadow: inset 0 0 0 2px var(--archetype-trim-color, var(--card-trim-neutral));
+  filter: drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow));
+
+  &:hover,
+  &:focus-visible {
+    box-shadow: inset 0 0 0 3px var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
+    filter:
+      drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
+      brightness(1.06);
+  }
+}
+
+/* --- Framed tile (Modifier polygon silhouette) --- */
+//
+// Mirrors .tile--frame-tower pattern. Uses --card-frame-modifier-clip--tile
+// (9% chamfer — proportionate to the 12% hand chamfer on the taller 22/32 face).
+// The octagonal medallion shape differentiates Modifier from Tower (battlements)
+// and Spell (peak) in the library grid at a glance.
+
+.tile--frame-modifier {
+  clip-path: var(--card-frame-modifier-clip--tile);
+  transition:
+    transform var(--card-tile-transition-duration) ease-out,
+    border-color var(--card-tile-transition-duration) ease,
+    filter var(--card-tile-transition-duration) ease,
+    box-shadow var(--card-tile-transition-duration) ease,
+    clip-path var(--card-tile-transition-duration) ease;
+  box-shadow: inset 0 0 0 2px var(--archetype-trim-color, var(--card-trim-neutral));
+  filter: drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow));
+
+  &:hover,
+  &:focus-visible {
+    box-shadow: inset 0 0 0 3px var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
+    filter:
+      drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
+      brightness(1.06);
+  }
+}
+
+/* --- Framed tile (Utility polygon silhouette) --- */
+//
+// Mirrors .tile--frame-modifier pattern. Uses --card-frame-utility-clip--tile
+// (chevron at 55%/65%/75% — shifted lower vs. hand to avoid the art-strip focal
+// region on the taller 22/32 face). The bilateral V-notch differentiates Utility
+// from Tower (battlements), Spell (peak), and Modifier (octagon) in the library
+// grid at a glance.
+
+.tile--frame-utility {
+  clip-path: var(--card-frame-utility-clip--tile);
+  transition:
+    transform var(--card-tile-transition-duration) ease-out,
+    border-color var(--card-tile-transition-duration) ease,
+    filter var(--card-tile-transition-duration) ease,
+    box-shadow var(--card-tile-transition-duration) ease,
+    clip-path var(--card-tile-transition-duration) ease;
+  box-shadow: inset 0 0 0 2px var(--archetype-trim-color, var(--card-trim-neutral));
+  filter: drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow));
+
+  &:hover,
+  &:focus-visible {
+    box-shadow: inset 0 0 0 3px var(--archetype-trim-color-strong, var(--card-trim-neutral-strong));
+    filter:
+      drop-shadow(0 0 min(var(--card-tile-glow-blur), var(--card-frame-drop-shadow-blur-max)) var(--tile-glow))
+      brightness(1.06);
+  }
+}
+
+/* --- Tower footprint preview (tile) --- */
+//
+// Flat outlined square centered at the bottom of tower tiles.
+// Positioned in the dead-air strip below the footer border, above the tile edge.
+// Color inherits --tile-tower-accent (bound inline) so per-subtype tints flow through.
+// Suppressed on desaturated (undiscovered) tiles via *ngIf in the template.
+// z-index: 2 — same layer as the cost/icon chrome, above the ::before art bloom.
+
+.tile__footprint {
+  position: absolute;
+  bottom: var(--spacing-xs);
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--card-footprint-size-tile, 1.5rem);
+  height: var(--card-footprint-size-tile, 1.5rem);
+  color: var(--tile-tower-accent, var(--card-type-tower));
+  opacity: var(--card-footprint-opacity, 0.65);
+  pointer-events: none;
+  z-index: 2;
+
+  svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
 }
 
 /* --- Reduce-motion --- */
@@ -427,6 +627,7 @@ body.reduce-motion .tile:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :root { --card-tile-rare-shimmer-duration: var(--card-tile-rare-shimmer-duration-reduced); }
   .tile {
     transition: none;
     animation: none;

@@ -8,8 +8,10 @@ import {
 import {
   CardDefinition,
   CardType,
+  EffectGlyphName,
 } from '../../run/models/card.model';
 import { TOWER_CONFIGS, TowerType } from '../../game/game-board/models/tower.model';
+import { ARCHETYPE_DISPLAY } from '../../run/constants/archetype.constants';
 
 /**
  * Presentational card tile for the Codex grid. Static view of a
@@ -35,6 +37,42 @@ export class LibraryCardTileComponent {
 
   onClick(): void {
     this.selected.emit(this.definition);
+  }
+
+  /**
+   * CSS var() reference for the archetype trim color (rest state).
+   * Bound to --archetype-trim-color on the tile element.
+   */
+  get archetypeTrimColor(): string {
+    const archetype = this.definition.archetype ?? 'neutral';
+    const trimVar = ARCHETYPE_DISPLAY[archetype]?.trimVar ?? '--card-trim-neutral';
+    return `var(${trimVar})`;
+  }
+
+  /**
+   * CSS var() reference for the archetype trim color (hover/selected state).
+   * Bound to --archetype-trim-color-strong on the tile element.
+   */
+  get archetypeTrimColorStrong(): string {
+    const archetype = this.definition.archetype ?? 'neutral';
+    const trimVarStrong = ARCHETYPE_DISPLAY[archetype]?.trimVarStrong ?? '--card-trim-neutral-strong';
+    return `var(${trimVarStrong})`;
+  }
+
+  /**
+   * CSS var() reference for the archetype backdrop SVG pattern.
+   * Bound to --card-backdrop-image on the tile element; consumed by ::before.
+   * Siegeworks falls back to neutral (Phase 5 unscoped).
+   */
+  get archetypeBackdropVar(): string {
+    switch (this.definition.archetype) {
+      case 'cartographer': return 'var(--card-backdrop-cartographer)';
+      case 'highground':   return 'var(--card-backdrop-highground)';
+      case 'conduit':      return 'var(--card-backdrop-conduit)';
+      case 'neutral':
+      case 'siegeworks':
+      default:             return 'var(--card-backdrop-neutral)';
+    }
   }
 
   /**
@@ -73,6 +111,19 @@ export class LibraryCardTileComponent {
     if (d.terraform) chips.push('Terraform');
     if (d.link)      chips.push('Link');
     return chips;
+  }
+
+  /** Primary effect glyph for non-tower cards (hero art in the tile body). */
+  get primaryGlyph(): EffectGlyphName | null {
+    const g = this.definition.effectGlyph;
+    if (!g) return null;
+    return Array.isArray(g) ? g[0] : g;
+  }
+
+  /** Secondary glyph rendered as a small accent when effectGlyph is a 2-tuple. */
+  get secondaryGlyph(): EffectGlyphName | null {
+    const g = this.definition.effectGlyph;
+    return Array.isArray(g) ? g[1] : null;
   }
 
   /** Description shown on the tile — upgraded if toggled, else base. */

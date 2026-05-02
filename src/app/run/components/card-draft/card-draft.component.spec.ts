@@ -10,6 +10,12 @@ const MOCK_CHOICES: CardReward[] = [
   { type: 'card', cardId: CardId.FORTIFY },
 ];
 
+const TOWER_CHOICES: CardReward[] = [
+  { type: 'card', cardId: CardId.TOWER_BASIC },
+  { type: 'card', cardId: CardId.GOLD_RUSH },
+  { type: 'card', cardId: CardId.DAMAGE_BOOST },
+];
+
 describe('CardDraftComponent', () => {
   let fixture: ComponentFixture<CardDraftComponent>;
   let component: CardDraftComponent;
@@ -90,6 +96,22 @@ describe('CardDraftComponent', () => {
     expect(component.getRarityClass(CardRarity.RARE)).toBe('card-draft__card--rarity-rare');
   });
 
+  it('getFrameClass returns frame modifier for tower type', () => {
+    expect(component.getFrameClass(CardType.TOWER)).toBe('card-draft__card--frame-tower');
+  });
+
+  it('getFrameClass returns frame modifier for spell type', () => {
+    expect(component.getFrameClass(CardType.SPELL)).toBe('card-draft__card--frame-spell');
+  });
+
+  it('getFrameClass returns frame modifier for modifier type', () => {
+    expect(component.getFrameClass(CardType.MODIFIER)).toBe('card-draft__card--frame-modifier');
+  });
+
+  it('getFrameClass returns frame modifier for utility type', () => {
+    expect(component.getFrameClass(CardType.UTILITY)).toBe('card-draft__card--frame-utility');
+  });
+
   it('selected card receives --selected class after picking', () => {
     component.pickCard(MOCK_CHOICES[2]);
     fixture.detectChanges();
@@ -107,5 +129,40 @@ describe('CardDraftComponent', () => {
     expect(() => fixture.detectChanges()).not.toThrow();
     const cards = (fixture.nativeElement as HTMLElement).querySelectorAll('.card-draft__card');
     expect(cards.length).toBe(0);
+  });
+
+  describe('tower footprint preview', () => {
+    beforeEach(() => {
+      component.cardChoices = TOWER_CHOICES;
+      fixture.detectChanges();
+    });
+
+    it('renders .card-draft__footprint on the tower card', () => {
+      const cards = (fixture.nativeElement as HTMLElement)
+        .querySelectorAll<HTMLElement>('.card-draft__card');
+      // First card is TOWER_BASIC — should have footprint
+      const fp = cards[0].querySelector('.card-draft__footprint');
+      expect(fp).toBeTruthy();
+    });
+
+    it('does NOT render .card-draft__footprint on non-tower cards', () => {
+      const cards = (fixture.nativeElement as HTMLElement)
+        .querySelectorAll<HTMLElement>('.card-draft__card');
+      // Second card is GOLD_RUSH (spell), third is DAMAGE_BOOST (modifier)
+      expect(cards[1].querySelector('.card-draft__footprint')).toBeFalsy();
+      expect(cards[2].querySelector('.card-draft__footprint')).toBeFalsy();
+    });
+
+    it('footprint element is aria-hidden', () => {
+      const fp = (fixture.nativeElement as HTMLElement)
+        .querySelector('.card-draft__footprint');
+      expect(fp?.getAttribute('aria-hidden')).toBe('true');
+    });
+
+    it('footprint contains an SVG rect element', () => {
+      const rect = (fixture.nativeElement as HTMLElement)
+        .querySelector('.card-draft__footprint svg rect');
+      expect(rect).toBeTruthy();
+    });
   });
 });

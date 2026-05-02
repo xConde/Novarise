@@ -15,7 +15,10 @@
     <div class="pile-inspector__grid" *ngIf="groupedCards.length > 0">
       <div *ngFor="let c of groupedCards"
            class="pile-inspector__card"
-           [class.pile-inspector__card--upgraded]="c.upgraded">
+           [class.pile-inspector__card--upgraded]="c.upgraded"
+           [style.--archetype-trim-color]="getArchetypeTrimVar(c)">
+        <span class="pile-shape-badge pile-shape-badge--{{ c.type }}"
+              aria-hidden="true"></span>
         <span class="pile-inspector__card-name">{{ c.name }}</span>
         <span class="pile-inspector__card-count">×{{ c.count }}</span>
       </div>

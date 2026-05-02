@@ -62,7 +62,7 @@
   padding: var(--spacing-sm) calc(28px + var(--spacing-md) + var(--spacing-sm))
            var(--spacing-sm) var(--spacing-md);
   background: var(--bg-color);
-  border-bottom: 1px solid var(--border-structural);
+  border-bottom: var(--border-width-thin) solid var(--border-structural);
 }
 
 .library__home-link {
@@ -141,7 +141,7 @@
   margin-left: calc(-1 * var(--spacing-md));    /* bleed into content padding so the bg covers */
   margin-right: calc(-1 * var(--spacing-md));
   background: var(--bg-color);
-  border-bottom: 1px solid var(--border-structural);
+  border-bottom: var(--border-width-thin) solid var(--border-structural);
 }
 
 .tab {
@@ -227,7 +227,7 @@
   padding: var(--spacing-2xl);
   text-align: center;
   background: rgba(255, 255, 255, 0.02);
-  border: 1px dashed var(--border-color-subtle);
+  border: var(--border-width-thin) dashed var(--border-color-subtle);
   border-radius: var(--border-radius-md);
 }
 
