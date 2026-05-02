@@ -1,40 +1,49 @@
 # PR Draft — feat/card-branding
 
 **Target branch:** main
-**Commits:** 38 ahead of main
-**Test count:** 7736 SUCCESS / 0 FAILED / 1 skipped (+362 over inherited PR #35 baseline of 7374)
+**Commits:** 52 ahead of main
+**Test count:** 7745 SUCCESS / 0 FAILED / 1 skipped (+371 over inherited PR #35 baseline of 7374)
 **Build:** clean
 
-70-sprint UI/UX card branding overhaul across 8 phases. Cut from `main`
-after PR #35 merge (commit 87b8a64). 0 spec regressions, 0 build failures
-across the entire branch.
+70-sprint UI/UX card branding overhaul (Phases A-H), then a 31-sprint
+post-phase iteration round (S73-S101) that replaced the polygon clip-path
+chrome with HUD-pair chip layout, built `TowerThumbnailService` for 3D
+mesh thumbnails on tower cards, and shipped a 13-glyph hero-art vocabulary
+for all 62 non-tower cards. Cut from `main` after PR #35 merge (commit
+87b8a64). 0 spec regressions, 0 build failures across the entire branch.
 
 ---
 
 ## TL;DR
 
-Cards now carry a full identity system. Players can read a card's type
-(silhouette), archetype (trim color + backdrop pattern + sub-icon),
-keywords (icon badges + inline icons in description), and flavor at a
-glance — across all 6 card surfaces (card-hand, pile-inspector,
-card-draft, library tile, in-game card-detail modal, library
-card-detail-modal).
+Cards now carry a full identity system across 5 surfaces (card-hand,
+library tile, card-draft, in-game card-detail modal, library card-detail-
+modal). Players can read a card's type (silhouette + chrome), archetype
+(trim color + backdrop pattern + sub-icon), keywords (icon badges + inline
+icons in description), flavor (lore line), AND **hero art** at a glance:
+
+- Tower cards (12) show pixel-perfect 3D mesh thumbnails rendered live by
+  `TowerThumbnailService` from each tower type's actual game model
+- Non-tower cards (62) show one of 13 effect glyphs in a shared vocabulary
+  (fx-damage / burn / poison / slow / heal / gold / draw / energy / buff /
+  scout / recycle / link + reuse of kw-terraform for terraform spells)
 
 Before this branch: every card looked like the same rectangle with a
-type-color border. After: each archetype reads distinctly, each card
-type has its own silhouette, and each keyword has a recognizable icon.
+type-color border. After: each archetype reads distinctly, each card type
+has its own silhouette, and every individual card has a unique hero image.
 
-## Layered identity system (8 layers, 6 surfaces)
+## Layered identity system (9 layers, 5 surfaces)
 
 | Layer | What it conveys | Surfaces |
 |---|---|---|
-| Frame silhouette (clip-path) | Card type at-a-glance | hand, tile, draft |
+| Hero art (3D thumbnail / effect glyph) | Per-card visual identity | hand, tile, draft, modals |
+| Frame chrome (HUD-pair chips) | Cost / upgrade state | hand, tile, draft, modals |
 | Archetype trim ring | Archetype faction | hand, pile, tile, modals |
-| Archetype backdrop | Archetype theme texture | hand, tile, modals |
+| Archetype backdrop | Archetype theme texture | tile, modals |
 | Archetype sub-icon | Archetype reinforcement | hand, modals |
 | Keyword badges | Active keywords | hand, modals |
 | Inline {kw-*} icons | Keywords in flow text | tooltip, modals |
-| Tower footprint | "This places a tower" | hand, tile, draft, modals |
+| Tower footprint | "This places a tower" | tile, draft, modals |
 | Flavor text | Personality / lore | tooltip, modals |
 
 ## Phase summary
@@ -49,10 +58,12 @@ type has its own silhouette, and each keyword has a recognizable icon.
 | F | S49-S58 | 3 | +171 | Card-detail modal + cross-component spec |
 | G | S59-S66 | 3 | +18 | flavorText field + 74 lines written |
 | H | S67-S72 | 3 | 0 | Audits + reduce-motion bug fixes + close |
+| **Visual rescue** | **S73-S90** | **12** | **0** | **HUD-pair chrome + TowerThumbnailService** |
+| **Glyph system** | **S91-S101** | **3** | **+9** | **13 hero glyphs for 62 non-tower cards** |
 
 ## Key design decisions
 
-### Hue-distance audited archetype palette
+### Hue-distance audited archetype palette (Phase C)
 
 Trim colors aren't theme-pure; they're picked to maximize distinguishability:
 
@@ -93,6 +104,61 @@ sprints. Voice coherence preserved (military-industrial with sci-fi
 accents per the Phase A naming-audit's tonal finding). Average 46.8 chars,
 max 60 (well under 80 budget).
 
+### Hand-card chrome is HUD-pair, not polygon-frame (S73-S81)
+
+The Phase B polygon clip-path frames read as "battle-damaged" at 7×9.5rem
+hand scale — the angular cuts implied damage rather than identity. S73
+stripped clip-paths from card-hand only (kept on library tile + card-draft
+where they have room to breathe). S80-S81 replaced the cost pill + instance
+dot with HUD-pair chips: cost top-right (square, gold when affordable),
+upgrade `+` top-left (square, present only when upgraded). Reads as a
+clean overlay, not damage.
+
+### 3D thumbnails beat vector silhouettes for towers (S77-S90)
+
+S77 attempted a flat SVG turret icon as tower hero art — rejected. A
+generic vector turret reads as "any tower" not "this specific tower." The
+in-game 3D meshes have distinct silhouettes (Sniper tripod, Mortar angled
+cannon, Slow orb-on-rings, etc.) that no flat icon can match.
+
+S79 built `TowerThumbnailService` (root-scoped, ~230 lines) to render
+each `TowerType` to a 384×384 PNG data URL via an offscreen Three.js
+renderer. Uses `TowerMeshFactoryService` directly (factory accepts
+undefined registries via `@Optional`). Per-tower bounding-box
+auto-framing (S87), 90° Y rotation for action-shot side profile (S86),
+3-point lighting (S89), centered lookAt (S90). Cached per `TowerType`
+in a Map; rebuilds on hard refresh. ~40-50kb per cached PNG.
+
+### 13-glyph effect vocabulary for non-tower cards (S91-S101)
+
+The 3D thumbnail pipeline doesn't generalize to spells/modifiers/utilities
+because they have no 3D model. S91-S97 shipped an iconographic system: 11
+new fx-* glyphs (damage, burn, poison, slow, heal, gold, draw, energy,
+buff, scout, recycle) in the same design language as the existing kw-* and
+arch-* icons (24×24 viewBox, strokeWidth 1.5, currentColor). Plus reuse of
+kw-terraform / kw-link as hero glyphs for archetype-effect cards (Lay Tile,
+terraform spells).
+
+`CardDefinition.effectGlyph` accepts a single name OR a 2-tuple
+`[primary, secondary]` for composed effects (Cryo Pulse `[fx-slow,
+fx-draw]`, Chain Lightning `[fx-damage, fx-link]`, Conduit Bridge
+`[fx-link, fx-buff]`). Primary renders at hero size (40-64px depending on
+surface), secondary as a small bottom-right circular accent. Color tints
+via per-card-type accent variables (cyan/purple/green for spell/modifier/
+utility).
+
+S98-S101 iterated 3 glyphs based on hero-scale smoke testing:
+- **fx-damage** corner ticks → 8-point asterisk burst (clearer "strike")
+- **fx-link** added (hub + 4 satellites) for hero scale; kw-link kept
+  unchanged for the 14px keyword badges. Splits scale-specific concerns.
+- **fx-gold** stacked ellipses → stacked rectangular gold bars (reads as
+  "ingots / treasure" not "abstract discs")
+- **fx-scout** generic eye → magnifying glass (specifically "examine
+  ahead", matches the SCOUT_AHEAD/ELITE mechanic)
+
+Coverage spec asserts every non-tower card has a glyph, every glyph name
+is registered, and 2-tuple glyphs never duplicate.
+
 ## Honest scope cuts
 
 ### Phase E rescoped 8 → 3 sprints
@@ -114,10 +180,17 @@ all game-state UX, not card branding. Belongs in a separate
 
 ## Test plan
 
-- [ ] `npm test` — confirm 7736 SUCCESS / 0 FAILED / 1 skipped
+- [ ] `npm test` — confirm 7745 SUCCESS / 0 FAILED / 1 skipped
 - [ ] `npm run build` — confirm clean
 - [ ] Walk the browser-smoke checklist at
-      `docs/cards/browser-smoke-checklist.md` (60+ items across 8 phases)
+      `docs/cards/browser-smoke-checklist.md` (60+ items across Phases A-H)
+- [ ] Verify all 6 tower thumbnails render correctly (basic / sniper /
+      splash / slow / chain / mortar) — temp-deck override pattern in
+      `project_card_branding_handoff.md` if needed
+- [ ] Verify all 13 non-tower hero glyphs render at hand / tile / draft /
+      modal scales — temp-deck override returns 13 cards covering every
+      glyph; bump `DECK_CONFIG.handSize` + `maxHandSize` to 13 to see them
+      all in one hand
 - [ ] Spot-check 3 flagged flavor lines (CLIFFSIDE / COLLAPSE /
       GRAVITY_WELL) for tone/clarity — revise if needed before merge
 - [ ] Verify reduce-motion via OS toggle AND in-game settings — both
@@ -128,12 +201,17 @@ all game-state UX, not card branding. Belongs in a separate
 
 ## Files changed
 
+- 2 new services: `TowerThumbnailService` (root-scoped, ~230 lines, S79+),
+  + `EffectIconPath` data file (S91)
 - 1 new component: `DescriptionTextComponent` (standalone, parses {kw-*}
   tokens, renders inline icons inline with text)
 - 1 new SCSS partial: `_card-tokens.scss` (~140 tokens across 14 groups)
-- 14 new SVG icons in IconRegistry (6 keyword + 4 archetype + refresh of 4 type)
+- 14 + 11 SVG icons in IconRegistry (6 keyword + 4 archetype + refresh of
+  4 type, then 11 new fx-* + 1 fx-link)
 - 1 new integration spec: `card-branding.integration.spec.ts` (152 specs
   guarding cross-surface binding consistency)
+- `CardDefinition` field additions: `archetype` (required, Phase A),
+  `flavorText` (optional, Phase G), `effectGlyph` (optional, S91)
 - 8 in-repo phase close docs + 1 branch close doc + 1 browser-smoke checklist
 
 ## Out of scope
@@ -142,7 +220,6 @@ all game-state UX, not card branding. Belongs in a separate
 - Balance changes
 - New keywords / mechanics
 - Audio
-- 3D card meshes
 - Foil/holographic effects
 - i18n / translation hooks
 - Modifier chips on towers (deferred branch)
@@ -150,6 +227,9 @@ all game-state UX, not card branding. Belongs in a separate
 ## Documentation
 
 Full permanent record at `docs/cards/card-branding-close.md`. Per-phase
-close docs at `docs/cards/phase-{a,b,c,d,e,f,g,h}-close.md`.
+close docs at `docs/cards/phase-{a,b,c,d,e,f,g,h}-close.md`. Visual-rescue
++ glyph-system iteration history is in commit messages S73-S101 (no
+separate close doc — the system was small enough to reason about from
+git log + this PR body).
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
