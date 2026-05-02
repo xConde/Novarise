@@ -30,6 +30,8 @@ export class TowerThumbnailService implements OnDestroy {
   private initialized = false;
   /** Set to true when WebGL init fails so we skip further attempts. */
   private initFailed = false;
+  /** TowerTypes whose render threw — guard against per-type warn-spam. */
+  private readonly renderFailed = new Set<TowerType>();
 
   private readonly factory = new TowerMeshFactoryService();
 
@@ -84,9 +86,11 @@ export class TowerThumbnailService implements OnDestroy {
       this.camera.lookAt(0, 0.7, 0);
 
       this.initialized = true;
-    } catch {
+    } catch (error) {
       this.initFailed = true;
       this.disposeRenderer();
+      // One-shot warn — initFailed gates subsequent calls so this fires once.
+      console.warn('TowerThumbnailService: WebGL init failed; tower thumbnails disabled.', error);
     }
   }
 
@@ -115,7 +119,13 @@ export class TowerThumbnailService implements OnDestroy {
       this.renderer.render(this.scene, this.camera);
       const url = this.renderer.domElement.toDataURL('image/png');
       return url;
-    } catch {
+    } catch (error) {
+      // Per-type one-shot warn so a recurring render failure for one tower
+      // doesn't spam the console on every card-hand recompute.
+      if (!this.renderFailed.has(type)) {
+        this.renderFailed.add(type);
+        console.warn(`TowerThumbnailService: render failed for ${type}.`, error);
+      }
       return null;
     } finally {
       if (mesh) {
@@ -167,6 +177,7 @@ export class TowerThumbnailService implements OnDestroy {
   ngOnDestroy(): void {
     this.disposeRenderer();
     this.cache.clear();
+    this.renderFailed.clear();
     this.initialized = false;
   }
 
