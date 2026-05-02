@@ -746,32 +746,32 @@ body.reduce-motion .card-hand { animation: none; }
 // Previous design (circle badge + floating absolute label) read as two
 // disconnected elements floating over the art zone. The pill unifies them
 // so the cost indicator is a single coherent UI element.
-// Cost pip — single dominant number, top-left corner. StS reference:
-// the cost is the primary at-a-glance signal; everything else can wait
-// for tooltip. Circular, type-color tinted when affordable, dim when not.
+// Cost pip — single dominant number, top-right square corner chip.
+// Square (not circular) for HUD readout feel. The thumbnail occupies
+// the upper card body; the cost chip floats over its top-right corner.
 .card__cost {
   position: absolute;
   top: 0.4rem;
-  left: 0.4rem;
+  right: 0.4rem;
   width: 1.6rem;
   height: 1.6rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: rgba(10, 5, 20, 0.85);
-  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.18);
-  border-radius: 50%;
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.22);
+  border-radius: 0.25rem;
   color: var(--text-dim);
   font-family: "Orbitron", sans-serif;
   font-size: var(--font-size-base);
   font-weight: 800;
   line-height: 1;
-  z-index: 2; // above art zone + scan lines
+  z-index: 2; // above thumbnail + scan lines
   pointer-events: none;
 
   @media (max-width: 480px) {
     top: 0.25rem;
-    left: 0.25rem;
+    right: 0.25rem;
     width: 1.1rem;
     height: 1.1rem;
     font-size: var(--font-size-xs);
@@ -785,45 +785,61 @@ body.reduce-motion .card-hand { animation: none; }
   box-shadow: 0 0 0.5rem var(--game-gold-a40);
 }
 
-// Upgraded "+" badge — top-right corner
+// Upgraded "+" badge — top-left square chip (matches cost pip on the right).
+// Same square treatment as cost so chrome reads as a HUD pair.
 .card__upgraded-badge {
   position: absolute;
-  top: 0.2rem;
-  right: 0.25rem;
-  font-size: var(--font-size-2xs);
-  font-weight: 900;
+  top: 0.4rem;
+  left: 0.4rem;
+  width: 1.6rem;
+  height: 1.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 5, 20, 0.85);
+  border: var(--border-width-thin) solid rgba(255, 215, 0, 0.65);
+  border-radius: 0.25rem;
   color: var(--game-gold);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-base);
+  font-weight: 900;
   line-height: 1;
   text-shadow: 0 0 0.6rem rgba(255, 215, 0, 0.9);
-  letter-spacing: 0.06em;
-  z-index: 2; // above art zone + scan lines
+  letter-spacing: 0;
+  z-index: 2; // above thumbnail + scan lines
 
   @media (max-width: 480px) {
-    font-size: var(--font-size-3xs);
+    top: 0.25rem;
+    left: 0.25rem;
+    width: 1.1rem;
+    height: 1.1rem;
+    font-size: var(--font-size-xs);
   }
 }
 
 // Tower mesh thumbnail — rendered PNG from the actual in-game 3-D model.
-// Flow item so it pushes the card name down; only renders on tower cards.
-// object-fit: contain preserves the transparent background from the offscreen render.
+// Flow item dominating the top portion of the card. Only renders on tower
+// cards. The cost + upgrade chips float at top corners on z-index 2; the
+// thumbnail sits beneath them filling the upper card body.
 .card__art-thumbnail {
   display: block;
-  width: 4rem;
-  height: 4rem;
+  width: 5.5rem;
+  height: 5rem;
+  margin: 0 auto;
   object-fit: contain;
   pointer-events: none;
   flex-shrink: 0;
   position: relative;
-  z-index: 1; // above art-zone ::before, same layer as other card children
+  z-index: 1; // above art-zone ::before, below cost + upgrade chips (z:2)
 
   @media (max-width: 768px) {
-    width: 3.2rem;
-    height: 3.2rem;
+    width: 4.5rem;
+    height: 4.2rem;
   }
 
   @media (max-width: 480px) {
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 3rem;
+    height: 2.8rem;
   }
 }
 
@@ -865,15 +881,20 @@ body.reduce-motion .card-hand { animation: none; }
   }
 }
 
-// Type icon — small top-right corner chip signals type at a glance
-// (tower/spell/modifier/utility). The @each type-color rule above keeps per-type tinting.
+// Type icon — small bottom-center corner chip signals type at a glance
+// for non-tower cards. Tower cards hide it because the 3D thumbnail
+// already conveys "this is a tower" (and which one).
+.card--frame-tower .card__type-icon {
+  display: none;
+}
+
 .card__type-icon {
   position: absolute;
-  top: 0.45rem;
+  bottom: 0.4rem;
   right: 0.4rem;
-  opacity: 0.85;
+  opacity: 0.7;
   pointer-events: none;
-  z-index: 2; // sits beside the cost pill in the top strip
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
