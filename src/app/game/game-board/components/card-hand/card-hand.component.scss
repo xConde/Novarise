@@ -749,7 +749,12 @@ body.reduce-motion .card-hand { animation: none; }
 // Cost pip — single dominant number, top-right square corner chip.
 // Square (not circular) for HUD readout feel. The thumbnail occupies
 // the upper card body; the cost chip floats over its top-right corner.
-.card__cost {
+//
+// Specificity note: `.card > *` (line 312) has post-encapsulation
+// specificity (0,3,0); flat `.card__cost` would only be (0,2,0) and
+// lose. The `.card .card__cost` form bumps to (0,4,0) so position:
+// absolute wins.
+.card .card__cost {
   position: absolute;
   top: 0.4rem;
   right: 0.4rem;
@@ -778,7 +783,7 @@ body.reduce-motion .card-hand { animation: none; }
   }
 }
 
-.card__cost--affordable {
+.card .card__cost--affordable {
   background: rgba(255, 215, 0, 0.18);
   border-color: rgba(255, 215, 0, 0.7);
   color: var(--game-gold);
@@ -787,7 +792,8 @@ body.reduce-motion .card-hand { animation: none; }
 
 // Upgraded "+" badge — top-left square chip (matches cost pip on the right).
 // Same square treatment as cost so chrome reads as a HUD pair.
-.card__upgraded-badge {
+// Same specificity bump as .card__cost — see note there.
+.card .card__upgraded-badge {
   position: absolute;
   top: 0.4rem;
   left: 0.4rem;
@@ -881,14 +887,14 @@ body.reduce-motion .card-hand { animation: none; }
   }
 }
 
-// Type icon — small bottom-center corner chip signals type at a glance
+// Type icon — small bottom-corner chip signals type at a glance
 // for non-tower cards. Tower cards hide it because the 3D thumbnail
 // already conveys "this is a tower" (and which one).
 .card--frame-tower .card__type-icon {
   display: none;
 }
 
-.card__type-icon {
+.card .card__type-icon {
   position: absolute;
   bottom: 0.4rem;
   right: 0.4rem;
