@@ -96,11 +96,11 @@ export class TowerThumbnailService implements OnDestroy {
       // gridToWorld(0, 0, 1, 1) = { x: -0.5*tileSize, z: -0.5*tileSize }
       // Re-center so the tower sits at world origin for framing.
       mesh.position.set(0, 0, 0);
-      // Rotate the tower so its front quarters toward the camera instead
-      // of the barrel pointing straight along +Z (which foreshortens to a
-      // dot on a head-on camera). 45° around Y exposes the barrel length
-      // and the front-right face simultaneously — reads as "facing us."
-      mesh.rotation.y = Math.PI / 4;
+      // Rotate 90° around Y so the barrel — built along +Z by the factory —
+      // now points along +X. With the camera head-on at +Z, the barrel
+      // sweeps left-right across the image: the classic TD "action-shot"
+      // profile pose. Body in 3/4 side view, weapon visibly aimed.
+      mesh.rotation.y = Math.PI / 2;
       this.scene.add(mesh);
       this.renderer.render(this.scene, this.camera);
       const url = this.renderer.domElement.toDataURL('image/png');
