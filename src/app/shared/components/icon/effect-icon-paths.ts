@@ -118,16 +118,20 @@ export const EFFECT_ICON_PATHS = {
   /**
    * gold — coin spells / gold-from-kills modifiers.
    *
-   * Visual: 3 stacked horizontal ellipses (coins seen edge-on). Distinct
-   * from the existing 'coin' icon (single circle with $ glyph) so the two
-   * never collide visually in adjacent surfaces.
+   * Visual: 2 stacked rectangular gold bars (ingots) with short interior
+   * notches suggesting the bar's lip. The brick silhouette reads as
+   * "wealth / treasure" more directly than the prior stacked-ellipses
+   * design, which scanned as abstract horizontal lines at hero scale.
    */
   gold: {
     viewBox: '0 0 24 24',
     paths: [
-      { tag: 'ellipse', attrs: { cx: '12', cy: '7',  rx: '7', ry: '2.5' } },
-      { tag: 'ellipse', attrs: { cx: '12', cy: '12', rx: '7', ry: '2.5' } },
-      { tag: 'ellipse', attrs: { cx: '12', cy: '17', rx: '7', ry: '2.5' } },
+      { tag: 'rect', attrs: { x: '3', y: '13', width: '18', height: '7', rx: '1' } },
+      { tag: 'rect', attrs: { x: '5', y: '5',  width: '14', height: '7', rx: '1' } },
+      { tag: 'line', attrs: { x1: '8',  y1: '13', x2: '8',  y2: '20' } },
+      { tag: 'line', attrs: { x1: '16', y1: '13', x2: '16', y2: '20' } },
+      { tag: 'line', attrs: { x1: '9',  y1: '5',  x2: '9',  y2: '12' } },
+      { tag: 'line', attrs: { x1: '15', y1: '5',  x2: '15', y2: '12' } },
     ],
   } satisfies EffectIconDef,
 
@@ -181,15 +185,17 @@ export const EFFECT_ICON_PATHS = {
   /**
    * scout — wave-preview / reveal spells (Scout Ahead, Scout Elite).
    *
-   * Visual: stylized eye (almond outline + circular pupil). Reads as
-   * "see / reveal" — the universal "view" iconography.
+   * Visual: magnifying glass (lens circle + diagonal handle + small inner
+   * highlight ring). Reads as "examine / search ahead" which matches the
+   * "reveal next N waves" mechanic better than a generic eye, and
+   * disambiguates from the cardinal-arm arch-cartographer compass rose.
    */
   scout: {
     viewBox: '0 0 24 24',
     paths: [
-      { tag: 'path',   attrs: { d: 'M2 12 C 5 7, 9 5, 12 5 C 15 5, 19 7, 22 12 C 19 17, 15 19, 12 19 C 9 19, 5 17, 2 12 Z' } },
-      { tag: 'circle', attrs: { cx: '12', cy: '12', r: '3' } },
-      { tag: 'circle', attrs: { cx: '12', cy: '12', r: '1', fill: 'currentColor', stroke: 'none' } },
+      { tag: 'circle', attrs: { cx: '10', cy: '10', r: '6' } },
+      { tag: 'circle', attrs: { cx: '10', cy: '10', r: '3' } },
+      { tag: 'line',   attrs: { x1: '14.5', y1: '14.5', x2: '20', y2: '20' } },
     ],
   } satisfies EffectIconDef,
 
