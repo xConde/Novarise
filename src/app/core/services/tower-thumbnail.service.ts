@@ -3,8 +3,11 @@ import * as THREE from 'three';
 import { TowerType } from '@core/models/tower-type.model';
 import { TowerMeshFactoryService } from '../../game/game-board/services/tower-mesh-factory.service';
 
-/** Offscreen render size in pixels (square). */
-const THUMBNAIL_SIZE = 192;
+/** Offscreen render size in pixels (square).
+ *  384 gives 2× linear / 4× pixel density vs the prior 192 — captures
+ *  more of the tower mesh detail (vents, bolt-heads, barrel segments)
+ *  that gets lost at the smaller render. PNG size ~40-50kb per tower. */
+const THUMBNAIL_SIZE = 384;
 
 /**
  * Renders each tower type to a PNG data URL using an offscreen Three.js
@@ -55,18 +58,19 @@ export class TowerThumbnailService implements OnDestroy {
 
       this.scene = new THREE.Scene();
 
-      // Three-point lighting tuned for the card art zone.
-      // Key: warm-white from upper-right; fill: cool blue to add depth;
-      // rim: faint top-back edge separation.
-      const ambient = new THREE.AmbientLight(0xffffff, 0.35);
+      // Three-point lighting tuned for the card art zone. Lower ambient
+      // + stronger key gives sharper light/shadow contrast that makes
+      // turret vents, bolt-heads, and barrel segments pop — matches the
+      // in-game render's dramatic shading.
+      const ambient = new THREE.AmbientLight(0xffffff, 0.22);
 
-      const key = new THREE.DirectionalLight(0xfff5e0, 1.1);
+      const key = new THREE.DirectionalLight(0xfff5e0, 1.55);
       key.position.set(2.5, 4.5, 3.0);
 
-      const fill = new THREE.DirectionalLight(0x99bbff, 0.45);
+      const fill = new THREE.DirectionalLight(0x99bbff, 0.5);
       fill.position.set(-2.5, 2.0, -1.5);
 
-      const rim = new THREE.DirectionalLight(0xffffff, 0.25);
+      const rim = new THREE.DirectionalLight(0xffffff, 0.35);
       rim.position.set(0, 5, -3);
 
       this.scene.add(ambient, key, fill, rim);
