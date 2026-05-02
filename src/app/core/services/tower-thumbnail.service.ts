@@ -71,10 +71,13 @@ export class TowerThumbnailService implements OnDestroy {
 
       this.scene.add(ambient, key, fill, rim);
 
-      // Camera: 3/4 view from above-right-front so the tower reads clearly.
-      // FOV 38° keeps perspective distortion low at this scale.
-      this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-      this.camera.position.set(1.6, 2.2, 3.0);
+      // Camera: nearly head-on with a slight 3/4 from the right + small
+      // elevation so the tower faces the viewer. FOV tightened to 28° for a
+      // tighter "telephoto" frame — fills more of the canvas with the tower
+      // body and reduces perspective distortion. Camera pulled closer
+      // (z 3.0 → 2.6) for additional zoom.
+      this.camera = new THREE.PerspectiveCamera(28, 1, 0.1, 100);
+      this.camera.position.set(0.7, 1.6, 2.6);
       this.camera.lookAt(0, 0.55, 0);
 
       this.initialized = true;

@@ -70,7 +70,10 @@
   // === Card art zone ===
   // Top 55% of the card; rendered as ::before pseudo-element.
 
-  --card-art-zone-height: 55%;
+  // Match the absolute thumbnail height (S83) so the radial-gradient
+  // ::before extends through the full art-zone box. Mismatch produced
+  // a visible color-cutoff seam where the gradient ended early.
+  --card-art-zone-height: 7rem;
 
   // Opacity values used in the per-type radial gradient stops (inner / outer)
   --card-art-tower-opacity-inner:    0.28;
