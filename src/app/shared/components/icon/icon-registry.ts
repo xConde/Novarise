@@ -9,7 +9,7 @@ export type IconName =
   | 'kw-terraform' | 'kw-link' | 'kw-exhaust' | 'kw-retain' | 'kw-innate' | 'kw-ethereal'
   | 'arch-cartographer' | 'arch-highground' | 'arch-conduit' | 'arch-neutral'
   | 'fx-damage' | 'fx-burn' | 'fx-poison' | 'fx-slow' | 'fx-heal' | 'fx-gold'
-  | 'fx-draw' | 'fx-energy' | 'fx-buff' | 'fx-scout' | 'fx-recycle';
+  | 'fx-draw' | 'fx-energy' | 'fx-buff' | 'fx-scout' | 'fx-recycle' | 'fx-link';
 
 export interface IconDef {
   readonly viewBox: string;
@@ -69,4 +69,5 @@ export const ICON_REGISTRY: Record<IconName, IconDef> = {
   'fx-buff':            { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
   'fx-scout':           { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
   'fx-recycle':         { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'fx-link':            { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
 };

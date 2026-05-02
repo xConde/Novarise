@@ -945,7 +945,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.CHAIN_LIGHTNING]: {
     id: CardId.CHAIN_LIGHTNING,
     name: 'Chain Lightning',
-    effectGlyph: ['fx-damage', 'kw-link'],
+    effectGlyph: ['fx-damage', 'fx-link'],
     description: 'Chain towers +2 bounces for 2 waves.',
     upgradedDescription: 'Chain towers +3 bounces for 2 waves.',
     flavorText: 'The arc counts on the next target always being there.',
@@ -1945,7 +1945,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.HANDSHAKE]: {
     id: CardId.HANDSHAKE,
     name: 'Handshake',
-    effectGlyph: 'kw-link',
+    effectGlyph: 'fx-link',
     description: 'Towers with at least one adjacent tower gain +20% damage this wave.',
     upgradedDescription: 'Towers with at least one adjacent tower gain +30% damage this wave.',
     flavorText: 'Two towers sharing a wall share a purpose.',
@@ -1978,7 +1978,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.FORMATION]: {
     id: CardId.FORMATION,
     name: 'Formation',
-    effectGlyph: 'kw-link',
+    effectGlyph: 'fx-link',
     description: 'Towers in a row of 3 or more gain +2 range this wave.',
     upgradedDescription: 'Towers in a row of 3 or more gain +3 range this wave.',
     flavorText: 'A row is not just placement. It is a firing lane.',
@@ -2011,7 +2011,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.LINKWORK]: {
     id: CardId.LINKWORK,
     name: 'Linkwork',
-    effectGlyph: 'kw-link',
+    effectGlyph: 'fx-link',
     description: 'For 2 turns, linked towers share the highest fire rate in their cluster.',
     upgradedDescription: 'For 3 turns, linked towers share the highest fire rate in their cluster.',
     flavorText: 'The fastest link sets the tempo. Everyone else follows.',
@@ -2046,7 +2046,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.HARMONIC]: {
     id: CardId.HARMONIC,
     name: 'Harmonic',
-    effectGlyph: 'kw-link',
+    effectGlyph: 'fx-link',
     description: 'For 3 turns, when a tower fires, 2 random linked neighbors fire at the same target.',
     upgradedDescription: 'For 4 turns, when a tower fires, 2 random linked neighbors fire at the same target.',
     flavorText: 'When one fires, the network answers.',
@@ -2081,7 +2081,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.GRID_SURGE]: {
     id: CardId.GRID_SURGE,
     name: 'Grid Surge',
-    effectGlyph: 'kw-link',
+    effectGlyph: 'fx-link',
     description: 'Towers with all 4 neighbors filled deal double damage this turn.',
     upgradedDescription: 'Towers with all 4 neighbors filled deal ×2.5 damage this turn.',
     flavorText: 'Four neighbors. One moment. All of them at once.',
@@ -2117,7 +2117,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.CONDUIT_BRIDGE]: {
     id: CardId.CONDUIT_BRIDGE,
     name: 'Conduit Bridge',
-    effectGlyph: ['kw-link', 'fx-buff'],
+    effectGlyph: ['fx-link', 'fx-buff'],
     description: 'Link two non-adjacent towers as neighbors for 3 turns.',
     upgradedDescription: 'Link two non-adjacent towers as neighbors for 4 turns.',
     flavorText: 'The signal travels faster than the towers do.',
@@ -2149,7 +2149,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.ARCHITECT]: {
     id: CardId.ARCHITECT,
     name: 'Architect',
-    effectGlyph: ['kw-link', 'fx-energy'],
+    effectGlyph: ['fx-link', 'fx-energy'],
     description: 'Every tower in a cluster counts as adjacent to every other tower in that cluster for the rest of this encounter.',
     upgradedDescription: 'Costs 2 energy. Every tower in a cluster counts as adjacent to every other tower in that cluster for the rest of this encounter.',
     flavorText: 'Every tower in the cluster now speaks the same language.',
@@ -2183,7 +2183,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.HIVE_MIND]: {
     id: CardId.HIVE_MIND,
     name: 'Hive Mind',
-    effectGlyph: 'kw-link',
+    effectGlyph: 'fx-link',
     description: 'For the rest of this encounter, every tower in a cluster fires with the strongest tower\u2019s damage and range.',
     upgradedDescription: 'For the rest of this encounter, every tower in a cluster fires with the strongest tower\u2019s damage, range, and secondary effect (splash, chain bounces, status, and DoT).',
     flavorText: 'The strongest node defines what every node becomes.',

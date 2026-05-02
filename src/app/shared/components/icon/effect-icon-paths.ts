@@ -34,17 +34,24 @@ export const EFFECT_ICON_PATHS = {
   /**
    * damage — direct damage spell or damage modifier on a tower.
    *
-   * Visual: filled center impact dot + 4 angled "impact spike" lines
-   * radiating to the corners. Reads as a struck target / explosion burst.
+   * Visual: filled center impact dot + 8-point asterisk burst (4 cardinal
+   * spikes + 4 diagonal spikes radiating outward from center). Reads as
+   * "explosion / impact burst from a single point" — clearer "strike"
+   * silhouette than the prior 4-corner tick design which scanned as
+   * disconnected marks at hero scale.
    */
   damage: {
     viewBox: '0 0 24 24',
     paths: [
       { tag: 'circle', attrs: { cx: '12', cy: '12', r: '2.5', fill: 'currentColor', stroke: 'none' } },
-      { tag: 'line',   attrs: { x1: '6',  y1: '6',  x2: '9',  y2: '9'  } },
-      { tag: 'line',   attrs: { x1: '18', y1: '6',  x2: '15', y2: '9'  } },
-      { tag: 'line',   attrs: { x1: '6',  y1: '18', x2: '9',  y2: '15' } },
-      { tag: 'line',   attrs: { x1: '18', y1: '18', x2: '15', y2: '15' } },
+      { tag: 'line',   attrs: { x1: '12', y1: '4',  x2: '12', y2: '8'  } },
+      { tag: 'line',   attrs: { x1: '12', y1: '16', x2: '12', y2: '20' } },
+      { tag: 'line',   attrs: { x1: '4',  y1: '12', x2: '8',  y2: '12' } },
+      { tag: 'line',   attrs: { x1: '16', y1: '12', x2: '20', y2: '12' } },
+      { tag: 'line',   attrs: { x1: '5',  y1: '5',  x2: '8.5', y2: '8.5' } },
+      { tag: 'line',   attrs: { x1: '19', y1: '5',  x2: '15.5', y2: '8.5' } },
+      { tag: 'line',   attrs: { x1: '5',  y1: '19', x2: '8.5', y2: '15.5' } },
+      { tag: 'line',   attrs: { x1: '19', y1: '19', x2: '15.5', y2: '15.5' } },
     ],
   } satisfies EffectIconDef,
 
@@ -199,6 +206,33 @@ export const EFFECT_ICON_PATHS = {
       { tag: 'polyline', attrs: { points: '15,5 19,9 15,11' } },
       { tag: 'path',     attrs: { d: 'M19 15 A 8 8 0 0 1 5 15' } },
       { tag: 'polyline', attrs: { points: '9,19 5,15 9,13' } },
+    ],
+  } satisfies EffectIconDef,
+
+  /**
+   * link — Conduit-archetype hero glyph (link modifiers + Conduit Bridge).
+   *
+   * Visual: central hub node with 4 cardinal satellite nodes connected by
+   * short stroke segments. Reads as "tower with 4 neighbors" — directly
+   * matches the link archetype's adjacency mechanic.
+   *
+   * Distinct from `kw-link` (2-node dumbbell, designed for 14px keyword
+   * badges) and `arch-conduit` (3-node triangle archetype glyph). Both
+   * `kw-link` (badges) and `fx-link` (hero) coexist: the keyword icon stays
+   * tight at small scale, the hero icon fills the 64px art zone.
+   */
+  link: {
+    viewBox: '0 0 24 24',
+    paths: [
+      { tag: 'circle', attrs: { cx: '12', cy: '12', r: '3', fill: 'currentColor', stroke: 'none' } },
+      { tag: 'circle', attrs: { cx: '12', cy: '4',  r: '2', fill: 'currentColor', stroke: 'none' } },
+      { tag: 'circle', attrs: { cx: '12', cy: '20', r: '2', fill: 'currentColor', stroke: 'none' } },
+      { tag: 'circle', attrs: { cx: '4',  cy: '12', r: '2', fill: 'currentColor', stroke: 'none' } },
+      { tag: 'circle', attrs: { cx: '20', cy: '12', r: '2', fill: 'currentColor', stroke: 'none' } },
+      { tag: 'line',   attrs: { x1: '12', y1: '9',  x2: '12', y2: '6'  } },
+      { tag: 'line',   attrs: { x1: '12', y1: '15', x2: '12', y2: '18' } },
+      { tag: 'line',   attrs: { x1: '9',  y1: '12', x2: '6',  y2: '12' } },
+      { tag: 'line',   attrs: { x1: '15', y1: '12', x2: '18', y2: '12' } },
     ],
   } satisfies EffectIconDef,
 

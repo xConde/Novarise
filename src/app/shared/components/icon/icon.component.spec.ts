@@ -264,10 +264,10 @@ describe('IconComponent', () => {
   describe('effect glyphs (fx-*)', () => {
     const FX_ICON_NAMES: IconName[] = [
       'fx-damage', 'fx-burn', 'fx-poison', 'fx-slow', 'fx-heal', 'fx-gold',
-      'fx-draw', 'fx-energy', 'fx-buff', 'fx-scout', 'fx-recycle',
+      'fx-draw', 'fx-energy', 'fx-buff', 'fx-scout', 'fx-recycle', 'fx-link',
     ];
 
-    it('all 11 effect glyphs are registered in ICON_REGISTRY', () => {
+    it('all 12 effect glyphs are registered in ICON_REGISTRY', () => {
       for (const name of FX_ICON_NAMES) {
         expect(ICON_REGISTRY[name])
           .withContext(`"${name}" missing from ICON_REGISTRY`)
@@ -275,7 +275,7 @@ describe('IconComponent', () => {
       }
     });
 
-    it('all 11 effect glyphs use strokeWidth 1.5 and stroke="currentColor"', () => {
+    it('all 12 effect glyphs use strokeWidth 1.5 and stroke="currentColor"', () => {
       for (const name of FX_ICON_NAMES) {
         expect(ICON_REGISTRY[name].strokeWidth).toBe('1.5');
         expect(ICON_REGISTRY[name].stroke).toBe('currentColor');
@@ -293,7 +293,7 @@ describe('IconComponent', () => {
       }
     });
 
-    it('IconName union contains all 11 effect glyph names', () => {
+    it('IconName union contains all 12 effect glyph names', () => {
       for (const name of FX_ICON_NAMES) {
         const typed: IconName = name;
         expect(typed).toBe(name);

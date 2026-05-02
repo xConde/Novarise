@@ -3,11 +3,11 @@ import { EFFECT_ICON_PATHS, EffectIconName } from './effect-icon-paths';
 describe('EFFECT_ICON_PATHS', () => {
   const EFFECTS: EffectIconName[] = [
     'damage', 'burn', 'poison', 'slow', 'heal', 'gold',
-    'draw', 'energy', 'buff', 'scout', 'recycle',
+    'draw', 'energy', 'buff', 'scout', 'recycle', 'link',
   ];
 
-  it('contains all 11 required effect entries', () => {
-    expect(Object.keys(EFFECT_ICON_PATHS).length).toBe(11);
+  it('contains all 12 required effect entries', () => {
+    expect(Object.keys(EFFECT_ICON_PATHS).length).toBe(12);
     for (const fx of EFFECTS) {
       expect(EFFECT_ICON_PATHS[fx]).toBeDefined();
     }
@@ -20,10 +20,10 @@ describe('EFFECT_ICON_PATHS', () => {
           expect(EFFECT_ICON_PATHS[fx].viewBox).toBe('0 0 24 24');
         });
 
-        it('has between 1 and 5 path elements', () => {
+        it('has between 1 and 9 path elements', () => {
           const count = EFFECT_ICON_PATHS[fx].paths.length;
           expect(count).toBeGreaterThanOrEqual(1);
-          expect(count).toBeLessThanOrEqual(5);
+          expect(count).toBeLessThanOrEqual(9);
         });
 
         it('declares a tag and attrs on every path element', () => {

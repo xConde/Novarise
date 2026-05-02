@@ -273,7 +273,7 @@ export interface CardDefinition {
 export type EffectGlyphName =
   | 'fx-damage' | 'fx-burn' | 'fx-poison' | 'fx-slow' | 'fx-heal' | 'fx-gold'
   | 'fx-draw'   | 'fx-energy' | 'fx-buff'  | 'fx-scout' | 'fx-recycle'
-  | 'kw-terraform' | 'kw-link';
+  | 'fx-link'   | 'kw-terraform' | 'kw-link';
 
 export type EffectGlyph = EffectGlyphName | readonly [EffectGlyphName, EffectGlyphName];
 

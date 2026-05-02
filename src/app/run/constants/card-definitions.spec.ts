@@ -1394,7 +1394,7 @@ describe('CARD_DEFINITIONS', () => {
   describe('effectGlyph coverage (non-tower cards)', () => {
     const VALID_GLYPHS = new Set([
       'fx-damage', 'fx-burn', 'fx-poison', 'fx-slow', 'fx-heal', 'fx-gold',
-      'fx-draw', 'fx-energy', 'fx-buff', 'fx-scout', 'fx-recycle',
+      'fx-draw', 'fx-energy', 'fx-buff', 'fx-scout', 'fx-recycle', 'fx-link',
       'kw-terraform', 'kw-link',
     ]);
 

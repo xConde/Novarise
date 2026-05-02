@@ -239,10 +239,14 @@
 
     <ng-container *ngSwitchCase="'fx-damage'">
       <svg:circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/>
-      <svg:line x1="6"  y1="6"  x2="9"  y2="9"/>
-      <svg:line x1="18" y1="6"  x2="15" y2="9"/>
-      <svg:line x1="6"  y1="18" x2="9"  y2="15"/>
-      <svg:line x1="18" y1="18" x2="15" y2="15"/>
+      <svg:line x1="12" y1="4"  x2="12" y2="8"/>
+      <svg:line x1="12" y1="16" x2="12" y2="20"/>
+      <svg:line x1="4"  y1="12" x2="8"  y2="12"/>
+      <svg:line x1="16" y1="12" x2="20" y2="12"/>
+      <svg:line x1="5"  y1="5"  x2="8.5" y2="8.5"/>
+      <svg:line x1="19" y1="5"  x2="15.5" y2="8.5"/>
+      <svg:line x1="5"  y1="19" x2="8.5" y2="15.5"/>
+      <svg:line x1="19" y1="19" x2="15.5" y2="15.5"/>
     </ng-container>
 
     <ng-container *ngSwitchCase="'fx-burn'">
@@ -303,6 +307,18 @@
       <svg:polyline points="15,5 19,9 15,11"/>
       <svg:path d="M19 15 A 8 8 0 0 1 5 15"/>
       <svg:polyline points="9,19 5,15 9,13"/>
+    </ng-container>
+
+    <ng-container *ngSwitchCase="'fx-link'">
+      <svg:circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>
+      <svg:circle cx="12" cy="4"  r="2" fill="currentColor" stroke="none"/>
+      <svg:circle cx="12" cy="20" r="2" fill="currentColor" stroke="none"/>
+      <svg:circle cx="4"  cy="12" r="2" fill="currentColor" stroke="none"/>
+      <svg:circle cx="20" cy="12" r="2" fill="currentColor" stroke="none"/>
+      <svg:line x1="12" y1="9"  x2="12" y2="6"/>
+      <svg:line x1="12" y1="15" x2="12" y2="18"/>
+      <svg:line x1="9"  y1="12" x2="6"  y2="12"/>
+      <svg:line x1="15" y1="12" x2="18" y2="12"/>
     </ng-container>
 
   </ng-container>
