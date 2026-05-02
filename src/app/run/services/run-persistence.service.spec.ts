@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { RunPersistenceService } from './run-persistence.service';
 import { RunState, RunStatus, DEFAULT_RUN_CONFIG } from '../models/run-state.model';
 import { NodeMap, NodeType } from '../models/node-map.model';
+import { CardId } from '../models/card.model';
 
 const RUN_STATE_KEY = 'novarise_run_state';
 const NODE_MAP_KEY = 'novarise_run_map';
@@ -20,7 +21,9 @@ function makeRunState(overrides: Partial<RunState> = {}): RunState {
     maxLives: 20,
     gold: 150,
     relicIds: [],
-    deckCardIds: [],
+    // Default deck contains a tower card so loadRunState's corruption guard
+    // (which rejects saves whose deck has zero towers) does not reject.
+    deckCardIds: [CardId.TOWER_BASIC],
     encounterResults: [],
     status: RunStatus.IN_PROGRESS,
     startedAt: 1000000,
@@ -129,6 +132,39 @@ describe('RunPersistenceService', () => {
 
   it('loadRunState() returns null and clears save for corrupt JSON', () => {
     localStorage.setItem(RUN_STATE_KEY, '{ not valid json }}}');
+    expect(service.loadRunState()).toBeNull();
+    expect(service.hasSavedRun()).toBeFalse();
+  });
+
+  // ── Corruption guard: zero-tower deck (smoke-test override leftover) ──
+
+  it('loadRunState() rejects + clears a saved deck containing zero tower cards', () => {
+    // Mirrors the shape left behind by the glyph-review smoke override:
+    // 13 non-tower cards, no towers. Production starter always has 16 towers,
+    // so this composition cannot arise from normal play.
+    const corruptDeck = [
+      CardId.LIGHTNING_STRIKE, CardId.INCINERATE, CardId.TOXIC_SPRAY,
+      CardId.FROST_WAVE, CardId.REPAIR_WALLS, CardId.GOLD_RUSH,
+      CardId.DRAW_TWO, CardId.ENERGY_SURGE, CardId.DAMAGE_BOOST,
+      CardId.SCOUT_AHEAD, CardId.RECYCLE, CardId.HANDSHAKE, CardId.LAY_TILE,
+    ];
+    service.saveRunState(makeRunState({ deckCardIds: corruptDeck }), makeNodeMap());
+    expect(service.loadRunState()).toBeNull();
+    expect(service.hasSavedRun()).toBeFalse();
+  });
+
+  it('loadRunState() restores a deck that contains at least one tower card', () => {
+    const validDeck = [
+      CardId.TOWER_BASIC, CardId.TOWER_BASIC, CardId.GOLD_RUSH,
+    ];
+    service.saveRunState(makeRunState({ deckCardIds: validDeck }), makeNodeMap());
+    const loaded = service.loadRunState();
+    expect(loaded).not.toBeNull();
+    expect(loaded!.deckCardIds).toEqual(validDeck);
+  });
+
+  it('loadRunState() rejects an empty deck (defense-in-depth)', () => {
+    service.saveRunState(makeRunState({ deckCardIds: [] }), makeNodeMap());
     expect(service.loadRunState()).toBeNull();
     expect(service.hasSavedRun()).toBeFalse();
   });
