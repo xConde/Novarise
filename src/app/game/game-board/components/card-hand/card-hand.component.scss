@@ -875,7 +875,11 @@ body.reduce-motion .card-hand { animation: none; }
   letter-spacing: 0.03em;
   text-align: center;
   line-height: 1.15;
-  word-break: break-word;
+  // Allow whole words to break to a new line, but DON'T split a word
+  // mid-character (which produced "HANDSHAK / E" orphans).
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: none;
 
   @media (max-width: 768px) {
     font-size: var(--font-size-2xs);

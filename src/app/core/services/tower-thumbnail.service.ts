@@ -146,17 +146,20 @@ export class TowerThumbnailService implements OnDestroy {
     const maxDim = Math.max(size.x, size.y);
 
     // Tight framing — tower fills the canvas with a hint of breathing room.
-    // 1.05 = 5% padding (was 1.3 = 30%). Tighter framing recovers the
-    // hero-shot flavor lost when the auto-frame uniformized everything.
+    // 1.08 = 8% padding (mild — still hero-shot tight without cropping
+    // tall towers' upper features like the Slow crystal or Sniper scope).
     const fovRad = (this.camera.fov * Math.PI) / 180;
     const fitDistance = (maxDim * 0.5) / Math.tan(fovRad / 2);
-    const distance = fitDistance * 1.05;
+    const distance = fitDistance * 1.08;
 
-    // Stronger upward bias for a 3/4-from-above hero angle. Camera sits
-    // ~40% of the mesh height above center, giving a downward tilt that
-    // shows turret tops + barrel profile dramatically.
-    const cameraY = center.y + size.y * 0.4;
+    // Camera y biased slightly above mesh center for a 3/4 angle.
+    // 15% above center gives a mild downward tilt without looking down
+    // ON the upper features.
+    const cameraY = center.y + size.y * 0.15;
 
+    // LookAt at strict bbox center so the mesh fills the frame symmetrically
+    // — visually centered, not weighted toward the bottom (which happens
+    // when lookAt is above center) or cropped at top (when lookAt is below).
     this.camera.position.set(0, cameraY, distance);
     this.camera.lookAt(center.x, center.y, center.z);
   }
