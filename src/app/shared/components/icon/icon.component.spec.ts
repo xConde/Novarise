@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { IconComponent } from './icon.component';
 import { ICON_REGISTRY, IconName } from './icon-registry';
+import { KEYWORD_ICON_PATHS, KeywordIconName } from './keyword-icon-paths';
+import { EFFECT_ICON_PATHS, EffectIconName } from './effect-icon-paths';
 
 const KEYWORD_ICON_NAMES: IconName[] = [
   'kw-terraform', 'kw-link', 'kw-exhaust', 'kw-retain', 'kw-innate', 'kw-ethereal',
@@ -298,6 +300,77 @@ describe('IconComponent', () => {
         const typed: IconName = name;
         expect(typed).toBe(name);
       }
+    });
+  });
+
+  // Red Team Finding 1 (HIGH) — parity guard between the *_ICON_PATHS data
+  // files (treated as authoritative spec by *.spec.ts) and the inline SVG
+  // primitives in icon.component.html (consumed by the runtime renderer).
+  // These two sources can drift silently; this spec catches a count delta
+  // the moment one file is edited without the other.
+  //
+  // Counts SVG primitive children — circle / line / path / polyline / polygon
+  // / rect / ellipse — and asserts the rendered count matches the data file's
+  // `paths.length`. Doesn't catch attribute drift but is the cheapest check
+  // that meaningfully enforces the spec/render contract.
+  describe('SVG primitive parity (data file ↔ template)', () => {
+    const PRIMITIVE_TAGS = ['circle', 'line', 'path', 'polyline', 'polygon', 'rect', 'ellipse'];
+
+    function countPrimitives(svg: SVGElement): number {
+      let count = 0;
+      for (const tag of PRIMITIVE_TAGS) {
+        count += svg.getElementsByTagName(tag).length;
+      }
+      return count;
+    }
+
+    function renderAndCount(name: IconName): number {
+      component.name = name;
+      component.ngOnChanges();
+      fixture.detectChanges();
+      const svg = fixture.nativeElement.querySelector('svg') as SVGElement;
+      return countPrimitives(svg);
+    }
+
+    describe('keyword glyphs (kw-*)', () => {
+      const KEYWORD_DATA_NAMES: KeywordIconName[] = [
+        'terraform', 'link', 'exhaust', 'retain', 'innate', 'ethereal',
+      ];
+
+      KEYWORD_DATA_NAMES.forEach((dataName) => {
+        const iconName = `kw-${dataName}` as IconName;
+        it(`${iconName} renders the same primitive count as KEYWORD_ICON_PATHS.${dataName}`, () => {
+          const expected = KEYWORD_ICON_PATHS[dataName].paths.length;
+          const actual = renderAndCount(iconName);
+          expect(actual)
+            .withContext(
+              `${iconName}: data file has ${expected} paths but template renders ${actual}. ` +
+              `Update both keyword-icon-paths.ts AND icon.component.html together.`,
+            )
+            .toBe(expected);
+        });
+      });
+    });
+
+    describe('effect glyphs (fx-*)', () => {
+      const EFFECT_DATA_NAMES: EffectIconName[] = [
+        'damage', 'burn', 'poison', 'slow', 'heal', 'gold',
+        'draw', 'energy', 'buff', 'scout', 'recycle', 'link',
+      ];
+
+      EFFECT_DATA_NAMES.forEach((dataName) => {
+        const iconName = `fx-${dataName}` as IconName;
+        it(`${iconName} renders the same primitive count as EFFECT_ICON_PATHS.${dataName}`, () => {
+          const expected = EFFECT_ICON_PATHS[dataName].paths.length;
+          const actual = renderAndCount(iconName);
+          expect(actual)
+            .withContext(
+              `${iconName}: data file has ${expected} paths but template renders ${actual}. ` +
+              `Update both effect-icon-paths.ts AND icon.component.html together.`,
+            )
+            .toBe(expected);
+        });
+      });
     });
   });
 });

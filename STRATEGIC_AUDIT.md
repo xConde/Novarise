@@ -2607,3 +2607,54 @@ Result: when SNIPER has a target in range, `tickAim`'s lerpYaw result is immedia
 - [x] Production build clean — `npx ng build --configuration=production` completed successfully
 - [x] No new `console.log`/`debugger` statements — one `console.warn` added on branch is intentional defensive guard, ESLint-exempt
 - [x] Browser smoke checklist documented — polish: `docs/towers/browser-smoke-checklist.md` (30+ items); aim: `docs/towers/aim-browser-checklist.md`
+
+---
+
+# feat/card-branding — Red Team Critique (2026-05-02)
+
+**Scope:** 53 commits, 65 files, +8688/−650 LOC. 7745 SUCCESS / 0 FAILED / 1 skipped. Branch covers Phases A–H (S1–S72), visual rescue (S73–S90), and the non-tower glyph system (S91–S101).
+
+**Phase 0 — Hook check:** `.claude/tasks/hooks/post-write-check.sh` and `pre-commit-check.sh` exist as shell scripts but are NOT wired into `.claude/settings.local.json`. The post-write hook would have caught the 2 console.debug statements in `card-play.service.ts:760, 769` on the original write (those are pre-existing on `main`, documented as exempt in the prior PR's deployment checklist, so not in this branch's remit). Recommend wiring hooks in a separate infra PR — orthogonal to card branding.
+
+---
+
+### Finding 1: Two sources of truth for SVG glyph paths (HIGH)
+
+**Location:** `src/app/shared/components/icon/effect-icon-paths.ts` + `src/app/shared/components/icon/icon.component.html` (also `keyword-icon-paths.ts` + same template).
+
+**Risk:** SVG path data exists in TWO places — the data const file (`EFFECT_ICON_PATHS`, claimed authoritative in its own file header comment) and inline `<svg:line>` / `<svg:circle>` primitives inside `*ngSwitchCase` blocks in `icon.component.html`. The runtime renders from the template; the spec file (`effect-icon-paths.spec.ts`) validates the const but does NOT validate the template matches the const. A future contributor editing one file without the other ships a glyph whose render disagrees with its "spec" — silent drift, no test failure. Same risk exists for `keyword-icon-paths.ts` ↔ template kw-* cases.
+
+**Fix:** Add a parity spec to `icon.component.spec.ts` that for each fx-* and kw-* IconName: (a) renders the icon, (b) counts SVG primitive children, (c) asserts the count matches `EFFECT_ICON_PATHS[name].paths.length` / `KEYWORD_ICON_PATHS[name].paths.length`. Catches the count delta the moment one file is edited without the other. Doesn't catch attribute drift but is the cheapest meaningful guard. Stronger fix (refactor template to render directly from data files) is a larger change deferred to follow-up.
+
+**Severity rationale:** HIGH because the data files are explicitly documented as authoritative — the contract is a lie without enforcement. Two of the 13 effect glyphs (fx-damage, fx-link) have already had their geometry iterated post-S91; same coordinate edits in two files create real drift opportunity.
+
+---
+
+### Finding 2: Silent failure in TowerThumbnailService init + render (MEDIUM)
+
+**Location:** `src/app/core/services/tower-thumbnail.service.ts:87, 118`.
+
+**Risk:** Two bare `catch {}` blocks swallow errors and return null. `init()` failure (no WebGL, GL context creation throw) silently sets `initFailed = true` with no diagnostic. `renderTower()` failure (mesh-factory throw, OOM during `toDataURL`) returns null silently. In production, a user sees no tower thumbnails with zero log line explaining why. In dev, the same. Per CLAUDE.md anti-sycophancy rule: "Silent Failures: Are there code paths that swallow errors, return defaults that look valid, or degrade without any signal to the caller?" — yes.
+
+**Fix:** Add `console.warn` with the caught error inside both catches, gated to fire ONCE per service lifecycle (use the existing `initFailed` flag for init; add a per-type `renderFailed` Set for renders). Tests that legitimately expect no WebGL (Karma headless without GL) won't see the warn either since they don't trigger the catch path. ESLint `no-console` rule allows `warn` per existing config (`tower-animation.service.ts:265` precedent documented in prior PR's deployment checklist).
+
+**Severity rationale:** MEDIUM — failure mode is graceful (cards just lose thumbnails), but debuggability is zero. Worth a 4-line fix.
+
+---
+
+### Finding 3: Per-type glyph tint pattern split across two SCSS strategies (LOW)
+
+**Location:** `src/app/game/game-board/components/card-hand/card-hand.component.scss` and `library-card-tile.component.scss` use `.card.card--frame-spell .card__art-glyph { color: ... }` (class selector); `card-detail-modal.component.scss` and `card-draft.component.scss` use `[data-card-type='spell']` (attribute selector).
+
+**Risk:** Two patterns for the same per-type tint logic. If a future surface uses one pattern but binds the other input, the glyph won't tint. The original card-hand pattern (frame class on the host) was the established convention from Phase B; the data-attribute pattern was introduced in S96 because card-detail-modal and card-draft don't have frame classes on their host. Both work; neither is wrong; but the split is integration fragility.
+
+**Fix:** Defer. Either pattern is acceptable and refactoring 4 surfaces for stylistic consistency is scope creep on a feature branch. Document the dual pattern in the next time `_card-tokens.scss` is touched. Severity LOW because: (a) every consumer surface is already wired and tested; (b) introducing a new surface would naturally use whichever convention its host already has.
+
+**Severity rationale:** LOW — purely a maintainability concern, no user-facing risk.
+
+---
+
+### Phase 3 — Hardening applied
+
+Picking **Finding 1** (HIGH) as the critical fix. Adding a parity spec to `icon.component.spec.ts` that validates render-time SVG primitive counts against the `EFFECT_ICON_PATHS` and `KEYWORD_ICON_PATHS` data file entries. See diff in next commit.
+
