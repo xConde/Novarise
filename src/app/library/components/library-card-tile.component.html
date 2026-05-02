@@ -44,6 +44,16 @@
 
   <!-- DISCOVERED body: name, archetype, description. -->
   <div *ngIf="!desaturated" class="tile__body">
+    <!-- Effect glyph — hero art for non-tower cards. Tower cards skip; the
+         tile__footprint outline at the bottom carries their identity. -->
+    <span *ngIf="definition.type !== CardType.TOWER && primaryGlyph"
+          class="tile__art-glyph"
+          aria-hidden="true">
+      <app-icon [name]="primaryGlyph" [size]="56"></app-icon>
+      <span *ngIf="secondaryGlyph" class="tile__art-glyph-secondary">
+        <app-icon [name]="secondaryGlyph" [size]="22"></app-icon>
+      </span>
+    </span>
     <h3 class="tile__name">{{ definition.name }}</h3>
     <span *ngIf="definition.archetype && definition.archetype !== 'neutral'"
           class="tile__archetype tile__archetype--{{ definition.archetype }}">

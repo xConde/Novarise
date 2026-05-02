@@ -80,6 +80,19 @@
            alt=""
            aria-hidden="true">
 
+      <!-- Effect glyph — hero art for non-tower cards. Mirrors the absolute
+           positioning of the tower thumbnail. Primary glyph fills the art zone;
+           when the card has a 2-tuple effectGlyph, the secondary renders as a
+           smaller bottom-right accent. -->
+      <span *ngIf="card.definition.type !== CardType.TOWER && getPrimaryGlyph(card) as primaryGlyph"
+            class="card__art-glyph"
+            aria-hidden="true">
+        <app-icon [name]="primaryGlyph" [size]="64"></app-icon>
+        <span *ngIf="getSecondaryGlyph(card) as secondaryGlyph" class="card__art-glyph-secondary">
+          <app-icon [name]="secondaryGlyph" [size]="28"></app-icon>
+        </span>
+      </span>
+
       <!-- Card name -->
       <span class="card__name">{{ card.definition.name }}</span>
 

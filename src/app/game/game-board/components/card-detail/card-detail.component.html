@@ -24,6 +24,15 @@
                 stroke="currentColor" stroke-width="1.5" fill="none"/>
         </svg>
       </span>
+      <!-- Effect glyph — hero art for non-tower cards. Mirrors footprint slot. -->
+      <span *ngIf="!isTowerCard && primaryGlyph"
+            class="card-detail__art-glyph"
+            aria-hidden="true">
+        <app-icon [name]="primaryGlyph" [size]="40"></app-icon>
+        <span *ngIf="secondaryGlyph" class="card-detail__art-glyph-secondary">
+          <app-icon [name]="secondaryGlyph" [size]="18"></app-icon>
+        </span>
+      </span>
     </div>
 
     <!-- Header: name + close -->

@@ -23,6 +23,16 @@
                 stroke="currentColor" stroke-width="1.5" fill="none"/>
         </svg>
       </span>
+      <!-- Effect glyph — hero art for non-tower cards. -->
+      <span *ngIf="!isTowerCard && primaryGlyph"
+            class="modal__art-glyph"
+            [attr.data-card-type]="definition.type"
+            aria-hidden="true">
+        <app-icon [name]="primaryGlyph" [size]="36"></app-icon>
+        <span *ngIf="secondaryGlyph" class="modal__art-glyph-secondary">
+          <app-icon [name]="secondaryGlyph" [size]="16"></app-icon>
+        </span>
+      </span>
     </div>
 
     <!-- Header -->

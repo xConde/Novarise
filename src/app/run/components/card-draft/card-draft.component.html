@@ -46,6 +46,17 @@
         </svg>
       </span>
 
+      <!-- Effect glyph — hero art for non-tower cards. -->
+      <span *ngIf="item.definition.type !== CardType.TOWER && getPrimaryGlyph(item.definition) as primaryGlyph"
+            class="card-draft__art-glyph"
+            [attr.data-card-type]="item.definition.type"
+            aria-hidden="true">
+        <app-icon [name]="primaryGlyph" [size]="48"></app-icon>
+        <span *ngIf="getSecondaryGlyph(item.definition) as secondaryGlyph" class="card-draft__art-glyph-secondary">
+          <app-icon [name]="secondaryGlyph" [size]="20"></app-icon>
+        </span>
+      </span>
+
       <!-- Selected indicator -->
       <span class="card-draft__check" *ngIf="selectedCard === item.reward.cardId" aria-hidden="true">
         <app-icon name="check" [size]="14"></app-icon>

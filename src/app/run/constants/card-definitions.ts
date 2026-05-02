@@ -568,6 +568,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.GOLD_RUSH]: {
     id: CardId.GOLD_RUSH,
     name: 'Gold Rush',
+    effectGlyph: 'fx-gold',
     description: 'Gain 40 gold.',
     upgradedDescription: 'Gain 60 gold.',
     flavorText: 'Liquid assets. Spend before the wave does it for you.',
@@ -583,6 +584,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.REPAIR_WALLS]: {
     id: CardId.REPAIR_WALLS,
     name: 'Repair Walls',
+    effectGlyph: 'fx-heal',
     description: 'Restore 2 lives.',
     upgradedDescription: 'Restore 3 lives.',
     flavorText: 'Patch the breach. Hold a little longer.',
@@ -598,6 +600,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.SCOUT_AHEAD]: {
     id: CardId.SCOUT_AHEAD,
     name: 'Scout Ahead',
+    effectGlyph: 'fx-scout',
     description: 'Reveal next 3 waves.',
     upgradedDescription: 'Reveal next 5 waves.',
     flavorText: 'Three days of survey for three turns of certainty.',
@@ -616,6 +619,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.LIGHTNING_STRIKE]: {
     id: CardId.LIGHTNING_STRIKE,
     name: 'Lightning Strike',
+    effectGlyph: 'fx-damage',
     description: 'Deal 100 damage to the strongest enemy.',
     upgradedDescription: 'Deal 150 damage to the strongest enemy.',
     flavorText: 'Command selects the target. The sky obeys.',
@@ -631,6 +635,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.FROST_WAVE]: {
     id: CardId.FROST_WAVE,
     name: 'Frost Wave',
+    effectGlyph: 'fx-slow',
     description: 'Slow all enemies by 50% for 5 seconds.',
     upgradedDescription: 'Slow all enemies by 50% for 8 seconds.',
     flavorText: "The cold doesn't care who's winning.",
@@ -646,6 +651,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.SALVAGE]: {
     id: CardId.SALVAGE,
     name: 'Salvage',
+    effectGlyph: 'fx-recycle',
     description: 'Sell a tower for 100% refund.',
     flavorText: 'Nothing on this battlefield is wasted.',
     type: CardType.SPELL,
@@ -660,6 +666,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.FORTIFY]: {
     id: CardId.FORTIFY,
     name: 'Fortify',
+    effectGlyph: 'fx-buff',
     description: 'Upgrade a random tower one level for free.',
     upgradedDescription: 'Upgrade two random towers one level for free.',
     flavorText: 'Reinforce now. Explain the bill to command later.',
@@ -677,6 +684,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.OVERCLOCK]: {
     id: CardId.OVERCLOCK,
     name: 'Overclock',
+    effectGlyph: 'fx-buff',
     description: 'All towers fire 50% faster for the current wave.',
     upgradedDescription: 'All towers fire 75% faster for the current wave.',
     flavorText: 'Push the thermal limits. Count the kills. Justify it after.',
@@ -694,6 +702,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.INCINERATE]: {
     id: CardId.INCINERATE,
     name: 'Incinerate',
+    effectGlyph: 'fx-burn',
     description: 'Apply Burn to all enemies for 3 turns.',
     upgradedDescription: 'Apply Burn to all enemies for 5 turns.',
     flavorText: 'Fire propagates. Fire does not ask permission.',
@@ -710,6 +719,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.TOXIC_SPRAY]: {
     id: CardId.TOXIC_SPRAY,
     name: 'Toxic Spray',
+    effectGlyph: 'fx-poison',
     description: 'Apply Poison to all enemies for 4 turns.',
     upgradedDescription: 'Apply Poison to all enemies for 6 turns.',
     flavorText: 'It gets into everything. It takes days to clear.',
@@ -726,6 +736,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.CRYO_PULSE]: {
     id: CardId.CRYO_PULSE,
     name: 'Cryo Pulse',
+    effectGlyph: ['fx-slow', 'fx-draw'],
     description: 'Apply Slow to the lead enemy. Draw 1 card.',
     upgradedDescription: 'Apply Slow to the lead enemy. Draw 2 cards.',
     flavorText: 'One frozen target. One extra card. The math checks out.',
@@ -744,6 +755,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.DETONATE]: {
     id: CardId.DETONATE,
     name: 'Detonate',
+    effectGlyph: ['fx-damage', 'fx-burn'],
     description: 'Deal 25 damage to each burning enemy. Consume Burn.',
     upgradedDescription: 'Deal 35 damage to each burning enemy. Consume Burn.',
     flavorText: 'The burning are already marked. This is just confirmation.',
@@ -759,6 +771,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.EPIDEMIC]: {
     id: CardId.EPIDEMIC,
     name: 'Epidemic',
+    effectGlyph: 'fx-poison',
     description: 'If 2 or more enemies are Poisoned, apply Poison to all other enemies.',
     upgradedDescription: 'If 1 or more enemies are Poisoned, apply Poison to all other enemies.',
     flavorText: 'One carrier is enough. Two is a guarantee.',
@@ -776,6 +789,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.DAMAGE_BOOST]: {
     id: CardId.DAMAGE_BOOST,
     name: 'Damage Boost',
+    effectGlyph: 'fx-buff',
     description: 'All towers +25% damage for 2 waves.',
     upgradedDescription: 'All towers +37.5% damage for 2 waves.',
     flavorText: 'Triple-checked sights for triple-checked kills.',
@@ -801,6 +815,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.RANGE_EXTEND]: {
     id: CardId.RANGE_EXTEND,
     name: 'Range Extend',
+    effectGlyph: 'fx-buff',
     description: 'All towers +20% range for 2 waves.',
     upgradedDescription: 'All towers +30% range for 2 waves.',
     flavorText: "Every extra meter of range is a meter they don't close.",
@@ -826,6 +841,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.RAPID_FIRE]: {
     id: CardId.RAPID_FIRE,
     name: 'Rapid Fire',
+    effectGlyph: 'fx-buff',
     description: 'All towers fire 30% faster for 2 waves.',
     upgradedDescription: 'All towers fire 45% faster for 2 waves.',
     flavorText: 'The cycle time drops. The kill rate climbs.',
@@ -851,6 +867,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.ENEMY_SLOW]: {
     id: CardId.ENEMY_SLOW,
     name: 'Heavy Fog',
+    effectGlyph: 'fx-slow',
     description: 'All enemies 15% slower for 3 waves.',
     upgradedDescription: 'All enemies 22.5% slower for 3 waves.',
     flavorText: 'Fog buys minutes. Minutes buy lives.',
@@ -876,6 +893,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.GOLD_INTEREST]: {
     id: CardId.GOLD_INTEREST,
     name: 'Bounty Orders',
+    effectGlyph: ['fx-gold', 'fx-buff'],
     description: '+50% gold from kills for 2 waves.',
     upgradedDescription: '+75% gold from kills for 2 waves.',
     flavorText: 'Command pays per kill. The towers notice the difference.',
@@ -901,6 +919,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.SHIELD_WALL]: {
     id: CardId.SHIELD_WALL,
     name: 'Shield Wall',
+    effectGlyph: 'fx-heal',
     description: 'Block next 3 enemy leaks.',
     upgradedDescription: 'Block next 5 enemy leaks.',
     flavorText: 'Three leaks forgiven. Three chances to fix the line.',
@@ -926,6 +945,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.CHAIN_LIGHTNING]: {
     id: CardId.CHAIN_LIGHTNING,
     name: 'Chain Lightning',
+    effectGlyph: ['fx-damage', 'kw-link'],
     description: 'Chain towers +2 bounces for 2 waves.',
     upgradedDescription: 'Chain towers +3 bounces for 2 waves.',
     flavorText: 'The arc counts on the next target always being there.',
@@ -951,6 +971,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.PRECISION]: {
     id: CardId.PRECISION,
     name: 'Precision',
+    effectGlyph: 'fx-buff',
     description: 'Sniper towers +50% damage for 2 waves.',
     upgradedDescription: 'Sniper towers +75% damage for 2 waves.',
     flavorText: 'Snipers do not fire more. They fire better.',
@@ -978,6 +999,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.DRAW_TWO]: {
     id: CardId.DRAW_TWO,
     name: 'Quick Draw',
+    effectGlyph: 'fx-draw',
     description: 'Draw 2 cards.',
     upgradedDescription: 'Draw 3 cards.',
     flavorText: 'Two cards, one breath.',
@@ -993,6 +1015,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.RECYCLE]: {
     id: CardId.RECYCLE,
     name: 'Recycle',
+    effectGlyph: 'fx-recycle',
     description: 'Discard your hand, then draw that many cards plus one.',
     upgradedDescription: 'Discard your hand, then draw that many cards plus two.',
     flavorText: 'Discard the plan. Draw a better one.',
@@ -1008,6 +1031,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.ENERGY_SURGE]: {
     id: CardId.ENERGY_SURGE,
     name: 'Energy Surge',
+    effectGlyph: 'fx-energy',
     description: 'Gain 2 energy this wave.',
     upgradedDescription: 'Gain 3 energy this wave.',
     flavorText: 'When the wave breaks, the surge breaks first.',
@@ -1031,6 +1055,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.LAST_STAND]: {
     id: CardId.LAST_STAND,
     name: 'Last Stand',
+    effectGlyph: 'fx-heal',
     description: 'Restore 5 lives. {kw-exhaust}.',
     upgradedDescription: 'Restore 8 lives. {kw-exhaust}.',
     flavorText: 'Five lives, one chance. The card does not come back.',
@@ -1051,6 +1076,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.OVERLOAD]: {
     id: CardId.OVERLOAD,
     name: 'Overload',
+    effectGlyph: ['fx-buff', 'fx-energy'],
     description: 'All towers deal +50% damage for 2 waves. {kw-exhaust}.',
     upgradedDescription: 'All towers deal +75% damage for 2 waves. {kw-exhaust}.',
     flavorText: 'Beyond rated capacity. The towers do not forgive the debt.',
@@ -1081,6 +1107,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.BATTLE_SURGE]: {
     id: CardId.BATTLE_SURGE,
     name: 'Emergency Orders',
+    effectGlyph: 'fx-draw',
     description: 'Draw 3 cards. {kw-exhaust}.',
     upgradedDescription: 'Draw 4 cards. {kw-exhaust}.',
     flavorText: "The orders went out. They don't go out again.",
@@ -1101,6 +1128,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.IRON_WILL]: {
     id: CardId.IRON_WILL,
     name: 'Far Sight',
+    effectGlyph: 'fx-buff',
     description: 'All towers +40% range for 3 waves. {kw-exhaust}.',
     upgradedDescription: 'All towers +60% range for 3 waves. {kw-exhaust}.',
     flavorText: 'Wide eyes on the horizon. One use of that clarity.',
@@ -1133,6 +1161,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.STOCKPILE]: {
     id: CardId.STOCKPILE,
     name: 'Stockpile',
+    effectGlyph: 'fx-energy',
     description: 'Gain 1 energy. {kw-retain}.',
     upgradedDescription: 'Gain 2 energy. {kw-retain}.',
     flavorText: 'Hold it. Let the moment come to you.',
@@ -1153,6 +1182,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.WAR_FUND]: {
     id: CardId.WAR_FUND,
     name: 'War Fund',
+    effectGlyph: 'fx-gold',
     description: 'Gain 25 gold. {kw-retain}.',
     upgradedDescription: 'Gain 40 gold. {kw-retain}.',
     flavorText: 'Held coin gathers no rust.',
@@ -1173,6 +1203,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.VANGUARD]: {
     id: CardId.VANGUARD,
     name: 'Vanguard',
+    effectGlyph: 'fx-buff',
     description: 'All towers +30% damage for 3 waves. {kw-retain}.',
     upgradedDescription: 'All towers +45% damage for 3 waves. {kw-retain}.',
     flavorText: 'Save the surge for the wave that deserves it.',
@@ -1203,6 +1234,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.BULWARK]: {
     id: CardId.BULWARK,
     name: 'Bulwark',
+    effectGlyph: 'fx-heal',
     description: 'All towers +25% range for 3 waves. {kw-retain}.',
     upgradedDescription: 'All towers +40% range for 3 waves. {kw-retain}.',
     flavorText: 'Timing the buff matters more than the buff itself.',
@@ -1235,6 +1267,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.OPENING_GAMBIT]: {
     id: CardId.OPENING_GAMBIT,
     name: 'Opening Gambit',
+    effectGlyph: 'fx-draw',
     description: 'Draw 2 cards. {kw-innate}.',
     upgradedDescription: 'Draw 3 cards. {kw-innate}.',
     flavorText: "First move is the only move that's ever truly free.",
@@ -1255,6 +1288,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.SCOUT_ELITE]: {
     id: CardId.SCOUT_ELITE,
     name: 'Scout Elite',
+    effectGlyph: 'fx-scout',
     description: 'Reveal the next 5 waves of spawns. {kw-innate}.',
     upgradedDescription: 'Reveal the next 8 waves of spawns. {kw-innate}.',
     flavorText: 'The deployment window opens informed or not. Better to know.',
@@ -1275,6 +1309,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.ADVANCE_GUARD]: {
     id: CardId.ADVANCE_GUARD,
     name: 'Forward Pay',
+    effectGlyph: 'fx-gold',
     description: 'Gain 30 gold. {kw-innate}.',
     upgradedDescription: 'Gain 50 gold. {kw-innate}.',
     flavorText: 'Pay is in the hand before the orders are spoken.',
@@ -1295,6 +1330,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.FIRST_BLOOD]: {
     id: CardId.FIRST_BLOOD,
     name: 'First Blood',
+    effectGlyph: 'fx-damage',
     description: 'Deal 60 damage to the strongest enemy. {kw-innate}.',
     upgradedDescription: 'Deal 90 damage to the strongest enemy. {kw-innate}.',
     flavorText: 'The first wave deserves the first answer.',
@@ -1317,6 +1353,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.DESPERATE_MEASURES]: {
     id: CardId.DESPERATE_MEASURES,
     name: 'Desperate Measures',
+    effectGlyph: 'fx-heal',
     description: 'Restore 3 lives. {kw-ethereal}.',
     upgradedDescription: 'Restore 5 lives. {kw-ethereal}.',
     flavorText: 'Spend it now. It does not survive the turn.',
@@ -1337,6 +1374,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.WARP_STRIKE]: {
     id: CardId.WARP_STRIKE,
     name: 'Phase Bolt',
+    effectGlyph: 'fx-damage',
     description: 'Deal 80 damage to the strongest enemy. {kw-ethereal}.',
     upgradedDescription: 'Deal 120 damage to the strongest enemy. {kw-ethereal}.',
     flavorText: 'The window is open. It closes when the turn ends.',
@@ -1357,6 +1395,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.PHANTOM_GOLD]: {
     id: CardId.PHANTOM_GOLD,
     name: 'Phantom Gold',
+    effectGlyph: 'fx-gold',
     description: 'Gain 50 gold. {kw-ethereal}.',
     upgradedDescription: 'Gain 75 gold. {kw-ethereal}.',
     flavorText: 'Spend it before it forgets to exist.',
@@ -1388,6 +1427,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.LAY_TILE]: {
     id: CardId.LAY_TILE,
     name: 'Lay Tile',
+    effectGlyph: 'kw-terraform',
     description: 'Convert a wall into a path tile.',
     upgradedDescription: 'Convert a wall into a path tile. Draw 1 card.',
     flavorText: 'The map changes. The enemy does not expect that.',
@@ -1413,6 +1453,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.BLOCK_PASSAGE]: {
     id: CardId.BLOCK_PASSAGE,
     name: 'Block Passage',
+    effectGlyph: 'kw-terraform',
     description: 'Convert a path tile into a wall for 2 turns.',
     upgradedDescription: 'Convert a path tile into a wall for 3 turns.',
     flavorText: 'A road closed is a road that costs them time.',
@@ -1449,6 +1490,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.BRIDGEHEAD]: {
     id: CardId.BRIDGEHEAD,
     name: 'Bridgehead',
+    effectGlyph: 'kw-terraform',
     description: 'Create a tower-only platform on a wall for 3 turns. Place a tower before it expires to keep the tile.',
     upgradedDescription: 'Create a tower-only platform on a wall for 4 turns. Place a tower before it expires to keep the tile.',
     flavorText: "Temporary footing. Permanent if you're fast enough.",
@@ -1480,6 +1522,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.COLLAPSE]: {
     id: CardId.COLLAPSE,
     name: 'Collapse',
+    effectGlyph: 'kw-terraform',
     description: 'Destroy a path tile. Enemies on it take 50% of max HP as damage.',
     upgradedDescription: 'Destroy a path tile. Enemies on it take 75% of max HP as damage.',
     flavorText: 'The ground does not care about their schedule.',
@@ -1516,6 +1559,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.DETOUR]: {
     id: CardId.DETOUR,
     name: 'Detour',
+    effectGlyph: 'kw-terraform',
     description: 'Force all enemies onto the longest valid path for one step.',
     upgradedDescription: 'Force all enemies onto the longest valid path for one step. Each detoured enemy also takes 8% max HP damage per extra tile of path walked.',
     flavorText: 'Add distance. They will walk every step of it.',
@@ -1541,6 +1585,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.CARTOGRAPHER_SEAL]: {
     id: CardId.CARTOGRAPHER_SEAL,
     name: 'Cartographer\'s Seal',
+    effectGlyph: 'kw-terraform',
     description: 'All terraform you play this encounter is permanent.',
     upgradedDescription: 'All terraform you play this encounter is permanent. The first terraform each turn refunds 1 energy.',
     flavorText: 'Every mark on this map stays.',
@@ -1578,6 +1623,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.LABYRINTH_MIND]: {
     id: CardId.LABYRINTH_MIND,
     name: 'Labyrinth Mind',
+    effectGlyph: 'kw-terraform',
     description: 'Tower damage scales with path length (+2% per tile) this encounter.',
     upgradedDescription: 'Tower damage scales with path length (+3% per tile) this encounter.',
     flavorText: 'The longer the path, the better the towers think.',
@@ -1612,6 +1658,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.RAISE_PLATFORM]: {
     id: CardId.RAISE_PLATFORM,
     name: 'Raise Platform',
+    effectGlyph: 'kw-terraform',
     description: 'Raise a tile by 1 unit. Towers on raised tiles gain range.',
     upgradedDescription: 'Raise a tile by 1 unit permanently. Towers on raised tiles gain range.',
     flavorText: 'One level up. The towers see farther already.',
@@ -1643,6 +1690,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.DEPRESS_TILE]: {
     id: CardId.DEPRESS_TILE,
     name: 'Depress Tile',
+    effectGlyph: 'kw-terraform',
     description: 'Lower a tile by 1 unit. Enemies on lowered tiles take +25% damage.',
     upgradedDescription: 'Lower a tile and one random adjacent tile by 1 unit. Enemies on lowered tiles take +25% damage.',
     flavorText: "Lower the ground beneath them. They won't thank you.",
@@ -1676,6 +1724,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.HIGH_PERCH]: {
     id: CardId.HIGH_PERCH,
     name: 'High Perch',
+    effectGlyph: ['kw-terraform', 'fx-buff'],
     description: 'Towers on elevation 2+ gain +25% range for this wave.',
     upgradedDescription: 'Towers on elevation 2+ gain +40% range for this wave.',
     flavorText: 'From above, the battle is always smaller.',
@@ -1714,6 +1763,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.CLIFFSIDE]: {
     id: CardId.CLIFFSIDE,
     name: 'Cliffside',
+    effectGlyph: 'kw-terraform',
     description: 'Raise a horizontal 3-tile line by +1. Wings that hit spawn/exit are skipped.',
     upgradedDescription: 'Raise a horizontal 5-tile line by +1. Wings that hit spawn/exit are skipped.',
     flavorText: 'A horizontal ridge. The towers look down the barrel.',
@@ -1751,6 +1801,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.VANTAGE_POINT]: {
     id: CardId.VANTAGE_POINT,
     name: 'Vantage Point',
+    effectGlyph: ['kw-terraform', 'fx-buff'],
     description: 'Elevated towers (elevation ≥ 1) gain +50% damage for this wave.',
     upgradedDescription: 'Elevated towers (elevation ≥ 1) gain +75% damage for this wave.',
     flavorText: 'Elevation is the simplest force multiplier.',
@@ -1792,6 +1843,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.AVALANCHE_ORDER]: {
     id: CardId.AVALANCHE_ORDER,
     name: 'Avalanche Order',
+    effectGlyph: ['fx-damage', 'kw-terraform'],
     description: 'Target an elevated tile. Enemies on it take (elevation × 10) damage, then the tile collapses.',
     upgradedDescription: 'Target an elevated tile. Enemies on it take (elevation × 15) damage, then the tile collapses.',
     flavorText: 'The mountain was always on your side.',
@@ -1828,6 +1880,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.KING_OF_THE_HILL]: {
     id: CardId.KING_OF_THE_HILL,
     name: 'King of the Hill',
+    effectGlyph: 'kw-terraform',
     description: 'The tower(s) at the highest elevation deal +100% damage for this encounter.',
     upgradedDescription: 'The tower(s) at the highest elevation deal +150% damage for this encounter.',
     flavorText: 'The peak answers to one tower. Make it worth it.',
@@ -1859,6 +1912,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.GRAVITY_WELL]: {
     id: CardId.GRAVITY_WELL,
     name: 'Gravity Well',
+    effectGlyph: ['kw-terraform', 'fx-slow'],
     description: 'Enemies on depressed tiles (elevation < 0) cannot move this encounter.',
     upgradedDescription: 'Enemies on depressed tiles (elevation < 0) cannot move this encounter. Each turn, gated enemies also take 10% of their max HP as damage.',
     flavorText: 'A trench is only a disadvantage if you dug it wrong.',
@@ -1891,6 +1945,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.HANDSHAKE]: {
     id: CardId.HANDSHAKE,
     name: 'Handshake',
+    effectGlyph: 'kw-link',
     description: 'Towers with at least one adjacent tower gain +20% damage this wave.',
     upgradedDescription: 'Towers with at least one adjacent tower gain +30% damage this wave.',
     flavorText: 'Two towers sharing a wall share a purpose.',
@@ -1923,6 +1978,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.FORMATION]: {
     id: CardId.FORMATION,
     name: 'Formation',
+    effectGlyph: 'kw-link',
     description: 'Towers in a row of 3 or more gain +2 range this wave.',
     upgradedDescription: 'Towers in a row of 3 or more gain +3 range this wave.',
     flavorText: 'A row is not just placement. It is a firing lane.',
@@ -1955,6 +2011,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.LINKWORK]: {
     id: CardId.LINKWORK,
     name: 'Linkwork',
+    effectGlyph: 'kw-link',
     description: 'For 2 turns, linked towers share the highest fire rate in their cluster.',
     upgradedDescription: 'For 3 turns, linked towers share the highest fire rate in their cluster.',
     flavorText: 'The fastest link sets the tempo. Everyone else follows.',
@@ -1989,6 +2046,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.HARMONIC]: {
     id: CardId.HARMONIC,
     name: 'Harmonic',
+    effectGlyph: 'kw-link',
     description: 'For 3 turns, when a tower fires, 2 random linked neighbors fire at the same target.',
     upgradedDescription: 'For 4 turns, when a tower fires, 2 random linked neighbors fire at the same target.',
     flavorText: 'When one fires, the network answers.',
@@ -2023,6 +2081,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.GRID_SURGE]: {
     id: CardId.GRID_SURGE,
     name: 'Grid Surge',
+    effectGlyph: 'kw-link',
     description: 'Towers with all 4 neighbors filled deal double damage this turn.',
     upgradedDescription: 'Towers with all 4 neighbors filled deal ×2.5 damage this turn.',
     flavorText: 'Four neighbors. One moment. All of them at once.',
@@ -2058,6 +2117,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.CONDUIT_BRIDGE]: {
     id: CardId.CONDUIT_BRIDGE,
     name: 'Conduit Bridge',
+    effectGlyph: ['kw-link', 'fx-buff'],
     description: 'Link two non-adjacent towers as neighbors for 3 turns.',
     upgradedDescription: 'Link two non-adjacent towers as neighbors for 4 turns.',
     flavorText: 'The signal travels faster than the towers do.',
@@ -2089,6 +2149,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.ARCHITECT]: {
     id: CardId.ARCHITECT,
     name: 'Architect',
+    effectGlyph: ['kw-link', 'fx-energy'],
     description: 'Every tower in a cluster counts as adjacent to every other tower in that cluster for the rest of this encounter.',
     upgradedDescription: 'Costs 2 energy. Every tower in a cluster counts as adjacent to every other tower in that cluster for the rest of this encounter.',
     flavorText: 'Every tower in the cluster now speaks the same language.',
@@ -2122,6 +2183,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.HIVE_MIND]: {
     id: CardId.HIVE_MIND,
     name: 'Hive Mind',
+    effectGlyph: 'kw-link',
     description: 'For the rest of this encounter, every tower in a cluster fires with the strongest tower\u2019s damage and range.',
     upgradedDescription: 'For the rest of this encounter, every tower in a cluster fires with the strongest tower\u2019s damage, range, and secondary effect (splash, chain bounces, status, and DoT).',
     flavorText: 'The strongest node defines what every node becomes.',

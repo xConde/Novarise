@@ -16,6 +16,7 @@ import {
   CardRarity,
   CardType,
   DeckState,
+  EffectGlyphName,
   EnergyState,
 } from '../../../../run/models/card.model';
 import { getCardDefinition, getEffectiveEnergyCost } from '../../../../run/constants/card-definitions';
@@ -112,6 +113,27 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
     if (!('towerType' in card.definition.effect)) return null;
     const towerType = (card.definition.effect as { type: 'tower'; towerType: TowerType }).towerType;
     return this.towerThumbnailService.getThumbnail(towerType);
+  }
+
+  /**
+   * Returns the primary effect glyph for a non-tower card, or null when the
+   * card has no `effectGlyph` mapping. The glyph is rendered hero-size in the
+   * art zone (mirrors the tower-thumbnail slot).
+   */
+  getPrimaryGlyph(card: HandCard): EffectGlyphName | null {
+    const glyph = card.definition.effectGlyph;
+    if (!glyph) return null;
+    return Array.isArray(glyph) ? glyph[0] : glyph;
+  }
+
+  /**
+   * Returns the secondary effect glyph (small bottom-right accent) when the
+   * card's `effectGlyph` is a 2-tuple, otherwise null.
+   */
+  getSecondaryGlyph(card: HandCard): EffectGlyphName | null {
+    const glyph = card.definition.effectGlyph;
+    if (!Array.isArray(glyph)) return null;
+    return glyph[1];
   }
 
   /**

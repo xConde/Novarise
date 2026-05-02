@@ -260,4 +260,44 @@ describe('IconComponent', () => {
       }
     });
   });
+
+  describe('effect glyphs (fx-*)', () => {
+    const FX_ICON_NAMES: IconName[] = [
+      'fx-damage', 'fx-burn', 'fx-poison', 'fx-slow', 'fx-heal', 'fx-gold',
+      'fx-draw', 'fx-energy', 'fx-buff', 'fx-scout', 'fx-recycle',
+    ];
+
+    it('all 11 effect glyphs are registered in ICON_REGISTRY', () => {
+      for (const name of FX_ICON_NAMES) {
+        expect(ICON_REGISTRY[name])
+          .withContext(`"${name}" missing from ICON_REGISTRY`)
+          .toBeDefined();
+      }
+    });
+
+    it('all 11 effect glyphs use strokeWidth 1.5 and stroke="currentColor"', () => {
+      for (const name of FX_ICON_NAMES) {
+        expect(ICON_REGISTRY[name].strokeWidth).toBe('1.5');
+        expect(ICON_REGISTRY[name].stroke).toBe('currentColor');
+        expect(ICON_REGISTRY[name].fill).toBe('none');
+      }
+    });
+
+    it('each effect glyph renders an SVG without error', () => {
+      for (const name of FX_ICON_NAMES) {
+        component.name = name;
+        component.ngOnChanges();
+        fixture.detectChanges();
+        const svg = fixture.nativeElement.querySelector('svg');
+        expect(svg).withContext(`SVG missing for effect glyph "${name}"`).toBeTruthy();
+      }
+    });
+
+    it('IconName union contains all 11 effect glyph names', () => {
+      for (const name of FX_ICON_NAMES) {
+        const typed: IconName = name;
+        expect(typed).toBe(name);
+      }
+    });
+  });
 });

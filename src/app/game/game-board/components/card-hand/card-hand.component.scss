@@ -864,6 +864,92 @@ body.reduce-motion .card-hand { animation: none; }
   }
 }
 
+// Effect glyph — hero art for non-tower cards. Same absolute slot as the
+// tower thumbnail so the layout is symmetric across card types. The glyph
+// inherits its color from the card's type accent (--card-type-spell etc.)
+// via currentColor on the inline SVG.
+.card .card__art-glyph {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6rem;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(0, 0, 0, 0.12) 100%);
+  border-bottom: var(--border-width-thin) solid rgba(255, 255, 255, 0.08);
+  box-sizing: border-box;
+  padding: 0.3rem;
+
+  // Glyph color tracks per-type accent. Spell cards pull cyan, modifier
+  // pulls purple, utility pulls green. Tower cards never reach this slot.
+  color: var(--card-type-spell);
+
+  app-icon {
+    // Slight translucency keeps the chrome from feeling decal-stamped.
+    opacity: 0.85;
+    filter: drop-shadow(0 0 6px currentColor);
+  }
+
+  @media (max-width: 768px) {
+    height: 5.2rem;
+    app-icon {
+      transform: scale(0.85);
+    }
+  }
+
+  @media (max-width: 480px) {
+    height: 3.6rem;
+    padding: 0.2rem;
+    app-icon {
+      transform: scale(0.6);
+    }
+  }
+}
+
+// Per-type tint override — applied via the existing card--frame-* classes.
+.card.card--frame-spell .card__art-glyph    { color: var(--card-type-spell); }
+.card.card--frame-modifier .card__art-glyph { color: var(--card-type-modifier); }
+.card.card--frame-utility .card__art-glyph  { color: var(--card-type-utility); }
+
+// Secondary glyph — small bottom-right accent for 2-tuple effectGlyph cards
+// (Cryo Pulse, Detonate, Chain Lightning, etc.). Sits inside the hero glyph
+// slot so it composes with the primary art instead of competing with the
+// type-corner chip.
+.card .card__art-glyph-secondary {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+
+  // Secondary uses a softer ring so it reads as accent, not duplicate hero.
+  background: rgba(0, 0, 0, 0.45);
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  padding: 0.18rem;
+
+  app-icon {
+    opacity: 0.95;
+    filter: none;
+  }
+
+  @media (max-width: 480px) {
+    right: 0.2rem;
+    bottom: 0.2rem;
+    padding: 0.1rem;
+  }
+}
+
 // Card name — first flow item after the top padding reserved for cost pill.
 // The old `margin-top: 55%` (push name below old art zone) was removed now
 // that the card is a normal flex-column: pill is absolute, name is flow.

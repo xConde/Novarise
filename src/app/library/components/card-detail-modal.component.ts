@@ -14,6 +14,7 @@ import {
   CardDefinition,
   CardEffect,
   CardType,
+  EffectGlyphName,
 } from '../../run/models/card.model';
 import { TOWER_CONFIGS, TowerType } from '../../game/game-board/models/tower.model';
 import { FocusTrap } from '@shared/utils/focus-trap.util';
@@ -231,6 +232,19 @@ export class CardDetailModalComponent implements AfterViewInit, OnDestroy {
   /** True when the card places a tower (footprint preview should render). */
   get isTowerCard(): boolean {
     return this.definition.type === CardType.TOWER;
+  }
+
+  /** Primary effect glyph for non-tower cards (rendered in the modal art-strip). */
+  get primaryGlyph(): EffectGlyphName | null {
+    const g = this.definition.effectGlyph;
+    if (!g) return null;
+    return Array.isArray(g) ? g[0] : g;
+  }
+
+  /** Secondary glyph as a small accent when effectGlyph is a 2-tuple. */
+  get secondaryGlyph(): EffectGlyphName | null {
+    const g = this.definition.effectGlyph;
+    return Array.isArray(g) ? g[1] : null;
   }
 }
 

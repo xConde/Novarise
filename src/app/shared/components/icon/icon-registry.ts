@@ -7,7 +7,9 @@ export type IconName =
   | 'node-combat' | 'node-elite' | 'node-boss'
   | 'node-rest' | 'node-shop' | 'node-event' | 'node-unknown'
   | 'kw-terraform' | 'kw-link' | 'kw-exhaust' | 'kw-retain' | 'kw-innate' | 'kw-ethereal'
-  | 'arch-cartographer' | 'arch-highground' | 'arch-conduit' | 'arch-neutral';
+  | 'arch-cartographer' | 'arch-highground' | 'arch-conduit' | 'arch-neutral'
+  | 'fx-damage' | 'fx-burn' | 'fx-poison' | 'fx-slow' | 'fx-heal' | 'fx-gold'
+  | 'fx-draw' | 'fx-energy' | 'fx-buff' | 'fx-scout' | 'fx-recycle';
 
 export interface IconDef {
   readonly viewBox: string;
@@ -56,4 +58,15 @@ export const ICON_REGISTRY: Record<IconName, IconDef> = {
   'arch-highground':    { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
   'arch-conduit':       { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
   'arch-neutral':       { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'fx-damage':          { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'fx-burn':            { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'fx-poison':          { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'fx-slow':            { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'fx-heal':            { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'fx-gold':            { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'fx-draw':            { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'fx-energy':          { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'fx-buff':            { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'fx-scout':           { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'fx-recycle':         { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
 };

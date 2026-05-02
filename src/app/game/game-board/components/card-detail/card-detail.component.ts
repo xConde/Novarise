@@ -1,5 +1,5 @@
 import { Component, ElementRef, EventEmitter, HostListener, Input, OnInit, Output } from '@angular/core';
-import { CardDefinition, CardType } from '../../../../run/models/card.model';
+import { CardDefinition, CardType, EffectGlyphName } from '../../../../run/models/card.model';
 import { HandCard } from '../card-hand/card-hand.component';
 import { ARCHETYPE_DISPLAY } from '../../../../run/constants/archetype.constants';
 import { IconName } from '../../../../shared/components/icon/icon-registry';
@@ -137,6 +137,19 @@ export class CardDetailComponent implements OnInit {
   /** True when the card is a tower type, so the footprint glyph should render. */
   get isTowerCard(): boolean {
     return this.definition.type === CardType.TOWER;
+  }
+
+  /** Primary effect glyph for non-tower cards (rendered in the art-zone strip). */
+  get primaryGlyph(): EffectGlyphName | null {
+    const g = this.definition.effectGlyph;
+    if (!g) return null;
+    return Array.isArray(g) ? g[0] : g;
+  }
+
+  /** Secondary glyph as a small accent when effectGlyph is a 2-tuple. */
+  get secondaryGlyph(): EffectGlyphName | null {
+    const g = this.definition.effectGlyph;
+    return Array.isArray(g) ? g[1] : null;
   }
 
   // Expose CardType to template for keyword icon conditions

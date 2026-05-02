@@ -8,6 +8,7 @@ import {
 import {
   CardDefinition,
   CardType,
+  EffectGlyphName,
 } from '../../run/models/card.model';
 import { TOWER_CONFIGS, TowerType } from '../../game/game-board/models/tower.model';
 import { ARCHETYPE_DISPLAY } from '../../run/constants/archetype.constants';
@@ -110,6 +111,19 @@ export class LibraryCardTileComponent {
     if (d.terraform) chips.push('Terraform');
     if (d.link)      chips.push('Link');
     return chips;
+  }
+
+  /** Primary effect glyph for non-tower cards (hero art in the tile body). */
+  get primaryGlyph(): EffectGlyphName | null {
+    const g = this.definition.effectGlyph;
+    if (!g) return null;
+    return Array.isArray(g) ? g[0] : g;
+  }
+
+  /** Secondary glyph rendered as a small accent when effectGlyph is a 2-tuple. */
+  get secondaryGlyph(): EffectGlyphName | null {
+    const g = this.definition.effectGlyph;
+    return Array.isArray(g) ? g[1] : null;
   }
 
   /** Description shown on the tile — upgraded if toggled, else base. */
