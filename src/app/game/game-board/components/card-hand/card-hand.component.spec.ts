@@ -1044,10 +1044,6 @@ describe('CardHandComponent', () => {
       'card--frame-spell',
     ];
 
-    function buildFanHand(): CardInstance[] {
-      return FAN_HAND_IDS.map((id, i) => makeInstance(`inst_fan_${i}` as unknown as CardId));
-    }
-
     function buildFanHandWithTypes(): CardInstance[] {
       return FAN_HAND_IDS.map((id, i) => ({ instanceId: `inst_fan_${i}`, cardId: id, upgraded: false }));
     }

@@ -23,15 +23,12 @@ import { ChangeDetectorRef } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 
-import { CardHandComponent, HandCard } from './card-hand.component';
+import { CardHandComponent } from './card-hand.component';
 import { LibraryCardTileComponent } from '../../../../library/components/library-card-tile.component';
 import { IconComponent } from '@shared/components/icon/icon.component';
 
 import {
-  CardDefinition,
   CardId,
-  CardRarity,
-  CardType,
   CardInstance,
   DeckState,
   EnergyState,

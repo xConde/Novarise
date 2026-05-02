@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { CardDetailComponent } from './card-detail.component';
 import { HandCard } from '../card-hand/card-hand.component';
-import { CardId, CardType } from '../../../../run/models/card.model';
+import { CardId } from '../../../../run/models/card.model';
 import { getCardDefinition } from '../../../../run/constants/card-definitions';
 import { DescriptionTextComponent } from '@shared/components/description-text/description-text.component';
 import { IconComponent } from '@shared/components/icon/icon.component';
