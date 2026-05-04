@@ -1320,6 +1320,59 @@ describe('GameBoardComponent', () => {
     });
   });
 
+  describe('projectedLeaksNextTurn', () => {
+    function makeEnemyAtPathIndex(id: string, type: EnemyType, pathLen: number, pathIndex: number) {
+      const path = Array.from({ length: pathLen }, (_, i) => ({ x: i, y: 0, f: 0, g: 0, h: 0 }));
+      return {
+        id,
+        type,
+        path,
+        pathIndex,
+        gridPosition: { row: 0, col: pathIndex },
+        position: { x: pathIndex, y: 0, z: 0 },
+        health: 10, maxHealth: 10, speed: 1, value: 5,
+        distanceTraveled: 0, leakDamage: 1,
+      } as unknown as import('./models/enemy.model').Enemy;
+    }
+
+    it('returns 0 when no enemies are present', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'getEnemies').and.returnValue(new Map());
+      expect(component.projectedLeaksNextTurn).toBe(0);
+    });
+
+    it('counts enemies projected to reach exit on next turn', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      // BASIC at 1 tile/turn, 1 tile from end → leaks next turn
+      // BASIC at 1 tile/turn, 5 tiles from end → does not leak next turn
+      spyOn(enemyService, 'getEnemies').and.returnValue(new Map([
+        ['e1', makeEnemyAtPathIndex('e1', EnemyType.BASIC, 5, 3)],
+        ['e2', makeEnemyAtPathIndex('e2', EnemyType.BASIC, 10, 4)],
+      ]));
+      expect(component.projectedLeaksNextTurn).toBe(1);
+    });
+
+    it('skips enemies that are dying', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      const dying = makeEnemyAtPathIndex('e1', EnemyType.BASIC, 5, 3);
+      (dying as unknown as { dying: boolean }).dying = true;
+      spyOn(enemyService, 'getEnemies').and.returnValue(new Map([['e1', dying]]));
+      expect(component.projectedLeaksNextTurn).toBe(0);
+    });
+
+    it('factors in SLOW tile reduction from StatusEffectService', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      const statusEffectService = fixture.debugElement.injector.get(StatusEffectService);
+      // FAST at 2 tiles/turn would leak from index 7 of length 10 (3 tiles, 2/turn → 2 turns to exit)
+      // With SLOW (-1 tile reduction), tilesToMove = 1; 3 tiles left → 3 turns; not leaking next turn
+      spyOn(enemyService, 'getEnemies').and.returnValue(new Map([
+        ['e1', makeEnemyAtPathIndex('e1', EnemyType.FAST, 10, 7)],
+      ]));
+      spyOn(statusEffectService, 'getSlowTileReduction').and.returnValue(1);
+      expect(component.projectedLeaksNextTurn).toBe(0);
+    });
+  });
+
   describe('getEnemyTooltip', () => {
     it('includes name, description, HP, and tilesPerTurn for a known enemy', () => {
       const tip = component.getEnemyTooltip(EnemyType.BASIC);

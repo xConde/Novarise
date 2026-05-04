@@ -153,11 +153,19 @@
       class="end-turn-btn"
       *ngIf="gameState.phase === GamePhase.COMBAT"
       [class.end-turn-btn--stuck]="handStuck && !pendingTowerCardId"
+      [class.end-turn-btn--leak-warning]="projectedLeaksNextTurn > 0"
       (click)="endTurn()"
       [disabled]="!!pendingTowerCardId"
-      [attr.aria-label]="pendingTowerCardId ? 'Place or cancel pending tower card first' : 'End turn and resolve combat'">
+      [attr.aria-label]="pendingTowerCardId
+        ? 'Place or cancel pending tower card first'
+        : (projectedLeaksNextTurn > 0
+            ? 'End turn and resolve combat. Warning: ' + projectedLeaksNextTurn + ' enemy projected to leak next turn.'
+            : 'End turn and resolve combat')">
       <span class="end-turn-label">End Turn</span>
       <span class="end-turn-hint">Turn {{ currentTurnNumber }} · Space</span>
+      <span class="end-turn-leak-warning"
+            *ngIf="projectedLeaksNextTurn > 0"
+            aria-hidden="true">⚠ {{ projectedLeaksNextTurn }} leak<ng-container *ngIf="projectedLeaksNextTurn !== 1">s</ng-container></span>
     </button>
 
     <!-- Turn start banner — fades in/out when a new turn begins -->

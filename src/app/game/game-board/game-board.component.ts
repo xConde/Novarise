@@ -24,7 +24,7 @@ import { TowerPreviewService } from './services/tower-preview.service';
 import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, PlacedTower, MAX_TOWER_LEVEL, TARGETING_MODE_LABELS } from './models/tower.model';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState } from './models/game-state.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, calculateModifierScoreMultiplier } from './models/game-modifier.model';
-import { EnemyType, ENEMY_STATS } from './models/enemy.model';
+import { EnemyType, ENEMY_STATS, VEINSEEKER_SPEED_BOOST_WINDOW } from './models/enemy.model';
 import { ENEMY_INFO } from './models/enemy-info.model';
 import { WavePreviewEntry } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
@@ -405,6 +405,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private towerGraphService: TowerGraphService,
     private linkMeshService: LinkMeshService,
     private targetPreviewService: TargetPreviewService,
+    private forwardSimulationService: ForwardSimulationService,
+    private statusEffectService: StatusEffectService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -1471,6 +1473,27 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Phase 4: current turn number (1-indexed for display). */
   get currentTurnNumber(): number {
     return this.combatLoopService.getTurnNumber() + 1;
+  }
+
+  /**
+   * Number of currently-active enemies projected to reach the exit on the
+   * next turn's resolution. Drives the End Turn button's leak-warning chip.
+   * Conservative — ignores the card-level ENEMY_SPEED modifier, so will
+   * over-warn rather than silently miss leaks.
+   */
+  get projectedLeaksNextTurn(): number {
+    const currentTurn = this.combatLoopService.getTurnNumber();
+    let count = 0;
+    for (const enemy of this.enemyService.getEnemies().values()) {
+      if (enemy.dying) continue;
+      const veinseekerBoosted = enemy.type === EnemyType.VEINSEEKER &&
+        this.pathMutationService.wasMutatedInLastTurns(currentTurn, VEINSEEKER_SPEED_BOOST_WINDOW);
+      const slow = this.statusEffectService.getSlowTileReduction(enemy.id);
+      if (this.forwardSimulationService.willLeakWithin(enemy, 1, slow, 0, veinseekerBoosted)) {
+        count++;
+      }
+    }
+    return count;
   }
 
   toggleAllRanges(): void {
