@@ -1035,6 +1035,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Combat stats — tilesPerTurn is the canonical movement value players plan against.
     const tilesPerTurnLabel = stats.tilesPerTurn === 1 ? 'tile' : 'tiles';
     parts.push(`HP: ${stats.health} · ${stats.tilesPerTurn} ${tilesPerTurnLabel}/turn · ${info.leakDamage} leak`);
+    // Traversal estimate based on the current map's spawner→exit path.
+    const pathTiles = this.enemyService.getPathToExit().length;
+    if (pathTiles > 1) {
+      const turnsToTraverse = Math.ceil((pathTiles - 1) / stats.tilesPerTurn);
+      parts.push(`~${turnsToTraverse} turns to exit`);
+    }
     if (info.special) parts.push(info.special);
     if (info.immunities?.length) parts.push(`Immune: ${info.immunities.join(', ')}`);
     return parts.join(' — ');

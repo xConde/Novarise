@@ -1399,6 +1399,23 @@ describe('GameBoardComponent', () => {
       const tip = component.getEnemyTooltip(EnemyType.FLYING);
       expect(tip).toContain('Immune:');
     });
+
+    it('includes traversal estimate when path is non-trivial', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      // 11 tiles in path → 10 to traverse → BASIC at 1 tile/turn → 10 turns
+      spyOn(enemyService, 'getPathToExit').and.returnValue(
+        Array.from({ length: 11 }, (_, i) => ({ x: i, z: 0 })),
+      );
+      const tip = component.getEnemyTooltip(EnemyType.BASIC);
+      expect(tip).toContain('~10 turns to exit');
+    });
+
+    it('omits traversal estimate when path is empty or trivial', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'getPathToExit').and.returnValue([]);
+      const tip = component.getEnemyTooltip(EnemyType.BASIC);
+      expect(tip).not.toContain('to exit');
+    });
   });
 
   // --- Tutorial integration ---
