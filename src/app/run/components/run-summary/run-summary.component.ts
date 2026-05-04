@@ -14,7 +14,7 @@ const MS_PER_SECOND = 1_000;
 export class RunSummaryComponent {
   @Input() runState!: RunState;
   @Output() returnToMenu = new EventEmitter<void>();
-  @Output() startNewRun = new EventEmitter<void>();
+  @Output() startNewRun = new EventEmitter<number>();
 
   get isVictory(): boolean {
     return this.runState.status === RunStatus.VICTORY;
@@ -72,6 +72,6 @@ export class RunSummaryComponent {
   }
 
   onStartNewRun(): void {
-    this.startNewRun.emit();
+    this.startNewRun.emit(this.runState.ascensionLevel);
   }
 }

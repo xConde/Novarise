@@ -144,14 +144,26 @@ describe('RunSummaryComponent', () => {
     expect(emitted).toBeTrue();
   });
 
-  it('emits startNewRun when new run button is clicked', () => {
-    let emitted = false;
-    component.startNewRun.subscribe(() => (emitted = true));
+  it('emits startNewRun with the ascension level just played when new run button is clicked', () => {
+    component.runState = makeRunState({ ascensionLevel: 7 });
+    fixture.detectChanges();
+    let emittedLevel: number | undefined;
+    component.startNewRun.subscribe(level => (emittedLevel = level));
 
     const btn = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.run-summary__btn--primary');
     btn?.click();
 
-    expect(emitted).toBeTrue();
+    expect(emittedLevel).toBe(7);
+  });
+
+  it('emits startNewRun with 0 when ascensionLevel was 0', () => {
+    let emittedLevel: number | undefined;
+    component.startNewRun.subscribe(level => (emittedLevel = level));
+
+    const btn = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.run-summary__btn--primary');
+    btn?.click();
+
+    expect(emittedLevel).toBe(0);
   });
 
   it('displays the score prominently', () => {

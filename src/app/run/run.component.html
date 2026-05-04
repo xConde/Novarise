@@ -167,7 +167,7 @@
     *ngIf="viewMode === 'summary' && runState"
     [runState]="runState"
     (returnToMenu)="returnToMenu()"
-    (startNewRun)="startNewRun(0)"
+    (startNewRun)="startNewRun($event)"
   ></app-run-summary>
 
   </div><!-- /run-content -->
