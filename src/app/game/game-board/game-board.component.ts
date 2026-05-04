@@ -1507,6 +1507,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return total;
   }
 
+  /**
+   * Comma-separated list of enemy type names projected to leak on the next
+   * turn — e.g. "Heavy, Swift". Used as the End Turn button's leak-warning
+   * tooltip detail so players know WHICH enemies are about to break through.
+   * Multiple enemies of the same type collapse to "Type ×N".
+   */
+  get projectedLeakerSummary(): string {
+    const counts = new Map<EnemyType, number>();
+    this.forEachProjectedLeaker(enemy => {
+      counts.set(enemy.type, (counts.get(enemy.type) ?? 0) + 1);
+    });
+    if (counts.size === 0) return '';
+    return Array.from(counts.entries())
+      .map(([type, n]) => n > 1 ? `${ENEMY_INFO[type].name} ×${n}` : ENEMY_INFO[type].name)
+      .join(', ');
+  }
+
   /** Iterates active enemies projected to leak on the next turn's resolution. */
   private forEachProjectedLeaker(visit: (enemy: import('./models/enemy.model').Enemy) => void): void {
     const currentTurn = this.combatLoopService.getTurnNumber();

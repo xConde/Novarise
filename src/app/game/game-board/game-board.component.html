@@ -159,8 +159,9 @@
       [attr.aria-label]="pendingTowerCardId
         ? 'Place or cancel pending tower card first'
         : (projectedLeaksNextTurn > 0
-            ? 'End turn and resolve combat. Warning: ' + projectedLeaksNextTurn + ' enemy projected to leak next turn.'
-            : 'End turn and resolve combat')">
+            ? 'End turn and resolve combat. Warning: ' + projectedLeakerSummary + ' projected to leak next turn.'
+            : 'End turn and resolve combat')"
+      [attr.title]="projectedLeaksNextTurn > 0 ? 'Will leak: ' + projectedLeakerSummary : null">
       <span class="end-turn-label">End Turn</span>
       <span class="end-turn-hint">Turn {{ currentTurnNumber }} · Space</span>
       <span class="end-turn-leak-warning"

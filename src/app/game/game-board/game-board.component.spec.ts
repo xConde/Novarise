@@ -1371,6 +1371,24 @@ describe('GameBoardComponent', () => {
       spyOn(statusEffectService, 'getSlowTileReduction').and.returnValue(1);
       expect(component.projectedLeaksNextTurn).toBe(0);
     });
+
+    it('projectedLeakerSummary lists enemy type names', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      // Two BASIC and one FAST all 1 tile from end at 1 tile/turn → all leak next turn
+      spyOn(enemyService, 'getEnemies').and.returnValue(new Map([
+        ['e1', makeEnemyAtPathIndex('e1', EnemyType.BASIC, 5, 3)],
+        ['e2', makeEnemyAtPathIndex('e2', EnemyType.BASIC, 5, 3)],
+        ['e3', makeEnemyAtPathIndex('e3', EnemyType.FAST, 5, 3)],
+      ]));
+      expect(component.projectedLeakerSummary).toContain('Basic ×2');
+      expect(component.projectedLeakerSummary).toContain('Fast');
+    });
+
+    it('projectedLeakerSummary is empty when no leaks projected', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'getEnemies').and.returnValue(new Map());
+      expect(component.projectedLeakerSummary).toBe('');
+    });
   });
 
   describe('getEnemyTooltip', () => {
