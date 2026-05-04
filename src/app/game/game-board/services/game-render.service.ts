@@ -8,6 +8,7 @@ import { EnemyService } from './enemy.service';
 import { TowerAnimationService } from './tower-animation.service';
 import { TowerCombatService } from './tower-combat.service';
 import { TargetPreviewService } from './target-preview.service';
+import { EnemyIntentService } from './enemy-intent.service';
 import { TowerMeshLifecycleService } from './tower-mesh-lifecycle.service';
 import { ParticleService } from './particle.service';
 import { GoldPopupService } from './gold-popup.service';
@@ -25,6 +26,7 @@ import { PHYSICS_CONFIG } from '../constants/physics.constants';
 import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 import { CombatFrameResult } from '../models/combat-frame.model';
 import { AimLineService } from './aim-line.service';
+import { CardPlayService } from './card-play.service';
 import type { ChallengeDefinition } from '../../../run/data/challenges';
 
 /**
@@ -81,6 +83,13 @@ export class GameRenderService {
     // @Optional() — aim-line cylinder for selected tower. update() is a no-op
     // when the service is absent so test beds without full provider lists work.
     @Optional() private aimLineService?: AimLineService,
+    // @Optional() — enemy intent (turns-to-exit) marker service. Absent from
+    // test beds that don't register it; update() degrades to a no-op.
+    @Optional() private enemyIntentService?: EnemyIntentService,
+    // @Optional() — reads hasPendingCard() to suppress intent markers during
+    // tower/terraform placement targeting. Absent from test beds → markers
+    // always visible (safe fallback).
+    @Optional() private cardPlayService?: CardPlayService,
   ) {}
 
   /** Initialize the render service. Call in ngAfterViewInit. */
@@ -308,6 +317,7 @@ export class GameRenderService {
     this.enemyService.updateStatusVisuals(activeEffects);
     this.enemyService.updateStatusEffectParticles(deltaTime, this.sceneService.getScene(), activeEffects);
     this.enemyService.updateEnemyAnimations(deltaTime);
+    this.enemyIntentService?.update(this.cardPlayService?.hasPendingCard() ?? false);
     this.updateMinimap(time);
 
     return output;
@@ -328,6 +338,7 @@ export class GameRenderService {
     this.enemyService.updateStatusVisuals(activeEffects);
     this.enemyService.updateStatusEffectParticles(deltaTime, this.sceneService.getScene(), activeEffects);
     this.enemyService.updateEnemyAnimations(deltaTime);
+    this.enemyIntentService?.update(this.cardPlayService?.hasPendingCard() ?? false);
     this.updateMinimap(time);
   }
 
