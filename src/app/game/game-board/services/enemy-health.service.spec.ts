@@ -1,8 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { EnemyHealthService } from './enemy-health.service';
+import { ForwardSimulationService } from './forward-simulation.service';
 import { Enemy, EnemyType, ENEMY_STATS } from '../models/enemy.model';
-import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG } from '../constants/ui.constants';
+import { PlacedTower, TowerType, TargetingMode, TOWER_CONFIGS } from '../models/tower.model';
+import { HEALTH_BAR_CONFIG, HEALTH_BAR_PREDICTED_CONFIG, SHIELD_VISUAL_CONFIG } from '../constants/ui.constants';
 import { DEATH_ANIM_CONFIG, HIT_FLASH_CONFIG, SHIELD_BREAK_CONFIG } from '../constants/effects.constants';
 
 /** Build a minimal Enemy fixture for the given type. */
@@ -50,6 +52,39 @@ function attachHealthBar(mesh: THREE.Mesh): { bg: THREE.Mesh; fg: THREE.Mesh } {
   return { bg, fg };
 }
 
+/**
+ * Attach predicted-damage overlay to a mesh (mirrors EnemyMeshFactoryService output).
+ * Returns the predicted mesh so tests can assert on its state.
+ */
+function attachPredictedBar(mesh: THREE.Mesh): THREE.Mesh {
+  const geo = new THREE.PlaneGeometry(HEALTH_BAR_CONFIG.width, HEALTH_BAR_CONFIG.height);
+  const mat = new THREE.MeshBasicMaterial({
+    color: HEALTH_BAR_PREDICTED_CONFIG.color,
+    transparent: true,
+    opacity: HEALTH_BAR_PREDICTED_CONFIG.opacity,
+  });
+  const predicted = new THREE.Mesh(geo, mat);
+  predicted.visible = false;
+  mesh.userData['healthBarPredicted'] = predicted;
+  mesh.add(predicted);
+  return predicted;
+}
+
+function makeTower(id: string, row: number, col: number, overrides: Partial<PlacedTower> = {}): PlacedTower {
+  return {
+    id,
+    type: TowerType.BASIC,
+    level: 1,
+    row,
+    col,
+    kills: 0,
+    totalInvested: 0,
+    targetingMode: TargetingMode.FIRST,
+    mesh: null,
+    ...overrides,
+  };
+}
+
 /** Attach a shield dome mesh to a mesh (mirrors EnemyMeshFactoryService output). */
 function attachShieldMesh(mesh: THREE.Mesh): THREE.Mesh {
   const geo = new THREE.SphereGeometry(1, 12, 12);
@@ -83,7 +118,9 @@ describe('EnemyHealthService', () => {
   const disposables: THREE.Mesh[] = [];
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [EnemyHealthService] });
+    TestBed.configureTestingModule({
+      providers: [EnemyHealthService, ForwardSimulationService],
+    });
     service = TestBed.inject(EnemyHealthService);
   });
 
@@ -633,6 +670,105 @@ describe('EnemyHealthService', () => {
       service.updateShieldBreakAnimations(enemies, 0);
 
       expect(enemy.shieldBreakTimer!).toBeCloseTo(SHIELD_BREAK_CONFIG.duration);
+    });
+  });
+
+  // ─── Predicted health bars ──────────────────────────────────────────────────
+
+  describe('updatePredictedHealthBars', () => {
+    it('hides the predicted mesh when no towers target this enemy (damage = 0)', () => {
+      const mesh = makeEnemyMesh();
+      disposables.push(mesh);
+      attachHealthBar(mesh);
+      const predicted = attachPredictedBar(mesh);
+      const enemy = makeEnemy(EnemyType.BASIC, { mesh });
+      const enemies = new Map([[enemy.id, enemy]]);
+      const towers = new Map<string, PlacedTower>();
+
+      service.updatePredictedHealthBars(enemies, towers, () => null);
+
+      expect(predicted.visible).toBe(false);
+    });
+
+    it('shows and sizes the predicted mesh when one tower targets this enemy', () => {
+      const mesh = makeEnemyMesh();
+      disposables.push(mesh);
+      attachHealthBar(mesh);
+      const predicted = attachPredictedBar(mesh);
+      const maxHp = ENEMY_STATS[EnemyType.BASIC].health;
+      const enemy = makeEnemy(EnemyType.BASIC, { mesh, health: maxHp, maxHealth: maxHp });
+      const enemies = new Map([[enemy.id, enemy]]);
+      const tower = makeTower('t1', 0, 0);
+      const towers = new Map([['0-0', tower]]);
+
+      service.updatePredictedHealthBars(enemies, towers, () => enemy);
+
+      expect(predicted.visible).toBe(true);
+      const expectedDamagePct = TOWER_CONFIGS[TowerType.BASIC].damage / maxHp;
+      expect(predicted.scale.x).toBeCloseTo(expectedDamagePct, 5);
+    });
+
+    it('clamps overlay to full HP segment when projected damage >= current HP (overkill)', () => {
+      const mesh = makeEnemyMesh();
+      disposables.push(mesh);
+      attachHealthBar(mesh);
+      const predicted = attachPredictedBar(mesh);
+      // Enemy has 1 HP; BASIC L1 tower deals 25 — overkill by 24
+      const enemy = makeEnemy(EnemyType.BASIC, { mesh, health: 1, maxHealth: 100 });
+      const enemies = new Map([[enemy.id, enemy]]);
+      const tower = makeTower('t1', 0, 0);
+      const towers = new Map([['0-0', tower]]);
+
+      service.updatePredictedHealthBars(enemies, towers, () => enemy);
+
+      expect(predicted.visible).toBe(true);
+      // Clamped to 1 HP remaining (1/100 = 0.01 of maxHealth)
+      expect(predicted.scale.x).toBeCloseTo(1 / 100, 5);
+    });
+
+    it('hides overlay for dying enemies', () => {
+      const mesh = makeEnemyMesh();
+      disposables.push(mesh);
+      attachHealthBar(mesh);
+      const predicted = attachPredictedBar(mesh);
+      // Make it visible first
+      predicted.visible = true;
+      const enemy = makeEnemy(EnemyType.BASIC, { mesh, dying: true });
+      const enemies = new Map([[enemy.id, enemy]]);
+      const tower = makeTower('t1', 0, 0);
+      const towers = new Map([['0-0', tower]]);
+
+      service.updatePredictedHealthBars(enemies, towers, () => enemy);
+
+      expect(predicted.visible).toBe(false);
+    });
+
+    it('is a no-op when enemy has no mesh', () => {
+      const enemy = makeEnemy(EnemyType.BASIC); // no mesh
+      const enemies = new Map([[enemy.id, enemy]]);
+      const towers = new Map<string, PlacedTower>();
+      expect(() =>
+        service.updatePredictedHealthBars(enemies, towers, () => null),
+      ).not.toThrow();
+    });
+
+    it('sums damage from two towers both targeting the same enemy', () => {
+      const mesh = makeEnemyMesh();
+      disposables.push(mesh);
+      attachHealthBar(mesh);
+      const predicted = attachPredictedBar(mesh);
+      const maxHp = 200;
+      const enemy = makeEnemy(EnemyType.BASIC, { mesh, health: maxHp, maxHealth: maxHp });
+      const enemies = new Map([[enemy.id, enemy]]);
+      const tower1 = makeTower('t1', 0, 0, { type: TowerType.BASIC });
+      const tower2 = makeTower('t2', 1, 1, { type: TowerType.BASIC });
+      const towers = new Map([['0-0', tower1], ['1-1', tower2]]);
+
+      service.updatePredictedHealthBars(enemies, towers, () => enemy);
+
+      expect(predicted.visible).toBe(true);
+      const expectedScale = (TOWER_CONFIGS[TowerType.BASIC].damage * 2) / maxHp;
+      expect(predicted.scale.x).toBeCloseTo(expectedScale, 5);
     });
   });
 });

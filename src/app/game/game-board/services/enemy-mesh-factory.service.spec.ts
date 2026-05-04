@@ -158,8 +158,8 @@ describe('EnemyMeshFactoryService', () => {
         expect(mesh.userData['shieldMesh']).toBeTruthy();
       });
 
-      it('should have 5 children (healthBarBg, healthBarFg, shield dome, shieldBarBg, shieldBarFg)', () => {
-        expect(mesh.children.length).toBe(5);
+      it('should have 6 children (healthBarBg, healthBarFg, healthBarPredicted, shield dome, shieldBarBg, shieldBarFg)', () => {
+        expect(mesh.children.length).toBe(6);
       });
 
       it('should add shield bar meshes to userData', () => {

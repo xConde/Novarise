@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ForwardSimulationService } from './forward-simulation.service';
 import { Enemy, EnemyType, GridNode } from '../models/enemy.model';
+import { PlacedTower, TowerType, TOWER_CONFIGS, TargetingMode } from '../models/tower.model';
 
 function makePath(length: number): GridNode[] {
   const nodes: GridNode[] = [];
@@ -24,6 +25,21 @@ function makeEnemy(overrides: Partial<Enemy> = {}): Enemy {
     pathIndex: 0,
     distanceTraveled: 0,
     leakDamage: 1,
+    ...overrides,
+  };
+}
+
+function makeTower(overrides: Partial<PlacedTower> = {}): PlacedTower {
+  return {
+    id: 't1',
+    type: TowerType.BASIC,
+    level: 1,
+    row: 0,
+    col: 0,
+    kills: 0,
+    totalInvested: 0,
+    targetingMode: TargetingMode.FIRST,
+    mesh: null,
     ...overrides,
   };
 }
@@ -136,6 +152,75 @@ describe('ForwardSimulationService', () => {
       const path = makePath(5);
       const enemy = makeEnemy({ path, pathIndex: path.length - 1 });
       expect(svc.willLeakWithin(enemy, 10)).toBeFalse();
+    });
+  });
+
+  describe('projectIncomingDamageNextTurn', () => {
+    it('returns 0 when there are no towers', () => {
+      const enemy = makeEnemy({ id: 'e1' });
+      const towers = new Map<string, PlacedTower>();
+      const result = svc.projectIncomingDamageNextTurn(enemy, towers, () => null);
+      expect(result).toBe(0);
+    });
+
+    it('returns 0 when no tower targets this enemy', () => {
+      const enemy = makeEnemy({ id: 'e1' });
+      const otherEnemy = makeEnemy({ id: 'e2' });
+      const tower = makeTower({ id: 't1', row: 0, col: 0 });
+      const towers = new Map([['0-0', tower]]);
+      // getTowerTarget always returns a different enemy
+      const result = svc.projectIncomingDamageNextTurn(enemy, towers, () => otherEnemy);
+      expect(result).toBe(0);
+    });
+
+    it('returns damage from a single BASIC L1 tower targeting this enemy', () => {
+      // BASIC L1 damage = TOWER_CONFIGS[BASIC].damage = 25
+      const enemy = makeEnemy({ id: 'e1' });
+      const tower = makeTower({ id: 't1', type: TowerType.BASIC, level: 1, row: 0, col: 0 });
+      const towers = new Map([['0-0', tower]]);
+      const result = svc.projectIncomingDamageNextTurn(enemy, towers, () => enemy);
+      expect(result).toBe(TOWER_CONFIGS[TowerType.BASIC].damage);
+    });
+
+    it('sums damage from multiple towers all targeting the same enemy', () => {
+      const enemy = makeEnemy({ id: 'e1' });
+      const tower1 = makeTower({ id: 't1', type: TowerType.BASIC, level: 1, row: 0, col: 0 });
+      const tower2 = makeTower({ id: 't2', type: TowerType.SNIPER, level: 1, row: 1, col: 1 });
+      const towers = new Map([['0-0', tower1], ['1-1', tower2]]);
+      const result = svc.projectIncomingDamageNextTurn(enemy, towers, () => enemy);
+      const expected = TOWER_CONFIGS[TowerType.BASIC].damage + TOWER_CONFIGS[TowerType.SNIPER].damage;
+      expect(result).toBe(expected);
+    });
+
+    it('skips towers targeting a different enemy', () => {
+      const targetEnemy = makeEnemy({ id: 'e1' });
+      const otherEnemy = makeEnemy({ id: 'e2' });
+      const towerForTarget = makeTower({ id: 't1', type: TowerType.BASIC, level: 1, row: 0, col: 0 });
+      const towerForOther = makeTower({ id: 't2', type: TowerType.SNIPER, level: 1, row: 1, col: 1 });
+      const towers = new Map([['0-0', towerForTarget], ['1-1', towerForOther]]);
+      const getTowerTarget = (tower: PlacedTower) =>
+        tower.id === 't1' ? targetEnemy : otherEnemy;
+      const result = svc.projectIncomingDamageNextTurn(targetEnemy, towers, getTowerTarget);
+      // Only towerForTarget (BASIC L1 = 25) should contribute
+      expect(result).toBe(TOWER_CONFIGS[TowerType.BASIC].damage);
+    });
+
+    it('returns 0 when getTowerTarget returns null for all towers', () => {
+      const enemy = makeEnemy({ id: 'e1' });
+      const tower = makeTower({ id: 't1', type: TowerType.BASIC, level: 1, row: 0, col: 0 });
+      const towers = new Map([['0-0', tower]]);
+      const result = svc.projectIncomingDamageNextTurn(enemy, towers, () => null);
+      expect(result).toBe(0);
+    });
+
+    it('uses getEffectiveStats — L2 tower applies the L2 damage multiplier', () => {
+      // getEffectiveStats returns level-scaled damage; L2 has a multiplier > 1
+      const enemy = makeEnemy({ id: 'e1' });
+      const tower = makeTower({ id: 't1', type: TowerType.BASIC, level: 2, row: 0, col: 0 });
+      const towers = new Map([['0-0', tower]]);
+      const result = svc.projectIncomingDamageNextTurn(enemy, towers, () => enemy);
+      // L1 base = 25; L2 should be greater
+      expect(result).toBeGreaterThan(TOWER_CONFIGS[TowerType.BASIC].damage);
     });
   });
 });

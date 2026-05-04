@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Enemy, EnemyType, ENEMY_STATS, VEINSEEKER_BOOSTED_TILES_PER_TURN } from '../models/enemy.model';
+import { PlacedTower, getEffectiveStats } from '../models/tower.model';
 
 /**
  * Pure projection of enemy movement N turns into the future.
@@ -71,6 +72,40 @@ export class ForwardSimulationService {
   ): boolean {
     const ttx = this.projectTurnsToExit(enemy, slowTileReduction, enemySpeedSlow, veinseekerBoosted);
     return ttx > 0 && ttx <= turnsAhead;
+  }
+
+  /**
+   * Projects the total damage this enemy will receive on the NEXT turn's
+   * combat resolution, based solely on current tower targeting.
+   *
+   * Design calls (v1 — do not expand without revisiting the plan doc):
+   * - Reads `getTowerTarget(tower)` — same closure that `AimLineService` and
+   *   `TowerFireZonePreviewService` use (resolves `userData['currentAimTarget']`).
+   * - Per-tower damage = `getEffectiveStats(type, level, spec).damage × 1`.
+   *   FIRE_RATE, LINKWORK, QUICK_DRAW, and archetype modifiers are excluded.
+   * - SPLASH, CHAIN, and MORTAR secondary/area hits are excluded. Only the
+   *   primary-target damage is projected.
+   *
+   * Pure function: no Angular DI dependencies beyond what the caller passes in.
+   *
+   * @param enemy           The enemy whose incoming damage is being projected.
+   * @param towers          All currently placed towers.
+   * @param getTowerTarget  Closure: returns the aim target for a given tower,
+   *                        or null if no target is currently resolved.
+   */
+  projectIncomingDamageNextTurn(
+    enemy: Enemy,
+    towers: Map<string, PlacedTower>,
+    getTowerTarget: (tower: PlacedTower) => Enemy | null,
+  ): number {
+    let total = 0;
+    for (const tower of towers.values()) {
+      const target = getTowerTarget(tower);
+      if (target !== null && target.id === enemy.id) {
+        total += getEffectiveStats(tower.type, tower.level, tower.specialization).damage;
+      }
+    }
+    return total;
   }
 
   // Mirrors stepEnemiesOneTurn:373-386 — the canonical movement math.

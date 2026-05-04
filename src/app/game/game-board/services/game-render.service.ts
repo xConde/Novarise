@@ -1,10 +1,13 @@
 import { Injectable, Optional } from '@angular/core';
+import * as THREE from 'three';
 import { AudioService } from './audio.service';
 import { FpsCounterService } from './fps-counter.service';
 import { GameInputService } from './game-input.service';
 import { SceneService } from './scene.service';
 import { GameStateService } from './game-state.service';
 import { EnemyService } from './enemy.service';
+import { Enemy } from '../models/enemy.model';
+import { PlacedTower } from '../models/tower.model';
 import { TowerAnimationService } from './tower-animation.service';
 import { TowerCombatService } from './tower-combat.service';
 import { TargetPreviewService } from './target-preview.service';
@@ -28,6 +31,7 @@ import { CombatFrameResult } from '../models/combat-frame.model';
 import { AimLineService } from './aim-line.service';
 import { TowerFireZonePreviewService } from './tower-fire-zone-preview.service';
 import { CardPlayService } from './card-play.service';
+import { EnemyHealthService } from './enemy-health.service';
 import type { ChallengeDefinition } from '../../../run/data/challenges';
 
 /**
@@ -94,6 +98,9 @@ export class GameRenderService {
     // tower/terraform placement targeting. Absent from test beds → markers
     // always visible (safe fallback).
     @Optional() private cardPlayService?: CardPlayService,
+    // @Optional() — predicted-damage overlay. Absent from test beds that
+    // don't register EnemyHealthService; update degrades to a no-op.
+    @Optional() private enemyHealthService?: EnemyHealthService,
   ) {}
 
   /** Initialize the render service. Call in ngAfterViewInit. */
@@ -319,7 +326,9 @@ export class GameRenderService {
     // Per-frame visual updates (health bars, status effects, minimap)
     // NOTE: dying/hit/shield animations are NOT called here — they run in the
     // phase-independent block in animate() (line ~2178) to avoid double-ticking.
-    this.enemyService.updateHealthBars(this.sceneService.getCamera().quaternion);
+    const cameraQuat = this.sceneService.getCamera().quaternion;
+    this.enemyService.updateHealthBars(cameraQuat);
+    this.tickPredictedHealthBars(cameraQuat);
     const activeEffects = this.statusEffectService.getAllActiveEffects();
     this.enemyService.updateStatusVisuals(activeEffects);
     this.enemyService.updateStatusEffectParticles(deltaTime, this.sceneService.getScene(), activeEffects);
@@ -340,13 +349,43 @@ export class GameRenderService {
     this.enemyService.updateDyingAnimations(deltaTime, this.sceneService.getScene());
     this.enemyService.updateHitFlashes(deltaTime);
     this.enemyService.updateShieldBreakAnimations(deltaTime);
-    this.enemyService.updateHealthBars(this.sceneService.getCamera().quaternion);
+    const cameraQuat = this.sceneService.getCamera().quaternion;
+    this.enemyService.updateHealthBars(cameraQuat);
+    this.tickPredictedHealthBars(cameraQuat);
     const activeEffects = this.statusEffectService.getAllActiveEffects();
     this.enemyService.updateStatusVisuals(activeEffects);
     this.enemyService.updateStatusEffectParticles(deltaTime, this.sceneService.getScene(), activeEffects);
     this.enemyService.updateEnemyAnimations(deltaTime);
     this.enemyIntentService?.update(this.cardPlayService?.hasPendingCard() ?? false);
     this.updateMinimap(time);
+  }
+
+  /**
+   * Resolve each tower's current aim target from its mesh group userData, then
+   * delegate to EnemyHealthService to update the predicted-damage overlays.
+   *
+   * Tower target lookup: reads `userData['currentAimTarget']` written by
+   * TowerAnimationService.tickAim — the same source AimLineService uses.
+   * This runs after tickAim in the frame so currentAimTarget is current.
+   *
+   * No-op when EnemyHealthService is absent (test beds without full providers).
+   */
+  private tickPredictedHealthBars(cameraQuaternion: THREE.Quaternion): void {
+    if (!this.enemyHealthService) return;
+    const towerMeshes = this.meshRegistry.towerMeshes;
+    const getTowerTarget = (tower: PlacedTower): Enemy | null => {
+      const group = towerMeshes.get(`${tower.row}-${tower.col}`);
+      if (!group) return null;
+      const raw = group.userData['currentAimTarget'] as unknown;
+      if (raw == null || typeof raw !== 'object') return null;
+      return raw as Enemy;
+    };
+    this.enemyHealthService.updatePredictedHealthBars(
+      this.enemyService.getEnemies(),
+      this.towerCombatService.getPlacedTowers(),
+      getTowerTarget,
+      cameraQuaternion,
+    );
   }
 
   private updateMinimap(timeMs: number): void {

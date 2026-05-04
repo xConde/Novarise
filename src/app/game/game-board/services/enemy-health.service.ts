@@ -1,8 +1,10 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy, EnemyType } from '../models/enemy.model';
+import { PlacedTower } from '../models/tower.model';
 import { HEALTH_BAR_CONFIG, SHIELD_BAR_CONFIG, SHIELD_VISUAL_CONFIG } from '../constants/ui.constants';
 import { DEATH_ANIM_CONFIG, HIT_FLASH_CONFIG, SHIELD_BREAK_CONFIG } from '../constants/effects.constants';
+import { ForwardSimulationService } from './forward-simulation.service';
 
 /**
  * Owns all per-frame health-state visual updates for enemies.
@@ -22,6 +24,12 @@ import { DEATH_ANIM_CONFIG, HIT_FLASH_CONFIG, SHIELD_BREAK_CONFIG } from '../con
 export class EnemyHealthService {
   /** Scratch quaternion reused each frame to avoid per-enemy allocation in billboarding. */
   private billboardScratchQuat = new THREE.Quaternion();
+
+  constructor(
+    // @Optional() — ForwardSimulationService is component-scoped; test beds
+    // that don't provide it get graceful no-ops in updatePredictedHealthBars.
+    @Optional() private forwardSim?: ForwardSimulationService,
+  ) {}
 
   // -------------------------------------------------------------------------
   // Health bars
@@ -90,6 +98,86 @@ export class EnemyHealthService {
             shieldBarFg.quaternion.copy(this.billboardScratchQuat);
           }
         }
+      }
+    });
+  }
+
+  /**
+   * Update the predicted-damage overlay on each enemy's health bar.
+   *
+   * For each enemy, projects the total damage it will receive on the next
+   * turn's combat resolution (via ForwardSimulationService), then positions
+   * the `healthBarPredicted` mesh to show that loss segment anchored to the
+   * right edge of the current HP foreground.
+   *
+   * Hidden when:
+   * - No incoming damage projected (damage = 0)
+   * - Enemy is dying
+   * - ForwardSimulationService is not provided (test beds without it)
+   *
+   * Clamped: if projected damage ≥ current HP, the full remaining HP segment
+   * is shown in red (overkill clamp — the overlay cannot exceed the FG bar).
+   *
+   * Billboard handling mirrors updateHealthBars: the predicted mesh is rotated
+   * to match the FG bar's billboard quaternion when cameraQuaternion is passed.
+   *
+   * @param enemies          Live enemy map owned by EnemyService.
+   * @param towers           Placed towers from TowerCombatService.
+   * @param getTowerTarget   Closure: returns the current aim target for a tower.
+   * @param cameraQuaternion Optional; enables billboard facing.
+   */
+  updatePredictedHealthBars(
+    enemies: Map<string, Enemy>,
+    towers: Map<string, PlacedTower>,
+    getTowerTarget: (tower: PlacedTower) => Enemy | null,
+    cameraQuaternion?: THREE.Quaternion,
+  ): void {
+    if (!this.forwardSim) return;
+
+    const forwardSim = this.forwardSim;
+
+    enemies.forEach(enemy => {
+      if (!enemy.mesh) return;
+      const predicted = enemy.mesh.userData?.['healthBarPredicted'] as THREE.Mesh | undefined;
+      if (!predicted) return;
+
+      // Hide overlay during death animation — avoids lingering red over a shrinking corpse.
+      if (enemy.dying) {
+        predicted.visible = false;
+        return;
+      }
+
+      const incomingDamage = forwardSim.projectIncomingDamageNextTurn(enemy, towers, getTowerTarget);
+
+      if (incomingDamage <= 0) {
+        predicted.visible = false;
+        return;
+      }
+
+      // Clamp to the current HP so the overlay never exceeds the FG bar width.
+      const clampedDamage = Math.min(incomingDamage, enemy.health);
+      const damagePct = clampedDamage / enemy.maxHealth;
+      const healthPct = Math.max(0, enemy.health / enemy.maxHealth);
+
+      // Width of the overlay as a proportion of bar full-width.
+      predicted.scale.x = damagePct;
+
+      // Anchor to the RIGHT edge of the current FG bar:
+      //   FG right edge world-x = fgCenter + (fgScale * barWidth/2)
+      //   = fgPosition.x + (healthPct * barWidth/2)
+      //   Predicted center = FG right edge − predictedWidth/2
+      //   = (-(1 - healthPct) * barWidth/2) + (healthPct * barWidth/2) − (damagePct * barWidth/2)
+      //   Simplified: ((healthPct * 2 - 1 - damagePct) * barWidth/2)
+      const halfWidth = HEALTH_BAR_CONFIG.width / 2;
+      predicted.position.x = (healthPct - damagePct / 2) * HEALTH_BAR_CONFIG.width - halfWidth;
+
+      predicted.visible = true;
+
+      // Billboard: face camera (compensate for parent enemy rotation)
+      if (cameraQuaternion) {
+        enemy.mesh.getWorldQuaternion(this.billboardScratchQuat);
+        this.billboardScratchQuat.invert().premultiply(cameraQuaternion);
+        predicted.quaternion.copy(this.billboardScratchQuat);
       }
     });
   }
