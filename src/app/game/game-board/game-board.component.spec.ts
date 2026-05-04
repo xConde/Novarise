@@ -1320,6 +1320,34 @@ describe('GameBoardComponent', () => {
     });
   });
 
+  describe('getEnemyTooltip', () => {
+    it('includes name, description, HP, and tilesPerTurn for a known enemy', () => {
+      const tip = component.getEnemyTooltip(EnemyType.BASIC);
+      expect(tip).toContain('Basic');
+      expect(tip).toContain('HP:');
+      expect(tip).toContain('/turn');
+      expect(tip).toContain('leak');
+    });
+
+    it('uses singular "tile" when tilesPerTurn is 1', () => {
+      // BASIC has tilesPerTurn = 1
+      const tip = component.getEnemyTooltip(EnemyType.BASIC);
+      expect(tip).toContain('1 tile/turn');
+    });
+
+    it('uses plural "tiles" when tilesPerTurn > 1', () => {
+      // FAST has tilesPerTurn = 2
+      const tip = component.getEnemyTooltip(EnemyType.FAST);
+      expect(tip).toContain('tiles/turn');
+    });
+
+    it('appends immunity list when present', () => {
+      // FLYING is immune to Slow
+      const tip = component.getEnemyTooltip(EnemyType.FLYING);
+      expect(tip).toContain('Immune:');
+    });
+  });
+
   // --- Tutorial integration ---
 
   describe('tutorial integration', () => {

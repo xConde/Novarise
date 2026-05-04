@@ -1026,7 +1026,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   getEnemyTooltip(type: EnemyType): string {
     const info = ENEMY_INFO[type];
     if (!info) return type;
+    const stats = ENEMY_STATS[type];
     const parts: string[] = [info.name, info.description];
+    // Combat stats — tilesPerTurn is the canonical movement value players plan against.
+    const tilesPerTurnLabel = stats.tilesPerTurn === 1 ? 'tile' : 'tiles';
+    parts.push(`HP: ${stats.health} · ${stats.tilesPerTurn} ${tilesPerTurnLabel}/turn · ${info.leakDamage} leak`);
     if (info.special) parts.push(info.special);
     if (info.immunities?.length) parts.push(`Immune: ${info.immunities.join(', ')}`);
     return parts.join(' — ');
