@@ -109,6 +109,22 @@ export class CardDraftComponent implements OnDestroy {
     this.hoveredCardRect = null;
   }
 
+  // Keyboard users need the same description payload mouse users get on hover.
+  // Focus shows the tooltip immediately (no 200ms delay — tab navigation
+  // expects responsive feedback). Blur clears.
+  onCardFocus(event: FocusEvent, card: DraftCard): void {
+    this.cancelHoverDelay();
+    const target = event.currentTarget as HTMLElement;
+    this.hoveredCard = card;
+    this.hoveredCardRect = target.getBoundingClientRect();
+  }
+
+  onCardBlur(): void {
+    this.cancelHoverDelay();
+    this.hoveredCard = null;
+    this.hoveredCardRect = null;
+  }
+
   private cancelHoverDelay(): void {
     if (this.hoverDelayTimer !== null) {
       clearTimeout(this.hoverDelayTimer);

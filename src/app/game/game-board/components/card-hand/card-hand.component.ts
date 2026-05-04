@@ -386,6 +386,24 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
     this.hoveredCardRect = null;
   }
 
+  // Keyboard users tabbing through the hand need the same description payload.
+  // Focus shows the tooltip immediately (no 200ms delay — Tab navigation
+  // expects responsive feedback). Suppressed during placement mode for
+  // consistency with the hover path.
+  onCardFocus(event: FocusEvent, card: HandCard): void {
+    if (this.pendingCardId !== null) return;
+    this.cancelHoverDelay();
+    const target = event.currentTarget as HTMLElement;
+    this.hoveredCard = card;
+    this.hoveredCardRect = target.getBoundingClientRect();
+  }
+
+  onCardBlur(): void {
+    this.cancelHoverDelay();
+    this.hoveredCard = null;
+    this.hoveredCardRect = null;
+  }
+
   private cancelHoverDelay(): void {
     if (this.hoverDelayTimer !== null) {
       clearTimeout(this.hoverDelayTimer);

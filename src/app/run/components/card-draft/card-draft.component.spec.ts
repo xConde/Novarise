@@ -180,6 +180,31 @@ describe('CardDraftComponent', () => {
       expect(component.hoveredCard).toBeNull();
     }));
 
+    it('keyboard focus shows tooltip immediately (no hover delay)', () => {
+      const item = component.resolvedCards[0];
+      const card = (fixture.nativeElement as HTMLElement)
+        .querySelectorAll<HTMLButtonElement>('.card-draft__card')[0];
+      const event = new FocusEvent('focus', { bubbles: true });
+      Object.defineProperty(event, 'currentTarget', { value: card });
+
+      component.onCardFocus(event, item);
+
+      expect(component.hoveredCard).toBe(item);
+    });
+
+    it('keyboard blur clears tooltip', () => {
+      const item = component.resolvedCards[0];
+      const card = (fixture.nativeElement as HTMLElement)
+        .querySelectorAll<HTMLButtonElement>('.card-draft__card')[0];
+      const focusEvent = new FocusEvent('focus', { bubbles: true });
+      Object.defineProperty(focusEvent, 'currentTarget', { value: card });
+      component.onCardFocus(focusEvent, item);
+
+      component.onCardBlur();
+
+      expect(component.hoveredCard).toBeNull();
+    });
+
     it('non-mouse pointer enter does NOT schedule hoveredCard', fakeAsync(() => {
       const item = component.resolvedCards[0];
       const card = (fixture.nativeElement as HTMLElement)

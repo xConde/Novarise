@@ -16,6 +16,8 @@
       (pointermove)="onCardPointerMove($event)"
       (pointerup)="onCardPointerUp()"
       (pointercancel)="onCardPointerUp()"
+      (focus)="onCardFocus($event, item)"
+      (blur)="onCardBlur()"
       [attr.aria-label]="'Option ' + (i + 1) + '. ' + item.definition.name + ': ' + item.definition.description + '. Type: ' + item.definition.type + '. Cost: ' + item.definition.energyCost + ' energy. Press ' + (i + 1) + ' to pick.'"
       [attr.aria-describedby]="hoveredCard?.reward?.cardId === item.reward.cardId ? hoverTooltipId : null"
       [attr.aria-pressed]="selectedCard === item.reward.cardId"

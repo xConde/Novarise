@@ -650,6 +650,40 @@ describe('CardHandComponent', () => {
       expect(component.hoveredCard).toBeNull();
     }));
 
+    it('keyboard focus shows tooltip immediately (no hover delay)', () => {
+      const card = makeCard();
+      const target = document.createElement('button');
+      const event = { currentTarget: target } as unknown as FocusEvent;
+
+      component.onCardFocus(event, card);
+
+      expect(component.hoveredCard).toBe(card);
+    });
+
+    it('keyboard focus is suppressed during placement mode', () => {
+      component.pendingCardId = 'some-other-card';
+      const card = makeCard();
+      const target = document.createElement('button');
+      const event = { currentTarget: target } as unknown as FocusEvent;
+
+      component.onCardFocus(event, card);
+
+      expect(component.hoveredCard).toBeNull();
+    });
+
+    it('keyboard blur clears tooltip', () => {
+      const card = makeCard();
+      const target = document.createElement('button');
+      const event = { currentTarget: target } as unknown as FocusEvent;
+      component.onCardFocus(event, card);
+      expect(component.hoveredCard).toBe(card);
+
+      component.onCardBlur();
+
+      expect(component.hoveredCard).toBeNull();
+      expect(component.hoveredCardRect).toBeNull();
+    });
+
     it('hoverTooltipLeft clamps to viewport edges', () => {
       // Force a rect that would push the tooltip off the right edge.
       component.hoveredCardRect = {

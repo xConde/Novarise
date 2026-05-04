@@ -43,6 +43,8 @@
       (pointercancel)="onCardPointerUp()"
       (pointerleave)="onCardPointerLeave($event); onCardPointerUp()"
       (pointerenter)="onCardPointerEnter($event, card)"
+      (focus)="onCardFocus($event, card)"
+      (blur)="onCardBlur()"
       [attr.aria-label]="card.definition.name + ' — Energy cost: ' + card.effectiveEnergyCost + (card.instance.upgraded ? ' (upgraded)' : '') + '. ' + card.definition.description + '. Right-click or long-press for details.'"
       [attr.aria-describedby]="hoveredCard?.instance?.instanceId === card.instance.instanceId ? hoverTooltipId : null"
       [attr.aria-pressed]="card.instance.instanceId === pendingCardId"
