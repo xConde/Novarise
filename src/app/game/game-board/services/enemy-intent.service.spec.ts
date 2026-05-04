@@ -87,8 +87,12 @@ function makeEnemySpy(enemies: Map<string, Enemy>): jasmine.SpyObj<EnemyService>
 }
 
 function makeStatusSpy(): jasmine.SpyObj<StatusEffectService> {
-  const spy = jasmine.createSpyObj<StatusEffectService>('StatusEffectService', ['getSlowTileReduction']);
+  const spy = jasmine.createSpyObj<StatusEffectService>('StatusEffectService', [
+    'getSlowTileReduction',
+    'getSlowRemainingTurns',
+  ]);
   spy.getSlowTileReduction.and.returnValue(0);
+  spy.getSlowRemainingTurns.and.returnValue(0);
   return spy;
 }
 
@@ -388,6 +392,47 @@ describe('EnemyIntentService', () => {
 
       const call = poolSpy.acquire.calls.first();
       expect(call.args[0].text).toBe('7t');
+    });
+  });
+
+  describe('confidence fade', () => {
+    it('renders sprite at full opacity when no SLOW is active', () => {
+      configure(5);
+      const enemy = makeEnemy({ id: 'e1' });
+      enemies.set('e1', enemy);
+      statusSpy.getSlowRemainingTurns.and.returnValue(0);
+
+      service.update(false);
+
+      const sprite = sceneSpy.getScene().children.find(c => c.userData['intentText'] === '5t') as THREE.Sprite;
+      expect(sprite.material.opacity).toBe(1.0);
+      expect(sprite.material.transparent).toBeTrue();
+    });
+
+    it('fades sprite when SLOW expires before projected exit', () => {
+      configure(5); // projected exit in 5 turns
+      const enemy = makeEnemy({ id: 'e1' });
+      enemies.set('e1', enemy);
+      // SLOW expires in 2 turns — 2 < 5, projection over-trusts SLOW
+      statusSpy.getSlowRemainingTurns.and.returnValue(2);
+
+      service.update(false);
+
+      const sprite = sceneSpy.getScene().children.find(c => c.userData['intentText'] === '5t') as THREE.Sprite;
+      expect(sprite.material.opacity).toBe(0.5);
+    });
+
+    it('keeps full opacity when SLOW lasts longer than projection', () => {
+      configure(3); // projected exit in 3 turns
+      const enemy = makeEnemy({ id: 'e1' });
+      enemies.set('e1', enemy);
+      // SLOW lasts 10 turns — projection horizon is fully covered
+      statusSpy.getSlowRemainingTurns.and.returnValue(10);
+
+      service.update(false);
+
+      const sprite = sceneSpy.getScene().children.find(c => c.userData['intentText'] === '3t') as THREE.Sprite;
+      expect(sprite.material.opacity).toBe(1.0);
     });
   });
 });

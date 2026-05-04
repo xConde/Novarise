@@ -25,6 +25,18 @@ export const ENEMY_INTENT_CONFIG = {
   /** World-unit Y offset above the enemy's position for the sprite anchor. */
   spriteYOffset: 1.5,
 
+  /** Sprite opacity when projection is high-confidence (default sprite alpha). */
+  opacityConfident: 1.0,
+
+  /**
+   * Sprite opacity when the projection's reliability is low — currently
+   * triggered when an enemy has a SLOW status that will expire BEFORE its
+   * projected turns-to-exit. The projection assumes SLOW continues for the
+   * full horizon, so an early SLOW expiry means the enemy will arrive sooner
+   * than the marker shows. Faded marker tells the player "trust this less".
+   */
+  opacityUncertain: 0.5,
+
   // --- TextSprite canvas / scale settings ---
   canvasWidth: 64,
   canvasHeight: 32,

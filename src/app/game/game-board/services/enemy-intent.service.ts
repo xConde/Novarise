@@ -140,9 +140,27 @@ export class EnemyIntentService implements OnDestroy {
         enemy.position.z,
       );
 
+      // Confidence fade: when SLOW will expire BEFORE the projected exit, the
+      // projection's tiles-per-turn assumption is wrong for the back half of
+      // the projection horizon. Fade the marker so players don't over-trust it.
+      sprite.material.opacity = this.confidenceOpacityFor(enemy, turns, currentTurn);
+      sprite.material.transparent = true;
+
       // Visibility: hide during card placement mode
       sprite.visible = !placementActive;
     }
+  }
+
+  // Returns the opacity to apply for the given (enemy, projected turns) pair.
+  // Currently a single low-confidence trigger: SLOW about to expire mid-projection.
+  // Add new triggers here as more uncertainty sources are surfaced (status-effect
+  // expiry, modifier-card expiry, etc.) — keep the predicate explicit per source.
+  private confidenceOpacityFor(enemy: Enemy, projectedTurns: number, currentTurn: number): number {
+    const slowRemaining = this.statusEffectService.getSlowRemainingTurns(enemy.id, currentTurn);
+    if (slowRemaining > 0 && slowRemaining < projectedTurns) {
+      return ENEMY_INTENT_CONFIG.opacityUncertain;
+    }
+    return ENEMY_INTENT_CONFIG.opacityConfident;
   }
 
   /**

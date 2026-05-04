@@ -170,6 +170,20 @@ export class StatusEffectService {
     return effects.has(StatusEffectType.SLOW) ? 1 : 0;
   }
 
+  /**
+   * Turns of SLOW remaining on an enemy at the given turn number. Returns 0
+   * when SLOW is not active. Used by forward-projection consumers (e.g.
+   * EnemyIntentService) to detect when the SLOW will expire mid-projection
+   * and degrade confidence in the projection accordingly.
+   */
+  getSlowRemainingTurns(enemyId: string, currentTurn: number): number {
+    const effects = this.effects.get(enemyId);
+    if (!effects) return 0;
+    const slow = effects.get(StatusEffectType.SLOW);
+    if (!slow) return 0;
+    return Math.max(0, slow.expiresAt - currentTurn);
+  }
+
   // M2 S2: gameTime-based update() DELETED. Replaced by tickTurn (turn-based).
   // Spec call sites cast to (svc as any) — H2 will rewrite against tickTurn.
 
