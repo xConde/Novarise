@@ -1,9 +1,11 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import { StatusEffectType, StatusEffectConfig, STATUS_EFFECT_CONFIGS } from '../constants/status-effect.constants';
 import { EnemyService, DamageResult } from './enemy.service';
 import { KillInfo } from './tower-combat.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { SerializableStatusEffect } from '../models/encounter-checkpoint.model';
+import { DamagePopupService } from './damage-popup.service';
+import { SceneService } from './scene.service';
 
 interface ActiveEffect {
   config: StatusEffectConfig;
@@ -26,6 +28,9 @@ export class StatusEffectService {
   constructor(
     private enemyService: EnemyService,
     private relicService: RelicService,
+    // @Optional() — not provided in pre-popup test beds; popups silently skipped when absent.
+    @Optional() private damagePopupService?: DamagePopupService,
+    @Optional() private sceneService?: SceneService,
   ) {}
 
   /**
@@ -139,6 +144,14 @@ export class StatusEffectService {
             kills.push({ id: enemyId, damage: damagePerTick, towerType: null, towerLevel: 0 });
             toRemoveEnemies.push(enemyId);
             break;
+          }
+          // Spawn non-lethal popup if scene is available.
+          // TODO: Sprint N+1 — aggregate per-enemy-per-turn before spawning to avoid popup flood
+          if ((result.damageDealt > 0 || result.shieldHit) && this.sceneService && this.damagePopupService) {
+            const enemyObj = this.enemyService.getEnemies().get(enemyId);
+            if (enemyObj) {
+              this.damagePopupService.spawn(result.damageDealt, enemyObj.position, this.sceneService.getScene(), result.shieldHit);
+            }
           }
         }
       }

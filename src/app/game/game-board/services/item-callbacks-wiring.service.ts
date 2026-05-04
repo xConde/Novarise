@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import { ItemService } from '../../../run/services/item.service';
 import { GameStateService } from './game-state.service';
 import { EnemyService } from './enemy.service';
@@ -6,6 +6,8 @@ import { WaveService } from './wave.service';
 import { DeckService } from '../../../run/services/deck.service';
 import { RunService } from '../../../run/services/run.service';
 import { NodeType, getNodeById } from '../../../run/models/node-map.model';
+import { DamagePopupService } from './damage-popup.service';
+import { SceneService } from './scene.service';
 
 /**
  * ItemCallbacksWiringService — wires ItemService combat + run-level
@@ -32,6 +34,9 @@ export class ItemCallbacksWiringService {
     private waveService: WaveService,
     private deckService: DeckService,
     private runService: RunService,
+    // @Optional() — not provided in pre-popup test beds; popups silently skipped when absent.
+    @Optional() private damagePopupService?: DamagePopupService,
+    @Optional() private sceneService?: SceneService,
   ) {}
 
   wire(): void {
@@ -41,8 +46,13 @@ export class ItemCallbacksWiringService {
         const enemies = [...this.enemyService.getEnemies().values()];
         const living = enemies.filter(e => !e.dying && e.health > 0);
         if (living.length === 0) return false;
+        const scene = this.sceneService?.getScene();
         for (const enemy of living) {
-          this.enemyService.damageEnemy(enemy.id, damage);
+          const dmgResult = this.enemyService.damageEnemy(enemy.id, damage);
+          // TODO: Sprint N+1 — aggregate per-enemy-per-turn before spawning to avoid popup flood
+          if (scene && !dmgResult.killed && (dmgResult.damageDealt > 0 || dmgResult.shieldHit)) {
+            this.damagePopupService?.spawn(dmgResult.damageDealt, enemy.position, scene, dmgResult.shieldHit);
+          }
         }
         // Dead enemies are removed by the normal render loop's dying-animation
         // pass; no explicit scene removal needed here.

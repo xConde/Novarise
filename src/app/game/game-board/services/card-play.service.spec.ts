@@ -161,6 +161,9 @@ describe('CardPlayService', () => {
     ]);
     // Default to empty enemy set; COLLAPSE damage specs override per-test.
     enemySpy.getEnemies.and.returnValue(new Map() as never);
+    // Default damageEnemy return — non-lethal hit with no shield absorption.
+    // COLLAPSE damage specs that need different behavior override per-test.
+    enemySpy.damageEnemy.and.returnValue({ killed: false, spawnedEnemies: [], damageDealt: 0, shieldHit: false });
 
     sceneSpy = createSceneServiceSpy();
 

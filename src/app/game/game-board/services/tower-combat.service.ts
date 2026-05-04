@@ -1,6 +1,7 @@
 import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy, ENEMY_STATS } from '../models/enemy.model';
+import { DamagePopupService } from './damage-popup.service';
 import { PlacedTower, TowerType, TowerStats, TowerSpecialization, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { assertNever } from '../utils/assert-never';
 import { KillInfo, CombatAudioEvent } from '../models/combat-frame.model';
@@ -172,6 +173,9 @@ export class TowerCombatService {
     // geometries/materials when disposing tower groups (sell, restart).
     @Optional() private geometryRegistry?: GeometryRegistryService,
     @Optional() private materialRegistry?: MaterialRegistryService,
+    // @Optional() — not provided in test beds that predate non-lethal popup wiring.
+    // Absent → popups are silently skipped; full GameModule always wires it.
+    @Optional() private damagePopupService?: DamagePopupService,
   ) {}
 
   /**
@@ -585,6 +589,10 @@ export class TowerCombatService {
             if (stats.statusEffect) {
               this.statusEffectService.apply(enemy.id, stats.statusEffect, turnNumber);
             }
+            // TODO: Sprint N+1 — aggregate per-enemy-per-turn before spawning to avoid popup flood
+            if (result.damageDealt > 0 || result.shieldHit) {
+              this.damagePopupService?.spawn(result.damageDealt, enemy.position, scene, result.shieldHit);
+            }
           }
           result.spawnedEnemies.forEach(mini => {
             if (mini.mesh) scene.add(mini.mesh);
@@ -629,6 +637,10 @@ export class TowerCombatService {
               if (stats.statusEffect) {
                 this.statusEffectService.apply(enemy.id, stats.statusEffect, turnNumber);
               }
+              // TODO: Sprint N+1 — aggregate per-enemy-per-turn before spawning to avoid popup flood
+              if (result.damageDealt > 0 || result.shieldHit) {
+                this.damagePopupService?.spawn(result.damageDealt, enemy.position, scene, result.shieldHit);
+              }
             }
             result.spawnedEnemies.forEach(mini => {
               if (mini.mesh) scene.add(mini.mesh);
@@ -656,6 +668,10 @@ export class TowerCombatService {
           this.enemyService.startHitFlash(target.id);
           if (stats.statusEffect) {
             this.statusEffectService.apply(target.id, stats.statusEffect, turnNumber);
+          }
+          // TODO: Sprint N+1 — aggregate per-enemy-per-turn before spawning to avoid popup flood
+          if (result.damageDealt > 0 || result.shieldHit) {
+            this.damagePopupService?.spawn(result.damageDealt, target.position, scene, result.shieldHit);
           }
         }
         result.spawnedEnemies.forEach(mini => {
@@ -877,6 +893,10 @@ export class TowerCombatService {
             this.enemyService.startHitFlash(enemy.id);
             if (zone.statusEffect) {
               this.statusEffectService.apply(enemy.id, zone.statusEffect, turnNumber);
+            }
+            // TODO: Sprint N+1 — aggregate per-enemy-per-turn before spawning to avoid popup flood
+            if (result.damageDealt > 0 || result.shieldHit) {
+              this.damagePopupService?.spawn(result.damageDealt, enemy.position, scene, result.shieldHit);
             }
           }
           result.spawnedEnemies.forEach(mini => {

@@ -353,6 +353,8 @@ describe('ChainLightningService', () => {
       enemyServiceSpy.damageEnemy.and.callFake((_id: string, _damage: number) => ({
         killed: true,
         spawnedEnemies: [mini as Enemy & { mesh?: THREE.Object3D }],
+        damageDealt: _damage,
+        shieldHit: false,
       }));
 
       service.fire(makeTower(), e1, stats, mockScene, TOWER_X, TOWER_Z, spatialGrid, GAME_TIME);
