@@ -33,12 +33,12 @@ export class RestScreenComponent {
     return this.currentLives >= this.maxLives;
   }
 
-  /** Cards that can still be upgraded (have an upgradedEffect and are not already upgraded). */
+  /** Cards that can still be upgraded (not already upgraded and define at least one upgrade payload). */
   get upgradableCards(): CardInstance[] {
     return this.deckCards.filter(c => {
       if (c.upgraded) return false;
       const def = getCardDefinition(c.cardId);
-      return def.upgradedEffect !== undefined;
+      return def.upgradedEffect !== undefined || def.upgradedEnergyCost !== undefined;
     });
   }
 
