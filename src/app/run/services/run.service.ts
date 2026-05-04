@@ -33,6 +33,7 @@ import {
   RELIC_EFFECT_CONFIG,
   REWARD_CONFIG,
   REWARD_RARITY_WEIGHTS,
+  CARD_PITY_THRESHOLD,
   REST_CONFIG,
   RUN_CONFIG,
   SHOP_CONFIG,
@@ -539,14 +540,34 @@ export class RunService {
     // snapshot — both reads hit the same deck state so they agree.
     const dominant = this.deckService.getDominantArchetype();
 
+    // Pity-timer state — drives the "guaranteed rare every CARD_PITY_THRESHOLD
+    // consecutive non-rare picks" floor. Read off the run state, mutate locally,
+    // commit at the end so an early return path doesn't poison the counter.
+    let pityCounter = this.runState.cardPityCounter ?? 0;
+
     const picked: CardReward[] = [];
     for (let i = 0; i < count; i++) {
-      const rarity = this.pickWeightedRarity(rarityWeights, byRarity, rng);
+      const pityForceRare = pityCounter >= CARD_PITY_THRESHOLD && byRarity[CardRarity.RARE].length > 0;
+      const rarity = pityForceRare
+        ? CardRarity.RARE
+        : this.pickWeightedRarity(rarityWeights, byRarity, rng);
       if (rarity === null) continue;
       const pool = byRarity[rarity];
       if (pool.length === 0) continue;
       const card = this.pickArchetypeAwareCard(pool, dominant, rng);
       picked.push({ type: 'card', cardId: card.id });
+      // Counter mechanics: rare resets, non-rare increments.
+      if (rarity === CardRarity.RARE) {
+        pityCounter = 0;
+      } else {
+        pityCounter++;
+      }
+    }
+
+    // Persist the updated counter onto the run state so it carries across
+    // the next reward generation.
+    if (pityCounter !== (this.runState.cardPityCounter ?? 0)) {
+      this.updateState({ ...this.runState, cardPityCounter: pityCounter });
     }
 
     // Every offered card counts as seen — QA user wants "what haven't I

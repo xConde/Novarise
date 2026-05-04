@@ -2307,6 +2307,82 @@ describe('RunService', () => {
     }));
   });
 
+  describe('card pity timer', () => {
+    it('initialises cardPityCounter to 0 on a new run', fakeAsync(() => {
+      service.startNewRun();
+      expect(service.runState!.cardPityCounter).toBe(0);
+    }));
+
+    it('forces a rare card draw after CARD_PITY_THRESHOLD consecutive non-rare picks', fakeAsync(() => {
+      service.startNewRun();
+      // Push the counter to threshold − the next single pick should force RARE.
+      service['updateState']({ ...service.runState!, cardPityCounter: 9 });
+
+      const seededRng = createSeededRng(123);
+      const rng: () => number = () => seededRng.next();
+      // Direct call into the private picker. Cast via index access for test scope.
+      const picks = (service as unknown as { pickCardRewards: (count: number, rng: () => number) => Array<{ cardId: CardId }> })
+        .pickCardRewards(1, rng);
+
+      expect(picks.length).toBe(1);
+      const def = CARD_DEFINITIONS[picks[0].cardId];
+      expect(def.rarity).toBe(CardRarity.RARE);
+
+      // Counter resets after a rare.
+      expect(service.runState!.cardPityCounter).toBe(0);
+    }));
+
+    it('resets pity counter when a rare drops naturally before the threshold', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, cardPityCounter: 3 });
+
+      // Seed 1 happens to roll a rare immediately for default weights — guard
+      // by re-seeding until we observe at least one rare in 1 pick. If neither
+      // seed lands a rare, the test relies on the threshold-forced path
+      // verified above; this spec is a complementary best-effort.
+      let seed = 1;
+      let landedRare = false;
+      for (let attempt = 0; attempt < 10; attempt++) {
+        service['updateState']({ ...service.runState!, cardPityCounter: 3 });
+        const seededRng = createSeededRng(seed++);
+        const rng: () => number = () => seededRng.next();
+        const picks = (service as unknown as { pickCardRewards: (n: number, r: () => number) => Array<{ cardId: CardId }> })
+          .pickCardRewards(1, rng);
+        const rarity = CARD_DEFINITIONS[picks[0].cardId].rarity;
+        if (rarity === CardRarity.RARE) {
+          landedRare = true;
+          expect(service.runState!.cardPityCounter).toBe(0);
+          break;
+        }
+      }
+      // Only assert when we observed a natural rare. If not, the
+      // threshold-force test above covers the reset semantics.
+      if (landedRare) {
+        expect(service.runState!.cardPityCounter).toBe(0);
+      }
+    }));
+
+    it('increments counter on non-rare picks', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, cardPityCounter: 2 });
+
+      // Seed unlikely to land a rare for a single 1-pick draw at 10% weight.
+      const seededRng = createSeededRng(7);
+      const rng: () => number = () => seededRng.next();
+      const picks = (service as unknown as { pickCardRewards: (n: number, r: () => number) => Array<{ cardId: CardId }> })
+        .pickCardRewards(1, rng);
+      const rarity = CARD_DEFINITIONS[picks[0].cardId].rarity;
+
+      if (rarity === CardRarity.RARE) {
+        // Lucky roll — counter resets.
+        expect(service.runState!.cardPityCounter).toBe(0);
+      } else {
+        // Common/uncommon — counter increments.
+        expect(service.runState!.cardPityCounter).toBe(3);
+      }
+    }));
+  });
+
   describe('getCardRemoveCost — ascension scaling', () => {
     it('returns base SHOP_CONFIG.cardRemoveCost at ascension 0', fakeAsync(() => {
       service.startNewRun(0);

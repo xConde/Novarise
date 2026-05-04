@@ -233,6 +233,18 @@ export const REWARD_RARITY_WEIGHTS = {
   rare: 10,
 } as const;
 
+/**
+ * Pity-timer threshold for card rewards. After this many consecutive
+ * non-rare picks across combat rewards + shop, the next card pick is
+ * forced to RARE and the counter resets. Genre-standard floor that
+ * protects players from cold streaks without bumping baseline weights.
+ *
+ * Calibration: at the 10% rare weight, an unbroken pity streak fires
+ * after every ~9 expected picks of bad luck, well above the typical
+ * mean-time-to-rare so it functions as an outlier-floor, not a payout.
+ */
+export const CARD_PITY_THRESHOLD = 9;
+
 // ── Archetype Card Draw Bias ──────────────────────────────────
 
 /**
