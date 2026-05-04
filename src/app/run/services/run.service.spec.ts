@@ -2307,6 +2307,41 @@ describe('RunService', () => {
     }));
   });
 
+  describe('rarity distribution — statistical', () => {
+    it('over 1000 single-pick draws, rare rate sits between 8% and 18% (10% baseline + pity uplift)', fakeAsync(() => {
+      service.startNewRun();
+      const seededRng = createSeededRng(424242);
+      const rng: () => number = () => seededRng.next();
+
+      const counts = { common: 0, uncommon: 0, rare: 0 };
+      const picker = service as unknown as { pickCardRewards: (n: number, r: () => number) => Array<{ cardId: CardId }> };
+      const N = 1000;
+      for (let i = 0; i < N; i++) {
+        const picks = picker.pickCardRewards(1, rng);
+        if (picks.length === 0) continue;
+        const r = CARD_DEFINITIONS[picks[0].cardId].rarity;
+        if (r === CardRarity.COMMON) counts.common++;
+        else if (r === CardRarity.UNCOMMON) counts.uncommon++;
+        else if (r === CardRarity.RARE) counts.rare++;
+      }
+      const total = counts.common + counts.uncommon + counts.rare;
+      expect(total).toBeGreaterThanOrEqual(N * 0.95);
+
+      // Baseline 10% + pity-driven uplift; widen the tolerance to absorb
+      // RNG variance over 1000 trials. Lower bound 8% guards against
+      // regression to flat distribution; upper 18% guards against runaway
+      // pity overrides.
+      const rareRate = counts.rare / total;
+      expect(rareRate).toBeGreaterThan(0.08);
+      expect(rareRate).toBeLessThan(0.18);
+
+      // Common is the dominant tier — must clearly exceed uncommon.
+      expect(counts.common).toBeGreaterThan(counts.uncommon);
+      // Uncommon must clearly exceed rare.
+      expect(counts.uncommon).toBeGreaterThan(counts.rare);
+    }));
+  });
+
   describe('card pity timer', () => {
     it('initialises cardPityCounter to 0 on a new run', fakeAsync(() => {
       service.startNewRun();
