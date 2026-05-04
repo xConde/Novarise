@@ -1027,6 +1027,27 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return ENEMY_INFO[type].name;
   }
 
+  /**
+   * Earliest exit-turn estimate for a spawn-preview group, expressed as the
+   * absolute turn offset (T+N) at which the FASTEST enemy in the group will
+   * reach the exit. Returns null when the group is empty or no path exists.
+   *
+   * Worst case for the player — soonest threat — drives the value.
+   */
+  getEarliestArrivalTurn(entry: { turnOffset: number; spawns: { type: EnemyType; count: number }[] }): number | null {
+    if (entry.spawns.length === 0) return null;
+    const pathTiles = this.enemyService.getPathToExit().length;
+    if (pathTiles <= 1) return null;
+    let fastestTilesPerTurn = 0;
+    for (const s of entry.spawns) {
+      const tpt = ENEMY_STATS[s.type].tilesPerTurn;
+      if (tpt > fastestTilesPerTurn) fastestTilesPerTurn = tpt;
+    }
+    if (fastestTilesPerTurn === 0) return null;
+    const traversal = Math.ceil((pathTiles - 1) / fastestTilesPerTurn);
+    return entry.turnOffset + traversal;
+  }
+
   /** Returns a hover tooltip string for a spawn-preview enemy entry. */
   getEnemyTooltip(type: EnemyType): string {
     const info = ENEMY_INFO[type];

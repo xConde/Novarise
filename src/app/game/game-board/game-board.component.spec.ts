@@ -1436,6 +1436,40 @@ describe('GameBoardComponent', () => {
     });
   });
 
+  describe('getEarliestArrivalTurn', () => {
+    it('returns null for an empty spawn group', () => {
+      expect(component.getEarliestArrivalTurn({ turnOffset: 2, spawns: [] })).toBeNull();
+    });
+
+    it('returns null when no path is set', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'getPathToExit').and.returnValue([]);
+      const arrival = component.getEarliestArrivalTurn({
+        turnOffset: 1,
+        spawns: [{ type: EnemyType.BASIC, count: 1 }],
+      });
+      expect(arrival).toBeNull();
+    });
+
+    it('uses fastest enemy in group to compute earliest exit', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      // 11-tile path → 10 to walk
+      spyOn(enemyService, 'getPathToExit').and.returnValue(
+        Array.from({ length: 11 }, (_, i) => ({ x: i, z: 0 })),
+      );
+      // Mixed group: BASIC (1/turn) + FAST (2/turn) — FAST wins, 10/2 = 5 turns
+      // Spawn at T+2 → exits T+2+5 = T+7
+      const arrival = component.getEarliestArrivalTurn({
+        turnOffset: 2,
+        spawns: [
+          { type: EnemyType.BASIC, count: 3 },
+          { type: EnemyType.FAST, count: 1 },
+        ],
+      });
+      expect(arrival).toBe(7);
+    });
+  });
+
   // --- Tutorial integration ---
 
   describe('tutorial integration', () => {

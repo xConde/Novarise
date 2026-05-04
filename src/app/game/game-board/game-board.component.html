@@ -196,6 +196,10 @@
           class="spawn-preview__turn"
           [class.spawn-preview__turn--empty]="entry.spawns.length === 0">
           <span class="spawn-preview__label">T+{{ entry.turnOffset }}</span>
+          <span class="spawn-preview__arrival"
+                *ngIf="getEarliestArrivalTurn(entry) as arrival"
+                [attr.title]="'Earliest exit turn for this spawn group'"
+                aria-hidden="true">→ T+{{ arrival }}</span>
           <span class="spawn-preview__spawns" *ngIf="entry.spawns.length > 0">
             <span
               *ngFor="let s of entry.spawns"

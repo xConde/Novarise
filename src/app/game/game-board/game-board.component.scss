@@ -261,6 +261,15 @@
       color: var(--panel-blue-accent);
     }
 
+    .spawn-preview__arrival {
+      font-size: var(--font-size-3xs);
+      font-weight: 500;
+      color: var(--text-muted);
+      opacity: 0.7;
+      margin-right: 0.25rem;
+      letter-spacing: 0.025em;
+    }
+
     .spawn-preview__spawns {
       display: flex;
       flex-wrap: nowrap;
