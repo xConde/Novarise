@@ -14,7 +14,7 @@
   border-bottom: var(--border-width-thin) solid var(--theme-purple-glow);
   padding: 0 var(--spacing-xs);
   flex-shrink: 0;
-  z-index: 2000;
+  z-index: var(--z-index-app-chrome);
   user-select: none;
 }
 
@@ -45,7 +45,7 @@
   position: fixed;
   top: 50px;
   right: var(--spacing-md);
-  z-index: 1999;
+  z-index: calc(var(--z-index-app-chrome) - 1);
   display: flex;
   align-items: center;
   justify-content: center;

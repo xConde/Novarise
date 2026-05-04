@@ -508,7 +508,7 @@ body.reduce-motion .card-draft__card {
 
 .card-draft-tooltip {
   position: fixed;
-  z-index: calc(var(--z-index-overlay) + 50);
+  z-index: var(--z-index-tooltip);
   width: 15rem; // matches TOOLTIP_WIDTH_ESTIMATE = 240px in the component
   max-width: calc(100vw - 1rem);
   padding: var(--spacing-sm);

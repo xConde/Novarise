@@ -3,7 +3,7 @@
   pointer-events: none; /* Let clicks pass through to the game */
   position: fixed;
   inset: 0;
-  z-index: 900;
+  z-index: var(--z-index-tutorial);
 }
 
 /* Fix 4: Subtle backdrop dim — not blocking, just enough contrast for the card */
@@ -28,7 +28,7 @@
   width: 90%;
   text-align: center;
   box-shadow: 0 0 20px var(--theme-purple-a40);
-  z-index: 901;
+  z-index: var(--z-index-tutorial-card);
   /* Fix 6: Fade-in animation on appearance/step change */
   animation: tutorial-fade-in 0.3s ease-out;
 }

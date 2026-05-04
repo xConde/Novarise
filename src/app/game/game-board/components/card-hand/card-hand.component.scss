@@ -1242,7 +1242,7 @@ body.reduce-motion .pile-count--pulse .pile-value { animation: none; }
 // getBoundingClientRect; styles only handle look + theming.
 .card-tooltip {
   position: fixed;
-  z-index: calc(var(--z-index-overlay) + 50);
+  z-index: var(--z-index-tooltip);
   width: 15rem; // matches TOOLTIP_WIDTH_ESTIMATE in the component (240px)
   max-width: calc(100vw - 1rem);
   padding: var(--spacing-sm);
