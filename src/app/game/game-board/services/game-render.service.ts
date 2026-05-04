@@ -26,6 +26,7 @@ import { PHYSICS_CONFIG } from '../constants/physics.constants';
 import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 import { CombatFrameResult } from '../models/combat-frame.model';
 import { AimLineService } from './aim-line.service';
+import { TowerFireZonePreviewService } from './tower-fire-zone-preview.service';
 import { CardPlayService } from './card-play.service';
 import type { ChallengeDefinition } from '../../../run/data/challenges';
 
@@ -83,6 +84,9 @@ export class GameRenderService {
     // @Optional() — aim-line cylinder for selected tower. update() is a no-op
     // when the service is absent so test beds without full provider lists work.
     @Optional() private aimLineService?: AimLineService,
+    // @Optional() — dashed projected-position line for selected tower. Absent
+    // from test beds; update() degrades to a no-op.
+    @Optional() private towerFireZonePreviewService?: TowerFireZonePreviewService,
     // @Optional() — enemy intent (turns-to-exit) marker service. Absent from
     // test beds that don't register it; update() degrades to a no-op.
     @Optional() private enemyIntentService?: EnemyIntentService,
@@ -185,6 +189,9 @@ export class GameRenderService {
     // currentAimTarget on each group is current. Hides automatically when
     // no tower is selected or no target is found.
     this.aimLineService?.update(reduceMotion);
+    // Update dashed projected-position line for the selected tower's aim target.
+    // Runs after aimLineService so the solid line is already positioned.
+    this.towerFireZonePreviewService?.update(reduceMotion);
     this.towerAnimationService.updateTowerAnimations(this.meshRegistry.towerMeshes, time);
     this.towerAnimationService.tickRecoilAnimations(this.meshRegistry.towerMeshes, nowSeconds);
     this.towerAnimationService.tickTubeEmits(this.meshRegistry.towerMeshes, nowSeconds);
