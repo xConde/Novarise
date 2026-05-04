@@ -158,4 +158,30 @@ export class LastTurnSummaryComponent {
   hasExpandableDetail(row: TurnEventRecord): boolean {
     return row.kills > 0 || row.damageDealt > 0;
   }
+
+  /**
+   * Diff between predicted and actual lives-lost for the row, expressed as
+   * a small badge pinned next to the lives-lost stat. Returns null when no
+   * prediction was captured (older turns, restored checkpoints, or zero
+   * predicted leaks that matched zero actual leaks).
+   *
+   *   actual > predicted → "+N" warning (player undercaught a leak risk)
+   *   actual < predicted → "−N" relief (towers handled more than expected)
+   *   actual = predicted → null (no badge — prediction was correct)
+   */
+  leakPredictionDelta(row: TurnEventRecord): { kind: 'higher' | 'lower'; text: string } | null {
+    if (row.predictedLivesLost < 0) return null;
+    const diff = row.livesLost - row.predictedLivesLost;
+    if (diff === 0) return null;
+    if (diff > 0) return { kind: 'higher', text: `(+${diff})` };
+    return { kind: 'lower', text: `(${diff})` };
+  }
+
+  /** Title attribute showing predicted-vs-actual; falls back to plain copy when no prediction. */
+  leakPredictionTitle(row: TurnEventRecord): string {
+    const noun = row.livesLost === 1 ? 'life' : 'lives';
+    const lostCopy = `${row.livesLost} ${noun} lost`;
+    if (row.predictedLivesLost < 0) return lostCopy;
+    return `${lostCopy} (predicted ${row.predictedLivesLost})`;
+  }
 }

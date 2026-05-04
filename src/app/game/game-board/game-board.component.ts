@@ -1106,6 +1106,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Begin tracking turn in history service BEFORE resolution
       this.turnHistoryService.beginTurn(this.currentTurnNumber);
+      this.turnHistoryService.recordPredictedLivesLost(this.projectedLivesLostNextTurn);
 
       this.waveCombat.endTurn();
 
@@ -1489,18 +1490,35 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    * over-warn rather than silently miss leaks.
    */
   get projectedLeaksNextTurn(): number {
-    const currentTurn = this.combatLoopService.getTurnNumber();
     let count = 0;
+    this.forEachProjectedLeaker(() => { count++; });
+    return count;
+  }
+
+  /**
+   * Total `leakDamage` summed across enemies projected to reach the exit on
+   * the next turn — i.e., predicted lives lost. Captured in TurnHistoryService
+   * before each endTurn() resolution so the prediction can be compared against
+   * the actual outcome in the last-turn-summary panel.
+   */
+  get projectedLivesLostNextTurn(): number {
+    let total = 0;
+    this.forEachProjectedLeaker(enemy => { total += enemy.leakDamage; });
+    return total;
+  }
+
+  /** Iterates active enemies projected to leak on the next turn's resolution. */
+  private forEachProjectedLeaker(visit: (enemy: import('./models/enemy.model').Enemy) => void): void {
+    const currentTurn = this.combatLoopService.getTurnNumber();
     for (const enemy of this.enemyService.getEnemies().values()) {
       if (enemy.dying) continue;
       const veinseekerBoosted = enemy.type === EnemyType.VEINSEEKER &&
         this.pathMutationService.wasMutatedInLastTurns(currentTurn, VEINSEEKER_SPEED_BOOST_WINDOW);
       const slow = this.statusEffectService.getSlowTileReduction(enemy.id);
       if (this.forwardSimulationService.willLeakWithin(enemy, 1, slow, 0, veinseekerBoosted)) {
-        count++;
+        visit(enemy);
       }
     }
-    return count;
   }
 
   toggleAllRanges(): void {
