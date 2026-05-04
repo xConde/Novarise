@@ -589,9 +589,8 @@ export class TowerCombatService {
             if (stats.statusEffect) {
               this.statusEffectService.apply(enemy.id, stats.statusEffect, turnNumber);
             }
-            // TODO: Sprint N+1 — aggregate per-enemy-per-turn before spawning to avoid popup flood
             if (result.damageDealt > 0 || result.shieldHit) {
-              this.damagePopupService?.spawn(result.damageDealt, enemy.position, scene, result.shieldHit);
+              this.damagePopupService?.accumulate(enemy.id, result.damageDealt, enemy.position, scene, result.shieldHit);
             }
           }
           result.spawnedEnemies.forEach(mini => {
@@ -637,9 +636,8 @@ export class TowerCombatService {
               if (stats.statusEffect) {
                 this.statusEffectService.apply(enemy.id, stats.statusEffect, turnNumber);
               }
-              // TODO: Sprint N+1 — aggregate per-enemy-per-turn before spawning to avoid popup flood
               if (result.damageDealt > 0 || result.shieldHit) {
-                this.damagePopupService?.spawn(result.damageDealt, enemy.position, scene, result.shieldHit);
+                this.damagePopupService?.accumulate(enemy.id, result.damageDealt, enemy.position, scene, result.shieldHit);
               }
             }
             result.spawnedEnemies.forEach(mini => {
@@ -669,9 +667,8 @@ export class TowerCombatService {
           if (stats.statusEffect) {
             this.statusEffectService.apply(target.id, stats.statusEffect, turnNumber);
           }
-          // TODO: Sprint N+1 — aggregate per-enemy-per-turn before spawning to avoid popup flood
           if (result.damageDealt > 0 || result.shieldHit) {
-            this.damagePopupService?.spawn(result.damageDealt, target.position, scene, result.shieldHit);
+            this.damagePopupService?.accumulate(target.id, result.damageDealt, target.position, scene, result.shieldHit);
           }
         }
         result.spawnedEnemies.forEach(mini => {
@@ -894,9 +891,8 @@ export class TowerCombatService {
             if (zone.statusEffect) {
               this.statusEffectService.apply(enemy.id, zone.statusEffect, turnNumber);
             }
-            // TODO: Sprint N+1 — aggregate per-enemy-per-turn before spawning to avoid popup flood
             if (result.damageDealt > 0 || result.shieldHit) {
-              this.damagePopupService?.spawn(result.damageDealt, enemy.position, scene, result.shieldHit);
+              this.damagePopupService?.accumulate(enemy.id, result.damageDealt, enemy.position, scene, result.shieldHit);
             }
           }
           result.spawnedEnemies.forEach(mini => {

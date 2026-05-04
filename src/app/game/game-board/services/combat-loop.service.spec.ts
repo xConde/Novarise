@@ -19,6 +19,7 @@ import { createRelicServiceSpy, createCardEffectServiceSpy } from '../testing';
 import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
+import { DamagePopupService } from './damage-popup.service';
 
 import { GamePhase, INITIAL_GAME_STATE, DifficultyLevel } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
@@ -1508,6 +1509,38 @@ describe('CombatLoopService', () => {
       service.resolveTurn(scene);
       service.resolveTurn(scene);
       expect(elevationSpy.tickTurn).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('DamagePopupService flush integration', () => {
+    let popupSpy: jasmine.SpyObj<DamagePopupService>;
+
+    beforeEach(() => {
+      popupSpy = jasmine.createSpyObj<DamagePopupService>('DamagePopupService', [
+        'spawn', 'accumulate', 'flush', 'flushOne', 'update', 'cleanup', 'clearAccumulators',
+      ]);
+      (service as unknown as { damagePopupService: DamagePopupService }).damagePopupService = popupSpy;
+    });
+
+    it('calls flush(scene) once at end of resolveTurn', () => {
+      service.resolveTurn(scene);
+      expect(popupSpy.flush).toHaveBeenCalledOnceWith(scene);
+    });
+
+    it('calls flushOne before processKill for tower kills', () => {
+      const enemy = makeEnemy({ id: 'e-kill', value: 5 });
+      const enemies = new Map([['e-kill', enemy]]);
+      enemySpy.getEnemies.and.returnValue(enemies);
+      combatSpy.fireTurn.and.returnValue({
+        killed: [{ id: 'e-kill', damage: 10, towerType: TowerType.BASIC, towerLevel: 1 }],
+        fired: [TowerType.BASIC],
+        hitCount: 1,
+        damageDealt: 10,
+      });
+
+      service.resolveTurn(scene);
+
+      expect(popupSpy.flushOne).toHaveBeenCalledWith('e-kill', scene);
     });
   });
 });

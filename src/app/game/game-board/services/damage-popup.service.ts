@@ -8,9 +8,19 @@ interface DamagePopup {
   age: number;
 }
 
+/** Accumulated non-lethal hits for one enemy within the current turn. */
+interface PopupAccumulator {
+  total: number;
+  lastPosition: { x: number; y: number; z: number };
+  lastShieldHit: boolean;
+  lastSource: DamagePopupSource;
+  scene: THREE.Scene;
+}
+
 @Injectable()
 export class DamagePopupService {
   private popups: DamagePopup[] = [];
+  private accumulators = new Map<string, PopupAccumulator>();
 
   constructor(
     @Optional() private readonly spritePool?: TextSpritePoolService,
@@ -44,6 +54,74 @@ export class DamagePopupService {
     sprite.position.set(position.x + jitterX, position.y + DAMAGE_POPUP_CONFIG.spawnHeightOffset, position.z);
     scene.add(sprite);
     this.popups.push({ sprite, age: 0 });
+  }
+
+  /**
+   * Accumulate a non-lethal hit for `enemyId`. No sprite is spawned immediately.
+   * Call `flush` at end-of-turn (or `flushOne` on kill) to materialise the popup.
+   *
+   * Zero-damage, non-shield hits are no-ops (pure miss with no visual value).
+   */
+  accumulate(
+    enemyId: string,
+    damage: number,
+    position: { x: number; y: number; z: number },
+    scene: THREE.Scene,
+    isShieldHit = false,
+    source: DamagePopupSource = 'tower',
+  ): void {
+    if (damage === 0 && !isShieldHit) return;
+
+    const existing = this.accumulators.get(enemyId);
+    if (existing) {
+      existing.total += damage;
+      existing.lastPosition = position;
+      existing.lastShieldHit = isShieldHit;
+      existing.lastSource = source;
+      existing.scene = scene;
+    } else {
+      this.accumulators.set(enemyId, {
+        total: damage,
+        lastPosition: position,
+        lastShieldHit: isShieldHit,
+        lastSource: source,
+        scene,
+      });
+    }
+  }
+
+  /**
+   * Flush a single enemy's accumulator immediately (mid-stream killing-blow flush).
+   * Spawns one popup for the accumulated total, removes the entry, and returns
+   * the total that was flushed (0 when no entry existed — safe no-op).
+   */
+  flushOne(enemyId: string, scene: THREE.Scene): number {
+    const entry = this.accumulators.get(enemyId);
+    if (!entry) return 0;
+    this.accumulators.delete(enemyId);
+    this.spawnFromAccumulator(entry, scene);
+    return entry.total;
+  }
+
+  /**
+   * Flush all remaining accumulators at end-of-turn. Spawns one popup per
+   * accumulated entry and clears the map.
+   */
+  flush(scene: THREE.Scene): void {
+    for (const entry of this.accumulators.values()) {
+      this.spawnFromAccumulator(entry, scene);
+    }
+    this.accumulators.clear();
+  }
+
+  /** Clear accumulators without spawning — used at encounter end / cleanup. */
+  clearAccumulators(): void {
+    this.accumulators.clear();
+  }
+
+  /** Spawn one popup from an accumulator entry using the stored scene reference. */
+  private spawnFromAccumulator(entry: PopupAccumulator, scene: THREE.Scene): void {
+    this.spawn(entry.total, entry.lastPosition, scene, entry.lastShieldHit, entry.lastSource);
   }
 
   // Shield > source-specific color > critical/normal magnitude tier.
@@ -101,6 +179,7 @@ export class DamagePopupService {
       this.releasePopup(popup);
     }
     this.popups = [];
+    this.clearAccumulators();
   }
 
   get popupCount(): number {

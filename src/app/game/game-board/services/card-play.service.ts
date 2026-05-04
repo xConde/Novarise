@@ -492,9 +492,8 @@ export class CardPlayService {
           const damage = Math.floor(enemy.maxHealth * pct);
           if (damage > 0) {
             const dmgResult = this.enemyService.damageEnemy(enemy.id, damage);
-            // TODO: Sprint N+1 — aggregate per-enemy-per-turn before spawning to avoid popup flood
             if (!dmgResult.killed && (dmgResult.damageDealt > 0 || dmgResult.shieldHit)) {
-              this.damagePopupService?.spawn(dmgResult.damageDealt, enemy.position, this.sceneService.getScene(), dmgResult.shieldHit);
+              this.damagePopupService?.accumulate(enemy.id, dmgResult.damageDealt, enemy.position, this.sceneService.getScene(), dmgResult.shieldHit);
             }
           }
         }
@@ -619,9 +618,8 @@ export class CardPlayService {
               !enemy.dying
             ) {
               const dmgResult = this.enemyService.damageEnemy(enemy.id, totalDamage);
-              // TODO: Sprint N+1 — aggregate per-enemy-per-turn before spawning to avoid popup flood
               if (!dmgResult.killed && (dmgResult.damageDealt > 0 || dmgResult.shieldHit)) {
-                this.damagePopupService?.spawn(dmgResult.damageDealt, enemy.position, this.sceneService.getScene(), dmgResult.shieldHit);
+                this.damagePopupService?.accumulate(enemy.id, dmgResult.damageDealt, enemy.position, this.sceneService.getScene(), dmgResult.shieldHit);
               }
             }
           });

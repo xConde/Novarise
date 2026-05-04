@@ -30,6 +30,7 @@ import { ElevationService } from './elevation.service';
 import { TowerGraphService } from './tower-graph.service';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { RELIC_EFFECT_CONFIG } from '../../../run/constants/run.constants';
+import { DamagePopupService } from './damage-popup.service';
 
 /**
  * Owns the turn-based combat resolution for the COMBAT phase.
@@ -83,6 +84,8 @@ export class CombatLoopService {
     private elevationService: ElevationService,
     // @Optional() — absent in pre-Conduit test beds; tickTurn becomes a no-op.
     @Optional() private towerGraphService?: TowerGraphService,
+    // @Optional() — absent in pre-aggregation test beds; flush becomes a no-op.
+    @Optional() private damagePopupService?: DamagePopupService,
   ) {}
 
   /** Phase 4: current turn number, exposed for UI bindings. */
@@ -212,8 +215,11 @@ export class CombatLoopService {
     frameHitCount += fireResult.hitCount;
     frameDamageDealt += fireResult.damageDealt;
 
-    // 4. Process tower kills — gold award, stat recording, run events
+    // 4. Process tower kills — gold award, stat recording, run events.
+    // flushOne drains any accumulated non-lethal hits for the dying enemy
+    // so the kill popup fires cleanly after the damage total is visible.
     for (const killInfo of fireResult.killed) {
+      this.damagePopupService?.flushOne(killInfo.id, scene);
       this.processKill(killInfo, cardGoldMult);
       this.accumulateKillByTower(killInfo.towerType, killInfo.towerLevel, frameKillsByTower);
     }
@@ -222,6 +228,7 @@ export class CombatLoopService {
     const mortarResult = this.towerCombatService.tickMortarZonesForTurn(scene, this.turnNumber);
     frameDamageDealt += mortarResult.damageDealt;
     for (const killInfo of mortarResult.kills) {
+      this.damagePopupService?.flushOne(killInfo.id, scene);
       this.processKill(killInfo, cardGoldMult);
       this.accumulateKillByTower(killInfo.towerType, killInfo.towerLevel, frameKillsByTower);
     }
@@ -231,6 +238,7 @@ export class CombatLoopService {
     // frameDamageDealt (which reflects "offensive pressure from towers").
     const dotKills = this.statusEffectService.tickTurn(this.turnNumber);
     for (const killInfo of dotKills) {
+      this.damagePopupService?.flushOne(killInfo.id, scene);
       this.processKill(killInfo, cardGoldMult);
       this.accumulateKillByTower(killInfo.towerType, killInfo.towerLevel, frameKillsByTower);
     }
@@ -362,6 +370,10 @@ export class CombatLoopService {
     // after play." Ticking at top of resolveTurn would expire duration=1
     // modifiers before fireTurn and never fire them.
     this.cardEffectService.tickTurn();
+
+    // Flush remaining per-enemy damage accumulators — one popup per enemy for
+    // all non-lethal hits this turn. Kill entries were already flushed above.
+    this.damagePopupService?.flush(scene);
 
     return {
       kills: [...this.frameKills],

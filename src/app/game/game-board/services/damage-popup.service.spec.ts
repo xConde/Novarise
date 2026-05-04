@@ -158,5 +158,130 @@ describe('DamagePopupService', () => {
       service.cleanup();
       expect(service.popupCount).toBe(0);
     });
+
+    it('should clear accumulators on cleanup', () => {
+      service.accumulate('e1', 10, pos, scene);
+      service.cleanup(scene);
+      // After cleanup, flush should produce no popups
+      service.flush(scene);
+      expect(service.popupCount).toBe(0);
+    });
+  });
+
+  describe('accumulate', () => {
+    it('does not spawn a sprite immediately', () => {
+      const before = scene.children.length;
+      service.accumulate('e1', 25, pos, scene);
+      expect(scene.children.length).toBe(before);
+      expect(service.popupCount).toBe(0);
+    });
+
+    it('is a no-op when damage=0 and isShieldHit=false', () => {
+      service.accumulate('e1', 0, pos, scene, false);
+      service.flush(scene);
+      expect(service.popupCount).toBe(0);
+    });
+
+    it('accumulates when damage=0 but isShieldHit=true', () => {
+      service.accumulate('e1', 0, pos, scene, true);
+      service.flush(scene);
+      expect(service.popupCount).toBe(1);
+    });
+
+    it('sums multiple hits on the same enemy', () => {
+      service.accumulate('e1', 10, pos, scene);
+      service.accumulate('e1', 15, pos, scene);
+      service.accumulate('e1', 5, pos, scene);
+      // After flush, one popup should exist
+      service.flush(scene);
+      expect(service.popupCount).toBe(1);
+    });
+
+    it('last-write-wins: uses the last recorded source', () => {
+      service.accumulate('e1', 10, pos, scene, false, 'tower');
+      service.accumulate('e1', 5, pos, scene, false, 'burn');
+      // Only one popup spawned — no error, last source used
+      service.flush(scene);
+      expect(service.popupCount).toBe(1);
+    });
+
+    it('last-write-wins: uses the last recorded shieldHit flag', () => {
+      service.accumulate('e1', 10, pos, scene, false);
+      service.accumulate('e1', 0, pos, scene, true);
+      service.flush(scene);
+      expect(service.popupCount).toBe(1);
+    });
+
+    it('last-write-wins: uses the last recorded position', () => {
+      const pos2 = { x: 99, y: 1, z: 99 };
+      service.accumulate('e1', 10, pos, scene);
+      service.accumulate('e1', 5, pos2, scene);
+      service.flush(scene);
+      const sprite = scene.children[scene.children.length - 1] as THREE.Sprite;
+      expect(sprite.position.z).toBe(pos2.z);
+    });
+  });
+
+  describe('flush', () => {
+    it('spawns one popup per accumulator entry', () => {
+      service.accumulate('e1', 10, pos, scene);
+      service.accumulate('e2', 20, pos, scene);
+      service.accumulate('e3', 5, pos, scene);
+      service.flush(scene);
+      expect(service.popupCount).toBe(3);
+    });
+
+    it('clears the accumulator after flush', () => {
+      service.accumulate('e1', 10, pos, scene);
+      service.flush(scene);
+      const countAfterFirst = service.popupCount;
+      // Second flush should produce nothing new
+      service.flush(scene);
+      expect(service.popupCount).toBe(countAfterFirst); // no new popups
+    });
+
+    it('is a no-op when there are no accumulators', () => {
+      service.flush(scene);
+      expect(service.popupCount).toBe(0);
+    });
+  });
+
+  describe('flushOne', () => {
+    it('spawns one popup and removes only that entry', () => {
+      service.accumulate('e1', 10, pos, scene);
+      service.accumulate('e2', 20, pos, scene);
+      const total = service.flushOne('e1', scene);
+      expect(total).toBe(10);
+      expect(service.popupCount).toBe(1); // e1 flushed
+      // e2 should still be pending
+      service.flush(scene);
+      expect(service.popupCount).toBe(2); // e1 + e2 now both spawned
+    });
+
+    it('returns 0 and is safe when enemyId is not found', () => {
+      const total = service.flushOne('nonexistent', scene);
+      expect(total).toBe(0);
+      expect(service.popupCount).toBe(0);
+    });
+
+    it('only removes the flushed entry, leaving others intact', () => {
+      service.accumulate('e1', 5, pos, scene);
+      service.accumulate('e2', 15, pos, scene);
+      service.accumulate('e3', 25, pos, scene);
+      service.flushOne('e2', scene);
+      expect(service.popupCount).toBe(1); // e2 spawned
+      service.flush(scene);
+      expect(service.popupCount).toBe(3); // e1 + e2 + e3
+    });
+  });
+
+  describe('clearAccumulators', () => {
+    it('clears all accumulators without spawning popups', () => {
+      service.accumulate('e1', 10, pos, scene);
+      service.accumulate('e2', 20, pos, scene);
+      service.clearAccumulators();
+      service.flush(scene);
+      expect(service.popupCount).toBe(0);
+    });
   });
 });

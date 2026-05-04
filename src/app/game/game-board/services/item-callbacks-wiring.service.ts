@@ -49,9 +49,8 @@ export class ItemCallbacksWiringService {
         const scene = this.sceneService?.getScene();
         for (const enemy of living) {
           const dmgResult = this.enemyService.damageEnemy(enemy.id, damage);
-          // TODO: Sprint N+1 — aggregate per-enemy-per-turn before spawning to avoid popup flood
           if (scene && !dmgResult.killed && (dmgResult.damageDealt > 0 || dmgResult.shieldHit)) {
-            this.damagePopupService?.spawn(dmgResult.damageDealt, enemy.position, scene, dmgResult.shieldHit);
+            this.damagePopupService?.accumulate(enemy.id, dmgResult.damageDealt, enemy.position, scene, dmgResult.shieldHit);
           }
         }
         // Dead enemies are removed by the normal render loop's dying-animation

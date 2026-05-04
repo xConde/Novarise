@@ -100,9 +100,8 @@ export class ChainLightningService {
         if (stats.statusEffect) {
           this.statusEffectService.apply(currentTarget.id, stats.statusEffect, turnNumber);
         }
-        // TODO: Sprint N+1 — aggregate per-enemy-per-turn before spawning to avoid popup flood
         if (chainResult.damageDealt > 0 || chainResult.shieldHit) {
-          this.damagePopupService?.spawn(chainResult.damageDealt, currentTarget.position, scene, chainResult.shieldHit);
+          this.damagePopupService?.accumulate(currentTarget.id, chainResult.damageDealt, currentTarget.position, scene, chainResult.shieldHit);
         }
       }
       // Mini-swarm meshes from chain kills are added to scene here

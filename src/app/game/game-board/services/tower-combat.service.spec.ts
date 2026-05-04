@@ -5521,7 +5521,7 @@ describe('TowerCombatService non-lethal popup wiring', () => {
 
     service = TestBed.inject(TowerCombatService);
     mockScene = new THREE.Scene();
-    damagePopupSpy = jasmine.createSpyObj<DamagePopupService>('DamagePopupService', ['spawn', 'update', 'cleanup']);
+    damagePopupSpy = jasmine.createSpyObj<DamagePopupService>('DamagePopupService', ['spawn', 'accumulate', 'flush', 'flushOne', 'update', 'cleanup']);
     (service as unknown as { damagePopupService: DamagePopupService }).damagePopupService = damagePopupSpy;
   });
 
@@ -5529,7 +5529,7 @@ describe('TowerCombatService non-lethal popup wiring', () => {
     mockScene.clear();
   });
 
-  it('spawns a popup when a BASIC tower hits but does not kill an enemy', () => {
+  it('accumulates a popup when a BASIC tower hits but does not kill an enemy', () => {
     service.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group());
     // High-health enemy — guaranteed non-lethal
     const enemy = makeEnemy('e1', 10000);
@@ -5537,14 +5537,15 @@ describe('TowerCombatService non-lethal popup wiring', () => {
 
     service.fireTurn(mockScene, 1);
 
-    expect(damagePopupSpy.spawn).toHaveBeenCalled();
-    const [dmg, pos, , isShield] = damagePopupSpy.spawn.calls.mostRecent().args;
+    expect(damagePopupSpy.accumulate).toHaveBeenCalled();
+    const [enemyId, dmg, pos, , isShield] = damagePopupSpy.accumulate.calls.mostRecent().args;
+    expect(enemyId).toBe('e1');
     expect(dmg).toBeGreaterThan(0);
     expect(pos).toEqual(jasmine.objectContaining({ x: jasmine.any(Number) }));
     expect(isShield).toBe(false);
   });
 
-  it('does NOT spawn a popup when the hit kills the enemy (kills go through game-render kill path)', () => {
+  it('does NOT accumulate a popup when the hit kills the enemy (kills go through game-render kill path)', () => {
     service.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group());
     // Exactly-1-hp enemy — one hit kills
     const enemy = makeEnemy('e1', 1);
@@ -5552,10 +5553,10 @@ describe('TowerCombatService non-lethal popup wiring', () => {
 
     service.fireTurn(mockScene, 1);
 
-    expect(damagePopupSpy.spawn).not.toHaveBeenCalled();
+    expect(damagePopupSpy.accumulate).not.toHaveBeenCalled();
   });
 
-  it('spawns a shield popup when hit is fully shield-absorbed (damageDealt=0, shieldHit=true)', () => {
+  it('accumulates a shield popup when hit is fully shield-absorbed (damageDealt=0, shieldHit=true)', () => {
     enemyServiceSpy.damageEnemy.and.returnValue({
       killed: false,
       spawnedEnemies: [],
@@ -5568,8 +5569,9 @@ describe('TowerCombatService non-lethal popup wiring', () => {
 
     service.fireTurn(mockScene, 1);
 
-    expect(damagePopupSpy.spawn).toHaveBeenCalled();
-    const [dmg, , , isShield] = damagePopupSpy.spawn.calls.mostRecent().args;
+    expect(damagePopupSpy.accumulate).toHaveBeenCalled();
+    const [enemyId, dmg, , , isShield] = damagePopupSpy.accumulate.calls.mostRecent().args;
+    expect(enemyId).toBe('e1');
     expect(dmg).toBe(0);
     expect(isShield).toBe(true);
   });
