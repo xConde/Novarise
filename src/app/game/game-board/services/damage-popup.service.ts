@@ -1,6 +1,6 @@
 import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
-import { DAMAGE_POPUP_CONFIG } from '../constants/damage-popup.constants';
+import { DAMAGE_POPUP_CONFIG, DamagePopupSource } from '../constants/damage-popup.constants';
 import { TextSpritePoolService } from './text-sprite-pool.service';
 
 interface DamagePopup {
@@ -18,28 +18,51 @@ export class DamagePopupService {
 
   /**
    * Spawn a floating damage number at the given world position.
-   * Color is determined by damage amount and whether it hit a shield.
+   * Color is determined by damage source (tower / burn / poison), then by
+   * shield-hit, then by damage magnitude. Sprite scale grows with damage
+   * up to `spriteScaleMax` so big hits visually dominate small ones.
+   *
+   * @param source Damage source — drives the color tier when not a shield hit.
+   *   Defaults to 'tower'. Status-effect DoT ticks should pass 'burn' / 'poison'
+   *   so players can distinguish ongoing-damage feedback from on-hit feedback.
    */
   spawn(
     damage: number,
     position: { x: number; y: number; z: number },
     scene: THREE.Scene,
-    isShieldHit = false
+    isShieldHit = false,
+    source: DamagePopupSource = 'tower',
   ): void {
     const label = `${Math.round(damage)}`;
-    const textColor = isShieldHit
-      ? DAMAGE_POPUP_CONFIG.shieldColor
-      : damage >= DAMAGE_POPUP_CONFIG.criticalThreshold
-        ? DAMAGE_POPUP_CONFIG.criticalColor
-        : DAMAGE_POPUP_CONFIG.normalColor;
+    const textColor = this.colorFor(damage, isShieldHit, source);
+    const scale = this.scaleFor(damage);
 
-    const sprite = this.acquireSprite(label, textColor);
+    const sprite = this.acquireSprite(label, textColor, scale);
     if (!sprite) return;
 
     const jitterX = (Math.random() - 0.5) * DAMAGE_POPUP_CONFIG.jitterRange;
     sprite.position.set(position.x + jitterX, position.y + DAMAGE_POPUP_CONFIG.spawnHeightOffset, position.z);
     scene.add(sprite);
     this.popups.push({ sprite, age: 0 });
+  }
+
+  // Shield > source-specific color > critical/normal magnitude tier.
+  private colorFor(damage: number, isShieldHit: boolean, source: DamagePopupSource): string {
+    if (isShieldHit) return DAMAGE_POPUP_CONFIG.shieldColor;
+    if (source === 'burn') return DAMAGE_POPUP_CONFIG.burnColor;
+    if (source === 'poison') return DAMAGE_POPUP_CONFIG.poisonColor;
+    return damage >= DAMAGE_POPUP_CONFIG.criticalThreshold
+      ? DAMAGE_POPUP_CONFIG.criticalColor
+      : DAMAGE_POPUP_CONFIG.normalColor;
+  }
+
+  // Linear ramp from spriteScale → spriteScaleMax, saturating at scaleSaturationDamage.
+  // Floor at the baseline so 0-damage shield-absorption popups still read.
+  private scaleFor(damage: number): number {
+    const { spriteScale, spriteScaleMax, scaleSaturationDamage } = DAMAGE_POPUP_CONFIG;
+    if (damage <= 0) return spriteScale;
+    const t = Math.min(1, damage / scaleSaturationDamage);
+    return spriteScale + (spriteScaleMax - spriteScale) * t;
   }
 
   update(deltaTime: number): void {
@@ -84,7 +107,7 @@ export class DamagePopupService {
     return this.popups.length;
   }
 
-  private acquireSprite(label: string, textColor: string): THREE.Sprite | null {
+  private acquireSprite(label: string, textColor: string, scale: number): THREE.Sprite | null {
     if (this.spritePool) {
       return this.spritePool.acquire({
         text: label,
@@ -94,11 +117,11 @@ export class DamagePopupService {
         font: `bold ${DAMAGE_POPUP_CONFIG.fontSize}px ${DAMAGE_POPUP_CONFIG.fontFamily}`,
         canvasWidth: DAMAGE_POPUP_CONFIG.canvasWidth,
         canvasHeight: DAMAGE_POPUP_CONFIG.canvasHeight,
-        scaleX: DAMAGE_POPUP_CONFIG.spriteScale,
-        scaleY: DAMAGE_POPUP_CONFIG.spriteScale / 2,
+        scaleX: scale,
+        scaleY: scale / 2,
       });
     }
-    return this.fallbackBuildSprite(label, textColor);
+    return this.fallbackBuildSprite(label, textColor, scale);
   }
 
   private releasePopup(popup: DamagePopup): void {
@@ -113,7 +136,7 @@ export class DamagePopupService {
     mat.dispose();
   }
 
-  private fallbackBuildSprite(label: string, textColor: string): THREE.Sprite | null {
+  private fallbackBuildSprite(label: string, textColor: string, scale: number): THREE.Sprite | null {
     const canvas = document.createElement('canvas');
     canvas.width = DAMAGE_POPUP_CONFIG.canvasWidth;
     canvas.height = DAMAGE_POPUP_CONFIG.canvasHeight;
@@ -136,7 +159,7 @@ export class DamagePopupService {
       depthTest: false,
     });
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(DAMAGE_POPUP_CONFIG.spriteScale, DAMAGE_POPUP_CONFIG.spriteScale / 2, 1);
+    sprite.scale.set(scale, scale / 2, 1);
     return sprite;
   }
 }

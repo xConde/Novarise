@@ -67,6 +67,47 @@ describe('DamagePopupService', () => {
       service.spawn(30, pos, scene);
       expect(service.popupCount).toBe(3);
     });
+
+    it('scales sprite up for big-damage hits (StS-style scaling)', () => {
+      service.spawn(5, pos, scene); // small hit
+      const small = scene.children[scene.children.length - 1] as THREE.Sprite;
+      const smallScale = small.scale.x;
+
+      service.spawn(DAMAGE_POPUP_CONFIG.scaleSaturationDamage, pos, scene); // saturated big hit
+      const big = scene.children[scene.children.length - 1] as THREE.Sprite;
+      const bigScale = big.scale.x;
+
+      expect(bigScale).toBeGreaterThan(smallScale);
+      expect(bigScale).toBeCloseTo(DAMAGE_POPUP_CONFIG.spriteScaleMax, 3);
+    });
+
+    it('clamps sprite scale to spriteScaleMax above saturation damage', () => {
+      service.spawn(DAMAGE_POPUP_CONFIG.scaleSaturationDamage * 5, pos, scene);
+      const sprite = scene.children[scene.children.length - 1] as THREE.Sprite;
+      expect(sprite.scale.x).toBeCloseTo(DAMAGE_POPUP_CONFIG.spriteScaleMax, 3);
+    });
+
+    it('falls back to baseline scale for non-positive damage', () => {
+      service.spawn(0, pos, scene, true); // shield-absorbed = 0 damage
+      const sprite = scene.children[scene.children.length - 1] as THREE.Sprite;
+      expect(sprite.scale.x).toBeCloseTo(DAMAGE_POPUP_CONFIG.spriteScale, 3);
+    });
+
+    it('accepts a damage source parameter for color routing', () => {
+      // Smoke test — no throw, popup created. Color is rendered into the canvas
+      // texture so we can't directly assert the hex; the fact that the spawn
+      // path completes without error and the popup is registered is sufficient.
+      service.spawn(10, pos, scene, false, 'burn');
+      service.spawn(10, pos, scene, false, 'poison');
+      service.spawn(10, pos, scene, false, 'tower');
+      expect(service.popupCount).toBe(3);
+    });
+
+    it('shield-hit override beats source-specific color', () => {
+      // No throw + popup created when isShieldHit conflicts with a DoT source.
+      service.spawn(10, pos, scene, true, 'burn');
+      expect(service.popupCount).toBe(1);
+    });
   });
 
   describe('update', () => {

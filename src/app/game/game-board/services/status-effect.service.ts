@@ -145,12 +145,25 @@ export class StatusEffectService {
             toRemoveEnemies.push(enemyId);
             break;
           }
-          // Spawn non-lethal popup if scene is available.
-          // TODO: Sprint N+1 — aggregate per-enemy-per-turn before spawning to avoid popup flood
+          // Spawn non-lethal popup with DoT-source tinting so burn/poison ticks
+          // are visually distinct from on-hit tower damage. Shield-hit override
+          // still wins inside DamagePopupService.colorFor.
+          // TODO: aggregate per-enemy-per-turn before spawning to avoid popup flood
           if ((result.damageDealt > 0 || result.shieldHit) && this.sceneService && this.damagePopupService) {
             const enemyObj = this.enemyService.getEnemies().get(enemyId);
             if (enemyObj) {
-              this.damagePopupService.spawn(result.damageDealt, enemyObj.position, this.sceneService.getScene(), result.shieldHit);
+              const source = effectType === StatusEffectType.BURN
+                ? 'burn'
+                : effectType === StatusEffectType.POISON
+                  ? 'poison'
+                  : 'tower';
+              this.damagePopupService.spawn(
+                result.damageDealt,
+                enemyObj.position,
+                this.sceneService.getScene(),
+                result.shieldHit,
+                source,
+              );
             }
           }
         }
