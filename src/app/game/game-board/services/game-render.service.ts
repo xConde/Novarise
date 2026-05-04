@@ -26,7 +26,6 @@ import { GameBoardService } from '../game-board.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { GamePhase } from '../models/game-state.model';
 import { PHYSICS_CONFIG } from '../constants/physics.constants';
-import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 import { CombatFrameResult } from '../models/combat-frame.model';
 import { AimLineService } from './aim-line.service';
 import { TowerFireZonePreviewService } from './tower-fire-zone-preview.service';
@@ -318,9 +317,11 @@ export class GameRenderService {
       }
     }
 
-    // Screen shake on life loss
-    if (result.exitCount > 0) {
-      this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
+    // Screen shake on life loss — intensity/duration scale with lives lost
+    // so HEAVY (2 leak) and BOSS (variable) hits register harder than a basic
+    // 1-life leak. Falls back to no-op when no lives were lost this frame.
+    if (result.livesLostThisFrame > 0) {
+      this.screenShakeService.triggerForLifeLoss(result.livesLostThisFrame);
     }
 
     // Per-frame visual updates (health bars, status effects, minimap)

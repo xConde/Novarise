@@ -43,8 +43,16 @@ export const STATUS_EFFECT_PRIORITY: StatusEffectType[] = [
 export const SCREEN_SHAKE_CONFIG = {
   bossHitIntensity: 0.15,
   bossHitDuration: 0.2,
+  /** Baseline shake intensity for a 1-life leak. Scales linearly per life lost. */
   lifeLossIntensity: 0.3,
   lifeLossDuration: 0.4,
+  /** Per-life additional intensity. Big leaks (HEAVY=2 leak, BOSS=variable) shake harder. */
+  lifeLossPerLifeIntensity: 0.12,
+  /** Hard ceiling so a catastrophic leak can't lock the camera. */
+  lifeLossMaxIntensity: 0.7,
+  /** Per-life additional duration so big leaks linger longer. */
+  lifeLossPerLifeDuration: 0.05,
+  lifeLossMaxDuration: 0.8,
 } as const;
 
 export const GOLD_POPUP_CONFIG = {

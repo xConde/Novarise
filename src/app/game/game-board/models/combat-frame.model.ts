@@ -72,6 +72,12 @@ export interface CombatFrameResult {
   hitCount: number;
   /** Number of enemies that reached the exit. */
   exitCount: number;
+  /**
+   * Total lives lost this frame, summed across leaked enemies' leakDamage.
+   * Differs from `exitCount` for HEAVY (2 leak) / BOSS (variable). Drives
+   * magnitude-scaled screen shake.
+   */
+  livesLostThisFrame: number;
   /** Whether any enemy leaked during this frame. */
   leaked: boolean;
   /** Whether DEFEAT was triggered (from loseLife) during this frame. */

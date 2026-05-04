@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
+import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 
 interface ShakeState {
   intensity: number;
@@ -37,6 +38,27 @@ export class ScreenShakeService {
     const originZ = this.shake?.originZ ?? 0;
 
     this.shake = { intensity, duration, remaining: duration, originX, originY, originZ };
+  }
+
+  /**
+   * Trigger a life-loss shake whose intensity and duration scale with the
+   * total lives lost on this frame. A 1-life leak hits the baseline intensity;
+   * larger leaks (HEAVY 2-leak, BOSS variable) shake progressively harder up
+   * to the configured ceiling. Floors at 0 lives = no-op.
+   */
+  triggerForLifeLoss(livesLost: number): void {
+    if (livesLost <= 0) return;
+    const cfg = SCREEN_SHAKE_CONFIG;
+    const extra = livesLost - 1;
+    const intensity = Math.min(
+      cfg.lifeLossMaxIntensity,
+      cfg.lifeLossIntensity + extra * cfg.lifeLossPerLifeIntensity,
+    );
+    const duration = Math.min(
+      cfg.lifeLossMaxDuration,
+      cfg.lifeLossDuration + extra * cfg.lifeLossPerLifeDuration,
+    );
+    this.trigger(intensity, duration);
   }
 
   /**

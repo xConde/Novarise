@@ -178,6 +178,7 @@ export class CombatLoopService {
     let frameDamageDealt = 0;
     const frameKillsByTower: Array<{ type: TowerType | 'dot'; level: number; count: number }> = [];
     let frameExitCount = 0;
+    let frameLivesLost = 0;
     let frameLeaked = false;
     let defeatTriggered = false;
     let waveCompletion: WaveCompletionEvent | null = null;
@@ -265,6 +266,7 @@ export class CombatLoopService {
       this.leakedThisWave = true;
       this.gameStatsService.recordEnemyLeaked();
       frameExitCount++;
+      frameLivesLost += leakCost;
       this.runEventBus.emit(RunEventType.ENEMY_LEAKED, {
         enemyType: leakedEnemy?.type,
         leakCost,
@@ -366,6 +368,7 @@ export class CombatLoopService {
       firedTypes: new Set(this.frameFiredTypes),
       hitCount: frameHitCount,
       exitCount: frameExitCount,
+      livesLostThisFrame: frameLivesLost,
       leaked: frameLeaked,
       defeatTriggered,
       waveCompletion,

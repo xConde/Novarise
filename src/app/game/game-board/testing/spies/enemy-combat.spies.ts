@@ -93,6 +93,7 @@ export function createCombatLoopServiceSpy(): jasmine.SpyObj<CombatLoopService> 
     firedTypes: new Set<TowerType>(),
     hitCount: 0,
     exitCount: 0,
+    livesLostThisFrame: 0,
     leaked: false,
     defeatTriggered: false,
     waveCompletion: null,
