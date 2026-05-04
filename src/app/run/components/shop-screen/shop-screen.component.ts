@@ -42,12 +42,22 @@ export class ShopScreenComponent implements OnChanges {
 
   readonly healCost = SHOP_CONFIG.healCostPerLife;
   readonly maxHealPerVisit = SHOP_CONFIG.maxHealPerVisit;
-  readonly cardRemoveCost = SHOP_CONFIG.cardRemoveCost;
+  /**
+   * Live ascension-scaled card-remove cost. Falls back to the base config
+   * value when no parent passes the input (e.g. older test beds).
+   */
+  @Input() cardRemoveCost = SHOP_CONFIG.cardRemoveCost;
   healCount = 0;
   /** True after the player has used the one card-remove slot for this shop visit. */
   cardRemoveUsed = false;
   /** Toggle between the default shop view and the card-removal picker. */
   activeAction: 'none' | 'remove' = 'none';
+  /**
+   * Name of the card that was just removed, captured for the success banner.
+   * Cleared on shop revisit (reset in ngOnChanges) so the banner doesn't
+   * persist across encounters.
+   */
+  lastRemovedCardName: string | null = null;
 
   /** Pre-computed relic definitions — avoids per-CD-cycle allocations in template. */
   resolvedItems: ResolvedShopItem[] = [];
@@ -63,6 +73,7 @@ export class ShopScreenComponent implements OnChanges {
       this.healCount = 0;
       this.cardRemoveUsed = false;
       this.activeAction = 'none';
+      this.lastRemovedCardName = null;
     }
     this.resolvedItems = this.shopItems.map((item, index) => {
       const relic = this.resolveRelicDef(item);
@@ -152,11 +163,12 @@ export class ShopScreenComponent implements OnChanges {
     this.activeAction = 'none';
   }
 
-  /** Player picked a card. Mark slot used, close picker, emit upward. */
+  /** Player picked a card. Mark slot used, close picker, capture name for the success banner, emit upward. */
   selectCardToRemove(card: CardInstance): void {
     if (this.cardRemoveUsed) return;
     this.cardRemoveUsed = true;
     this.activeAction = 'none';
+    this.lastRemovedCardName = this.getCardName(card);
     this.cardRemoved.emit(card.instanceId);
   }
 

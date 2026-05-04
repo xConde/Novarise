@@ -792,7 +792,8 @@ export class RunService {
   removeCardFromShop(instanceId: string): boolean {
     const state = this.runState;
     if (!state) return false;
-    if (state.gold < SHOP_CONFIG.cardRemoveCost) return false;
+    const cost = this.getCardRemoveCost();
+    if (state.gold < cost) return false;
 
     const allCards = this.deckService.getAllCards();
     const target = allCards.find(c => c.instanceId === instanceId);
@@ -814,11 +815,25 @@ export class RunService {
 
     this.updateState({
       ...state,
-      gold: state.gold - SHOP_CONFIG.cardRemoveCost,
+      gold: state.gold - cost,
       deckCardIds: newDeckCardIds,
     });
     this.persist();
     return true;
+  }
+
+  /**
+   * Live-scaled cost of the shop card-removal service. Applies the same
+   * SHOP_PRICE_MULTIPLIER ascension scaling that other shop items use, so
+   * removal becomes proportionally pricier at higher ascensions rather than
+   * staying fixed at the base 75g.
+   */
+  getCardRemoveCost(): number {
+    const state = this.runState;
+    if (!state) return SHOP_CONFIG.cardRemoveCost;
+    const ascEffects = getAscensionEffects(state.ascensionLevel);
+    const priceMultiplier = ascEffects.get(AscensionEffectType.SHOP_PRICE_MULTIPLIER) ?? 1;
+    return Math.round(SHOP_CONFIG.cardRemoveCost * priceMultiplier);
   }
 
   /** Resolve an event choice by index. */

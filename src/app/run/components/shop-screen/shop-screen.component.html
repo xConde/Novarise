@@ -159,8 +159,11 @@
           [class.shop-card-remove__cost--unaffordable]="!canAfford(cardRemoveCost)"
         >{{ cardRemoveCost }}g</span>
       </button>
-      <p class="shop-card-remove__hint" *ngIf="cardRemoveUsed" aria-live="polite">
-        Removal already used this visit.
+      <p class="shop-card-remove__success"
+         *ngIf="cardRemoveUsed && lastRemovedCardName"
+         aria-live="polite">
+        <span class="shop-card-remove__success-icon" aria-hidden="true">✓</span>
+        Removed <strong>{{ lastRemovedCardName }}</strong> from your deck.
       </p>
       <p class="shop-card-remove__hint" *ngIf="!cardRemoveUsed && removableCards.length === 0" aria-live="polite">
         No removable cards in your deck.

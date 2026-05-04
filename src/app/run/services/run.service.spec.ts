@@ -22,7 +22,7 @@ import { EncounterConfig } from '../models/encounter.model';
 import { RelicId, RelicDefinition, RelicRarity, RELIC_DEFINITIONS } from '../models/relic.model';
 import { CardArchetype, CardId, CardRarity } from '../models/card.model';
 import { CARD_DEFINITIONS } from '../constants/card-definitions';
-import { REWARD_CONFIG, REWARD_RARITY_WEIGHTS, createSeededRng, SeededRng } from '../constants/run.constants';
+import { REWARD_CONFIG, REWARD_RARITY_WEIGHTS, SHOP_CONFIG, createSeededRng, SeededRng } from '../constants/run.constants';
 import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
 import { ChallengeDefinition, ChallengeType } from '../data/challenges';
 import {
@@ -2304,6 +2304,50 @@ describe('RunService', () => {
       const liveCardIds = service.getDeckCards().map(c => c.cardId).slice().sort();
       const persistedSorted = service.runState!.deckCardIds.slice().sort();
       expect(persistedSorted).toEqual(liveCardIds);
+    }));
+  });
+
+  describe('getCardRemoveCost — ascension scaling', () => {
+    it('returns base SHOP_CONFIG.cardRemoveCost at ascension 0', fakeAsync(() => {
+      service.startNewRun(0);
+      expect(service.getCardRemoveCost()).toBe(SHOP_CONFIG.cardRemoveCost);
+    }));
+
+    it('scales by SHOP_PRICE_MULTIPLIER at ascension 9 (Gouged: ×1.2)', fakeAsync(() => {
+      service.startNewRun(9);
+      // Ascension 9 stacks SHOP_PRICE_MULTIPLIER 1.2; round.
+      expect(service.getCardRemoveCost()).toBe(Math.round(SHOP_CONFIG.cardRemoveCost * 1.2));
+    }));
+
+    it('falls back to base cost when no run is active', () => {
+      // Fresh service, no startNewRun() — runState is null.
+      expect(service.getCardRemoveCost()).toBe(SHOP_CONFIG.cardRemoveCost);
+    });
+
+    it('removeCardFromShop charges the scaled cost', fakeAsync(() => {
+      service.startNewRun(9);
+      const scaledCost = service.getCardRemoveCost();
+      // Stash enough gold to cover; baseline starter gold is below scaled cost.
+      service['updateState']({ ...service.runState!, gold: scaledCost + 500 });
+      const goldBefore = service.runState!.gold;
+
+      const target = service.getDeckCards().find(c => {
+        const def = CARD_DEFINITIONS[c.cardId as CardId];
+        return def?.rarity !== CardRarity.STARTER;
+      });
+      // Add a non-starter if none present.
+      if (!target) {
+        service.collectReward({ type: 'card', cardId: CardId.GOLD_RUSH });
+      }
+      const removable = service.getDeckCards().find(c => {
+        const def = CARD_DEFINITIONS[c.cardId as CardId];
+        return def?.rarity !== CardRarity.STARTER;
+      });
+      expect(removable).toBeDefined();
+
+      const result = service.removeCardFromShop(removable!.instanceId);
+      expect(result).toBeTrue();
+      expect(service.runState!.gold).toBe(goldBefore - scaledCost);
     }));
   });
 });

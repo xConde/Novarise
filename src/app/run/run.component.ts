@@ -60,6 +60,11 @@ export class RunComponent implements OnInit, OnDestroy {
 
   readonly NodeType = NodeType;
 
+  /** Live-scaled card-remove cost — recomputed via getter so ascension price multiplier flows through. */
+  get cardRemoveCost(): number {
+    return this.runService.getCardRemoveCost();
+  }
+
   constructor(
     private runService: RunService,
     private router: Router,
