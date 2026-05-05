@@ -53,6 +53,25 @@
     </div>
   </section>
 
+  <!-- Ascension modifier breakdown — only when run was at ascension > 0. -->
+  <section class="run-summary__ascension"
+           *ngIf="activeAscensionModifiers.length > 0"
+           aria-label="Active ascension modifiers">
+    <h2 class="run-summary__section-title">Ascension Modifiers</h2>
+    <ul class="run-summary__ascension-list">
+      <li
+        *ngFor="let mod of activeAscensionModifiers"
+        class="ascension-mod-entry"
+        [attr.title]="mod.description"
+        [attr.aria-label]="'A' + mod.level + ': ' + mod.label + ' — ' + mod.description"
+      >
+        <span class="ascension-mod-entry__tier">A{{ mod.level }}</span>
+        <span class="ascension-mod-entry__name">{{ mod.label }}</span>
+        <span class="ascension-mod-entry__desc">{{ mod.description }}</span>
+      </li>
+    </ul>
+  </section>
+
   <!-- Relics section -->
   <section class="run-summary__relics" *ngIf="relicDefinitions.length > 0" aria-label="Relics collected">
     <h2 class="run-summary__section-title">Relics</h2>

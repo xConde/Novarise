@@ -134,6 +134,19 @@ describe('RunSummaryComponent', () => {
     expect(component.ascensionLabel).toBe('Ascension 5');
   });
 
+  it('activeAscensionModifiers returns empty when ascensionLevel is 0', () => {
+    component.runState = makeRunState({ ascensionLevel: 0 });
+    expect(component.activeAscensionModifiers).toEqual([]);
+  });
+
+  it('activeAscensionModifiers returns A1..A_N in order when ascensionLevel > 0', () => {
+    component.runState = makeRunState({ ascensionLevel: 5 });
+    const mods = component.activeAscensionModifiers;
+    expect(mods.length).toBe(5);
+    expect(mods[0].level).toBe(1);
+    expect(mods[4].level).toBe(5);
+  });
+
   it('emits returnToMenu when return button is clicked', () => {
     let emitted = false;
     component.returnToMenu.subscribe(() => (emitted = true));

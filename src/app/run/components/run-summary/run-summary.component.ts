@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { RunState, RunStatus, EncounterResult } from '../../models/run-state.model';
 import { RelicDefinition, RELIC_DEFINITIONS, RelicId } from '../../models/relic.model';
+import { ASCENSION_LEVELS, AscensionLevel } from '../../models/ascension.model';
 
 /** Duration of a run in minutes and seconds, computed from startedAt to now. */
 const MS_PER_MINUTE = 60_000;
@@ -46,6 +47,16 @@ export class RunSummaryComponent {
     return this.runState.ascensionLevel > 0
       ? `Ascension ${this.runState.ascensionLevel}`
       : '';
+  }
+
+  /**
+   * The ascension modifier definitions active for this run, ordered A1 → A_N.
+   * Used to render the post-run breakdown so the player sees which difficulty
+   * knobs shaped (and beat) them. Empty array when ascensionLevel is 0.
+   */
+  get activeAscensionModifiers(): readonly AscensionLevel[] {
+    if (this.runState.ascensionLevel <= 0) return [];
+    return ASCENSION_LEVELS.slice(0, this.runState.ascensionLevel);
   }
 
   get runDuration(): string {
