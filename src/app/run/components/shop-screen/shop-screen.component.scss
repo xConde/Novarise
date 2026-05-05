@@ -679,3 +679,15 @@ body.reduce-motion .shop-card-remove__success {
 body.reduce-motion .shop-card-upgrade__success {
   animation: none;
 }
+
+// Defense-in-depth: honor OS-level reduce-motion preference even when the
+// user hasn't toggled the in-app setting. SettingsComponent currently
+// sets body.reduce-motion only on explicit toggle; this @media block
+// catches users who set the preference at the OS level without ever
+// opening Settings.
+@media (prefers-reduced-motion: reduce) {
+  .shop-card-remove__success,
+  .shop-card-upgrade__success {
+    animation: none;
+  }
+}
