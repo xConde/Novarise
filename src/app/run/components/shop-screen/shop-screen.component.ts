@@ -47,13 +47,15 @@ export class ShopScreenComponent implements OnChanges {
   /**
    * Live ascension-scaled card-remove cost. Falls back to the base config
    * value when no parent passes the input (e.g. older test beds).
+   * Explicit `number` type — SHOP_CONFIG is `as const` so the default would
+   * otherwise narrow to its literal value and break parent assignments.
    */
-  @Input() cardRemoveCost = SHOP_CONFIG.cardRemoveCost;
+  @Input() cardRemoveCost: number = SHOP_CONFIG.cardRemoveCost;
   /**
    * Live ascension-scaled card-upgrade cost. Falls back to the base config
    * value when no parent passes the input (e.g. older test beds).
    */
-  @Input() cardUpgradeCost = SHOP_CONFIG.cardUpgradeCost;
+  @Input() cardUpgradeCost: number = SHOP_CONFIG.cardUpgradeCost;
   healCount = 0;
   /** True after the player has used the one card-remove slot for this shop visit. */
   cardRemoveUsed = false;
