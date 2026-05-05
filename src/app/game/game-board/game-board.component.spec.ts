@@ -1320,6 +1320,34 @@ describe('GameBoardComponent', () => {
     });
   });
 
+  describe('activeAscensionModifiers', () => {
+    it('returns empty array when no run is active', () => {
+      // No runService.startNewRun called in this fixture path → runState is null.
+      expect(component.currentAscensionLevel).toBe(0);
+      expect(component.activeAscensionModifiers).toEqual([]);
+    });
+
+    it('returns levels A1..A_N when run is at ascension N', () => {
+      const runService = fixture.debugElement.injector.get(RunService);
+      const fakeState = { ascensionLevel: 5 } as Partial<import('../../run/models/run-state.model').RunState>;
+      Object.defineProperty(runService, 'runState', { get: () => fakeState, configurable: true });
+
+      expect(component.currentAscensionLevel).toBe(5);
+      expect(component.activeAscensionModifiers.length).toBe(5);
+      // First modifier is A1 (Hardened); last is A5 (Fortified)
+      expect(component.activeAscensionModifiers[0].level).toBe(1);
+      expect(component.activeAscensionModifiers[4].level).toBe(5);
+    });
+
+    it('returns empty array when ascensionLevel is 0', () => {
+      const runService = fixture.debugElement.injector.get(RunService);
+      const fakeState = { ascensionLevel: 0 } as Partial<import('../../run/models/run-state.model').RunState>;
+      Object.defineProperty(runService, 'runState', { get: () => fakeState, configurable: true });
+
+      expect(component.activeAscensionModifiers).toEqual([]);
+    });
+  });
+
   describe('projectedLeaksNextTurn', () => {
     function makeEnemyAtPathIndex(id: string, type: EnemyType, pathLen: number, pathIndex: number) {
       const path = Array.from({ length: pathLen }, (_, i) => ({ x: i, y: 0, f: 0, g: 0, h: 0 }));

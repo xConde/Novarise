@@ -36,6 +36,20 @@
       </button>
     </div>
 
+    <!-- Desktop-only: active ascension modifier chips (only visible when ascension > 0) -->
+    <div class="hud-ascension-peek"
+         *ngIf="activeAscensionModifiers.length > 0"
+         [attr.aria-label]="'Ascension ' + currentAscensionLevel + ': ' + activeAscensionModifiers.length + ' modifier' + (activeAscensionModifiers.length === 1 ? '' : 's') + ' active'">
+      <span class="hud-ascension-peek__badge" aria-hidden="true">A{{ currentAscensionLevel }}</span>
+      <button *ngFor="let mod of activeAscensionModifiers"
+              type="button"
+              class="hud-ascension-peek__item"
+              [attr.title]="mod.label + ' — ' + mod.description"
+              [attr.aria-label]="mod.label + ': ' + mod.description">
+        {{ mod.label.charAt(0) }}
+      </button>
+    </div>
+
     <!-- Desktop-only: items peek — click to open pause menu -->
     <div class="hud-items-peek"
          *ngIf="itemInventoryEntries.length > 0"

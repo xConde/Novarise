@@ -74,6 +74,7 @@ import { getActiveTowerEffect } from '../../run/constants/card-definitions';
 import { WaveCombatFacadeService } from './services/wave-combat-facade.service';
 import { TutorialFacadeService } from './services/tutorial-facade.service';
 import { AscensionModifierService } from './services/ascension-modifier.service';
+import { ASCENSION_LEVELS, AscensionLevel } from '../../run/models/ascension.model';
 import { TurnHistoryService, TurnEventRecord } from './services/turn-history.service';
 import { TurnBannerService } from './services/turn-banner.service';
 import { PathBlockedWarningService } from './services/path-blocked-warning.service';
@@ -1082,6 +1083,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         return def ? { id, name: def.name, description: def.description } : null;
       })
       .filter((r): r is { id: string; name: string; description: string } => r !== null);
+  }
+
+  /** Current ascension level for the active run, or 0 when no run is active. */
+  get currentAscensionLevel(): number {
+    return this.runService.runState?.ascensionLevel ?? 0;
+  }
+
+  /**
+   * All ascension level definitions active on the current run, in order from
+   * A1 → A_N. Drives the in-play HUD chip cluster so players can see at a
+   * glance which difficulty modifiers are shaping the encounter without
+   * opening the pause menu.
+   */
+  get activeAscensionModifiers(): readonly AscensionLevel[] {
+    const level = this.currentAscensionLevel;
+    if (level <= 0) return [];
+    return ASCENSION_LEVELS.slice(0, level);
   }
 
   /**
