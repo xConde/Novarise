@@ -31,6 +31,8 @@ import { TowerGraphService } from './tower-graph.service';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { CONDUIT_CONFIG } from '../constants/conduit.constants';
 import { RELIC_EFFECT_CONFIG } from '../../../run/constants/run.constants';
+import { ProjectileVisualService } from './projectile-visual.service';
+import { PROJECTILE_HITSCAN_CONFIG } from '../constants/projectile.constants';
 
 /** M3 S4: turn-based mortar DoT zone. Replaces the legacy real-time path for fireTurn. */
 interface TurnMortarZone {
@@ -176,6 +178,9 @@ export class TowerCombatService {
     // @Optional() — not provided in test beds that predate non-lethal popup wiring.
     // Absent → popups are silently skipped; full GameModule always wires it.
     @Optional() private damagePopupService?: DamagePopupService,
+    // @Optional() — projectile line-flash visuals. Absent in test beds that
+    // do not register ProjectileVisualService. Full GameModule always wires it.
+    @Optional() private projectileVisualService?: ProjectileVisualService,
   ) {}
 
   /**
@@ -674,6 +679,29 @@ export class TowerCombatService {
         result.spawnedEnemies.forEach(mini => {
           if (mini.mesh) scene.add(mini.mesh);
         });
+
+        // HITSCAN visual — SNIPER only (Sprint 1).  Spawned AFTER damage so
+        // the cosmetic never gates the logic path.  Other tower types get
+        // their own idioms in subsequent sprints.
+        if (tower.type === TowerType.SNIPER && this.projectileVisualService) {
+          const { x: twx, z: twz } = this.getTowerWorldPos(tower);
+          const from = new THREE.Vector3(
+            twx,
+            PROJECTILE_HITSCAN_CONFIG.yOffsetTower,
+            twz,
+          );
+          const to = new THREE.Vector3(
+            target.position.x,
+            PROJECTILE_HITSCAN_CONFIG.yOffsetEnemy,
+            target.position.z,
+          );
+          this.projectileVisualService.fireHitscan(
+            from,
+            to,
+            TOWER_CONFIGS[TowerType.SNIPER].color,
+            scene,
+          );
+        }
       }
     }
 

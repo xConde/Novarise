@@ -31,6 +31,7 @@ import { AimLineService } from './aim-line.service';
 import { TowerFireZonePreviewService } from './tower-fire-zone-preview.service';
 import { CardPlayService } from './card-play.service';
 import { EnemyHealthService } from './enemy-health.service';
+import { ProjectileVisualService } from './projectile-visual.service';
 import type { ChallengeDefinition } from '../../../run/data/challenges';
 
 /**
@@ -100,6 +101,9 @@ export class GameRenderService {
     // @Optional() — predicted-damage overlay. Absent from test beds that
     // don't register EnemyHealthService; update degrades to a no-op.
     @Optional() private enemyHealthService?: EnemyHealthService,
+    // @Optional() — projectile line-flash visuals. Absent from test beds
+    // that don't register ProjectileVisualService; update() degrades to a no-op.
+    @Optional() private projectileVisualService?: ProjectileVisualService,
   ) {}
 
   /** Initialize the render service. Call in ngAfterViewInit. */
@@ -357,6 +361,7 @@ export class GameRenderService {
     this.enemyService.updateStatusVisuals(activeEffects);
     this.enemyService.updateStatusEffectParticles(deltaTime, this.sceneService.getScene(), activeEffects);
     this.enemyService.updateEnemyAnimations(deltaTime);
+    this.projectileVisualService?.update(deltaTime);
     this.enemyIntentService?.update(this.cardPlayService?.hasPendingCard() ?? false);
     this.updateMinimap(time);
   }
