@@ -80,6 +80,24 @@ export class LandingComponent implements OnInit {
     return this.runPersistence.isAscensionMastered();
   }
 
+  /**
+   * Highest ascension level the player has beaten. maxAscension is the
+   * highest-unlocked level (= beaten + 1), so this returns maxAscension - 1
+   * floored at 0. Returns 0 when no ascension has been beaten yet.
+   */
+  get highestBeatenAscension(): number {
+    return Math.max(0, this.maxAscension - 1);
+  }
+
+  /**
+   * True when a "Best: A_N" badge should display on the selector — not
+   * when the player has mastered (A20 ✓ pill takes precedence) and not
+   * when they haven't beaten anything past A0 yet.
+   */
+  get showBeatenBadge(): boolean {
+    return !this.isAscensionMastered && this.highestBeatenAscension >= 1;
+  }
+
   /** Start a brand-new run. Clears any saved run first — confirmation UI
    *  lives in a hardening phase; for now the button label swaps to
    *  "Start New Run" when a saved run exists so the destructive action is

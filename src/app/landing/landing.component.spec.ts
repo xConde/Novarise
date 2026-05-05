@@ -211,6 +211,36 @@ describe('LandingComponent', () => {
     });
   });
 
+  describe('highest-beaten badge', () => {
+    it('highestBeatenAscension is maxAscension - 1 when maxAscension > 0', () => {
+      component.maxAscension = 5;
+      expect(component.highestBeatenAscension).toBe(4);
+    });
+
+    it('highestBeatenAscension floors at 0', () => {
+      component.maxAscension = 0;
+      expect(component.highestBeatenAscension).toBe(0);
+    });
+
+    it('showBeatenBadge is false when no run beaten yet', () => {
+      component.maxAscension = 0;
+      runPersistence.isAscensionMastered.and.returnValue(false);
+      expect(component.showBeatenBadge).toBeFalse();
+    });
+
+    it('showBeatenBadge is false when mastered (A20 pill takes precedence)', () => {
+      component.maxAscension = 20;
+      runPersistence.isAscensionMastered.and.returnValue(true);
+      expect(component.showBeatenBadge).toBeFalse();
+    });
+
+    it('showBeatenBadge is true between A1 and A19', () => {
+      component.maxAscension = 5;
+      runPersistence.isAscensionMastered.and.returnValue(false);
+      expect(component.showBeatenBadge).toBeTrue();
+    });
+  });
+
   describe('isAscensionMastered', () => {
     it('delegates to runPersistence.isAscensionMastered()', () => {
       runPersistence.isAscensionMastered.and.returnValue(true);

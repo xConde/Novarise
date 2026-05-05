@@ -48,6 +48,11 @@
         </li>
       </ul>
       <span class="ascension-selector__mastered" *ngIf="isAscensionMastered">A20 ✓</span>
+      <span class="ascension-selector__beaten"
+            *ngIf="showBeatenBadge"
+            [attr.aria-label]="'Highest ascension beaten: A' + highestBeatenAscension">
+        Best: A{{ highestBeatenAscension }}
+      </span>
     </div>
   </div>
 
