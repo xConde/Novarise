@@ -32,7 +32,7 @@ import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { CONDUIT_CONFIG } from '../constants/conduit.constants';
 import { RELIC_EFFECT_CONFIG } from '../../../run/constants/run.constants';
 import { ProjectileVisualService } from './projectile-visual.service';
-import { PROJECTILE_HITSCAN_CONFIG, PROJECTILE_ARC_CONFIG, PROJECTILE_BOLT_CONFIG } from '../constants/projectile.constants';
+import { PROJECTILE_HITSCAN_CONFIG, PROJECTILE_ARC_CONFIG, PROJECTILE_BOLT_CONFIG, PROJECTILE_SPLASH_CONFIG } from '../constants/projectile.constants';
 
 /** M3 S4: turn-based mortar DoT zone. Replaces the legacy real-time path for fireTurn. */
 interface TurnMortarZone {
@@ -673,6 +673,30 @@ export class TowerCombatService {
               if (mini.mesh) scene.add(mini.mesh);
             });
           }
+        }
+
+        // SPLASH visual — spawned AFTER damage loop so the cosmetic never
+        // gates the sim path.  Fires once per shot toward the primary target;
+        // the expanding ring telegraphs the AOE radius that was just resolved.
+        if (tower.type === TowerType.SPLASH && this.projectileVisualService) {
+          const { x: twx, z: twz } = this.getTowerWorldPos(tower);
+          const splashFrom = new THREE.Vector3(
+            twx,
+            PROJECTILE_SPLASH_CONFIG.yOffsetTower,
+            twz,
+          );
+          const splashTo = new THREE.Vector3(
+            target.position.x,
+            PROJECTILE_SPLASH_CONFIG.yOffsetEnemy,
+            target.position.z,
+          );
+          this.projectileVisualService.fireSplash(
+            splashFrom,
+            splashTo,
+            splashRadius,
+            TOWER_CONFIGS[TowerType.SPLASH].color,
+            scene,
+          );
         }
       } else {
         // Sprint 38/39 elevation-immunity per-target adjustment.

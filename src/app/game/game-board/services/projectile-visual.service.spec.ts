@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 
 import { ProjectileVisualService } from './projectile-visual.service';
-import { PROJECTILE_HITSCAN_CONFIG, PROJECTILE_ARC_CONFIG, PROJECTILE_BOLT_CONFIG } from '../constants/projectile.constants';
+import { PROJECTILE_HITSCAN_CONFIG, PROJECTILE_ARC_CONFIG, PROJECTILE_BOLT_CONFIG, PROJECTILE_SPLASH_CONFIG } from '../constants/projectile.constants';
 
 describe('ProjectileVisualService', () => {
   let service: ProjectileVisualService;
@@ -10,19 +10,32 @@ describe('ProjectileVisualService', () => {
 
   /** Cast to the private shape so tests can inspect internal state. */
   interface TestableService {
-    /** Unified discriminated-union entry list (hitscan + bolt + arc). */
+    /** Unified discriminated-union entry list (hitscan + bolt + arc + splash). */
     entries: Array<{
-      kind: 'hitscan' | 'bolt' | 'arc';
+      kind: 'hitscan' | 'bolt' | 'arc' | 'splash';
       // hitscan fields
       line?: THREE.Line;
-      // bolt / arc fields
+      // bolt / arc / hitscan shared — present on all non-splash kinds
       mesh?: THREE.Mesh;
-      geo: THREE.BufferGeometry | THREE.SphereGeometry;
-      mat: THREE.LineBasicMaterial | THREE.MeshBasicMaterial;
+      // geo and mat use broad types: present on hitscan/bolt/arc, undefined on splash.
+      // Callers must narrow via kind before use; tests that access these fields
+      // only do so after firing non-splash idioms.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      geo: any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mat: any;
       age: number;
       scene: THREE.Scene;
       from?: THREE.Vector3;
       to?: THREE.Vector3;
+      // splash-only fields
+      sphereMesh?: THREE.Mesh;
+      sphereGeo?: THREE.SphereGeometry;
+      sphereMat?: THREE.MeshBasicMaterial;
+      ringMesh?: THREE.Mesh;
+      ringGeo?: THREE.RingGeometry;
+      ringMat?: THREE.MeshBasicMaterial;
+      splashRadius?: number;
     }>;
     isReduceMotion(): boolean;
   }
@@ -387,6 +400,121 @@ describe('ProjectileVisualService', () => {
     });
   });
 
+  // ── fireSplash ────────────────────────────────────────────────────────────
+
+  describe('fireSplash', () => {
+    const SPLASH_RADIUS = 1.5;
+
+    it('adds exactly two Meshes to the scene (sphere + ring)', () => {
+      service.fireSplash(FROM, TO, SPLASH_RADIUS, COLOR, scene);
+
+      const meshes: THREE.Mesh[] = [];
+      scene.traverse(obj => { if (obj instanceof THREE.Mesh) meshes.push(obj); });
+      expect(meshes.length).toBe(2);
+    });
+
+    it('tracks one entry internally with kind = splash', () => {
+      service.fireSplash(FROM, TO, SPLASH_RADIUS, COLOR, scene);
+
+      expect(asTestable().entries.length).toBe(1);
+      expect(asTestable().entries[0].kind).toBe('splash');
+    });
+
+    it('is a no-op when body.reduce-motion class is set', () => {
+      document.body.classList.add('reduce-motion');
+      try {
+        service.fireSplash(FROM, TO, SPLASH_RADIUS, COLOR, scene);
+        expect(asTestable().entries.length).toBe(0);
+        const meshes: THREE.Mesh[] = [];
+        scene.traverse(obj => { if (obj instanceof THREE.Mesh) meshes.push(obj); });
+        expect(meshes.length).toBe(0);
+      } finally {
+        document.body.classList.remove('reduce-motion');
+      }
+    });
+
+    it('during travel phase: sphere is visible and ring is hidden', () => {
+      service.fireSplash(FROM, TO, SPLASH_RADIUS, COLOR, scene);
+      // Advance to middle of travel phase — still in phase 1.
+      service.update(PROJECTILE_SPLASH_CONFIG.travelLifetimeSec / 2);
+
+      const entry = asTestable().entries[0];
+      expect(entry.sphereMesh!.visible).toBe(true);
+      expect(entry.ringMesh!.visible).toBe(false);
+    });
+
+    it('after travel phase ends: sphere hidden, ring visible', () => {
+      service.fireSplash(FROM, TO, SPLASH_RADIUS, COLOR, scene);
+      // Step past travelLifetimeSec into impact phase.
+      service.update(PROJECTILE_SPLASH_CONFIG.travelLifetimeSec + 0.01);
+
+      const entry = asTestable().entries[0];
+      expect(entry.sphereMesh!.visible).toBe(false);
+      expect(entry.ringMesh!.visible).toBe(true);
+    });
+
+    it('ring scale grows toward splashRadius during impact phase', () => {
+      service.fireSplash(FROM, TO, SPLASH_RADIUS, COLOR, scene);
+      // Advance to midpoint of impact phase.
+      const midImpact = PROJECTILE_SPLASH_CONFIG.travelLifetimeSec
+        + PROJECTILE_SPLASH_CONFIG.impactLifetimeSec / 2;
+      service.update(midImpact);
+
+      const entry = asTestable().entries[0];
+      const scale = entry.ringMesh!.scale.x;
+      // At p=0.5, scale = splashRadius * 0.5.
+      expect(scale).toBeGreaterThan(0);
+      expect(scale).toBeLessThan(SPLASH_RADIUS);
+    });
+
+    it('expires and removes both meshes from the scene at total lifetime', () => {
+      service.fireSplash(FROM, TO, SPLASH_RADIUS, COLOR, scene);
+      const totalLifetime = PROJECTILE_SPLASH_CONFIG.travelLifetimeSec
+        + PROJECTILE_SPLASH_CONFIG.impactLifetimeSec;
+      service.update(totalLifetime + 0.001);
+
+      const meshes: THREE.Mesh[] = [];
+      scene.traverse(obj => { if (obj instanceof THREE.Mesh) meshes.push(obj); });
+      expect(meshes.length).toBe(0);
+      expect(asTestable().entries.length).toBe(0);
+    });
+
+    it('disposes sphere geo+mat AND ring geo+mat on expiry', () => {
+      service.fireSplash(FROM, TO, SPLASH_RADIUS, COLOR, scene);
+      const entry = asTestable().entries[0];
+      const sphereGeoSpy = spyOn(entry.sphereGeo!, 'dispose').and.callThrough();
+      const sphereMatSpy = spyOn(entry.sphereMat!, 'dispose').and.callThrough();
+      const ringGeoSpy   = spyOn(entry.ringGeo!,   'dispose').and.callThrough();
+      const ringMatSpy   = spyOn(entry.ringMat!,   'dispose').and.callThrough();
+
+      const totalLifetime = PROJECTILE_SPLASH_CONFIG.travelLifetimeSec
+        + PROJECTILE_SPLASH_CONFIG.impactLifetimeSec;
+      service.update(totalLifetime + 0.001);
+
+      expect(sphereGeoSpy).toHaveBeenCalledTimes(1);
+      expect(sphereMatSpy).toHaveBeenCalledTimes(1);
+      expect(ringGeoSpy).toHaveBeenCalledTimes(1);
+      expect(ringMatSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('cleanup disposes both sphere and ring meshes (all 4 resources freed)', () => {
+      service.fireSplash(FROM, TO, SPLASH_RADIUS, COLOR, scene);
+      const entry = asTestable().entries[0];
+      const sphereGeoSpy = spyOn(entry.sphereGeo!, 'dispose').and.callThrough();
+      const sphereMatSpy = spyOn(entry.sphereMat!, 'dispose').and.callThrough();
+      const ringGeoSpy   = spyOn(entry.ringGeo!,   'dispose').and.callThrough();
+      const ringMatSpy   = spyOn(entry.ringMat!,   'dispose').and.callThrough();
+
+      service.cleanup(scene);
+
+      expect(sphereGeoSpy).toHaveBeenCalledTimes(1);
+      expect(sphereMatSpy).toHaveBeenCalledTimes(1);
+      expect(ringGeoSpy).toHaveBeenCalledTimes(1);
+      expect(ringMatSpy).toHaveBeenCalledTimes(1);
+      expect(asTestable().entries.length).toBe(0);
+    });
+  });
+
   // ── Mixed idiom coexistence ───────────────────────────────────────────────
 
   describe('mixed hitscan + bolt entries', () => {
@@ -434,6 +562,43 @@ describe('ProjectileVisualService', () => {
         PROJECTILE_HITSCAN_CONFIG.lifetimeSec,
         PROJECTILE_BOLT_CONFIG.lifetimeSec,
         PROJECTILE_ARC_CONFIG.lifetimeSec,
+      );
+      service.update(maxLifetime + 0.001);
+
+      expect(asTestable().entries.length).toBe(0);
+
+      const lines: THREE.Line[] = [];
+      const meshes: THREE.Mesh[] = [];
+      scene.traverse(obj => {
+        if (obj instanceof THREE.Line) lines.push(obj);
+        if (obj instanceof THREE.Mesh) meshes.push(obj);
+      });
+      expect(lines.length).toBe(0);
+      expect(meshes.length).toBe(0);
+    });
+  });
+
+  describe('mixed hitscan + bolt + arc + splash entries', () => {
+    it('all four kinds coexist and all expire correctly', () => {
+      service.fireHitscan(FROM, TO, COLOR, scene);
+      service.fireBolt(FROM, TO, COLOR, scene);
+      service.fireArc(FROM, TO, COLOR, scene);
+      service.fireSplash(FROM, TO, 1.5, COLOR, scene);
+
+      expect(asTestable().entries.length).toBe(4);
+      expect(asTestable().entries[0].kind).toBe('hitscan');
+      expect(asTestable().entries[1].kind).toBe('bolt');
+      expect(asTestable().entries[2].kind).toBe('arc');
+      expect(asTestable().entries[3].kind).toBe('splash');
+
+      // Advance past the longest total lifetime (splash: 0.18 + 0.25 = 0.43s).
+      const splashTotal = PROJECTILE_SPLASH_CONFIG.travelLifetimeSec
+        + PROJECTILE_SPLASH_CONFIG.impactLifetimeSec;
+      const maxLifetime = Math.max(
+        PROJECTILE_HITSCAN_CONFIG.lifetimeSec,
+        PROJECTILE_BOLT_CONFIG.lifetimeSec,
+        PROJECTILE_ARC_CONFIG.lifetimeSec,
+        splashTotal,
       );
       service.update(maxLifetime + 0.001);
 

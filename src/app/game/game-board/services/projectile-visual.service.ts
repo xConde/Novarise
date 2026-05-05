@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import * as THREE from 'three';
 
-import { PROJECTILE_HITSCAN_CONFIG, PROJECTILE_BOLT_CONFIG, PROJECTILE_ARC_CONFIG } from '../constants/projectile.constants';
+import { PROJECTILE_HITSCAN_CONFIG, PROJECTILE_BOLT_CONFIG, PROJECTILE_ARC_CONFIG, PROJECTILE_SPLASH_CONFIG } from '../constants/projectile.constants';
 
 /**
  * Manages all in-flight projectile visuals regardless of idiom.
@@ -38,7 +38,7 @@ import { PROJECTILE_HITSCAN_CONFIG, PROJECTILE_BOLT_CONFIG, PROJECTILE_ARC_CONFI
  */
 @Injectable()
 export class ProjectileVisualService implements OnDestroy {
-  /** Managed list of all in-flight projectile entries (hitscan + bolt + arc). */
+  /** Managed list of all in-flight projectile entries (hitscan + bolt + arc + splash). */
   private readonly entries: ProjectileEntry[] = [];
 
   // ── Public API ───────────────────────────────────────────────────────────
@@ -160,6 +160,98 @@ export class ProjectileVisualService implements OnDestroy {
   }
 
   /**
+   * Spawn a two-phase SPLASH projectile:
+   *
+   * 1. **Travel phase** (0 → travelLifetimeSec): a small sphere lerps from
+   *    `fromWorld` to `toWorld`, exactly like BOLT but in the SPLASH tower's
+   *    color.
+   * 2. **Impact phase** (travelLifetimeSec → travelLifetimeSec +
+   *    impactLifetimeSec): the travel sphere is hidden; a flat ring at `toWorld`
+   *    scales from 0 → `splashRadius` while opacity ramps 1 → 0, showing the
+   *    AOE area that was already resolved by the sim.
+   *
+   * Both meshes are created at call time (ring starts `visible = false`).
+   * No dynamic mesh allocation occurs during `update()` — only a visibility
+   * swap on phase transition.
+   *
+   * The visual is gated by the reduce-motion preference — see class doc.
+   * Damage is already applied by the time this method is called.
+   *
+   * @param fromWorld    World-space origin (tower top, Y includes yOffsetTower).
+   * @param toWorld      World-space destination (primary target, Y includes yOffsetEnemy).
+   * @param splashRadius World-unit AOE radius — the ring scales to this maximum.
+   * @param color        Hex colour for both meshes; passed per-instance so
+   *                     simultaneous in-flight splashes carry distinct colors.
+   * @param scene        Active Three.js scene; both meshes are added immediately.
+   */
+  fireSplash(
+    fromWorld: THREE.Vector3,
+    toWorld: THREE.Vector3,
+    splashRadius: number,
+    color: number,
+    scene: THREE.Scene,
+  ): void {
+    if (this.isReduceMotion()) return;
+
+    const {
+      travelRadius, travelSegments,
+      ringInnerRatio, ringSegments,
+      yOffsetImpact, travelOpacity,
+    } = PROJECTILE_SPLASH_CONFIG;
+
+    // Travel sphere — starts at fromWorld, lerps to toWorld during travel phase.
+    const sphereGeo = new THREE.SphereGeometry(travelRadius, travelSegments, travelSegments);
+    const sphereMat = new THREE.MeshBasicMaterial({
+      color,
+      opacity: travelOpacity,
+      transparent: travelOpacity < 1,
+    });
+    const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
+    sphereMesh.position.copy(fromWorld);
+    sphereMesh.renderOrder = 2;
+
+    // Impact ring — created now, hidden until phase transition.
+    // Outer radius starts at travelRadius (non-zero to avoid degenerate geometry);
+    // it is rescaled during the impact phase, so initial size doesn't matter.
+    const ringGeo = new THREE.RingGeometry(
+      travelRadius * ringInnerRatio,
+      travelRadius,
+      ringSegments,
+    );
+    const ringMat = new THREE.MeshBasicMaterial({
+      color,
+      opacity: 1,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    // Orient flat ring to lie on the XZ plane (ring geometry is in XY by default).
+    ringMesh.rotation.x = -Math.PI / 2;
+    ringMesh.position.set(toWorld.x, yOffsetImpact, toWorld.z);
+    ringMesh.renderOrder = 2;
+    ringMesh.visible = false;
+
+    scene.add(sphereMesh);
+    scene.add(ringMesh);
+
+    this.entries.push({
+      kind: 'splash',
+      sphereMesh,
+      sphereGeo,
+      sphereMat,
+      ringMesh,
+      ringGeo,
+      ringMat,
+      from: fromWorld.clone(),
+      to: toWorld.clone(),
+      splashRadius,
+      age: 0,
+      scene,
+    });
+  }
+
+  /**
    * Advance all in-flight visuals by `deltaTime` seconds.
    * Expired entries are removed from the scene and their GPU resources
    * are disposed.  Call once per animation frame.
@@ -172,6 +264,8 @@ export class ProjectileVisualService implements OnDestroy {
     } = PROJECTILE_HITSCAN_CONFIG;
     const { lifetimeSec: boltLifetime } = PROJECTILE_BOLT_CONFIG;
     const { lifetimeSec: arcLifetime, arcApex } = PROJECTILE_ARC_CONFIG;
+    const { travelLifetimeSec, impactLifetimeSec } = PROJECTILE_SPLASH_CONFIG;
+    const splashTotalLifetime = travelLifetimeSec + impactLifetimeSec;
 
     for (let i = this.entries.length - 1; i >= 0; i--) {
       const entry = this.entries[i];
@@ -205,8 +299,7 @@ export class ProjectileVisualService implements OnDestroy {
         // Linear interpolation: position = from + (to - from) * (age / lifetime).
         const t = entry.age / boltLifetime;
         entry.mesh.position.lerpVectors(entry.from, entry.to, t);
-      } else {
-        // kind === 'arc'
+      } else if (entry.kind === 'arc') {
         if (entry.age >= arcLifetime) {
           this.disposeArcEntry(entry);
           this.entries.splice(i, 1);
@@ -224,6 +317,34 @@ export class ProjectileVisualService implements OnDestroy {
         entry.mesh.position.z = entry.from.z + (entry.to.z - entry.from.z) * t;
         const linearY = entry.from.y + (entry.to.y - entry.from.y) * t;
         entry.mesh.position.y = linearY + arcApex * 4 * t * (1 - t);
+      } else {
+        // kind === 'splash'
+        if (entry.age >= splashTotalLifetime) {
+          this.disposeSplashEntry(entry);
+          this.entries.splice(i, 1);
+          continue;
+        }
+
+        if (entry.age < travelLifetimeSec) {
+          // Travel phase: sphere lerps from → to; ring stays hidden.
+          const t = entry.age / travelLifetimeSec;
+          entry.sphereMesh.position.lerpVectors(entry.from, entry.to, t);
+        } else {
+          // Impact phase: hide sphere, show + animate ring.
+          entry.sphereMesh.visible = false;
+          entry.ringMesh.visible = true;
+
+          // Progress within the impact phase: 0 at phase start, 1 at phase end.
+          const impactAge = entry.age - travelLifetimeSec;
+          const p = impactAge / impactLifetimeSec;
+
+          // Scale ring from 0 → splashRadius.
+          const scale = entry.splashRadius * p;
+          entry.ringMesh.scale.setScalar(scale);
+
+          // Opacity ramps 1 → 0 as ring expands.
+          entry.ringMat.opacity = Math.max(0, 1 - p);
+        }
       }
     }
   }
@@ -240,8 +361,10 @@ export class ProjectileVisualService implements OnDestroy {
         this.disposeHitscanEntry(entry);
       } else if (entry.kind === 'bolt') {
         this.disposeBoltEntry(entry);
-      } else {
+      } else if (entry.kind === 'arc') {
         this.disposeArcEntry(entry);
+      } else {
+        this.disposeSplashEntry(entry);
       }
     }
     this.entries.length = 0;
@@ -287,6 +410,16 @@ export class ProjectileVisualService implements OnDestroy {
     entry.scene.remove(entry.mesh);
     entry.geo.dispose();
     entry.mat.dispose();
+  }
+
+  /** Remove both splash meshes from the scene and free all GPU resources. */
+  private disposeSplashEntry(entry: SplashEntry): void {
+    entry.scene.remove(entry.sphereMesh);
+    entry.scene.remove(entry.ringMesh);
+    entry.sphereGeo.dispose();
+    entry.sphereMat.dispose();
+    entry.ringGeo.dispose();
+    entry.ringMat.dispose();
   }
 }
 
@@ -336,5 +469,35 @@ interface ArcEntry {
   readonly scene: THREE.Scene;
 }
 
+/**
+ * One in-flight splash visual — used by the SPLASH tower.
+ *
+ * Contains two meshes (sphere + ring) created at fire-time.  The ring starts
+ * invisible and becomes visible on phase transition (age >= travelLifetimeSec).
+ * update() controls the visibility swap and ring scale/opacity; no dynamic
+ * mesh allocation occurs mid-flight.
+ */
+interface SplashEntry {
+  readonly kind: 'splash';
+  /** Travel phase sphere. */
+  readonly sphereMesh: THREE.Mesh;
+  readonly sphereGeo: THREE.SphereGeometry;
+  readonly sphereMat: THREE.MeshBasicMaterial;
+  /** Impact phase ring. */
+  readonly ringMesh: THREE.Mesh;
+  readonly ringGeo: THREE.RingGeometry;
+  readonly ringMat: THREE.MeshBasicMaterial;
+  /** Fixed world-space spawn position (tower top). */
+  readonly from: THREE.Vector3;
+  /** Fixed world-space destination position (primary target). */
+  readonly to: THREE.Vector3;
+  /** AOE radius in world units — the ring scales to this maximum at end of impact phase. */
+  readonly splashRadius: number;
+  /** Seconds elapsed since spawn. */
+  age: number;
+  /** Scene both meshes were added to — needed for safe removal. */
+  readonly scene: THREE.Scene;
+}
+
 /** Discriminated union of all in-flight projectile entry kinds. */
-type ProjectileEntry = HitscanEntry | BoltEntry | ArcEntry;
+type ProjectileEntry = HitscanEntry | BoltEntry | ArcEntry | SplashEntry;
