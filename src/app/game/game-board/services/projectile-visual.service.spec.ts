@@ -747,4 +747,52 @@ describe('ProjectileVisualService', () => {
       expect(meshes.length).toBe(0);
     });
   });
+
+  describe('heavy-turn perf budget', () => {
+    // Reasonable upper bound for a single update() pass over 100 in-flight
+    // projectiles on a modest dev machine. Headless Chrome is consistent
+    // enough that this catches an O(N²) or accidental allocation regression
+    // without flaking on a healthy build.
+    const PERF_BUDGET_MS_FOR_100_ENTRIES = 16;
+
+    it('update() over 100 mixed-idiom in-flight entries stays under the per-frame budget', () => {
+      // Spawn a heavy-turn payload: 25 of each idiom (hitscan + bolt + arc + splash)
+      // and 4 auras to round to 100 active visuals. AURA's update is
+      // scale + opacity ramp, so it counts toward the same budget.
+      for (let i = 0; i < 25; i++) {
+        service.fireHitscan(FROM, TO, COLOR, scene);
+        service.fireBolt(FROM, TO, COLOR, scene);
+        service.fireArc(FROM, TO, COLOR, scene);
+        service.fireSplash(FROM, TO, /* radius */ 1.5, COLOR, scene);
+      }
+      for (let i = 0; i < 4; i++) {
+        service.fireAura(FROM, /* radius */ 2, COLOR, scene);
+      }
+
+      // Tick by half the smallest idiom lifetime so all entries are still
+      // alive — exercises the full update() path without cleanup short-circuits.
+      const t0 = performance.now();
+      service.update(0.05);
+      const elapsed = performance.now() - t0;
+
+      expect(elapsed).toBeLessThan(PERF_BUDGET_MS_FOR_100_ENTRIES);
+    });
+
+    it('cleanup() over 100 in-flight entries disposes everything in one pass', () => {
+      for (let i = 0; i < 50; i++) {
+        service.fireBolt(FROM, TO, COLOR, scene);
+        service.fireArc(FROM, TO, COLOR, scene);
+      }
+      service.cleanup(scene);
+
+      const lines: THREE.Line[] = [];
+      const meshes: THREE.Mesh[] = [];
+      scene.traverse(obj => {
+        if (obj instanceof THREE.Line) lines.push(obj);
+        if (obj instanceof THREE.Mesh) meshes.push(obj);
+      });
+      expect(lines.length).toBe(0);
+      expect(meshes.length).toBe(0);
+    });
+  });
 });
