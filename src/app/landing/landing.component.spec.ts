@@ -191,6 +191,26 @@ describe('LandingComponent', () => {
     });
   });
 
+  describe('getAscensionStack()', () => {
+    it('returns empty array at A0', () => {
+      component.selectedAscension = 0;
+      expect(component.getAscensionStack()).toEqual([]);
+    });
+
+    it('returns A1..A_N modifiers in order at A_N', () => {
+      component.selectedAscension = 5;
+      const stack = component.getAscensionStack();
+      expect(stack.length).toBe(5);
+      expect(stack[0].level).toBe(1);
+      expect(stack[4].level).toBe(5);
+    });
+
+    it('returns full 20-entry stack at A20', () => {
+      component.selectedAscension = 20;
+      expect(component.getAscensionStack().length).toBe(20);
+    });
+  });
+
   describe('isAscensionMastered', () => {
     it('delegates to runPersistence.isAscensionMastered()', () => {
       runPersistence.isAscensionMastered.and.returnValue(true);

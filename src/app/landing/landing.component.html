@@ -37,9 +37,16 @@
           [disabled]="selectedAscension === maxAscension"
           aria-label="Increase ascension">+</button>
       </div>
-      <p class="ascension-selector__preview" *ngIf="getAscensionPreview() as preview">
-        {{ preview }}
-      </p>
+      <ul class="ascension-selector__stack"
+          *ngIf="getAscensionStack().length > 0"
+          [attr.aria-label]="'Ascension ' + selectedAscension + ' modifiers — ' + getAscensionStack().length + ' total'">
+        <li *ngFor="let mod of getAscensionStack()"
+            class="ascension-selector__stack-entry"
+            [attr.title]="mod.description">
+          <span class="ascension-selector__stack-tier">A{{ mod.level }}</span>
+          <span class="ascension-selector__stack-name">{{ mod.label }}</span>
+        </li>
+      </ul>
       <span class="ascension-selector__mastered" *ngIf="isAscensionMastered">A20 ✓</span>
     </div>
   </div>

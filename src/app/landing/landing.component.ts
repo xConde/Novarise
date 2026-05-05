@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { RunPersistenceService } from '../run/services/run-persistence.service';
 import { RunService } from '../run/services/run.service';
-import { ASCENSION_LEVELS, MAX_ASCENSION_LEVEL } from '../run/models/ascension.model';
+import { ASCENSION_LEVELS, AscensionLevel, MAX_ASCENSION_LEVEL } from '../run/models/ascension.model';
 
 /**
  * Phase 9: Landing component repurposed as the Run Hub.
@@ -55,13 +55,24 @@ export class LandingComponent implements OnInit {
   }
 
   /**
-   * Returns a one-line preview of the cumulative modifier for the selected
-   * ascension level, or null at A0 (no modifiers active).
+   * Returns a one-line preview of JUST the selected level's modifier, or
+   * null at A0. Kept for compact UI surfaces; new callers should prefer
+   * `getAscensionStack()` for the full cumulative breakdown.
    */
   getAscensionPreview(): string | null {
     if (this.selectedAscension === 0) return null;
     const def = ASCENSION_LEVELS[this.selectedAscension - 1];
     return `A${this.selectedAscension}: ${def.description}`;
+  }
+
+  /**
+   * The full A1 → A_selected modifier stack. Players picking A5 should see
+   * that ALL of A1..A5 modifiers stack, not just the topmost level. Empty
+   * when selectedAscension is 0.
+   */
+  getAscensionStack(): readonly AscensionLevel[] {
+    if (this.selectedAscension <= 0) return [];
+    return ASCENSION_LEVELS.slice(0, this.selectedAscension);
   }
 
   /** Whether the player has mastered ascension (beaten A20). */
