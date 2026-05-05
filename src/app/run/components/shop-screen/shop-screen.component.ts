@@ -39,6 +39,8 @@ export class ShopScreenComponent implements OnChanges {
   @Output() shopLeft = new EventEmitter<void>();
   /** Emits the instanceId of the card the player chose to permanently remove. */
   @Output() cardRemoved = new EventEmitter<string>();
+  /** Emits the instanceId of the card the player chose to upgrade. */
+  @Output() cardUpgraded = new EventEmitter<string>();
 
   readonly healCost = SHOP_CONFIG.healCostPerLife;
   readonly maxHealPerVisit = SHOP_CONFIG.maxHealPerVisit;
@@ -47,17 +49,30 @@ export class ShopScreenComponent implements OnChanges {
    * value when no parent passes the input (e.g. older test beds).
    */
   @Input() cardRemoveCost = SHOP_CONFIG.cardRemoveCost;
+  /**
+   * Live ascension-scaled card-upgrade cost. Falls back to the base config
+   * value when no parent passes the input (e.g. older test beds).
+   */
+  @Input() cardUpgradeCost = SHOP_CONFIG.cardUpgradeCost;
   healCount = 0;
   /** True after the player has used the one card-remove slot for this shop visit. */
   cardRemoveUsed = false;
-  /** Toggle between the default shop view and the card-removal picker. */
-  activeAction: 'none' | 'remove' = 'none';
+  /** True after the player has used the one card-upgrade slot for this shop visit. */
+  cardUpgradeUsed = false;
+  /** Toggle between the default shop view and the card-removal or upgrade picker. */
+  activeAction: 'none' | 'remove' | 'upgrade' = 'none';
   /**
    * Name of the card that was just removed, captured for the success banner.
    * Cleared on shop revisit (reset in ngOnChanges) so the banner doesn't
    * persist across encounters.
    */
   lastRemovedCardName: string | null = null;
+  /**
+   * Name of the card that was just upgraded, captured for the success banner.
+   * Cleared on shop revisit (reset in ngOnChanges) so the banner doesn't
+   * persist across encounters.
+   */
+  lastUpgradedCardName: string | null = null;
 
   /** Pre-computed relic definitions — avoids per-CD-cycle allocations in template. */
   resolvedItems: ResolvedShopItem[] = [];
@@ -72,8 +87,10 @@ export class ShopScreenComponent implements OnChanges {
     if (changes['shopItems']) {
       this.healCount = 0;
       this.cardRemoveUsed = false;
+      this.cardUpgradeUsed = false;
       this.activeAction = 'none';
       this.lastRemovedCardName = null;
+      this.lastUpgradedCardName = null;
     }
     this.resolvedItems = this.shopItems.map((item, index) => {
       const relic = this.resolveRelicDef(item);
@@ -180,5 +197,54 @@ export class ShopScreenComponent implements OnChanges {
   /** Description shown next to the name in the picker. */
   getCardDescription(card: CardInstance): string {
     return getCardDefinition(card.cardId).description;
+  }
+
+  // ── Card upgrade slot ─────────────────────────────────────────────────────
+
+  /** True when the card-upgrade slot is still available AND the player can afford it. */
+  canUpgradeCard(): boolean {
+    return !this.cardUpgradeUsed
+      && this.currentGold >= this.cardUpgradeCost
+      && this.upgradableCards.length > 0;
+  }
+
+  /**
+   * Cards eligible for upgrade — non-starter, not already upgraded, and with
+   * at least one upgrade payload (upgradedEffect or upgradedEnergyCost).
+   * Mirrors the rest-screen gate exactly.
+   */
+  get upgradableCards(): CardInstance[] {
+    return this.deckCards.filter(c => {
+      if (c.upgraded) return false;
+      const def = getCardDefinition(c.cardId);
+      if (def.rarity === CardRarity.STARTER) return false;
+      return def.upgradedEffect !== undefined || def.upgradedEnergyCost !== undefined;
+    });
+  }
+
+  /** Open the card-upgrade picker. No-op if slot used or unaffordable. */
+  showUpgradePanel(): void {
+    if (!this.canUpgradeCard()) return;
+    this.activeAction = 'upgrade';
+  }
+
+  /** Cancel the upgrade picker, return to default shop view. */
+  cancelUpgrade(): void {
+    this.activeAction = 'none';
+  }
+
+  /** Player picked a card to upgrade. Mark slot used, close picker, capture name, emit upward. */
+  selectCardToUpgrade(card: CardInstance): void {
+    if (this.cardUpgradeUsed) return;
+    this.cardUpgradeUsed = true;
+    this.activeAction = 'none';
+    this.lastUpgradedCardName = this.getCardName(card);
+    this.cardUpgraded.emit(card.instanceId);
+  }
+
+  /** Preview of the description AFTER upgrading — mirrors rest-screen helper. */
+  getCardUpgradedDescription(card: CardInstance): string {
+    const def = getCardDefinition(card.cardId);
+    return def.upgradedDescription ?? `+ ${def.description}`;
   }
 }

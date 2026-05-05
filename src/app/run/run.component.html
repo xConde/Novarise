@@ -140,10 +140,12 @@
     [currentLives]="runState.lives"
     [maxLives]="runState.maxLives"
     [cardRemoveCost]="cardRemoveCost"
+    [cardUpgradeCost]="cardUpgradeCost"
     [deckCards]="shopDeckSnapshot"
     (itemBought)="onShopBuy($event)"
     (shopLeft)="leaveShop()"
     (cardRemoved)="onShopCardRemoved($event)"
+    (cardUpgraded)="onShopCardUpgraded($event)"
   ></app-shop-screen>
 
   <!-- ── Event Screen ────────────────────────────────────── -->

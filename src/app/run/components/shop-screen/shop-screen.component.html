@@ -135,6 +135,70 @@
     </p>
   </section>
 
+  <!-- Card Upgrade — one-use-per-visit, mirrors card-remove slot -->
+  <section class="shop-card-upgrade" aria-label="Card upgrade service">
+    <h3 class="shop-section-title">Card Upgrade</h3>
+
+    <ng-container *ngIf="activeAction === 'none'">
+      <p class="shop-card-upgrade__blurb">
+        Upgrade a card in your deck. One use per shop visit.
+      </p>
+      <button
+        class="shop-card-upgrade__open-btn"
+        type="button"
+        [disabled]="!canUpgradeCard()"
+        (click)="showUpgradePanel()"
+        [attr.aria-label]="cardUpgradeUsed
+          ? 'Card upgrade already used this visit'
+          : 'Upgrade a card for ' + cardUpgradeCost + ' gold'"
+      >
+        <app-icon name="card" [size]="14"></app-icon>
+        Upgrade a Card —
+        <span
+          class="shop-card-upgrade__cost"
+          [class.shop-card-upgrade__cost--unaffordable]="!canAfford(cardUpgradeCost)"
+        >{{ cardUpgradeCost }}g</span>
+      </button>
+      <p class="shop-card-upgrade__success"
+         *ngIf="cardUpgradeUsed && lastUpgradedCardName"
+         aria-live="polite">
+        <span class="shop-card-upgrade__success-icon" aria-hidden="true">✓</span>
+        Upgraded <strong>{{ lastUpgradedCardName }}</strong>.
+      </p>
+      <p class="shop-card-upgrade__hint" *ngIf="!cardUpgradeUsed && upgradableCards.length === 0" aria-live="polite">
+        No upgradable cards in your deck.
+      </p>
+    </ng-container>
+
+    <ng-container *ngIf="activeAction === 'upgrade'">
+      <p class="shop-card-upgrade__instruction" aria-live="polite">
+        Choose a card to upgrade — costs {{ cardUpgradeCost }}g.
+      </p>
+      <div class="shop-card-upgrade__list" role="list">
+        <button
+          *ngFor="let card of upgradableCards"
+          class="shop-card-upgrade__card"
+          type="button"
+          role="listitem"
+          (click)="selectCardToUpgrade(card)"
+          [attr.aria-label]="'Upgrade ' + getCardName(card)"
+        >
+          <span class="shop-card-upgrade__card-name">{{ getCardName(card) }}</span>
+          <span class="shop-card-upgrade__card-desc">{{ getCardDescription(card) }}</span>
+          <span class="shop-card-upgrade__card-upgraded-desc">→ {{ getCardUpgradedDescription(card) }}</span>
+        </button>
+      </div>
+      <button
+        class="shop-card-upgrade__cancel-btn run-btn run-btn--secondary"
+        type="button"
+        (click)="cancelUpgrade()"
+        aria-label="Cancel card upgrade"
+      >
+        Cancel
+      </button>
+    </ng-container>
+  </section>
+
   <!-- Card Removal — Phase 1 Sprint 4 (one-use-per-visit, StS convention) -->
   <section class="shop-card-remove" aria-label="Card removal service">
     <h3 class="shop-section-title">Card Removal</h3>

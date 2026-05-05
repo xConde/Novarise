@@ -879,6 +879,57 @@ export class RunService {
     return Math.round(SHOP_CONFIG.cardRemoveCost * priceMultiplier);
   }
 
+  /**
+   * Live-scaled cost of the shop card-upgrade service. Mirrors getCardRemoveCost
+   * using SHOP_CONFIG.cardUpgradeCost (base 100g) and SHOP_PRICE_MULTIPLIER
+   * ascension scaling. Returns base cost when no run is active.
+   */
+  getCardUpgradeCost(): number {
+    const state = this.runState;
+    if (!state) return SHOP_CONFIG.cardUpgradeCost;
+    const ascEffects = getAscensionEffects(state.ascensionLevel);
+    const priceMultiplier = ascEffects.get(AscensionEffectType.SHOP_PRICE_MULTIPLIER) ?? 1;
+    return Math.round(SHOP_CONFIG.cardUpgradeCost * priceMultiplier);
+  }
+
+  /**
+   * Pay {@link SHOP_CONFIG.cardUpgradeCost} gold to upgrade a card at the shop.
+   * Returns true on success. One-use-per-visit is enforced by ShopScreenComponent.
+   *
+   * Validation:
+   *   - run state must exist
+   *   - player must have enough gold
+   *   - card must currently exist in any deck pile
+   *   - card must NOT be a starter card (StS convention)
+   *   - card must NOT already be upgraded
+   *   - card must have at least one upgrade payload (upgradedEffect or upgradedEnergyCost)
+   */
+  upgradeCardFromShop(instanceId: string): boolean {
+    const state = this.runState;
+    if (!state) return false;
+    const cost = this.getCardUpgradeCost();
+    if (state.gold < cost) return false;
+
+    const allCards = this.deckService.getAllCards();
+    const target = allCards.find(c => c.instanceId === instanceId);
+    if (!target) return false;
+
+    const def = CARD_DEFINITIONS[target.cardId as CardId];
+    if (!def || def.rarity === CardRarity.STARTER) return false;
+    if (target.upgraded) return false;
+    if (def.upgradedEffect === undefined && def.upgradedEnergyCost === undefined) return false;
+
+    const upgraded = this.deckService.upgradeCard(instanceId);
+    if (!upgraded) return false;
+
+    this.updateState({
+      ...state,
+      gold: state.gold - cost,
+    });
+    this.persist();
+    return true;
+  }
+
   /** Resolve an event choice by index. */
   resolveEvent(choiceIndex: number): void {
     const state = this.runState;

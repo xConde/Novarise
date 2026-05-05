@@ -373,4 +373,117 @@ describe('ShopScreenComponent', () => {
       expect(component.cardRemoveUsed).toBeTrue();
     });
   });
+
+  // ── Card upgrade slot ─────────────────────────────────────────────────────
+  describe('card upgrade', () => {
+    function makeInstance(cardId: CardId, instanceId = `inst_${cardId}`, upgraded = false): CardInstance {
+      return { instanceId, cardId, upgraded };
+    }
+
+    beforeEach(() => {
+      // GOLD_RUSH is COMMON with upgradedEffect; TOWER_BASIC is STARTER (excluded).
+      component.deckCards = [
+        makeInstance(CardId.TOWER_BASIC, 'starter1'),  // STARTER — not upgradable
+        makeInstance(CardId.GOLD_RUSH, 'gr1'),          // upgradable
+        makeInstance(CardId.GOLD_RUSH, 'gr2', true),    // already upgraded — excluded
+      ];
+      component.currentGold = SHOP_CONFIG.cardUpgradeCost + 50;
+      component.cardUpgradeUsed = false;
+      component.activeAction = 'none';
+    });
+
+    it('upgradableCards excludes starters and already-upgraded cards', () => {
+      const upgradable = component.upgradableCards;
+      expect(upgradable.length).toBe(1);
+      expect(upgradable[0].instanceId).toBe('gr1');
+    });
+
+    it('canUpgradeCard true when slot fresh, gold sufficient, and upgradable cards exist', () => {
+      expect(component.canUpgradeCard()).toBeTrue();
+    });
+
+    it('canUpgradeCard false after slot used', () => {
+      component.cardUpgradeUsed = true;
+      expect(component.canUpgradeCard()).toBeFalse();
+    });
+
+    it('canUpgradeCard false when gold insufficient', () => {
+      component.currentGold = SHOP_CONFIG.cardUpgradeCost - 1;
+      expect(component.canUpgradeCard()).toBeFalse();
+    });
+
+    it('canUpgradeCard false when no upgradable cards remain', () => {
+      component.deckCards = [makeInstance(CardId.TOWER_BASIC, 's1')];
+      expect(component.canUpgradeCard()).toBeFalse();
+    });
+
+    it('showUpgradePanel switches activeAction when allowed', () => {
+      component.showUpgradePanel();
+      expect(component.activeAction).toBe('upgrade');
+    });
+
+    it('showUpgradePanel no-ops when slot already used', () => {
+      component.cardUpgradeUsed = true;
+      component.showUpgradePanel();
+      expect(component.activeAction).toBe('none');
+    });
+
+    it('selectCardToUpgrade emits cardUpgraded with instanceId, marks slot used, closes picker', () => {
+      const spy = jasmine.createSpy('cardUpgraded');
+      component.cardUpgraded.subscribe(spy);
+
+      const card = component.upgradableCards[0];
+      component.selectCardToUpgrade(card);
+
+      expect(spy).toHaveBeenCalledWith(card.instanceId);
+      expect(component.cardUpgradeUsed).toBeTrue();
+      expect(component.activeAction).toBe('none');
+    });
+
+    it('selectCardToUpgrade ignored when slot already used', () => {
+      component.cardUpgradeUsed = true;
+      const spy = jasmine.createSpy('cardUpgraded');
+      component.cardUpgraded.subscribe(spy);
+
+      component.selectCardToUpgrade(component.upgradableCards[0]);
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('cancelUpgrade closes picker without using slot', () => {
+      component.showUpgradePanel();
+      component.cancelUpgrade();
+      expect(component.activeAction).toBe('none');
+      expect(component.cardUpgradeUsed).toBeFalse();
+    });
+
+    it('success banner appears after upgrade (lastUpgradedCardName set)', () => {
+      const card = component.upgradableCards[0];
+      component.selectCardToUpgrade(card);
+      expect(component.lastUpgradedCardName).toBe('Gold Rush');
+    });
+
+    it('ngOnChanges resets cardUpgradeUsed and lastUpgradedCardName on new shop visit', () => {
+      component.cardUpgradeUsed = true;
+      component.lastUpgradedCardName = 'Gold Rush';
+      component.activeAction = 'upgrade';
+      component.shopItems = [UNCOMMON_ITEM];
+      component.ngOnChanges({
+        shopItems: { currentValue: component.shopItems, previousValue: [], firstChange: false, isFirstChange: () => false },
+      } as SimpleChanges);
+      expect(component.cardUpgradeUsed).toBeFalse();
+      expect(component.lastUpgradedCardName).toBeNull();
+      expect(component.activeAction).toBe('none');
+    });
+
+    it('ngOnChanges does NOT reset cardUpgradeUsed when only deckCards changes', () => {
+      component.cardUpgradeUsed = true;
+      component.activeAction = 'upgrade';
+      component.deckCards = [makeInstance(CardId.GOLD_RUSH, 'newcard')];
+      component.ngOnChanges({
+        deckCards: { currentValue: component.deckCards, previousValue: [], firstChange: false, isFirstChange: () => false },
+      } as SimpleChanges);
+      expect(component.cardUpgradeUsed).toBeTrue();
+      expect(component.activeAction).toBe('upgrade');
+    });
+  });
 });

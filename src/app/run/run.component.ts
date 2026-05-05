@@ -65,6 +65,11 @@ export class RunComponent implements OnInit, OnDestroy {
     return this.runService.getCardRemoveCost();
   }
 
+  /** Live-scaled card-upgrade cost — recomputed via getter so ascension price multiplier flows through. */
+  get cardUpgradeCost(): number {
+    return this.runService.getCardUpgradeCost();
+  }
+
   constructor(
     private runService: RunService,
     private router: Router,
@@ -294,6 +299,14 @@ export class RunComponent implements OnInit, OnDestroy {
     // Refresh snapshot so subsequent UI surfaces (resume from shop later, etc.)
     // see the post-removal state. Does NOT trigger ShopScreen.ngOnChanges
     // shopItems reset path — only the deckCards reference changes.
+    this.refreshShopDeckSnapshot();
+  }
+
+  /** Handle the shop card-upgrade action. ShopScreen enforces one-use-per-visit locally. */
+  onShopCardUpgraded(instanceId: string): void {
+    this.runService.upgradeCardFromShop(instanceId);
+    // Refresh snapshot so the upgrade immediately reflects in the picker and
+    // any subsequent UI surfaces without triggering the shopItems reset path.
     this.refreshShopDeckSnapshot();
   }
 

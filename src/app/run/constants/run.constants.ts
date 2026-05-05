@@ -158,6 +158,10 @@ export const SHOP_CONFIG = {
   /** Phase 1 Sprint 4 — gold cost to permanently remove a card from the deck.
    *  One use per shop visit (StS convention). */
   cardRemoveCost: 75,
+
+  /** Gold cost to upgrade a card at the shop. Slightly higher than removal —
+   *  upgrade is more permanently impactful. One use per shop visit. */
+  cardUpgradeCost: 100,
 } as const;
 
 // ── Rest ──────────────────────────────────────────────────────

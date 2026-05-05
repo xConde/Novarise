@@ -2510,4 +2510,80 @@ describe('RunService', () => {
       expect(service.runState!.gold).toBe(goldBefore - scaledCost);
     }));
   });
+
+  // ── getCardUpgradeCost + upgradeCardFromShop ─────────────────────────────
+  describe('getCardUpgradeCost — ascension scaling', () => {
+    it('returns base SHOP_CONFIG.cardUpgradeCost at ascension 0', fakeAsync(() => {
+      service.startNewRun(0);
+      expect(service.getCardUpgradeCost()).toBe(SHOP_CONFIG.cardUpgradeCost);
+    }));
+
+    it('scales by SHOP_PRICE_MULTIPLIER at ascension 9 (Gouged: ×1.2)', fakeAsync(() => {
+      service.startNewRun(9);
+      expect(service.getCardUpgradeCost()).toBe(Math.round(SHOP_CONFIG.cardUpgradeCost * 1.2));
+    }));
+
+    it('falls back to base cost when no run is active', () => {
+      expect(service.getCardUpgradeCost()).toBe(SHOP_CONFIG.cardUpgradeCost);
+    });
+  });
+
+  describe('upgradeCardFromShop()', () => {
+    it('returns false when no run state exists', () => {
+      expect(service.upgradeCardFromShop('any')).toBeFalse();
+    });
+
+    it('returns false when player gold is below cardUpgradeCost', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, gold: 0 });
+      service.collectReward({ type: 'card', cardId: CardId.GOLD_RUSH });
+      const card = service.getDeckCards().find(c => c.cardId === CardId.GOLD_RUSH);
+      expect(service.upgradeCardFromShop(card!.instanceId)).toBeFalse();
+    }));
+
+    it('returns false for unknown instanceId', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, gold: 1000 });
+      expect(service.upgradeCardFromShop('does_not_exist')).toBeFalse();
+    }));
+
+    it('returns false when target is a STARTER card', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, gold: 1000 });
+      const cards = service.getDeckCards();
+      const starter = cards.find(c => CARD_DEFINITIONS[c.cardId as CardId].rarity === CardRarity.STARTER);
+      expect(starter).toBeTruthy();
+      expect(service.upgradeCardFromShop(starter!.instanceId)).toBeFalse();
+    }));
+
+    it('returns false when card is already upgraded', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, gold: 1000 });
+      service.collectReward({ type: 'card', cardId: CardId.GOLD_RUSH });
+      const card = service.getDeckCards().find(c => c.cardId === CardId.GOLD_RUSH)!;
+      // Upgrade via DeckService directly to set upgraded=true
+      service['deckService'].upgradeCard(card.instanceId);
+      expect(service.upgradeCardFromShop(card.instanceId)).toBeFalse();
+    }));
+
+    it('successfully upgrades a valid card and deducts gold', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, gold: 1000 });
+      service.collectReward({ type: 'card', cardId: CardId.GOLD_RUSH });
+
+      const cards = service.getDeckCards();
+      const target = cards.find(c => c.cardId === CardId.GOLD_RUSH);
+      expect(target).toBeTruthy();
+      expect(target!.upgraded).toBeFalse();
+
+      const goldBefore = service.runState!.gold;
+      const cost = service.getCardUpgradeCost();
+      const result = service.upgradeCardFromShop(target!.instanceId);
+
+      expect(result).toBeTrue();
+      expect(service.runState!.gold).toBe(goldBefore - cost);
+      const upgraded = service.getDeckCards().find(c => c.instanceId === target!.instanceId);
+      expect(upgraded?.upgraded).toBeTrue();
+    }));
+  });
 });
