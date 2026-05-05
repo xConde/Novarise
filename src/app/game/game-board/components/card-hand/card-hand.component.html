@@ -169,7 +169,7 @@
   <!-- Hover tooltip — desktop hover only. Fixed-positioned to escape any
        overflow:hidden ancestor; touch users get the full detail modal via
        long-press instead. -->
-  <div *ngIf="hoveredCard"
+  <div *ngIf="hoveredCard && hoveredCardRect"
        class="card-tooltip"
        role="tooltip"
        [id]="hoverTooltipId"

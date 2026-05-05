@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnDestroy, OnChanges, SimpleChanges } from '@angular/core';
 import { CardDefinition, CardId, CardRarity, CardType, EffectGlyphName } from '../../models/card.model';
 import { CardReward } from '../../models/encounter.model';
 import { getCardDefinition } from '../../constants/card-definitions';
@@ -13,7 +13,7 @@ interface DraftCard {
   templateUrl: './card-draft.component.html',
   styleUrls: ['./card-draft.component.scss'],
 })
-export class CardDraftComponent implements OnDestroy {
+export class CardDraftComponent implements OnDestroy, OnChanges {
   @Input() cardChoices: CardReward[] = [];
   /** Gold awarded on skip (0 = show plain "Skip Card"). */
   @Input() skipGoldAmount = 0;
@@ -50,6 +50,33 @@ export class CardDraftComponent implements OnDestroy {
     this.cancelLongPress();
     this.hoveredCard = null;
     this.hoveredCardRect = null;
+  }
+
+  /**
+   * Clear any stale hover state when a new draft loads. Without this, a
+   * tooltip captured during the previous draft (e.g. autofocus on mount
+   * before layout settles, leaving a zero-rect anchored at viewport 0,0)
+   * persists across the screen transition.
+   */
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['cardChoices']) {
+      this.cancelHoverDelay();
+      this.cancelLongPress();
+      this.hoveredCard = null;
+      this.hoveredCardRect = null;
+      this.selectedCard = null;
+      this.longPressFired = false;
+    }
+  }
+
+  /**
+   * Validate a getBoundingClientRect result before binding it. A zero-sized
+   * rect indicates the element is detached, display:none, or hasn't laid
+   * out yet — using it as the tooltip anchor would pin the tooltip to
+   * viewport (0, 0).
+   */
+  private isValidRect(rect: DOMRect): boolean {
+    return rect.width > 0 && rect.height > 0;
   }
 
   get resolvedCards(): DraftCard[] {
@@ -111,8 +138,12 @@ export class CardDraftComponent implements OnDestroy {
     const target = event.currentTarget as HTMLElement;
     this.hoverDelayTimer = setTimeout(() => {
       this.hoverDelayTimer = null;
+      const rect = target.getBoundingClientRect();
+      // Skip when the card hasn't laid out — pinning the tooltip to a
+      // zero rect would anchor it at viewport (0, 0).
+      if (!this.isValidRect(rect)) return;
       this.hoveredCard = card;
-      this.hoveredCardRect = target.getBoundingClientRect();
+      this.hoveredCardRect = rect;
     }, CardDraftComponent.HOVER_DELAY_MS);
   }
 
@@ -126,11 +157,29 @@ export class CardDraftComponent implements OnDestroy {
   // Keyboard users need the same description payload mouse users get on hover.
   // Focus shows the tooltip immediately (no 200ms delay — tab navigation
   // expects responsive feedback). Blur clears.
+  //
+  // Mount-time autofocus path: the browser may auto-focus the first focusable
+  // element before Angular finishes laying out the card-draft. The rect at
+  // that moment is zero. If we wrote it, the tooltip would anchor to viewport
+  // (0, 0) — visible as a stuck card preview in the top-left until the user
+  // moves focus or blurs. Defer to the next animation frame in that case so
+  // the rect can settle. If the second read is still invalid, drop the focus
+  // entirely — better no tooltip than a broken one.
   onCardFocus(event: FocusEvent, card: DraftCard): void {
     this.cancelHoverDelay();
     const target = event.currentTarget as HTMLElement;
-    this.hoveredCard = card;
-    this.hoveredCardRect = target.getBoundingClientRect();
+    const rect = target.getBoundingClientRect();
+    if (this.isValidRect(rect)) {
+      this.hoveredCard = card;
+      this.hoveredCardRect = rect;
+      return;
+    }
+    requestAnimationFrame(() => {
+      const retry = target.getBoundingClientRect();
+      if (!this.isValidRect(retry)) return;
+      this.hoveredCard = card;
+      this.hoveredCardRect = retry;
+    });
   }
 
   onCardBlur(): void {
@@ -157,9 +206,11 @@ export class CardDraftComponent implements OnDestroy {
     const target = event.currentTarget as HTMLElement;
     this.longPressTimer = setTimeout(() => {
       this.longPressTimer = null;
+      const rect = target.getBoundingClientRect();
+      if (!this.isValidRect(rect)) return;
       this.longPressFired = true;
       this.hoveredCard = card;
-      this.hoveredCardRect = target.getBoundingClientRect();
+      this.hoveredCardRect = rect;
     }, CardDraftComponent.LONG_PRESS_MS);
   }
 

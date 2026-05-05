@@ -180,6 +180,51 @@ describe('CardDraftComponent', () => {
       expect(component.hoveredCard).toBeNull();
     }));
 
+    it('keyboard focus on a not-yet-laid-out element does NOT pin tooltip to viewport (0,0)', () => {
+      // Regression: on /run reward-screen mount, the browser auto-focuses the
+      // first draft card before Angular finishes laying out its position.
+      // getBoundingClientRect at that moment returns a zero rect; without the
+      // guard, the tooltip would anchor to viewport (0, 0) — visible as a
+      // stuck card preview in the top-left.
+      const item = component.resolvedCards[0];
+      const detachedTarget = document.createElement('button');
+      // Detached element: getBoundingClientRect returns zero on all fields
+      const event = { currentTarget: detachedTarget } as unknown as FocusEvent;
+
+      component.onCardFocus(event, item);
+
+      // Synchronous path: must NOT have set hoveredCard (rect was zero).
+      // The retry-on-rAF still fires but rect remains zero on a detached
+      // element so it bails too.
+      expect(component.hoveredCard).toBeNull();
+      expect(component.hoveredCardRect).toBeNull();
+    });
+
+    it('ngOnChanges clears stale hover state when cardChoices changes', () => {
+      // Simulate a tooltip that lingered from a previous draft into a new one.
+      // The previous draft's rect would now be stale relative to the
+      // current card layout — clearing on input change is the safety net.
+      const stubRect = {
+        top: 100, left: 100, width: 120, height: 80,
+        bottom: 180, right: 220, x: 100, y: 100,
+        toJSON: () => ({}),
+      } as DOMRect;
+      component.hoveredCard = component.resolvedCards[0];
+      component.hoveredCardRect = stubRect;
+
+      component.ngOnChanges({
+        cardChoices: {
+          previousValue: component.cardChoices,
+          currentValue: [],
+          firstChange: false,
+          isFirstChange: () => false,
+        },
+      });
+
+      expect(component.hoveredCard).toBeNull();
+      expect(component.hoveredCardRect).toBeNull();
+    });
+
     it('keyboard focus shows tooltip immediately (no hover delay)', () => {
       const item = component.resolvedCards[0];
       const card = (fixture.nativeElement as HTMLElement)
