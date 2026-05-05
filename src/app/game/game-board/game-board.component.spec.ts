@@ -11,6 +11,10 @@ import { GameStatsService } from './services/game-stats.service';
 import { PlayerProfileService } from '../../core/services/player-profile.service';
 import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService } from './services/minimap.service';
+import { ForwardSimulationService } from './services/forward-simulation.service';
+import { EnemyIntentService } from './services/enemy-intent.service';
+import { TowerFireZonePreviewService } from './services/tower-fire-zone-preview.service';
+import { ProjectileVisualService } from './services/projectile-visual.service';
 import { SettingsService } from '../../core/services/settings.service';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase } from './models/game-state.model';
 import { TowerType, TowerSpecialization, PlacedTower, TargetingMode } from './models/tower.model';
@@ -245,6 +249,34 @@ describe('GameBoardComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  // Guards against a misconfigured providers array silently no-opping the
+  // legibility-stack services. All four use @Optional() injection in
+  // GameRenderService — if any of them is dropped from GameBoardComponent.providers,
+  // the entire feature stack quietly disappears in production with no
+  // failing test. This integration spec resolves each via the component's
+  // own injector to verify they're registered.
+  describe('legibility-stack provider registration', () => {
+    it('ForwardSimulationService is registered in component scope', () => {
+      const svc = fixture.debugElement.injector.get(ForwardSimulationService);
+      expect(svc).toBeTruthy();
+    });
+
+    it('EnemyIntentService is registered in component scope', () => {
+      const svc = fixture.debugElement.injector.get(EnemyIntentService);
+      expect(svc).toBeTruthy();
+    });
+
+    it('TowerFireZonePreviewService is registered in component scope', () => {
+      const svc = fixture.debugElement.injector.get(TowerFireZonePreviewService);
+      expect(svc).toBeTruthy();
+    });
+
+    it('ProjectileVisualService is registered in component scope', () => {
+      const svc = fixture.debugElement.injector.get(ProjectileVisualService);
+      expect(svc).toBeTruthy();
+    });
   });
 
   describe('goToEditor', () => {

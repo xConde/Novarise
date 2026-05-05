@@ -14,7 +14,6 @@ interface PopupAccumulator {
   lastPosition: { x: number; y: number; z: number };
   lastShieldHit: boolean;
   lastSource: DamagePopupSource;
-  scene: THREE.Scene;
 }
 
 @Injectable()
@@ -72,22 +71,26 @@ export class DamagePopupService {
   ): void {
     if (damage === 0 && !isShieldHit) return;
 
+    // The `scene` parameter is passed in by callers but stored only on the
+    // call stack — flushOne/flush always receive it again from the resolver.
+    // Keeping the accumulator scene-free avoids a stale reference if the
+    // scene is ever swapped between accumulate and flush.
     const existing = this.accumulators.get(enemyId);
     if (existing) {
       existing.total += damage;
       existing.lastPosition = position;
       existing.lastShieldHit = isShieldHit;
       existing.lastSource = source;
-      existing.scene = scene;
     } else {
       this.accumulators.set(enemyId, {
         total: damage,
         lastPosition: position,
         lastShieldHit: isShieldHit,
         lastSource: source,
-        scene,
       });
     }
+    // `scene` is intentionally unused here — see the comment above.
+    void scene;
   }
 
   /**
