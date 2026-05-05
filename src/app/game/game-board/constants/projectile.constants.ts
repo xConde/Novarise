@@ -91,6 +91,29 @@ export const PROJECTILE_ARC_CONFIG = {
 } as const;
 
 /**
+ * AURA idiom — radial pulse emanating from the SLOW tower base each fire.
+ *
+ * A flat ring (RingGeometry) at the tower's base expands from 0 to `auraRadius`
+ * world units over `lifetimeSec` seconds while opacity ramps 1 → 0.  The visual
+ * confirms that the slow-aura just activated this turn; damage / status
+ * application is handled entirely by the existing `applySlowAura` sim path.
+ *
+ * Reduce-motion: pulse is skipped entirely.  Status path unaffected.
+ * Per-instance material so multiple SLOW towers can pulse with distinct colors.
+ */
+export const PROJECTILE_AURA_CONFIG = {
+  /** Pulse expansion + fade duration in seconds. */
+  lifetimeSec: 0.45,
+  /** Y offset above tower base — pulse rides just above the ground. */
+  yOffsetGround: 0.05,
+  /** Inner-to-outer ring ratio. 0.85 = thin halo; 0 = solid disc. */
+  innerRatio: 0.85,
+  ringSegments: 48,
+  /** Starting opacity at age 0 (linearly ramps to 0 over lifetimeSec). */
+  opacityStart: 0.7,
+} as const;
+
+/**
  * BOLT idiom — small sphere that physically travels from tower to target.
  * Used by BASIC (the most common fire path).
  */

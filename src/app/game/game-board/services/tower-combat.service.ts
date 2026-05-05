@@ -32,7 +32,7 @@ import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { CONDUIT_CONFIG } from '../constants/conduit.constants';
 import { RELIC_EFFECT_CONFIG } from '../../../run/constants/run.constants';
 import { ProjectileVisualService } from './projectile-visual.service';
-import { PROJECTILE_HITSCAN_CONFIG, PROJECTILE_ARC_CONFIG, PROJECTILE_BOLT_CONFIG, PROJECTILE_SPLASH_CONFIG } from '../constants/projectile.constants';
+import { PROJECTILE_HITSCAN_CONFIG, PROJECTILE_ARC_CONFIG, PROJECTILE_BOLT_CONFIG, PROJECTILE_SPLASH_CONFIG, PROJECTILE_AURA_CONFIG } from '../constants/projectile.constants';
 
 /** M3 S4: turn-based mortar DoT zone. Replaces the legacy real-time path for fireTurn. */
 interface TurnMortarZone {
@@ -466,7 +466,7 @@ export class TowerCombatService {
       let lastTarget: Enemy | null = null;
       for (let shot = 0; shot < shotsPerTurn; shot++) {
         if (tower.type === TowerType.SLOW) {
-          this.applySlowAura(tower, stats, turnNumber);
+          this.applySlowAura(tower, stats, turnNumber, scene);
           this.towerAnimationService.triggerFire(tower);
           fired.push(tower.type);
           break; // Aura fires once regardless of shotsPerTurn.
@@ -1149,7 +1149,7 @@ export class TowerCombatService {
     return best;
   }
 
-  private applySlowAura(tower: PlacedTower, stats: TowerStats, turnNumber: number): void {
+  private applySlowAura(tower: PlacedTower, stats: TowerStats, turnNumber: number, scene: THREE.Scene): void {
     const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
 
     const candidates = this.spatialGrid.queryRadius(towerWorldX, towerWorldZ, stats.range);
@@ -1164,6 +1164,20 @@ export class TowerCombatService {
       // StatusEffectService handles immunity (flying), duration refresh, and speed mutation.
       // turnNumber is the StatusEffectService clock in turn-based mode.
       this.statusEffectService.apply(enemy.id, StatusEffectType.SLOW, turnNumber, stats.slowFactor);
+    }
+
+    // AURA visual — spawned after status application so the cosmetic never
+    // gates the sim path.  Confirms to the player that the slow-aura pulse
+    // just activated this turn.  stats.range is already in world units (same
+    // coordinate space as enemy positions — see getTowerWorldPos / gridToWorld).
+    if (this.projectileVisualService) {
+      const centerWorld = new THREE.Vector3(towerWorldX, PROJECTILE_AURA_CONFIG.yOffsetGround, towerWorldZ);
+      this.projectileVisualService.fireAura(
+        centerWorld,
+        stats.range,
+        TOWER_CONFIGS[TowerType.SLOW].color,
+        scene,
+      );
     }
   }
 

@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import * as THREE from 'three';
 
-import { PROJECTILE_HITSCAN_CONFIG, PROJECTILE_BOLT_CONFIG, PROJECTILE_ARC_CONFIG, PROJECTILE_SPLASH_CONFIG } from '../constants/projectile.constants';
+import { PROJECTILE_HITSCAN_CONFIG, PROJECTILE_BOLT_CONFIG, PROJECTILE_ARC_CONFIG, PROJECTILE_SPLASH_CONFIG, PROJECTILE_AURA_CONFIG } from '../constants/projectile.constants';
 
 /**
  * Manages all in-flight projectile visuals regardless of idiom.
@@ -38,7 +38,7 @@ import { PROJECTILE_HITSCAN_CONFIG, PROJECTILE_BOLT_CONFIG, PROJECTILE_ARC_CONFI
  */
 @Injectable()
 export class ProjectileVisualService implements OnDestroy {
-  /** Managed list of all in-flight projectile entries (hitscan + bolt + arc + splash). */
+  /** Managed list of all in-flight projectile entries (hitscan + bolt + arc + splash + aura). */
   private readonly entries: ProjectileEntry[] = [];
 
   // ── Public API ───────────────────────────────────────────────────────────
@@ -252,6 +252,56 @@ export class ProjectileVisualService implements OnDestroy {
   }
 
   /**
+   * Spawn a radial pulse from the SLOW tower base to confirm the slow-aura
+   * activated this turn.
+   *
+   * A flat ring at `centerWorld` expands from 0 to `auraRadius` world units
+   * over `PROJECTILE_AURA_CONFIG.lifetimeSec` seconds while opacity ramps
+   * from `opacityStart` to 0.  The ring lies on the XZ plane (rotated −90°
+   * around X) at `yOffsetGround` above the ground.
+   *
+   * The visual is gated by the reduce-motion preference — see class doc.
+   * Damage / status application is already handled by `applySlowAura` in the
+   * sim path before this method is called.
+   *
+   * Per-instance material: simultaneous SLOW tower pulses carry distinct
+   * colors (relevant when specialization recolors towers).
+   *
+   * @param centerWorld  World-space tower centre (X, Z used; Y replaced by yOffsetGround).
+   * @param auraRadius   World-unit reach of the aura — the ring scales to this maximum.
+   * @param color        Hex colour for the ring material (per-instance).
+   * @param scene        Active Three.js scene; the mesh is added immediately.
+   */
+  fireAura(centerWorld: THREE.Vector3, auraRadius: number, color: number, scene: THREE.Scene): void {
+    if (this.isReduceMotion()) return;
+
+    const { innerRatio, ringSegments, yOffsetGround, opacityStart } = PROJECTILE_AURA_CONFIG;
+
+    // Use auraRadius as the outer radius seed — at age 0 the ring is scaled
+    // to 0 anyway, so the initial geometry size doesn't affect appearance.
+    const outerSeed = auraRadius > 0 ? auraRadius : 1;
+    const geo = new THREE.RingGeometry(outerSeed * innerRatio, outerSeed, ringSegments);
+    const mat = new THREE.MeshBasicMaterial({
+      color,
+      opacity: opacityStart,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    // Orient flat ring to lie on the XZ plane (ring geometry is in XY by default).
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(centerWorld.x, yOffsetGround, centerWorld.z);
+    // Start scaled to zero — update() scales up from here.
+    mesh.scale.setScalar(0);
+    mesh.renderOrder = 2;
+
+    scene.add(mesh);
+
+    this.entries.push({ kind: 'aura', mesh, geo, mat, age: 0, radius: auraRadius, scene });
+  }
+
+  /**
    * Advance all in-flight visuals by `deltaTime` seconds.
    * Expired entries are removed from the scene and their GPU resources
    * are disposed.  Call once per animation frame.
@@ -266,6 +316,7 @@ export class ProjectileVisualService implements OnDestroy {
     const { lifetimeSec: arcLifetime, arcApex } = PROJECTILE_ARC_CONFIG;
     const { travelLifetimeSec, impactLifetimeSec } = PROJECTILE_SPLASH_CONFIG;
     const splashTotalLifetime = travelLifetimeSec + impactLifetimeSec;
+    const { lifetimeSec: auraLifetime, opacityStart } = PROJECTILE_AURA_CONFIG;
 
     for (let i = this.entries.length - 1; i >= 0; i--) {
       const entry = this.entries[i];
@@ -317,8 +368,7 @@ export class ProjectileVisualService implements OnDestroy {
         entry.mesh.position.z = entry.from.z + (entry.to.z - entry.from.z) * t;
         const linearY = entry.from.y + (entry.to.y - entry.from.y) * t;
         entry.mesh.position.y = linearY + arcApex * 4 * t * (1 - t);
-      } else {
-        // kind === 'splash'
+      } else if (entry.kind === 'splash') {
         if (entry.age >= splashTotalLifetime) {
           this.disposeSplashEntry(entry);
           this.entries.splice(i, 1);
@@ -345,6 +395,22 @@ export class ProjectileVisualService implements OnDestroy {
           // Opacity ramps 1 → 0 as ring expands.
           entry.ringMat.opacity = Math.max(0, 1 - p);
         }
+      } else {
+        // kind === 'aura'
+        if (entry.age >= auraLifetime) {
+          this.disposeAuraEntry(entry);
+          this.entries.splice(i, 1);
+          continue;
+        }
+
+        // t = 0 at spawn, t = 1 at expiry.
+        const t = entry.age / auraLifetime;
+
+        // Scale ring from 0 → auraRadius.
+        entry.mesh.scale.setScalar(t * entry.radius);
+
+        // Opacity ramps opacityStart → 0 linearly.
+        entry.mat.opacity = Math.max(0, opacityStart * (1 - t));
       }
     }
   }
@@ -363,8 +429,10 @@ export class ProjectileVisualService implements OnDestroy {
         this.disposeBoltEntry(entry);
       } else if (entry.kind === 'arc') {
         this.disposeArcEntry(entry);
-      } else {
+      } else if (entry.kind === 'splash') {
         this.disposeSplashEntry(entry);
+      } else {
+        this.disposeAuraEntry(entry);
       }
     }
     this.entries.length = 0;
@@ -420,6 +488,13 @@ export class ProjectileVisualService implements OnDestroy {
     entry.sphereMat.dispose();
     entry.ringGeo.dispose();
     entry.ringMat.dispose();
+  }
+
+  /** Remove the aura ring mesh from its scene and free all GPU resources. */
+  private disposeAuraEntry(entry: AuraEntry): void {
+    entry.scene.remove(entry.mesh);
+    entry.geo.dispose();
+    entry.mat.dispose();
   }
 }
 
@@ -499,5 +574,26 @@ interface SplashEntry {
   readonly scene: THREE.Scene;
 }
 
+/**
+ * One in-flight aura pulse — used by the SLOW tower.
+ *
+ * A flat ring starts at scale 0 (invisible at spawn) and expands to
+ * `radius` world units over `PROJECTILE_AURA_CONFIG.lifetimeSec` seconds
+ * while opacity ramps from `opacityStart` to 0.  Single mesh, single phase.
+ */
+interface AuraEntry {
+  readonly kind: 'aura';
+  /** Ring mesh — scale and opacity animated by update(). */
+  readonly mesh: THREE.Mesh;
+  readonly geo: THREE.RingGeometry;
+  readonly mat: THREE.MeshBasicMaterial;
+  /** World-unit maximum radius the ring reaches at end of lifetime. */
+  readonly radius: number;
+  /** Seconds elapsed since spawn. */
+  age: number;
+  /** Scene the mesh was added to — needed for safe removal. */
+  readonly scene: THREE.Scene;
+}
+
 /** Discriminated union of all in-flight projectile entry kinds. */
-type ProjectileEntry = HitscanEntry | BoltEntry | ArcEntry | SplashEntry;
+type ProjectileEntry = HitscanEntry | BoltEntry | ArcEntry | SplashEntry | AuraEntry;
