@@ -37,6 +37,7 @@ import { GoldPopupService } from './gold-popup.service';
 import { VfxPoolService } from './vfx-pool.service';
 import { TowerDecalLibraryService } from './tower-decal-library.service';
 import { AimLineService } from './aim-line.service';
+import { ProjectileVisualService } from './projectile-visual.service';
 import { buildDisposeProtect, disposeGroup } from '../utils/three-utils';
 
 /**
@@ -92,6 +93,10 @@ export class GameSessionService {
     // @Optional() — aim-line cylinder for selected tower; cleanup() removes
     // the mesh from the scene and disposes geometry + material.
     @Optional() private aimLineService?: AimLineService,
+    // @Optional() — projectile dispatcher (HITSCAN / BOLT / ARC / SPLASH /
+    // AURA). cleanup() called from cleanupScene to drop any mid-flight
+    // visuals before encounter teardown disposes the scene.
+    @Optional() private projectileVisualService?: ProjectileVisualService,
   ) {}
 
   /**
@@ -188,6 +193,14 @@ export class GameSessionService {
     // Dispose aim-line cylinder (mesh + geometry + material). Must run before
     // tower mesh disposal in case the line references the same scene context.
     this.aimLineService?.cleanup();
+
+    // Dispose any in-flight projectile visuals (HITSCAN / BOLT / ARC / SPLASH /
+    // AURA). Without this, an encounter restart leaving mid-flight projectiles
+    // in the scene would orphan their meshes/materials when the scene's tower
+    // meshes get disposed below — the projectile entries point at a dead
+    // scene reference. Run BEFORE tower-mesh disposal so the cleanup path
+    // can still call scene.remove() on attached visuals.
+    this.projectileVisualService?.cleanup(scene);
 
     // Dispose tower meshes — protect registry-owned geometry/material so
     // single-mesh disposal doesn't break the cache. Registries themselves
