@@ -31,6 +31,27 @@ export const PROJECTILE_HITSCAN_CONFIG = {
 } as const;
 
 /**
+ * ARC idiom — larger sphere that follows a parabolic trajectory from tower to
+ * target.  Used by MORTAR.  Slower than BOLT to telegraph the incoming shell
+ * and give the arc shape time to read.
+ */
+export const PROJECTILE_ARC_CONFIG = {
+  /** Total flight time in seconds — slower than BOLT to emphasize the arc. */
+  lifetimeSec: 0.4,
+  /** Sphere radius in world units — larger than BOLT (mortar shell). */
+  radius: 0.18,
+  widthSegments: 10,
+  heightSegments: 8,
+  /** World-unit Y offset above tower base for spawn position. */
+  yOffsetTower: 0.6,
+  /** World-unit Y offset above enemy base for impact position. */
+  yOffsetEnemy: 0.4,
+  /** Peak height of the parabolic arc above the linear lerp baseline (world units). */
+  arcApex: 2.0,
+  opacity: 1.0,
+} as const;
+
+/**
  * BOLT idiom — small sphere that physically travels from tower to target.
  * Used by BASIC (the most common fire path).
  */

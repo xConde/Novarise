@@ -32,7 +32,7 @@ import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { CONDUIT_CONFIG } from '../constants/conduit.constants';
 import { RELIC_EFFECT_CONFIG } from '../../../run/constants/run.constants';
 import { ProjectileVisualService } from './projectile-visual.service';
-import { PROJECTILE_HITSCAN_CONFIG, PROJECTILE_BOLT_CONFIG } from '../constants/projectile.constants';
+import { PROJECTILE_HITSCAN_CONFIG, PROJECTILE_ARC_CONFIG, PROJECTILE_BOLT_CONFIG } from '../constants/projectile.constants';
 
 /** M3 S4: turn-based mortar DoT zone. Replaces the legacy real-time path for fireTurn. */
 interface TurnMortarZone {
@@ -622,6 +622,30 @@ export class TowerCombatService {
         target.position.x, target.position.z, blastRadius, dotDuration, scene, turnNumber,
       );
       this.pendingAudioEvents.push({ type: 'sfx', sfxKey: 'mortarExplosion' });
+
+      // ARC visual — MORTAR (Sprint 3).  Spawned after damage/zone logic so
+      // the cosmetic never gates the sim path.  The shell arcs over ~400 ms;
+      // the zone appears at the same frame, which is intentional — players
+      // accept slight visual latency on a telegraphed AOE weapon.
+      if (this.projectileVisualService) {
+        const { x: twx, z: twz } = this.getTowerWorldPos(tower);
+        const arcFrom = new THREE.Vector3(
+          twx,
+          PROJECTILE_ARC_CONFIG.yOffsetTower,
+          twz,
+        );
+        const arcTo = new THREE.Vector3(
+          target.position.x,
+          PROJECTILE_ARC_CONFIG.yOffsetEnemy,
+          target.position.z,
+        );
+        this.projectileVisualService.fireArc(
+          arcFrom,
+          arcTo,
+          TOWER_CONFIGS[TowerType.MORTAR].color,
+          scene,
+        );
+      }
     } else {
       // Single-target or splash
       const splashRadius = stats.splashRadius ?? 0;
