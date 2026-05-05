@@ -231,6 +231,36 @@ describe('CardDraftComponent', () => {
       expect(component.hoveredCard).toBe(item);
     }));
 
+    it('long-press suppresses the click that synthesizes after pointerup (no double-fire)', fakeAsync(() => {
+      const item = component.resolvedCards[0];
+      const card = (fixture.nativeElement as HTMLElement)
+        .querySelectorAll<HTMLButtonElement>('.card-draft__card')[0];
+      const downEvent = new PointerEvent('pointerdown', {
+        pointerType: 'touch', clientX: 50, clientY: 50, bubbles: true,
+      });
+      Object.defineProperty(downEvent, 'currentTarget', { value: card });
+      let pickEmitted = false;
+      component.cardPicked.subscribe(() => { pickEmitted = true; });
+
+      component.onCardPointerDown(downEvent, item);
+      tick(500); // long-press fires, tooltip shows
+      // Now the synthesized click that follows pointerup must NOT commit the pick
+      component.pickCard(item.reward);
+
+      expect(pickEmitted).toBeFalse();
+    }));
+
+    it('a normal tap (no long-press) still picks the card', fakeAsync(() => {
+      const item = component.resolvedCards[0];
+      let pickEmitted = false;
+      component.cardPicked.subscribe(() => { pickEmitted = true; });
+
+      // No pointerdown / no long-press — direct click path (mouse or short tap).
+      component.pickCard(item.reward);
+
+      expect(pickEmitted).toBeTrue();
+    }));
+
     it('long-press is cancelled if pointer moves beyond slop threshold', fakeAsync(() => {
       const item = component.resolvedCards[0];
       const card = (fixture.nativeElement as HTMLElement)
@@ -250,7 +280,13 @@ describe('CardDraftComponent', () => {
       expect(component.hoveredCard).toBeNull();
     }));
 
-    it('click after long-press still emits cardPicked (long-press does not block tap-to-pick)', fakeAsync(() => {
+    it('click after long-press is suppressed (peek-vs-commit gesture separation)', fakeAsync(() => {
+      // QA-flag fix: original design treated long-press as a peek where the
+      // synthesized click after pointerup committed the pick. That made
+      // long-pressing to read a card unreliable — any hold beyond 500ms
+      // would commit. New behavior: long-press peeks, a separate tap
+      // (no held interval) commits. Mirrors card-hand's longPressFired
+      // suppression pattern.
       const item = component.resolvedCards[0];
       const card = (fixture.nativeElement as HTMLElement)
         .querySelectorAll<HTMLButtonElement>('.card-draft__card')[0];
@@ -264,6 +300,11 @@ describe('CardDraftComponent', () => {
 
       const emitted: CardReward[] = [];
       component.cardPicked.subscribe(r => emitted.push(r));
+      component.pickCard(item.reward);
+      // Long-press fired → click suppressed → no commit on this gesture
+      expect(emitted.length).toBe(0);
+
+      // A subsequent independent tap commits normally
       component.pickCard(item.reward);
       expect(emitted.length).toBe(1);
       expect(emitted[0].cardId).toBe(CardId.GOLD_RUSH);

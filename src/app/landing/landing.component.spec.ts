@@ -172,25 +172,6 @@ describe('LandingComponent', () => {
     });
   });
 
-  describe('getAscensionPreview()', () => {
-    it('returns null at A0', () => {
-      component.selectedAscension = 0;
-      expect(component.getAscensionPreview()).toBeNull();
-    });
-
-    it('returns a string containing A3 description at A3', () => {
-      component.selectedAscension = 3;
-      const preview = component.getAscensionPreview();
-      expect(preview).toBe('A3: Start with 20 less gold');
-    });
-
-    it('returns a string containing A18 description at A18', () => {
-      component.selectedAscension = 18;
-      const preview = component.getAscensionPreview();
-      expect(preview).toBe('A18: Your starting relic is drawn from common stock only');
-    });
-  });
-
   describe('getAscensionStack()', () => {
     it('returns empty array at A0', () => {
       component.selectedAscension = 0;

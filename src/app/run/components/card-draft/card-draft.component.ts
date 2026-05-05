@@ -37,6 +37,13 @@ export class CardDraftComponent implements OnDestroy {
   private longPressTimer: ReturnType<typeof setTimeout> | null = null;
   private longPressStartX = 0;
   private longPressStartY = 0;
+  /**
+   * Set true when the long-press timer fires (tooltip shown). Read by
+   * pickCard() to suppress the click that synthesizes after a touch
+   * pointerup. Without this guard, every long-press to peek at a card
+   * would also commit the pick — a real touch-UX bug surfaced in QA.
+   */
+  private longPressFired = false;
 
   ngOnDestroy(): void {
     this.cancelHoverDelay();
@@ -53,6 +60,13 @@ export class CardDraftComponent implements OnDestroy {
   }
 
   pickCard(reward: CardReward): void {
+    // Long-press just fired (tooltip showing). Swallow the click so a
+    // long-press peek doesn't also commit the pick. Reset the flag for
+    // the next gesture. Mirrors card-hand's longPressFired pattern.
+    if (this.longPressFired) {
+      this.longPressFired = false;
+      return;
+    }
     this.hoveredCard = null;
     this.hoveredCardRect = null;
     this.cancelHoverDelay();
@@ -137,11 +151,13 @@ export class CardDraftComponent implements OnDestroy {
   onCardPointerDown(event: PointerEvent, card: DraftCard): void {
     if (event.pointerType === 'mouse') return;
     this.cancelLongPress();
+    this.longPressFired = false;
     this.longPressStartX = event.clientX;
     this.longPressStartY = event.clientY;
     const target = event.currentTarget as HTMLElement;
     this.longPressTimer = setTimeout(() => {
       this.longPressTimer = null;
+      this.longPressFired = true;
       this.hoveredCard = card;
       this.hoveredCardRect = target.getBoundingClientRect();
     }, CardDraftComponent.LONG_PRESS_MS);

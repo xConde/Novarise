@@ -1332,12 +1332,15 @@ describe('RunService', () => {
       const uncommonPct = counts['uncommon'] / total;
       const rarePct = counts['rare'] / total;
 
-      // Allow ±10% tolerance on each tier
+      // Allow ±10% tolerance on each tier. Pity-aware lower bound: at 10%
+      // baseline the per-1000 sample plus pity uplift sits comfortably
+      // above 8%, so the older 4% floor was loose enough to silently miss
+      // a regression that stripped the pity timer. Tightened to 8%.
       expect(commonPct).toBeGreaterThanOrEqual(0.50);
       expect(commonPct).toBeLessThanOrEqual(0.70);
       expect(uncommonPct).toBeGreaterThanOrEqual(0.20);
       expect(uncommonPct).toBeLessThanOrEqual(0.40);
-      expect(rarePct).toBeGreaterThanOrEqual(0.04);
+      expect(rarePct).toBeGreaterThanOrEqual(0.08);
       expect(rarePct).toBeLessThanOrEqual(0.18);
     }));
 

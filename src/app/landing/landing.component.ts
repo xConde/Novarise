@@ -55,17 +55,6 @@ export class LandingComponent implements OnInit {
   }
 
   /**
-   * Returns a one-line preview of JUST the selected level's modifier, or
-   * null at A0. Kept for compact UI surfaces; new callers should prefer
-   * `getAscensionStack()` for the full cumulative breakdown.
-   */
-  getAscensionPreview(): string | null {
-    if (this.selectedAscension === 0) return null;
-    const def = ASCENSION_LEVELS[this.selectedAscension - 1];
-    return `A${this.selectedAscension}: ${def.description}`;
-  }
-
-  /**
    * The full A1 → A_selected modifier stack. Players picking A5 should see
    * that ALL of A1..A5 modifiers stack, not just the topmost level. Empty
    * when selectedAscension is 0.

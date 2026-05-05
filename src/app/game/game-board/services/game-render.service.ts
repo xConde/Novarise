@@ -384,7 +384,15 @@ export class GameRenderService {
       if (!group) return null;
       const raw = group.userData['currentAimTarget'] as unknown;
       if (raw == null || typeof raw !== 'object') return null;
-      return raw as Enemy;
+      const candidate = raw as Enemy;
+      // Filter dying / dead targets — TargetPreviewService can hold a
+      // stale reference for one frame between an enemy dying and the
+      // cache invalidating. Crediting damage to a corpse would inflate
+      // the predicted-loss overlay on a still-living enemy in the same
+      // turn. This guard runs every tick so it self-corrects at the
+      // next render frame after invalidation lands.
+      if (candidate.dying || candidate.health <= 0) return null;
+      return candidate;
     };
     this.enemyHealthService.updatePredictedHealthBars(
       this.enemyService.getEnemies(),

@@ -238,10 +238,16 @@ export const REWARD_RARITY_WEIGHTS = {
 } as const;
 
 /**
- * Pity-timer threshold for card rewards. After this many consecutive
- * non-rare picks across combat rewards + shop, the next card pick is
- * forced to RARE and the counter resets. Genre-standard floor that
- * protects players from cold streaks without bumping baseline weights.
+ * Pity-timer threshold for COMBAT-REWARD card picks. After this many
+ * consecutive non-rare picks via `RunService.pickCardRewards`, the next
+ * card pick is forced to RARE and the counter resets. Genre-standard
+ * floor that protects players from cold streaks without bumping
+ * baseline weights.
+ *
+ * **Scope: combat rewards only.** `RunService.generateShopItems` picks
+ * shop cards through a separate code path that does NOT read or advance
+ * `cardPityCounter` — shop picks are independent draws. If shop
+ * participation is wanted, wire it explicitly in a later sprint.
  *
  * Calibration: at the 10% rare weight, an unbroken pity streak fires
  * after every ~9 expected picks of bad luck, well above the typical

@@ -676,9 +676,14 @@ export class TowerCombatService {
         }
 
         // SPLASH visual — spawned AFTER damage loop so the cosmetic never
-        // gates the sim path.  Fires once per shot toward the primary target;
+        // gates the sim path. Fires once per shot toward the primary target;
         // the expanding ring telegraphs the AOE radius that was just resolved.
-        if (tower.type === TowerType.SPLASH && this.projectileVisualService) {
+        // Gated only on `splashRadius > 0` (the outer branch already enforces
+        // this) so HIVE_MIND towers borrowing splash from a SPLASH neighbor
+        // also fire the visual — any AOE that deals damage gets a ring.
+        // Color uses the tower's own type so a HIVE_MIND borrower reads as
+        // a HIVE_MIND-tinted splash, not a stolen SPLASH ring.
+        if (this.projectileVisualService) {
           const { x: twx, z: twz } = this.getTowerWorldPos(tower);
           const splashFrom = new THREE.Vector3(
             twx,
@@ -690,11 +695,13 @@ export class TowerCombatService {
             PROJECTILE_SPLASH_CONFIG.yOffsetEnemy,
             target.position.z,
           );
+          const splashColor = TOWER_CONFIGS[tower.type]?.color
+            ?? TOWER_CONFIGS[TowerType.SPLASH].color;
           this.projectileVisualService.fireSplash(
             splashFrom,
             splashTo,
             splashRadius,
-            TOWER_CONFIGS[TowerType.SPLASH].color,
+            splashColor,
             scene,
           );
         }
