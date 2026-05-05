@@ -32,7 +32,7 @@ import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { CONDUIT_CONFIG } from '../constants/conduit.constants';
 import { RELIC_EFFECT_CONFIG } from '../../../run/constants/run.constants';
 import { ProjectileVisualService } from './projectile-visual.service';
-import { PROJECTILE_HITSCAN_CONFIG } from '../constants/projectile.constants';
+import { PROJECTILE_HITSCAN_CONFIG, PROJECTILE_BOLT_CONFIG } from '../constants/projectile.constants';
 
 /** M3 S4: turn-based mortar DoT zone. Replaces the legacy real-time path for fireTurn. */
 interface TurnMortarZone {
@@ -699,6 +699,30 @@ export class TowerCombatService {
             from,
             to,
             TOWER_CONFIGS[TowerType.SNIPER].color,
+            scene,
+          );
+        }
+
+        // BOLT visual — BASIC tower (Sprint 2).  Spawned AFTER damage for the
+        // same reason as HITSCAN.  The sphere travels cosmetically over
+        // ~150 ms; popup-vs-arrival desync is acceptable given turn-end flush
+        // aggregation already absorbs it.
+        if (tower.type === TowerType.BASIC && this.projectileVisualService) {
+          const { x: twx, z: twz } = this.getTowerWorldPos(tower);
+          const from = new THREE.Vector3(
+            twx,
+            PROJECTILE_BOLT_CONFIG.yOffsetTower,
+            twz,
+          );
+          const to = new THREE.Vector3(
+            target.position.x,
+            PROJECTILE_BOLT_CONFIG.yOffsetEnemy,
+            target.position.z,
+          );
+          this.projectileVisualService.fireBolt(
+            from,
+            to,
+            TOWER_CONFIGS[TowerType.BASIC].color,
             scene,
           );
         }

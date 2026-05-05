@@ -1,7 +1,7 @@
 /**
  * Constants for the projectile visual subsystem.
  *
- * Five idioms planned: HITSCAN (this sprint) / arc / chain / splash / status.
+ * Five idioms planned: HITSCAN / BOLT / arc / chain / splash / status.
  * Each idiom adds its own config object here; shared infra lives in
  * ProjectileVisualService.
  */
@@ -28,4 +28,24 @@ export const PROJECTILE_HITSCAN_CONFIG = {
    * correct without a code change.
    */
   linewidth: 2,
+} as const;
+
+/**
+ * BOLT idiom — small sphere that physically travels from tower to target.
+ * Used by BASIC (the most common fire path).
+ */
+export const PROJECTILE_BOLT_CONFIG = {
+  /** Total flight time in seconds. */
+  lifetimeSec: 0.15,
+  /** Sphere radius in world units. */
+  radius: 0.12,
+  /** Vertex segments for the sphere — kept low; small projectile, GPU budget matters under heavy fire. */
+  widthSegments: 8,
+  heightSegments: 6,
+  /** World-unit Y offset above tower base for spawn position. */
+  yOffsetTower: 0.6,
+  /** World-unit Y offset above enemy base for impact position. */
+  yOffsetEnemy: 0.4,
+  /** Material opacity. Bolt does not fade — short lifetime makes opacity ramping wasteful. */
+  opacity: 1.0,
 } as const;
