@@ -20,6 +20,9 @@
         <span class="pile-shape-badge pile-shape-badge--{{ c.type }}"
               aria-hidden="true"></span>
         <span class="pile-inspector__card-name">{{ c.name }}</span>
+        <span class="pile-inspector__card-upgraded-badge"
+              *ngIf="c.upgraded"
+              aria-label="Upgraded">+</span>
         <span class="pile-inspector__card-count">×{{ c.count }}</span>
       </div>
     </div>

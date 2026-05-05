@@ -125,6 +125,17 @@
   flex-shrink: 0;
 }
 
+// Matches the card-hand "+" badge typography so the upgrade signal reads
+// the same across surfaces. Sits between the card name and the pile count.
+.pile-inspector__card-upgraded-badge {
+  font-family: "Orbitron", sans-serif;
+  font-weight: 800;
+  font-size: var(--font-size-xs);
+  color: var(--game-gold);
+  flex-shrink: 0;
+  letter-spacing: 0;
+}
+
 .pile-inspector__empty {
   padding: var(--spacing-lg);
   text-align: center;
