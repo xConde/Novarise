@@ -94,6 +94,20 @@ export class RunService {
   /** Current shop items (generated on entering shop node). */
   private shopItems: ShopItem[] = [];
 
+  /**
+   * Per-run reward telemetry — in-memory only, reset at startNewRun. Tracks
+   * what rarity distribution the run actually saw so future analysis layers
+   * (player profile, debug overlay, telemetry pipeline) can read it without
+   * each one re-instrumenting pickCardRewards.
+   */
+  private rewardTelemetry = {
+    totalDraws: 0,
+    common: 0,
+    uncommon: 0,
+    rare: 0,
+    pityFires: 0,
+  };
+
   /** Current event (generated on entering event node). */
   private currentEvent: RunEvent | null = null;
 
@@ -242,6 +256,7 @@ export class RunService {
     this.currentEvent = null;
     this.runRng = null;
     this.lastShownDominantArchetype = null;
+    this.resetRewardTelemetry();
 
     const seed = Date.now();
     const config = this.applyAscensionToConfig(DEFAULT_RUN_CONFIG, ascensionLevel);
@@ -556,6 +571,13 @@ export class RunService {
       if (pool.length === 0) continue;
       const card = this.pickArchetypeAwareCard(pool, dominant, rng);
       picked.push({ type: 'card', cardId: card.id });
+      // Telemetry — increment per-rarity bucket + total + pity-fires when
+      // applicable so future analysis can correlate distribution with runs.
+      this.rewardTelemetry.totalDraws++;
+      if (rarity === CardRarity.RARE) this.rewardTelemetry.rare++;
+      else if (rarity === CardRarity.UNCOMMON) this.rewardTelemetry.uncommon++;
+      else if (rarity === CardRarity.COMMON) this.rewardTelemetry.common++;
+      if (pityForceRare) this.rewardTelemetry.pityFires++;
       // Counter mechanics: rare resets, non-rare increments.
       if (rarity === CardRarity.RARE) {
         pityCounter = 0;
@@ -1215,5 +1237,31 @@ export class RunService {
     this.deckService.clear();
     this.itemService.resetForRun();
     this.runStateFlagService.resetForRun();
+    this.resetRewardTelemetry();
+  }
+
+  /**
+   * Read-only snapshot of the current run's reward distribution. Tracks
+   * card-pick counts per rarity, total draws, and pity-fire count. Reset
+   * at startNewRun. In-memory only — not persisted to checkpoints.
+   * Future telemetry layers (debug overlay, profile aggregation, external
+   * pipeline) read this without re-instrumenting pickCardRewards.
+   */
+  getRewardTelemetry(): Readonly<{
+    totalDraws: number;
+    common: number;
+    uncommon: number;
+    rare: number;
+    pityFires: number;
+  }> {
+    return { ...this.rewardTelemetry };
+  }
+
+  private resetRewardTelemetry(): void {
+    this.rewardTelemetry.totalDraws = 0;
+    this.rewardTelemetry.common = 0;
+    this.rewardTelemetry.uncommon = 0;
+    this.rewardTelemetry.rare = 0;
+    this.rewardTelemetry.pityFires = 0;
   }
 }

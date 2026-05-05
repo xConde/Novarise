@@ -2307,6 +2307,55 @@ describe('RunService', () => {
     }));
   });
 
+  describe('rewardTelemetry', () => {
+    it('starts zeroed on a new run', fakeAsync(() => {
+      service.startNewRun();
+      const t = service.getRewardTelemetry();
+      expect(t.totalDraws).toBe(0);
+      expect(t.common).toBe(0);
+      expect(t.uncommon).toBe(0);
+      expect(t.rare).toBe(0);
+      expect(t.pityFires).toBe(0);
+    }));
+
+    it('totalDraws sums to per-rarity counters after picks', fakeAsync(() => {
+      service.startNewRun();
+      const seededRng = createSeededRng(99);
+      const rng: () => number = () => seededRng.next();
+      (service as unknown as { pickCardRewards: (n: number, r: () => number) => unknown[] })
+        .pickCardRewards(20, rng);
+
+      const t = service.getRewardTelemetry();
+      expect(t.totalDraws).toBe(20);
+      expect(t.common + t.uncommon + t.rare).toBe(t.totalDraws);
+    }));
+
+    it('counts pity fires when threshold forces rare', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, cardPityCounter: 9 });
+      const seededRng = createSeededRng(123);
+      const rng: () => number = () => seededRng.next();
+      (service as unknown as { pickCardRewards: (n: number, r: () => number) => unknown[] })
+        .pickCardRewards(1, rng);
+
+      const t = service.getRewardTelemetry();
+      expect(t.pityFires).toBe(1);
+      expect(t.rare).toBe(1);
+    }));
+
+    it('resets to zero on a fresh startNewRun call', fakeAsync(() => {
+      service.startNewRun();
+      const seededRng = createSeededRng(7);
+      const rng: () => number = () => seededRng.next();
+      (service as unknown as { pickCardRewards: (n: number, r: () => number) => unknown[] })
+        .pickCardRewards(5, rng);
+      expect(service.getRewardTelemetry().totalDraws).toBe(5);
+
+      service.startNewRun();
+      expect(service.getRewardTelemetry().totalDraws).toBe(0);
+    }));
+  });
+
   describe('rarity distribution — statistical', () => {
     it('over 1000 single-pick draws, rare rate sits between 8% and 18% (10% baseline + pity uplift)', fakeAsync(() => {
       service.startNewRun();
