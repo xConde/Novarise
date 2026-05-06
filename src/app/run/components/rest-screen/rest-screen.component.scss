@@ -263,16 +263,43 @@
   grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
   gap: var(--spacing-sm);
   width: 100%;
-  // Constrain the picker so the list scrolls internally rather than the
-  // entire page. Keeps the title and Cancel button always in view —
-  // matches the shop card-remove __list pattern. min() lets short
-  // viewports cap at viewport height; tall viewports cap at 28rem so
-  // the picker doesn't dominate the screen on a 4K monitor either.
+  // Default cap for non-upgrading layouts (the upgrading variant
+  // overrides this with flex: 1 inside .rest-screen--upgrading).
+  // min() lets short viewports cap at viewport height; tall viewports
+  // cap at 28rem so the picker doesn't dominate a 4K monitor.
   max-height: min(50vh, 28rem);
   overflow-y: auto;
-  // Add a hair of right-padding so the inner card border doesn't kiss
-  // the scrollbar gutter at the right edge.
   padding-right: var(--spacing-xs);
+}
+
+// ── Upgrading layout: pin chrome, grow panel into remaining space ────────────
+// Without this, the icon / title / subtitle / lives chrome above the panel
+// (~400px combined) pushes the panel below the fold so the page itself
+// scrolls. Constraining .rest-screen to its allotted host height and
+// promoting the panel slot to a flex-grow row absorbs the remainder; the
+// LIST inside that bounded panel becomes the scroll surface.
+
+.rest-screen--upgrading {
+  height: 100%;
+  max-height: 100%;
+  // Promote the panel grid row to take all remaining vertical space
+  --rest-panel-size: minmax(0, 1fr);
+
+  .rest-upgrade-panel {
+    height: 100%;
+    min-height: 0; // allow children to shrink for overflow scroll
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+
+  .rest-card-list {
+    // Flex layout overrides the fixed max-height; the list takes whatever
+    // vertical space the panel has after title + Cancel button.
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+  }
 }
 
 .rest-card-item {

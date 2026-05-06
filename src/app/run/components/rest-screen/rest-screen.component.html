@@ -1,4 +1,7 @@
-<div class="rest-screen" role="main" aria-label="Rest site">
+<div class="rest-screen"
+     [class.rest-screen--upgrading]="activeAction === 'upgrade'"
+     role="main"
+     aria-label="Rest site">
 
   <!-- Bonfire ambiance: ambient glow, swaying flame tongue, rising embers -->
   <div class="rest-hearth" aria-hidden="true">
