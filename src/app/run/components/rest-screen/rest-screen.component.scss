@@ -263,6 +263,16 @@
   grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
   gap: var(--spacing-sm);
   width: 100%;
+  // Constrain the picker so the list scrolls internally rather than the
+  // entire page. Keeps the title and Cancel button always in view —
+  // matches the shop card-remove __list pattern. min() lets short
+  // viewports cap at viewport height; tall viewports cap at 28rem so
+  // the picker doesn't dominate the screen on a 4K monitor either.
+  max-height: min(50vh, 28rem);
+  overflow-y: auto;
+  // Add a hair of right-padding so the inner card border doesn't kiss
+  // the scrollbar gutter at the right edge.
+  padding-right: var(--spacing-xs);
 }
 
 .rest-card-item {
