@@ -4,7 +4,8 @@
      aria-label="Rest site">
 
   <!-- Bonfire ambiance: ambient glow, swaying flame tongue, rising embers -->
-  <div class="rest-hearth" aria-hidden="true">
+  <!-- Hidden in upgrade mode — the hearth glow bleeds through the card grid -->
+  <div class="rest-hearth" aria-hidden="true" *ngIf="activeAction !== 'upgrade'">
     <span class="rest-hearth__glow"></span>
     <span class="rest-hearth__flame"><span class="rest-hearth__flame-inner"></span></span>
     <span class="rest-hearth__embers"></span>
