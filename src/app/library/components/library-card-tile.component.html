@@ -44,8 +44,17 @@
 
   <!-- DISCOVERED body: name, archetype, description. -->
   <div *ngIf="!desaturated" class="tile__body">
-    <!-- Effect glyph — hero art for non-tower cards. Tower cards skip; the
-         tile__footprint outline at the bottom carries their identity. -->
+    <!-- Tower mesh thumbnail — 3-D rendered art for tower cards, mirrors
+         the card-hand presentation. When the service can't supply a URL
+         (no WebGL in tests, non-tower cards) this slot is empty and the
+         tile__footprint outline at the bottom carries the tower identity. -->
+    <img *ngIf="definition.type === CardType.TOWER && towerThumbnailUrl"
+         class="tile__art-thumbnail"
+         [src]="towerThumbnailUrl"
+         alt=""
+         aria-hidden="true">
+
+    <!-- Effect glyph — hero art for non-tower cards. -->
     <span *ngIf="definition.type !== CardType.TOWER && primaryGlyph"
           class="tile__art-glyph"
           aria-hidden="true">

@@ -3,6 +3,7 @@ import {
   Component,
   EventEmitter,
   Input,
+  Optional,
   Output,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -14,6 +15,7 @@ import {
 import { TOWER_CONFIGS, TowerType } from '../../game/game-board/models/tower.model';
 import { ARCHETYPE_DISPLAY } from '../../run/constants/archetype.constants';
 import { IconComponent } from '@shared/components/icon/icon.component';
+import { TowerThumbnailService } from '@core/services/tower-thumbnail.service';
 
 /**
  * Presentational card tile for the Codex grid AND any picker surface
@@ -45,8 +47,26 @@ export class LibraryCardTileComponent {
 
   readonly CardType = CardType;
 
+  constructor(
+    @Optional() private towerThumbnailService: TowerThumbnailService | null = null,
+  ) {}
+
   onClick(): void {
     this.selected.emit(this.definition);
+  }
+
+  /**
+   * 3-D tower mesh thumbnail (PNG data URL) for tower cards. Mirrors
+   * card-hand's getTowerThumbnailUrl — without it, tower tiles render an
+   * empty colored backdrop and read as half-finished. Returns null when
+   * the card is non-tower or the service is unavailable (no WebGL in
+   * test environments).
+   */
+  get towerThumbnailUrl(): string | null {
+    if (!this.towerThumbnailService) return null;
+    const effect = this.definition.effect;
+    if (effect.type !== 'tower') return null;
+    return this.towerThumbnailService.getThumbnail(effect.towerType);
   }
 
   /**

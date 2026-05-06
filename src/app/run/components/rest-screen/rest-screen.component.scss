@@ -260,7 +260,11 @@
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  /* Card-shaped columns: ~11rem wide caps each tile near in-game card
+     proportions. minmax(11rem, 13rem) prevents sprawl on wide panels —
+     library-tile aspect-ratio is 22:32 so 13rem wide → ~19rem tall. */
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 13rem));
+  justify-content: center;
   gap: var(--spacing-sm);
   width: 100%;
   // Default cap for non-upgrading layouts (the upgrading variant
