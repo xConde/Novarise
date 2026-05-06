@@ -12,7 +12,6 @@ import { LibraryFiltersComponent } from './components/library-filters.component'
 @NgModule({
   declarations: [
     CardLibraryComponent,
-    LibraryCardTileComponent,
     CardDetailModalComponent,
     LibraryFiltersComponent,
   ],
@@ -21,6 +20,7 @@ import { LibraryFiltersComponent } from './components/library-filters.component'
     RouterModule.forChild([{ path: '', component: CardLibraryComponent }]),
     IconComponent,
     DescriptionTextComponent,
+    LibraryCardTileComponent,
   ],
 })
 export class LibraryModule {}

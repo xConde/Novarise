@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { CardInstance, CardId } from '../../models/card.model';
+import { CardInstance, CardId, CardDefinition } from '../../models/card.model';
 import { getCardDefinition } from '../../constants/card-definitions';
 
 @Component({
@@ -45,6 +45,11 @@ export class RestScreenComponent {
   /** Human-readable name for a card instance. */
   getCardName(card: CardInstance): string {
     return getCardDefinition(card.cardId).name;
+  }
+
+  /** Returns the CardDefinition for an instance — used by app-library-card-tile. */
+  getCardDefinitionForInstance(card: CardInstance): CardDefinition {
+    return getCardDefinition(card.cardId);
   }
 
   /** Current (pre-upgrade) description for a card instance. */
