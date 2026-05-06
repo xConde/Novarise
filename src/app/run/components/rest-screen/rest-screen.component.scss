@@ -272,25 +272,35 @@
   padding-right: var(--spacing-xs);
 }
 
-// ── Upgrading layout: pin chrome, grow panel into remaining space ────────────
-// Without this, the icon / title / subtitle / lives chrome above the panel
-// (~400px combined) pushes the panel below the fold so the page itself
-// scrolls. Constraining .rest-screen to its allotted host height and
-// promoting the panel slot to a flex-grow row absorbs the remainder; the
-// LIST inside that bounded panel becomes the scroll surface.
+// ── Upgrading layout: abandon the grid, use plain flex column ───────────────
+// The base .rest-screen uses CSS grid with rows for icon/title/subtitle/lives/
+// preview/panel/actions. In upgrade mode all the chrome rows are *ngIf'd out
+// so they should collapse to zero — but the grid's row-sizing still produced
+// unexpected vertical distribution, parking the picker in the middle of empty
+// space at the top of the screen.
+//
+// Override: in upgrade mode, swap to a flex column. Only two children render
+// (.rest-upgrade-panel and the rest-actions which is hidden), so flex column
+// + the panel filling 100% gives the picker the entire viewport from y=0.
 
 .rest-screen--upgrading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   height: 100%;
   max-height: 100%;
-  // Promote the panel grid row to take all remaining vertical space
-  --rest-panel-size: minmax(0, 1fr);
+  padding-top: var(--spacing-md); // tighter top padding than the grid layout
 
   .rest-upgrade-panel {
-    height: 100%;
+    flex: 1;
     min-height: 0; // allow children to shrink for overflow scroll
+    width: 100%;
+    max-width: 56rem;
     display: flex;
     flex-direction: column;
+    align-items: center;
     justify-content: flex-start;
+    gap: var(--spacing-md);
   }
 
   .rest-card-list {
