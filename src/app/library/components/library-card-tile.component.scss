@@ -341,25 +341,22 @@
   color: var(--text-color);
 }
 
-/* Tower mesh thumbnail — 3-D rendered hero art for tower cards. Sits at
-   the top of the tile body so the layout matches the in-game card-hand
-   art slot. Without this, tower tiles render an empty colored backdrop
-   and read as half-finished. */
+/* Tower mesh thumbnail — 3-D rendered hero art for tower cards. Fills the
+   art zone the way the in-game card-hand thumbnail does so the picker
+   reads as the same card. Background is intentionally near-transparent
+   — the tile's archetype backdrop + per-type radial gradient bleeds
+   through and gives the mesh real contrast against a colored field
+   instead of sitting on a dim gray slab. */
 .tile__art-thumbnail {
   display: block;
   align-self: center;
   width: 100%;
-  max-width: 9rem;
-  height: 6.5rem;
+  height: 9rem;
   margin: 0 auto var(--spacing-xs);
   object-fit: contain;
   pointer-events: none;
-  background: linear-gradient(180deg,
-    rgba(255, 255, 255, 0.05) 0%,
-    rgba(0, 0, 0, 0.10) 100%);
-  border-bottom: var(--border-width-thin) solid rgba(255, 255, 255, 0.10);
-  border-radius: var(--border-radius-sm);
-  padding: 0.3rem;
+  background: transparent;
+  padding: 0.2rem;
   box-sizing: border-box;
 }
 
