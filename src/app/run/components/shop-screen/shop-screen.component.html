@@ -174,20 +174,19 @@
       <p class="shop-card-upgrade__instruction" aria-live="polite">
         Choose a card to upgrade — costs {{ cardUpgradeCost }}g.
       </p>
-      <div class="shop-card-upgrade__list" role="list">
-        <button
+      <ul class="shop-card-upgrade__list" role="list">
+        <li
           *ngFor="let card of upgradableCards"
-          class="shop-card-upgrade__card"
-          type="button"
+          class="shop-card-upgrade__item"
           role="listitem"
-          (click)="selectCardToUpgrade(card)"
-          [attr.aria-label]="'Upgrade ' + getCardName(card)"
         >
-          <span class="shop-card-upgrade__card-name">{{ getCardName(card) }}</span>
-          <span class="shop-card-upgrade__card-desc">{{ getCardDescription(card) }}</span>
-          <span class="shop-card-upgrade__card-upgraded-desc">→ {{ getCardUpgradedDescription(card) }}</span>
-        </button>
-      </div>
+          <app-library-card-tile
+            [definition]="getCardDefinitionForInstance(card)"
+            [showUpgraded]="true"
+            (selected)="selectCardToUpgrade(card)"
+          ></app-library-card-tile>
+        </li>
+      </ul>
       <button
         class="shop-card-upgrade__cancel-btn run-btn run-btn--secondary"
         type="button"
@@ -238,19 +237,18 @@
       <p class="shop-card-remove__instruction" aria-live="polite">
         Choose a card to remove permanently — costs {{ cardRemoveCost }}g.
       </p>
-      <div class="shop-card-remove__list" role="list">
-        <button
+      <ul class="shop-card-remove__list" role="list">
+        <li
           *ngFor="let card of removableCards"
-          class="shop-card-remove__card"
-          type="button"
+          class="shop-card-remove__item"
           role="listitem"
-          (click)="selectCardToRemove(card)"
-          [attr.aria-label]="'Remove ' + getCardName(card) + ' from deck'"
         >
-          <span class="shop-card-remove__card-name">{{ getCardName(card) }}</span>
-          <span class="shop-card-remove__card-desc">{{ getCardDescription(card) }}</span>
-        </button>
-      </div>
+          <app-library-card-tile
+            [definition]="getCardDefinitionForInstance(card)"
+            (selected)="selectCardToRemove(card)"
+          ></app-library-card-tile>
+        </li>
+      </ul>
       <button
         class="shop-card-remove__cancel-btn run-btn run-btn--secondary"
         type="button"

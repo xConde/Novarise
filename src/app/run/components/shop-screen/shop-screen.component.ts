@@ -201,6 +201,11 @@ export class ShopScreenComponent implements OnChanges {
     return getCardDefinition(card.cardId).description;
   }
 
+  /** Returns the CardDefinition for an instance — used by app-library-card-tile. */
+  getCardDefinitionForInstance(card: CardInstance): CardDefinition {
+    return getCardDefinition(card.cardId);
+  }
+
   // ── Card upgrade slot ─────────────────────────────────────────────────────
 
   /** True when the card-upgrade slot is still available AND the player can afford it. */
