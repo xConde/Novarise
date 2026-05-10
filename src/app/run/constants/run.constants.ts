@@ -158,6 +158,10 @@ export const SHOP_CONFIG = {
   /** Phase 1 Sprint 4 — gold cost to permanently remove a card from the deck.
    *  One use per shop visit (StS convention). */
   cardRemoveCost: 75,
+
+  /** Gold cost to upgrade a card at the shop. Slightly higher than removal —
+   *  upgrade is more permanently impactful. One use per shop visit. */
+  cardUpgradeCost: 100,
 } as const;
 
 // ── Rest ──────────────────────────────────────────────────────
@@ -232,6 +236,24 @@ export const REWARD_RARITY_WEIGHTS = {
   uncommon: 30,
   rare: 10,
 } as const;
+
+/**
+ * Pity-timer threshold for COMBAT-REWARD card picks. After this many
+ * consecutive non-rare picks via `RunService.pickCardRewards`, the next
+ * card pick is forced to RARE and the counter resets. Genre-standard
+ * floor that protects players from cold streaks without bumping
+ * baseline weights.
+ *
+ * **Scope: combat rewards only.** `RunService.generateShopItems` picks
+ * shop cards through a separate code path that does NOT read or advance
+ * `cardPityCounter` — shop picks are independent draws. If shop
+ * participation is wanted, wire it explicitly in a later sprint.
+ *
+ * Calibration: at the 10% rare weight, an unbroken pity streak fires
+ * after every ~9 expected picks of bad luck, well above the typical
+ * mean-time-to-rare so it functions as an outlier-floor, not a payout.
+ */
+export const CARD_PITY_THRESHOLD = 9;
 
 // ── Archetype Card Draw Bias ──────────────────────────────────
 

@@ -168,6 +168,7 @@ describe('WaveCombatFacadeService', () => {
     combatLoopService = jasmine.createSpyObj('CombatLoopService', ['resetLeakState', 'resolveTurn', 'getTurnNumber', 'getLeakedThisWave']);
     combatLoopService.resolveTurn.and.returnValue({
       exitCount: 0,
+      livesLostThisFrame: 0,
       kills: [],
       firedTypes: [],
       hitCount: 0,

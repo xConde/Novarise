@@ -201,6 +201,7 @@ function buildFullTestBed(gameBoardService: GameBoardService): {
     ['repathAffectedEnemies', 'getEnemies', 'damageEnemy'],
   );
   enemySpy.getEnemies.and.returnValue(new Map() as never);
+  enemySpy.damageEnemy.and.returnValue({ killed: false, spawnedEnemies: [], damageDealt: 0, shieldHit: false });
 
   const wavePreviewSpy = jasmine.createSpyObj<WavePreviewService>(
     'WavePreviewService',

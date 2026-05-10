@@ -554,10 +554,31 @@ describe('CardHandComponent', () => {
 
   // ── Phase 1 Sprint 3 — Card hover tooltip ──────────────────────────────
   describe('hover tooltip', () => {
+    /**
+     * Build a button element whose getBoundingClientRect returns a
+     * non-zero rect — required after the zero-rect guard added to
+     * onCardPointerEnter / onCardFocus. Without this the rect-validity
+     * check skips the assignment, defeating the spec's intent of
+     * exercising the hovered-state path.
+     */
+    function makeStubButton(): HTMLElement {
+      const btn = document.createElement('button');
+      // Override getBoundingClientRect to report a sensible rect
+      // (top:100, left:100, width:120, height:80, bottom:180, right:220)
+      Object.defineProperty(btn, 'getBoundingClientRect', {
+        value: () => ({
+          top: 100, left: 100, width: 120, height: 80,
+          bottom: 180, right: 220, x: 100, y: 100,
+          toJSON: () => ({}),
+        }),
+      });
+      return btn;
+    }
+
     function makeMouseEvent(target?: HTMLElement): PointerEvent {
       return {
         pointerType: 'mouse',
-        currentTarget: target ?? document.createElement('button'),
+        currentTarget: target ?? makeStubButton(),
         clientX: 0,
         clientY: 0,
       } as unknown as PointerEvent;
@@ -650,6 +671,40 @@ describe('CardHandComponent', () => {
       expect(component.hoveredCard).toBeNull();
     }));
 
+    it('keyboard focus shows tooltip immediately (no hover delay)', () => {
+      const card = makeCard();
+      const target = makeStubButton();
+      const event = { currentTarget: target } as unknown as FocusEvent;
+
+      component.onCardFocus(event, card);
+
+      expect(component.hoveredCard).toBe(card);
+    });
+
+    it('keyboard focus is suppressed during placement mode', () => {
+      component.pendingCardId = 'some-other-card';
+      const card = makeCard();
+      const target = makeStubButton();
+      const event = { currentTarget: target } as unknown as FocusEvent;
+
+      component.onCardFocus(event, card);
+
+      expect(component.hoveredCard).toBeNull();
+    });
+
+    it('keyboard blur clears tooltip', () => {
+      const card = makeCard();
+      const target = makeStubButton();
+      const event = { currentTarget: target } as unknown as FocusEvent;
+      component.onCardFocus(event, card);
+      expect(component.hoveredCard).toBe(card);
+
+      component.onCardBlur();
+
+      expect(component.hoveredCard).toBeNull();
+      expect(component.hoveredCardRect).toBeNull();
+    });
+
     it('hoverTooltipLeft clamps to viewport edges', () => {
       // Force a rect that would push the tooltip off the right edge.
       component.hoveredCardRect = {
@@ -703,8 +758,18 @@ describe('CardHandComponent', () => {
         };
       }
 
+      // Note: post zero-rect-guard, the template requires BOTH hoveredCard
+      // AND hoveredCardRect for the tooltip to render. These specs set both
+      // directly to exercise the rendered-template behavior.
+      const stubRect = {
+        top: 100, left: 100, width: 120, height: 80,
+        bottom: 180, right: 220, x: 100, y: 100,
+        toJSON: () => ({}),
+      } as DOMRect;
+
       it('renders .card-tooltip__flavor when flavorText is set', () => {
         component.hoveredCard = makeCardWithFlavor('Test flavor');
+        component.hoveredCardRect = stubRect;
         fixture.detectChanges();
 
         const flavor = fixture.nativeElement.querySelector('.card-tooltip__flavor') as HTMLElement;
@@ -714,6 +779,7 @@ describe('CardHandComponent', () => {
 
       it('does NOT render .card-tooltip__flavor when flavorText is undefined', () => {
         component.hoveredCard = makeCardNoFlavor();
+        component.hoveredCardRect = stubRect;
         fixture.detectChanges();
 
         const flavor = fixture.nativeElement.querySelector('.card-tooltip__flavor');
@@ -722,6 +788,7 @@ describe('CardHandComponent', () => {
 
       it('aria-label on flavor element prefixes with "Flavor: "', () => {
         component.hoveredCard = makeCardWithFlavor('Test flavor');
+        component.hoveredCardRect = stubRect;
         fixture.detectChanges();
 
         const flavor = fixture.nativeElement.querySelector('.card-tooltip__flavor') as HTMLElement;

@@ -892,6 +892,75 @@ describe('EnemyService', () => {
       });
     });
 
+    // ── DamageResult.damageDealt / shieldHit fields ──────────────────────────
+
+    describe('DamageResult.damageDealt and shieldHit fields', () => {
+      it('returns damageDealt = damage and shieldHit = false when hitting health (no shield)', () => {
+        const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+        const result = service.damageEnemy(enemy.id, 30);
+
+        expect(result.damageDealt).toBe(30);
+        expect(result.shieldHit).toBe(false);
+        expect(result.killed).toBe(false);
+      });
+
+      it('returns damageDealt = 0 and shieldHit = false for dead enemy (noOp path)', () => {
+        const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+        service.damageEnemy(enemy.id, enemy.health); // kill it
+
+        const result = service.damageEnemy(enemy.id, 20);
+
+        expect(result.damageDealt).toBe(0);
+        expect(result.shieldHit).toBe(false);
+        expect(result.killed).toBe(false);
+      });
+
+      it('returns damageDealt = 0 and shieldHit = true when shield fully absorbs hit', () => {
+        const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+        const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+        const smallHit = maxShield - 1; // guaranteed to be absorbed
+
+        const result = service.damageEnemy(enemy.id, smallHit);
+
+        expect(result.damageDealt).toBe(0);
+        expect(result.shieldHit).toBe(true);
+        expect(result.killed).toBe(false);
+        // Health untouched — full absorption
+        expect(enemy.health).toBe(ENEMY_STATS[EnemyType.SHIELDED].health);
+      });
+
+      it('returns damageDealt = remainder and shieldHit = true on partial shield absorption', () => {
+        const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+        const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+        const overshoot = 10;
+
+        const result = service.damageEnemy(enemy.id, maxShield + overshoot);
+
+        expect(result.shieldHit).toBe(true);
+        expect(result.damageDealt).toBe(overshoot);
+      });
+
+      it('damageDealt reflects post-elevation-multiplier value', () => {
+        const elevationSpy = jasmine.createSpyObj<ElevationService>('ElevationService', [
+          'getElevation', 'raise', 'depress', 'setAbsolute', 'collapse',
+          'getMaxElevation', 'getElevationMap', 'getActiveChanges',
+          'tickTurn', 'reset', 'serialize', 'restore',
+        ]);
+        elevationSpy.getElevation.and.returnValue(-1); // exposed tile
+        (service as unknown as { elevationService: ElevationService | null }).elevationService = elevationSpy;
+
+        const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+        // EXPOSED_DAMAGE_BONUS = 0.25, so 100 * 1.25 = 125
+        const result = service.damageEnemy(enemy.id, 100);
+
+        expect(result.damageDealt).toBe(125);
+        expect(result.shieldHit).toBe(false);
+
+        (service as unknown as { elevationService: ElevationService | null }).elevationService = null;
+      });
+    });
+
     // ── Phase 3 Highground — "exposed" damage multiplier (Sprint 28) ──────────
     //
     // Enemies on tiles with negative elevation (DEPRESS_TILE effect) take +25%

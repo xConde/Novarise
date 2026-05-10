@@ -10,7 +10,16 @@
       [class]="'card-draft__card ' + getTypeClass(item.definition.type) + ' ' + getRarityClass(item.definition.rarity) + ' ' + getFrameClass(item.definition.type)"
       [class.card-draft__card--selected]="selectedCard === item.reward.cardId"
       (click)="pickCard(item.reward)"
+      (pointerenter)="onCardPointerEnter($event, item)"
+      (pointerleave)="onCardPointerLeave($event)"
+      (pointerdown)="onCardPointerDown($event, item)"
+      (pointermove)="onCardPointerMove($event)"
+      (pointerup)="onCardPointerUp()"
+      (pointercancel)="onCardPointerUp()"
+      (focus)="onCardFocus($event, item)"
+      (blur)="onCardBlur()"
       [attr.aria-label]="'Option ' + (i + 1) + '. ' + item.definition.name + ': ' + item.definition.description + '. Type: ' + item.definition.type + '. Cost: ' + item.definition.energyCost + ' energy. Press ' + (i + 1) + ' to pick.'"
+      [attr.aria-describedby]="hoveredCard?.reward?.cardId === item.reward.cardId ? hoverTooltipId : null"
       [attr.aria-pressed]="selectedCard === item.reward.cardId"
       [attr.aria-keyshortcuts]="(i + 1).toString()"
       role="listitem"
@@ -79,3 +88,32 @@
   </button>
 
 </section>
+
+<div *ngIf="hoveredCard && hoveredCardRect"
+     class="card-draft-tooltip"
+     role="tooltip"
+     [id]="hoverTooltipId"
+     [style.top.px]="hoverTooltipTop"
+     [style.left.px]="hoverTooltipLeft">
+  <div class="card-draft-tooltip__header">
+    <span class="card-draft-tooltip__name">{{ hoveredCard.definition.name }}</span>
+    <span class="card-draft-tooltip__cost">{{ hoveredCard.definition.energyCost }}E</span>
+  </div>
+  <div class="card-draft-tooltip__meta">
+    <span class="card-draft-tooltip__type">{{ hoveredCard.definition.type }}</span>
+    <span class="card-draft-tooltip__rarity card-draft-tooltip__rarity--{{ hoveredCard.definition.rarity }}">
+      {{ hoveredCard.definition.rarity }}
+    </span>
+  </div>
+  <p class="card-draft-tooltip__description">
+    <app-description-text [description]="hoverTooltipDescription(hoveredCard)"></app-description-text>
+  </p>
+  <div *ngIf="hoverTooltipKeywords(hoveredCard).length > 0" class="card-draft-tooltip__keywords">
+    <span *ngFor="let kw of hoverTooltipKeywords(hoveredCard)" class="card-draft-tooltip__keyword">{{ kw }}</span>
+  </div>
+  <p *ngIf="hoveredCard.definition.flavorText"
+     class="card-draft-tooltip__flavor"
+     [attr.aria-label]="'Flavor: ' + hoveredCard.definition.flavorText">
+    "{{ hoveredCard.definition.flavorText }}"
+  </p>
+</div>

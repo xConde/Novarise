@@ -297,8 +297,8 @@ describe('Card branding — library-card-tile surface', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      declarations: [LibraryCardTileComponent],
-      imports: [IconComponent],
+      // LibraryCardTileComponent is now standalone — imports, not declarations.
+      imports: [LibraryCardTileComponent, IconComponent],
     }).compileComponents();
   });
 

@@ -1,9 +1,11 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import { StatusEffectType, StatusEffectConfig, STATUS_EFFECT_CONFIGS } from '../constants/status-effect.constants';
 import { EnemyService, DamageResult } from './enemy.service';
 import { KillInfo } from './tower-combat.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { SerializableStatusEffect } from '../models/encounter-checkpoint.model';
+import { DamagePopupService } from './damage-popup.service';
+import { SceneService } from './scene.service';
 
 interface ActiveEffect {
   config: StatusEffectConfig;
@@ -26,6 +28,9 @@ export class StatusEffectService {
   constructor(
     private enemyService: EnemyService,
     private relicService: RelicService,
+    // @Optional() — not provided in pre-popup test beds; popups silently skipped when absent.
+    @Optional() private damagePopupService?: DamagePopupService,
+    @Optional() private sceneService?: SceneService,
   ) {}
 
   /**
@@ -140,6 +145,27 @@ export class StatusEffectService {
             toRemoveEnemies.push(enemyId);
             break;
           }
+          // Accumulate non-lethal popup with DoT-source tinting so burn/poison ticks
+          // are visually distinct from on-hit tower damage. Shield-hit override
+          // still wins inside DamagePopupService.colorFor. Flushed at end-of-turn.
+          if ((result.damageDealt > 0 || result.shieldHit) && this.sceneService && this.damagePopupService) {
+            const enemyObj = this.enemyService.getEnemies().get(enemyId);
+            if (enemyObj) {
+              const source = effectType === StatusEffectType.BURN
+                ? 'burn'
+                : effectType === StatusEffectType.POISON
+                  ? 'poison'
+                  : 'tower';
+              this.damagePopupService.accumulate(
+                enemyId,
+                result.damageDealt,
+                enemyObj.position,
+                this.sceneService.getScene(),
+                result.shieldHit,
+                source,
+              );
+            }
+          }
         }
       }
 
@@ -168,6 +194,20 @@ export class StatusEffectService {
     const effects = this.effects.get(enemyId);
     if (!effects) return 0;
     return effects.has(StatusEffectType.SLOW) ? 1 : 0;
+  }
+
+  /**
+   * Turns of SLOW remaining on an enemy at the given turn number. Returns 0
+   * when SLOW is not active. Used by forward-projection consumers (e.g.
+   * EnemyIntentService) to detect when the SLOW will expire mid-projection
+   * and degrade confidence in the projection accordingly.
+   */
+  getSlowRemainingTurns(enemyId: string, currentTurn: number): number {
+    const effects = this.effects.get(enemyId);
+    if (!effects) return 0;
+    const slow = effects.get(StatusEffectType.SLOW);
+    if (!slow) return 0;
+    return Math.max(0, slow.expiresAt - currentTurn);
   }
 
   // M2 S2: gameTime-based update() DELETED. Replaced by tickTurn (turn-based).

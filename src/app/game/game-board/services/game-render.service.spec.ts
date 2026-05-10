@@ -56,6 +56,7 @@ describe('GameRenderService', () => {
       kills: [],
       combatAudioEvents: [],
       exitCount: 0,
+      livesLostThisFrame: 0,
       ...overrides,
     } as unknown as CombatFrameResult;
   }
@@ -88,7 +89,7 @@ describe('GameRenderService', () => {
     particle = jasmine.createSpyObj<ParticleService>('ParticleService', ['spawnDeathBurst']);
     goldPopup = jasmine.createSpyObj<GoldPopupService>('GoldPopupService', ['spawn', 'update']);
     damagePopup = jasmine.createSpyObj<DamagePopupService>('DamagePopupService', ['spawn', 'update']);
-    screenShake = jasmine.createSpyObj<ScreenShakeService>('ScreenShakeService', ['trigger', 'update']);
+    screenShake = jasmine.createSpyObj<ScreenShakeService>('ScreenShakeService', ['trigger', 'triggerForLifeLoss', 'update']);
     combatVfx = jasmine.createSpyObj<CombatVFXService>('CombatVFXService', ['updateVisuals']);
     statusEffect = jasmine.createSpyObj<StatusEffectService>('StatusEffectService', ['getAllActiveEffects']);
     statusEffect.getAllActiveEffects.and.returnValue(new Map() as unknown as ReturnType<StatusEffectService['getAllActiveEffects']>);
@@ -228,9 +229,20 @@ describe('GameRenderService', () => {
       expect(out.completedChallenges).toEqual([]);
     });
 
-    it('triggers screen shake when enemies leak (exitCount > 0)', () => {
-      service.processCombatResult(makeResult({ exitCount: 2 }), 0.016, 0);
-      expect(screenShake.trigger).toHaveBeenCalled();
+    it('triggers magnitude-scaled life-loss shake when livesLostThisFrame > 0', () => {
+      service.processCombatResult(
+        makeResult({ exitCount: 2, livesLostThisFrame: 3 }),
+        0.016, 0,
+      );
+      expect(screenShake.triggerForLifeLoss).toHaveBeenCalledWith(3);
+    });
+
+    it('does not shake when no lives lost this frame', () => {
+      service.processCombatResult(
+        makeResult({ exitCount: 0, livesLostThisFrame: 0 }),
+        0.016, 0,
+      );
+      expect(screenShake.triggerForLifeLoss).not.toHaveBeenCalled();
     });
 
     it('plays per-tower fire sounds for each entry in firedTypes', () => {

@@ -373,14 +373,49 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
     const target = event.currentTarget as HTMLElement;
     this.hoverDelayTimer = setTimeout(() => {
       this.hoverDelayTimer = null;
+      const rect = target.getBoundingClientRect();
+      // Skip when the card hasn't laid out — pinning to a zero rect would
+      // anchor the tooltip at viewport (0, 0).
+      if (rect.width === 0 && rect.height === 0) return;
       this.hoveredCard = card;
-      this.hoveredCardRect = target.getBoundingClientRect();
+      this.hoveredCardRect = rect;
     }, CardHandComponent.HOVER_DELAY_MS);
   }
 
   /** Mouse left a card — clears tooltip and any pending delay. */
   onCardPointerLeave(event: PointerEvent): void {
     if (event.pointerType !== 'mouse') return;
+    this.cancelHoverDelay();
+    this.hoveredCard = null;
+    this.hoveredCardRect = null;
+  }
+
+  // Keyboard users tabbing through the hand need the same description payload.
+  // Focus shows the tooltip immediately (no 200ms delay — Tab navigation
+  // expects responsive feedback). Suppressed during placement mode for
+  // consistency with the hover path.
+  onCardFocus(event: FocusEvent, card: HandCard): void {
+    if (this.pendingCardId !== null) return;
+    this.cancelHoverDelay();
+    const target = event.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    // Mount-time autofocus: the rect can be zero before layout settles.
+    // Defer to the next animation frame and retry; if still zero, drop
+    // the focus rather than anchor a broken tooltip at viewport (0, 0).
+    if (rect.width > 0 && rect.height > 0) {
+      this.hoveredCard = card;
+      this.hoveredCardRect = rect;
+      return;
+    }
+    requestAnimationFrame(() => {
+      const retry = target.getBoundingClientRect();
+      if (retry.width === 0 && retry.height === 0) return;
+      this.hoveredCard = card;
+      this.hoveredCardRect = retry;
+    });
+  }
+
+  onCardBlur(): void {
     this.cancelHoverDelay();
     this.hoveredCard = null;
     this.hoveredCardRect = null;

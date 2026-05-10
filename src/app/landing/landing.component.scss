@@ -216,6 +216,45 @@
     text-align: center;
   }
 
+  // Cumulative stack list — shows all A1..A_selected modifiers so the
+  // player sees the full ladder of pain they're picking up, not just the
+  // topmost level.
+  &__stack {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    width: 100%;
+    max-width: 280px;
+    max-height: 11rem;
+    overflow-y: auto;
+  }
+
+  &__stack-entry {
+    display: grid;
+    grid-template-columns: 1.75rem 1fr;
+    gap: var(--spacing-xs);
+    align-items: baseline;
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--border-radius-sm);
+    background: var(--game-gold-a08);
+    font-family: "Orbitron", sans-serif;
+    font-size: var(--font-size-2xs);
+  }
+
+  &__stack-tier {
+    color: var(--game-gold);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  &__stack-name {
+    color: var(--game-gold-a80, var(--game-gold-a60));
+    text-align: left;
+  }
+
   // Tiny gold pill shown when player has beaten A20.
   &__mastered {
     display: inline-block;
@@ -229,6 +268,22 @@
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
+  }
+
+  // Smaller, muted "best beaten" badge — hidden behind the gold-mastered
+  // pill when A20 is cleared. Shows the player their personal record so
+  // the ladder always feels like progress they own.
+  &__beaten {
+    display: inline-block;
+    padding: 0.1rem 0.6rem;
+    border-radius: var(--border-radius-md);
+    background: var(--game-gold-a08);
+    border: var(--border-width-thin) solid var(--game-gold-a25);
+    color: var(--game-gold-a80, var(--game-gold-a60));
+    font-family: "Orbitron", sans-serif;
+    font-size: var(--font-size-2xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
   }
 }
 

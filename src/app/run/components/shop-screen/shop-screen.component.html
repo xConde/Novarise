@@ -135,6 +135,72 @@
     </p>
   </section>
 
+  <!-- Card Upgrade — one-use-per-visit, mirrors card-remove slot -->
+  <section class="shop-card-upgrade" aria-label="Card upgrade service">
+    <h3 class="shop-section-title">Card Upgrade</h3>
+
+    <ng-container *ngIf="activeAction === 'none'">
+      <p class="shop-card-upgrade__blurb">
+        Upgrade a card in your deck. One use per shop visit.
+      </p>
+      <button
+        class="shop-card-upgrade__open-btn"
+        type="button"
+        [disabled]="!canUpgradeCard()"
+        (click)="showUpgradePanel()"
+        [attr.aria-label]="cardUpgradeUsed
+          ? 'Card upgrade already used this visit'
+          : 'Upgrade a card for ' + cardUpgradeCost + ' gold'"
+      >
+        <app-icon name="card" [size]="14"></app-icon>
+        Upgrade a Card —
+        <span
+          class="shop-card-upgrade__cost"
+          [class.shop-card-upgrade__cost--unaffordable]="!canAfford(cardUpgradeCost)"
+        >{{ cardUpgradeCost }}g</span>
+      </button>
+      <p class="shop-card-upgrade__success"
+         *ngIf="cardUpgradeUsed && lastUpgradedCardName"
+         aria-live="polite">
+        <span class="shop-card-upgrade__success-icon" aria-hidden="true">✓</span>
+        Upgraded <strong>{{ lastUpgradedCardName }}</strong>.
+      </p>
+      <p class="shop-card-upgrade__hint" *ngIf="!cardUpgradeUsed && upgradableCards.length === 0" aria-live="polite">
+        No upgradable cards in your deck.
+      </p>
+    </ng-container>
+
+    <ng-container *ngIf="activeAction === 'upgrade'">
+      <p class="shop-card-upgrade__instruction" aria-live="polite">
+        Choose a card to upgrade — costs {{ cardUpgradeCost }}g.
+      </p>
+      <ul class="shop-card-upgrade__list" role="list">
+        <li
+          *ngFor="let card of upgradableCards"
+          class="shop-card-upgrade__item"
+          role="listitem"
+        >
+          <app-game-card
+            [definition]="getCardDefinitionForInstance(card)"
+            [upgraded]="true"
+            (selected)="selectCardToUpgrade(card)"
+          ></app-game-card>
+          <p class="shop-card-upgrade__preview" aria-hidden="true">
+            &#8594; {{ getCardDefinitionForInstance(card).upgradedDescription ?? '+ ' + getCardDefinitionForInstance(card).description }}
+          </p>
+        </li>
+      </ul>
+      <button
+        class="shop-card-upgrade__cancel-btn run-btn run-btn--secondary"
+        type="button"
+        (click)="cancelUpgrade()"
+        aria-label="Cancel card upgrade"
+      >
+        Cancel
+      </button>
+    </ng-container>
+  </section>
+
   <!-- Card Removal — Phase 1 Sprint 4 (one-use-per-visit, StS convention) -->
   <section class="shop-card-remove" aria-label="Card removal service">
     <h3 class="shop-section-title">Card Removal</h3>
@@ -159,8 +225,11 @@
           [class.shop-card-remove__cost--unaffordable]="!canAfford(cardRemoveCost)"
         >{{ cardRemoveCost }}g</span>
       </button>
-      <p class="shop-card-remove__hint" *ngIf="cardRemoveUsed" aria-live="polite">
-        Removal already used this visit.
+      <p class="shop-card-remove__success"
+         *ngIf="cardRemoveUsed && lastRemovedCardName"
+         aria-live="polite">
+        <span class="shop-card-remove__success-icon" aria-hidden="true">✓</span>
+        Removed <strong>{{ lastRemovedCardName }}</strong> from your deck.
       </p>
       <p class="shop-card-remove__hint" *ngIf="!cardRemoveUsed && removableCards.length === 0" aria-live="polite">
         No removable cards in your deck.
@@ -171,19 +240,18 @@
       <p class="shop-card-remove__instruction" aria-live="polite">
         Choose a card to remove permanently — costs {{ cardRemoveCost }}g.
       </p>
-      <div class="shop-card-remove__list" role="list">
-        <button
+      <ul class="shop-card-remove__list" role="list">
+        <li
           *ngFor="let card of removableCards"
-          class="shop-card-remove__card"
-          type="button"
+          class="shop-card-remove__item"
           role="listitem"
-          (click)="selectCardToRemove(card)"
-          [attr.aria-label]="'Remove ' + getCardName(card) + ' from deck'"
         >
-          <span class="shop-card-remove__card-name">{{ getCardName(card) }}</span>
-          <span class="shop-card-remove__card-desc">{{ getCardDescription(card) }}</span>
-        </button>
-      </div>
+          <app-game-card
+            [definition]="getCardDefinitionForInstance(card)"
+            (selected)="selectCardToRemove(card)"
+          ></app-game-card>
+        </li>
+      </ul>
       <button
         class="shop-card-remove__cancel-btn run-btn run-btn--secondary"
         type="button"

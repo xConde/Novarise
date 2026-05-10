@@ -27,6 +27,7 @@
     [relics-start]  auto                       [relics-end]
     [cards-start]   auto                       [cards-end]
     [heal-start]    auto                       [heal-end]
+    [upgrade-start] auto                       [upgrade-end]
     [remove-start]  auto                       [remove-end]
     [footer-start]  var(--shop-footer-size)    [footer-end];
   grid-template-columns: 1fr;
@@ -35,6 +36,7 @@
     "relics"
     "cards"
     "heal"
+    "upgrade"
     "remove"
     "footer";
   justify-items: center;
@@ -54,6 +56,7 @@
 .shop-items--relics { grid-area: relics; }
 .shop-items--cards  { grid-area: cards; }
 .shop-heal          { grid-area: heal; }
+.shop-card-upgrade  { grid-area: upgrade; }
 .shop-card-remove   { grid-area: remove; }
 .shop-leave-btn     { grid-area: footer; }
 
@@ -408,7 +411,25 @@
   align-items: center;
   gap: var(--spacing-xs);
   width: 100%;
-  max-width: 32rem;
+  /* Wider in picker mode so the card grid has room to breathe; the
+     non-picker chrome (open button, success banner) stays centered. */
+  max-width: 64rem;
+
+  &__success {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-family: "Orbitron", sans-serif;
+    font-size: var(--font-size-small);
+    color: var(--action-success, #6ee7b7);
+    margin: 0;
+    animation: shop-card-remove-success-fade 0.4s ease-out;
+  }
+
+  &__success-icon {
+    font-size: 1.1em;
+    font-weight: 700;
+  }
 
   &__blurb,
   &__instruction,
@@ -457,43 +478,155 @@
   }
 
   &__list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-xs);
+    /* Picker scale matches rest-screen: 11rem cards on an 11rem grid track. */
+    --card-width-desktop:      11rem;
+    --card-min-height-desktop: 15.4rem;
+    --card-width-tablet:       9.5rem;
+    --card-min-height-tablet:  13.3rem;
+
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 11rem);
+    justify-content: center;
+    align-content: start;
+    gap: var(--spacing-sm);
     width: 100%;
-    max-height: 18rem;
+    max-height: 36rem;
     overflow-y: auto;
+    padding-right: var(--spacing-xs);
   }
 
-  &__card {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-xxs);
-    padding: var(--spacing-sm) var(--spacing-md);
-    background: var(--glass-bg);
-    border: var(--border-width-thin) solid var(--border-color);
-    border-radius: var(--radius-sm);
-    color: var(--text-primary);
-    text-align: left;
-    cursor: pointer;
-    transition: border-color 0.15s ease-out, background-color 0.15s ease-out;
+  &__item {
+    display: block;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
 
-    &:hover {
-      border-color: var(--game-gold);
-      background: rgba(255, 215, 0, 0.06);
+  &__cancel-btn {
+    margin-top: var(--spacing-xs);
+  }
+}
+
+// ── Card upgrade — mirrors card-remove ────────────────────────────────────────
+
+.shop-card-upgrade {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+  width: 100%;
+  max-width: 64rem;
+
+  &__success {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-family: "Orbitron", sans-serif;
+    font-size: var(--font-size-small);
+    color: var(--action-success, #6ee7b7);
+    margin: 0;
+    animation: shop-card-upgrade-success-fade 0.4s ease-out;
+  }
+
+  &__success-icon {
+    font-size: 1.1em;
+    font-weight: 700;
+  }
+
+  &__blurb,
+  &__instruction,
+  &__hint {
+    font-family: "Orbitron", sans-serif;
+    font-size: var(--font-size-small);
+    color: var(--text-dim);
+    margin: 0;
+    text-align: center;
+  }
+
+  &__hint {
+    color: var(--text-faint);
+    font-style: italic;
+  }
+
+  &__open-btn {
+    font-family: "Orbitron", sans-serif;
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border: var(--border-width-thin) solid var(--game-gold);
+    background: rgba(255, 215, 0, 0.08);
+    color: var(--game-gold);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    transition: background-color 0.15s ease-out, transform 0.15s ease-out;
+
+    &:hover:not(:disabled) {
+      background: rgba(255, 215, 0, 0.16);
+      transform: translateY(-1px);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
   }
 
-  &__card-name {
-    font-family: "Orbitron", sans-serif;
-    font-weight: 700;
-    font-size: var(--font-size-small);
+  &__cost {
+    color: var(--game-gold);
+    &--unaffordable { color: var(--action-danger); }
   }
 
-  &__card-desc {
+  &__list {
+    /* Picker scale matches rest-screen: 10rem cards on a 10rem grid track.
+       Each row also leaves room for the upgrade-preview caption below. */
+    --card-width-desktop:      10rem;
+    --card-min-height-desktop: 14rem;
+    --card-width-tablet:       9rem;
+    --card-min-height-tablet:  12.6rem;
+
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 10rem);
+    justify-content: center;
+    gap: var(--spacing-md) var(--spacing-sm);
+    width: 100%;
+    max-height: 32rem;
+    overflow-y: auto;
+    padding-right: var(--spacing-xs);
+  }
+
+  &__item {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-xxs);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+
+    app-game-card { display: block; }
+  }
+
+  /* Caption row beneath each card showing the upgraded effect text — the
+     game-card visual mirrors the in-hand layout (no description), so the
+     caption carries the upgrade preview the player needs to choose. */
+  &__preview {
+    margin: 0;
+    padding: 0 var(--spacing-xxs);
+    font-family: "Orbitron", sans-serif;
     font-size: var(--font-size-2xs);
-    color: var(--text-secondary);
-    line-height: 1.4;
+    line-height: 1.35;
+    color: var(--game-gold);
+    text-align: center;
+    font-style: italic;
   }
 
   &__cancel-btn {
@@ -512,7 +645,37 @@
   .shop-card__buy-btn,
   .shop-heal-btn,
   .shop-card-remove__open-btn,
-  .shop-card-remove__card {
+  .shop-card-upgrade__open-btn {
     transition: none;
+  }
+}
+
+@keyframes shop-card-remove-success-fade {
+  from { opacity: 0; transform: translateY(-0.25rem); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+body.reduce-motion .shop-card-remove__success {
+  animation: none;
+}
+
+@keyframes shop-card-upgrade-success-fade {
+  from { opacity: 0; transform: translateY(-0.25rem); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+body.reduce-motion .shop-card-upgrade__success {
+  animation: none;
+}
+
+// Defense-in-depth: honor OS-level reduce-motion preference even when the
+// user hasn't toggled the in-app setting. SettingsComponent currently
+// sets body.reduce-motion only on explicit toggle; this @media block
+// catches users who set the preference at the OS level without ever
+// opening Settings.
+@media (prefers-reduced-motion: reduce) {
+  .shop-card-remove__success,
+  .shop-card-upgrade__success {
+    animation: none;
   }
 }

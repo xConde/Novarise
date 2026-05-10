@@ -24,7 +24,7 @@ import { TowerPreviewService } from './services/tower-preview.service';
 import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, PlacedTower, MAX_TOWER_LEVEL, TARGETING_MODE_LABELS } from './models/tower.model';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState } from './models/game-state.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, calculateModifierScoreMultiplier } from './models/game-modifier.model';
-import { EnemyType, ENEMY_STATS } from './models/enemy.model';
+import { EnemyType, ENEMY_STATS, VEINSEEKER_SPEED_BOOST_WINDOW } from './models/enemy.model';
 import { ENEMY_INFO } from './models/enemy-info.model';
 import { WavePreviewEntry } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
@@ -74,6 +74,7 @@ import { getActiveTowerEffect } from '../../run/constants/card-definitions';
 import { WaveCombatFacadeService } from './services/wave-combat-facade.service';
 import { TutorialFacadeService } from './services/tutorial-facade.service';
 import { AscensionModifierService } from './services/ascension-modifier.service';
+import { ASCENSION_LEVELS, AscensionLevel } from '../../run/models/ascension.model';
 import { TurnHistoryService, TurnEventRecord } from './services/turn-history.service';
 import { TurnBannerService } from './services/turn-banner.service';
 import { PathBlockedWarningService } from './services/path-blocked-warning.service';
@@ -96,6 +97,10 @@ import { LinkMeshService } from './services/link-mesh.service';
 import { TowerDecalLibraryService } from './services/tower-decal-library.service';
 import { TargetPreviewService } from './services/target-preview.service';
 import { AimLineService } from './services/aim-line.service';
+import { ForwardSimulationService } from './services/forward-simulation.service';
+import { EnemyIntentService } from './services/enemy-intent.service';
+import { TowerFireZonePreviewService } from './services/tower-fire-zone-preview.service';
+import { ProjectileVisualService } from './services/projectile-visual.service';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
 export interface EnemyBadge {
@@ -160,7 +165,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, PathBlockedWarningService, ItemCallbacksWiringService, SpawnPreviewViewService, EncounterBootstrapService, CheckpointRestoreCoordinatorService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, GeometryRegistryService, MaterialRegistryService, TextSpritePoolService, VfxPoolService, TowerGraphService, LinkMeshService, TowerDecalLibraryService, TargetPreviewService, AimLineService]
+  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, PathBlockedWarningService, ItemCallbacksWiringService, SpawnPreviewViewService, EncounterBootstrapService, CheckpointRestoreCoordinatorService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, GeometryRegistryService, MaterialRegistryService, TextSpritePoolService, VfxPoolService, TowerGraphService, LinkMeshService, TowerDecalLibraryService, TargetPreviewService, AimLineService, ForwardSimulationService, EnemyIntentService, TowerFireZonePreviewService, ProjectileVisualService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -404,6 +409,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private towerGraphService: TowerGraphService,
     private linkMeshService: LinkMeshService,
     private targetPreviewService: TargetPreviewService,
+    private forwardSimulationService: ForwardSimulationService,
+    private statusEffectService: StatusEffectService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -1022,11 +1029,42 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return ENEMY_INFO[type].name;
   }
 
+  /**
+   * Earliest exit-turn estimate for a spawn-preview group, expressed as the
+   * absolute turn offset (T+N) at which the FASTEST enemy in the group will
+   * reach the exit. Returns null when the group is empty or no path exists.
+   *
+   * Worst case for the player — soonest threat — drives the value.
+   */
+  getEarliestArrivalTurn(entry: { turnOffset: number; spawns: { type: EnemyType; count: number }[] }): number | null {
+    if (entry.spawns.length === 0) return null;
+    const pathTiles = this.enemyService.getPathToExit().length;
+    if (pathTiles <= 1) return null;
+    let fastestTilesPerTurn = 0;
+    for (const s of entry.spawns) {
+      const tpt = ENEMY_STATS[s.type].tilesPerTurn;
+      if (tpt > fastestTilesPerTurn) fastestTilesPerTurn = tpt;
+    }
+    if (fastestTilesPerTurn === 0) return null;
+    const traversal = Math.ceil((pathTiles - 1) / fastestTilesPerTurn);
+    return entry.turnOffset + traversal;
+  }
+
   /** Returns a hover tooltip string for a spawn-preview enemy entry. */
   getEnemyTooltip(type: EnemyType): string {
     const info = ENEMY_INFO[type];
     if (!info) return type;
+    const stats = ENEMY_STATS[type];
     const parts: string[] = [info.name, info.description];
+    // Combat stats — tilesPerTurn is the canonical movement value players plan against.
+    const tilesPerTurnLabel = stats.tilesPerTurn === 1 ? 'tile' : 'tiles';
+    parts.push(`HP: ${stats.health} · ${stats.tilesPerTurn} ${tilesPerTurnLabel}/turn · ${info.leakDamage} leak`);
+    // Traversal estimate based on the current map's spawner→exit path.
+    const pathTiles = this.enemyService.getPathToExit().length;
+    if (pathTiles > 1) {
+      const turnsToTraverse = Math.ceil((pathTiles - 1) / stats.tilesPerTurn);
+      parts.push(`~${turnsToTraverse} turns to exit`);
+    }
     if (info.special) parts.push(info.special);
     if (info.immunities?.length) parts.push(`Immune: ${info.immunities.join(', ')}`);
     return parts.join(' — ');
@@ -1045,6 +1083,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         return def ? { id, name: def.name, description: def.description } : null;
       })
       .filter((r): r is { id: string; name: string; description: string } => r !== null);
+  }
+
+  /** Current ascension level for the active run, or 0 when no run is active. */
+  get currentAscensionLevel(): number {
+    return this.runService.runState?.ascensionLevel ?? 0;
+  }
+
+  /**
+   * All ascension level definitions active on the current run, in order from
+   * A1 → A_N. Drives the in-play HUD chip cluster so players can see at a
+   * glance which difficulty modifiers are shaping the encounter without
+   * opening the pause menu.
+   */
+  get activeAscensionModifiers(): readonly AscensionLevel[] {
+    const level = this.currentAscensionLevel;
+    if (level <= 0) return [];
+    return ASCENSION_LEVELS.slice(0, level);
   }
 
   /**
@@ -1092,6 +1147,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Begin tracking turn in history service BEFORE resolution
       this.turnHistoryService.beginTurn(this.currentTurnNumber);
+      this.turnHistoryService.recordPredictedLivesLost(this.projectedLivesLostNextTurn);
 
       this.waveCombat.endTurn();
 
@@ -1466,6 +1522,61 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Phase 4: current turn number (1-indexed for display). */
   get currentTurnNumber(): number {
     return this.combatLoopService.getTurnNumber() + 1;
+  }
+
+  /**
+   * Number of currently-active enemies projected to reach the exit on the
+   * next turn's resolution. Drives the End Turn button's leak-warning chip.
+   * Conservative — ignores the card-level ENEMY_SPEED modifier, so will
+   * over-warn rather than silently miss leaks.
+   */
+  get projectedLeaksNextTurn(): number {
+    let count = 0;
+    this.forEachProjectedLeaker(() => { count++; });
+    return count;
+  }
+
+  /**
+   * Total `leakDamage` summed across enemies projected to reach the exit on
+   * the next turn — i.e., predicted lives lost. Captured in TurnHistoryService
+   * before each endTurn() resolution so the prediction can be compared against
+   * the actual outcome in the last-turn-summary panel.
+   */
+  get projectedLivesLostNextTurn(): number {
+    let total = 0;
+    this.forEachProjectedLeaker(enemy => { total += enemy.leakDamage; });
+    return total;
+  }
+
+  /**
+   * Comma-separated list of enemy type names projected to leak on the next
+   * turn — e.g. "Heavy, Swift". Used as the End Turn button's leak-warning
+   * tooltip detail so players know WHICH enemies are about to break through.
+   * Multiple enemies of the same type collapse to "Type ×N".
+   */
+  get projectedLeakerSummary(): string {
+    const counts = new Map<EnemyType, number>();
+    this.forEachProjectedLeaker(enemy => {
+      counts.set(enemy.type, (counts.get(enemy.type) ?? 0) + 1);
+    });
+    if (counts.size === 0) return '';
+    return Array.from(counts.entries())
+      .map(([type, n]) => n > 1 ? `${ENEMY_INFO[type].name} ×${n}` : ENEMY_INFO[type].name)
+      .join(', ');
+  }
+
+  /** Iterates active enemies projected to leak on the next turn's resolution. */
+  private forEachProjectedLeaker(visit: (enemy: import('./models/enemy.model').Enemy) => void): void {
+    const currentTurn = this.combatLoopService.getTurnNumber();
+    for (const enemy of this.enemyService.getEnemies().values()) {
+      if (enemy.dying) continue;
+      const veinseekerBoosted = enemy.type === EnemyType.VEINSEEKER &&
+        this.pathMutationService.wasMutatedInLastTurns(currentTurn, VEINSEEKER_SPEED_BOOST_WINDOW);
+      const slow = this.statusEffectService.getSlowTileReduction(enemy.id);
+      if (this.forwardSimulationService.willLeakWithin(enemy, 1, slow, 0, veinseekerBoosted)) {
+        visit(enemy);
+      }
+    }
   }
 
   toggleAllRanges(): void {

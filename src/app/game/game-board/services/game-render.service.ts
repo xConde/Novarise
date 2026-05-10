@@ -1,13 +1,17 @@
 import { Injectable, Optional } from '@angular/core';
+import * as THREE from 'three';
 import { AudioService } from './audio.service';
 import { FpsCounterService } from './fps-counter.service';
 import { GameInputService } from './game-input.service';
 import { SceneService } from './scene.service';
 import { GameStateService } from './game-state.service';
 import { EnemyService } from './enemy.service';
+import { Enemy } from '../models/enemy.model';
+import { PlacedTower } from '../models/tower.model';
 import { TowerAnimationService } from './tower-animation.service';
 import { TowerCombatService } from './tower-combat.service';
 import { TargetPreviewService } from './target-preview.service';
+import { EnemyIntentService } from './enemy-intent.service';
 import { TowerMeshLifecycleService } from './tower-mesh-lifecycle.service';
 import { ParticleService } from './particle.service';
 import { GoldPopupService } from './gold-popup.service';
@@ -22,9 +26,12 @@ import { GameBoardService } from '../game-board.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { GamePhase } from '../models/game-state.model';
 import { PHYSICS_CONFIG } from '../constants/physics.constants';
-import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 import { CombatFrameResult } from '../models/combat-frame.model';
 import { AimLineService } from './aim-line.service';
+import { TowerFireZonePreviewService } from './tower-fire-zone-preview.service';
+import { CardPlayService } from './card-play.service';
+import { EnemyHealthService } from './enemy-health.service';
+import { ProjectileVisualService } from './projectile-visual.service';
 import type { ChallengeDefinition } from '../../../run/data/challenges';
 
 /**
@@ -81,6 +88,22 @@ export class GameRenderService {
     // @Optional() — aim-line cylinder for selected tower. update() is a no-op
     // when the service is absent so test beds without full provider lists work.
     @Optional() private aimLineService?: AimLineService,
+    // @Optional() — dashed projected-position line for selected tower. Absent
+    // from test beds; update() degrades to a no-op.
+    @Optional() private towerFireZonePreviewService?: TowerFireZonePreviewService,
+    // @Optional() — enemy intent (turns-to-exit) marker service. Absent from
+    // test beds that don't register it; update() degrades to a no-op.
+    @Optional() private enemyIntentService?: EnemyIntentService,
+    // @Optional() — reads hasPendingCard() to suppress intent markers during
+    // tower/terraform placement targeting. Absent from test beds → markers
+    // always visible (safe fallback).
+    @Optional() private cardPlayService?: CardPlayService,
+    // @Optional() — predicted-damage overlay. Absent from test beds that
+    // don't register EnemyHealthService; update degrades to a no-op.
+    @Optional() private enemyHealthService?: EnemyHealthService,
+    // @Optional() — projectile line-flash visuals. Absent from test beds
+    // that don't register ProjectileVisualService; update() degrades to a no-op.
+    @Optional() private projectileVisualService?: ProjectileVisualService,
   ) {}
 
   /** Initialize the render service. Call in ngAfterViewInit. */
@@ -176,6 +199,9 @@ export class GameRenderService {
     // currentAimTarget on each group is current. Hides automatically when
     // no tower is selected or no target is found.
     this.aimLineService?.update(reduceMotion);
+    // Update dashed projected-position line for the selected tower's aim target.
+    // Runs after aimLineService so the solid line is already positioned.
+    this.towerFireZonePreviewService?.update(reduceMotion);
     this.towerAnimationService.updateTowerAnimations(this.meshRegistry.towerMeshes, time);
     this.towerAnimationService.tickRecoilAnimations(this.meshRegistry.towerMeshes, nowSeconds);
     this.towerAnimationService.tickTubeEmits(this.meshRegistry.towerMeshes, nowSeconds);
@@ -295,19 +321,24 @@ export class GameRenderService {
       }
     }
 
-    // Screen shake on life loss
-    if (result.exitCount > 0) {
-      this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
+    // Screen shake on life loss — intensity/duration scale with lives lost
+    // so HEAVY (2 leak) and BOSS (variable) hits register harder than a basic
+    // 1-life leak. Falls back to no-op when no lives were lost this frame.
+    if (result.livesLostThisFrame > 0) {
+      this.screenShakeService.triggerForLifeLoss(result.livesLostThisFrame);
     }
 
     // Per-frame visual updates (health bars, status effects, minimap)
     // NOTE: dying/hit/shield animations are NOT called here — they run in the
     // phase-independent block in animate() (line ~2178) to avoid double-ticking.
-    this.enemyService.updateHealthBars(this.sceneService.getCamera().quaternion);
+    const cameraQuat = this.sceneService.getCamera().quaternion;
+    this.enemyService.updateHealthBars(cameraQuat);
+    this.tickPredictedHealthBars(cameraQuat);
     const activeEffects = this.statusEffectService.getAllActiveEffects();
     this.enemyService.updateStatusVisuals(activeEffects);
     this.enemyService.updateStatusEffectParticles(deltaTime, this.sceneService.getScene(), activeEffects);
     this.enemyService.updateEnemyAnimations(deltaTime);
+    this.enemyIntentService?.update(this.cardPlayService?.hasPendingCard() ?? false);
     this.updateMinimap(time);
 
     return output;
@@ -323,12 +354,52 @@ export class GameRenderService {
     this.enemyService.updateDyingAnimations(deltaTime, this.sceneService.getScene());
     this.enemyService.updateHitFlashes(deltaTime);
     this.enemyService.updateShieldBreakAnimations(deltaTime);
-    this.enemyService.updateHealthBars(this.sceneService.getCamera().quaternion);
+    const cameraQuat = this.sceneService.getCamera().quaternion;
+    this.enemyService.updateHealthBars(cameraQuat);
+    this.tickPredictedHealthBars(cameraQuat);
     const activeEffects = this.statusEffectService.getAllActiveEffects();
     this.enemyService.updateStatusVisuals(activeEffects);
     this.enemyService.updateStatusEffectParticles(deltaTime, this.sceneService.getScene(), activeEffects);
     this.enemyService.updateEnemyAnimations(deltaTime);
+    this.projectileVisualService?.update(deltaTime);
+    this.enemyIntentService?.update(this.cardPlayService?.hasPendingCard() ?? false);
     this.updateMinimap(time);
+  }
+
+  /**
+   * Resolve each tower's current aim target from its mesh group userData, then
+   * delegate to EnemyHealthService to update the predicted-damage overlays.
+   *
+   * Tower target lookup: reads `userData['currentAimTarget']` written by
+   * TowerAnimationService.tickAim — the same source AimLineService uses.
+   * This runs after tickAim in the frame so currentAimTarget is current.
+   *
+   * No-op when EnemyHealthService is absent (test beds without full providers).
+   */
+  private tickPredictedHealthBars(cameraQuaternion: THREE.Quaternion): void {
+    if (!this.enemyHealthService) return;
+    const towerMeshes = this.meshRegistry.towerMeshes;
+    const getTowerTarget = (tower: PlacedTower): Enemy | null => {
+      const group = towerMeshes.get(`${tower.row}-${tower.col}`);
+      if (!group) return null;
+      const raw = group.userData['currentAimTarget'] as unknown;
+      if (raw == null || typeof raw !== 'object') return null;
+      const candidate = raw as Enemy;
+      // Filter dying / dead targets — TargetPreviewService can hold a
+      // stale reference for one frame between an enemy dying and the
+      // cache invalidating. Crediting damage to a corpse would inflate
+      // the predicted-loss overlay on a still-living enemy in the same
+      // turn. This guard runs every tick so it self-corrects at the
+      // next render frame after invalidation lands.
+      if (candidate.dying || candidate.health <= 0) return null;
+      return candidate;
+    };
+    this.enemyHealthService.updatePredictedHealthBars(
+      this.enemyService.getEnemies(),
+      this.towerCombatService.getPlacedTowers(),
+      getTowerTarget,
+      cameraQuaternion,
+    );
   }
 
   private updateMinimap(timeMs: number): void {

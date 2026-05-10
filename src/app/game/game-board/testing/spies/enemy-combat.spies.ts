@@ -22,9 +22,9 @@ export function createEnemyServiceSpy(
   spy.getEnemies.and.returnValue(enemyMap);
   spy.damageEnemy.and.callFake((id: string, damage: number): DamageResult => {
     const enemy = enemyMap.get(id);
-    if (!enemy || enemy.health <= 0) return { killed: false, spawnedEnemies: [] };
+    if (!enemy || enemy.health <= 0) return { killed: false, spawnedEnemies: [], damageDealt: 0, shieldHit: false };
     enemy.health -= damage;
-    return { killed: enemy.health <= 0, spawnedEnemies: [] };
+    return { killed: enemy.health <= 0, spawnedEnemies: [], damageDealt: damage, shieldHit: false };
   });
   spy.stepEnemiesOneTurn.and.returnValue([]);
   spy.buildOccupiedSpawnerSet.and.returnValue(new Set<string>());
@@ -93,6 +93,7 @@ export function createCombatLoopServiceSpy(): jasmine.SpyObj<CombatLoopService> 
     firedTypes: new Set<TowerType>(),
     hitCount: 0,
     exitCount: 0,
+    livesLostThisFrame: 0,
     leaked: false,
     defeatTriggered: false,
     waveCompletion: null,

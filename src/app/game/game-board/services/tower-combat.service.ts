@@ -1,6 +1,7 @@
 import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy, ENEMY_STATS } from '../models/enemy.model';
+import { DamagePopupService } from './damage-popup.service';
 import { PlacedTower, TowerType, TowerStats, TowerSpecialization, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { assertNever } from '../utils/assert-never';
 import { KillInfo, CombatAudioEvent } from '../models/combat-frame.model';
@@ -30,6 +31,8 @@ import { TowerGraphService } from './tower-graph.service';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { CONDUIT_CONFIG } from '../constants/conduit.constants';
 import { RELIC_EFFECT_CONFIG } from '../../../run/constants/run.constants';
+import { ProjectileVisualService } from './projectile-visual.service';
+import { PROJECTILE_HITSCAN_CONFIG, PROJECTILE_ARC_CONFIG, PROJECTILE_BOLT_CONFIG, PROJECTILE_SPLASH_CONFIG, PROJECTILE_AURA_CONFIG } from '../constants/projectile.constants';
 
 /** M3 S4: turn-based mortar DoT zone. Replaces the legacy real-time path for fireTurn. */
 interface TurnMortarZone {
@@ -172,6 +175,12 @@ export class TowerCombatService {
     // geometries/materials when disposing tower groups (sell, restart).
     @Optional() private geometryRegistry?: GeometryRegistryService,
     @Optional() private materialRegistry?: MaterialRegistryService,
+    // @Optional() — not provided in test beds that predate non-lethal popup wiring.
+    // Absent → popups are silently skipped; full GameModule always wires it.
+    @Optional() private damagePopupService?: DamagePopupService,
+    // @Optional() — projectile line-flash visuals. Absent in test beds that
+    // do not register ProjectileVisualService. Full GameModule always wires it.
+    @Optional() private projectileVisualService?: ProjectileVisualService,
   ) {}
 
   /**
@@ -457,7 +466,7 @@ export class TowerCombatService {
       let lastTarget: Enemy | null = null;
       for (let shot = 0; shot < shotsPerTurn; shot++) {
         if (tower.type === TowerType.SLOW) {
-          this.applySlowAura(tower, stats, turnNumber);
+          this.applySlowAura(tower, stats, turnNumber, scene);
           this.towerAnimationService.triggerFire(tower);
           fired.push(tower.type);
           break; // Aura fires once regardless of shotsPerTurn.
@@ -585,6 +594,9 @@ export class TowerCombatService {
             if (stats.statusEffect) {
               this.statusEffectService.apply(enemy.id, stats.statusEffect, turnNumber);
             }
+            if (result.damageDealt > 0 || result.shieldHit) {
+              this.damagePopupService?.accumulate(enemy.id, result.damageDealt, enemy.position, scene, result.shieldHit);
+            }
           }
           result.spawnedEnemies.forEach(mini => {
             if (mini.mesh) scene.add(mini.mesh);
@@ -610,6 +622,30 @@ export class TowerCombatService {
         target.position.x, target.position.z, blastRadius, dotDuration, scene, turnNumber,
       );
       this.pendingAudioEvents.push({ type: 'sfx', sfxKey: 'mortarExplosion' });
+
+      // ARC visual — MORTAR (Sprint 3).  Spawned after damage/zone logic so
+      // the cosmetic never gates the sim path.  The shell arcs over ~400 ms;
+      // the zone appears at the same frame, which is intentional — players
+      // accept slight visual latency on a telegraphed AOE weapon.
+      if (this.projectileVisualService) {
+        const { x: twx, z: twz } = this.getTowerWorldPos(tower);
+        const arcFrom = new THREE.Vector3(
+          twx,
+          PROJECTILE_ARC_CONFIG.yOffsetTower,
+          twz,
+        );
+        const arcTo = new THREE.Vector3(
+          target.position.x,
+          PROJECTILE_ARC_CONFIG.yOffsetEnemy,
+          target.position.z,
+        );
+        this.projectileVisualService.fireArc(
+          arcFrom,
+          arcTo,
+          TOWER_CONFIGS[TowerType.MORTAR].color,
+          scene,
+        );
+      }
     } else {
       // Single-target or splash
       const splashRadius = stats.splashRadius ?? 0;
@@ -629,11 +665,45 @@ export class TowerCombatService {
               if (stats.statusEffect) {
                 this.statusEffectService.apply(enemy.id, stats.statusEffect, turnNumber);
               }
+              if (result.damageDealt > 0 || result.shieldHit) {
+                this.damagePopupService?.accumulate(enemy.id, result.damageDealt, enemy.position, scene, result.shieldHit);
+              }
             }
             result.spawnedEnemies.forEach(mini => {
               if (mini.mesh) scene.add(mini.mesh);
             });
           }
+        }
+
+        // SPLASH visual — spawned AFTER damage loop so the cosmetic never
+        // gates the sim path. Fires once per shot toward the primary target;
+        // the expanding ring telegraphs the AOE radius that was just resolved.
+        // Gated only on `splashRadius > 0` (the outer branch already enforces
+        // this) so HIVE_MIND towers borrowing splash from a SPLASH neighbor
+        // also fire the visual — any AOE that deals damage gets a ring.
+        // Color uses the tower's own type so a HIVE_MIND borrower reads as
+        // a HIVE_MIND-tinted splash, not a stolen SPLASH ring.
+        if (this.projectileVisualService) {
+          const { x: twx, z: twz } = this.getTowerWorldPos(tower);
+          const splashFrom = new THREE.Vector3(
+            twx,
+            PROJECTILE_SPLASH_CONFIG.yOffsetTower,
+            twz,
+          );
+          const splashTo = new THREE.Vector3(
+            target.position.x,
+            PROJECTILE_SPLASH_CONFIG.yOffsetEnemy,
+            target.position.z,
+          );
+          const splashColor = TOWER_CONFIGS[tower.type]?.color
+            ?? TOWER_CONFIGS[TowerType.SPLASH].color;
+          this.projectileVisualService.fireSplash(
+            splashFrom,
+            splashTo,
+            splashRadius,
+            splashColor,
+            scene,
+          );
         }
       } else {
         // Sprint 38/39 elevation-immunity per-target adjustment.
@@ -657,10 +727,60 @@ export class TowerCombatService {
           if (stats.statusEffect) {
             this.statusEffectService.apply(target.id, stats.statusEffect, turnNumber);
           }
+          if (result.damageDealt > 0 || result.shieldHit) {
+            this.damagePopupService?.accumulate(target.id, result.damageDealt, target.position, scene, result.shieldHit);
+          }
         }
         result.spawnedEnemies.forEach(mini => {
           if (mini.mesh) scene.add(mini.mesh);
         });
+
+        // HITSCAN visual — SNIPER only (Sprint 1).  Spawned AFTER damage so
+        // the cosmetic never gates the logic path.  Other tower types get
+        // their own idioms in subsequent sprints.
+        if (tower.type === TowerType.SNIPER && this.projectileVisualService) {
+          const { x: twx, z: twz } = this.getTowerWorldPos(tower);
+          const from = new THREE.Vector3(
+            twx,
+            PROJECTILE_HITSCAN_CONFIG.yOffsetTower,
+            twz,
+          );
+          const to = new THREE.Vector3(
+            target.position.x,
+            PROJECTILE_HITSCAN_CONFIG.yOffsetEnemy,
+            target.position.z,
+          );
+          this.projectileVisualService.fireHitscan(
+            from,
+            to,
+            TOWER_CONFIGS[TowerType.SNIPER].color,
+            scene,
+          );
+        }
+
+        // BOLT visual — BASIC tower (Sprint 2).  Spawned AFTER damage for the
+        // same reason as HITSCAN.  The sphere travels cosmetically over
+        // ~150 ms; popup-vs-arrival desync is acceptable given turn-end flush
+        // aggregation already absorbs it.
+        if (tower.type === TowerType.BASIC && this.projectileVisualService) {
+          const { x: twx, z: twz } = this.getTowerWorldPos(tower);
+          const from = new THREE.Vector3(
+            twx,
+            PROJECTILE_BOLT_CONFIG.yOffsetTower,
+            twz,
+          );
+          const to = new THREE.Vector3(
+            target.position.x,
+            PROJECTILE_BOLT_CONFIG.yOffsetEnemy,
+            target.position.z,
+          );
+          this.projectileVisualService.fireBolt(
+            from,
+            to,
+            TOWER_CONFIGS[TowerType.BASIC].color,
+            scene,
+          );
+        }
       }
     }
 
@@ -878,6 +998,9 @@ export class TowerCombatService {
             if (zone.statusEffect) {
               this.statusEffectService.apply(enemy.id, zone.statusEffect, turnNumber);
             }
+            if (result.damageDealt > 0 || result.shieldHit) {
+              this.damagePopupService?.accumulate(enemy.id, result.damageDealt, enemy.position, scene, result.shieldHit);
+            }
           }
           result.spawnedEnemies.forEach(mini => {
             if (mini.mesh) scene.add(mini.mesh);
@@ -1033,7 +1156,7 @@ export class TowerCombatService {
     return best;
   }
 
-  private applySlowAura(tower: PlacedTower, stats: TowerStats, turnNumber: number): void {
+  private applySlowAura(tower: PlacedTower, stats: TowerStats, turnNumber: number, scene: THREE.Scene): void {
     const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
 
     const candidates = this.spatialGrid.queryRadius(towerWorldX, towerWorldZ, stats.range);
@@ -1048,6 +1171,20 @@ export class TowerCombatService {
       // StatusEffectService handles immunity (flying), duration refresh, and speed mutation.
       // turnNumber is the StatusEffectService clock in turn-based mode.
       this.statusEffectService.apply(enemy.id, StatusEffectType.SLOW, turnNumber, stats.slowFactor);
+    }
+
+    // AURA visual — spawned after status application so the cosmetic never
+    // gates the sim path.  Confirms to the player that the slow-aura pulse
+    // just activated this turn.  stats.range is already in world units (same
+    // coordinate space as enemy positions — see getTowerWorldPos / gridToWorld).
+    if (this.projectileVisualService) {
+      const centerWorld = new THREE.Vector3(towerWorldX, PROJECTILE_AURA_CONFIG.yOffsetGround, towerWorldZ);
+      this.projectileVisualService.fireAura(
+        centerWorld,
+        stats.range,
+        TOWER_CONFIGS[TowerType.SLOW].color,
+        scene,
+      );
     }
   }
 

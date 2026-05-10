@@ -1,0 +1,693 @@
+/* ============================================================
+   GameCardComponent — reusable static card visual
+   Mirrors the in-game card-hand card face. No interactive
+   gameplay states (playable/pending/dimmed/playing).
+   ============================================================ */
+
+// Card type accent colours (top border + left edge + icon tint)
+$card-type-colors: (
+  tower:    var(--card-type-tower),
+  spell:    var(--card-type-spell),
+  modifier: var(--card-type-modifier),
+  utility:  var(--card-type-utility),
+);
+
+// ── Host ─────────────────────────────────────────────────────
+
+:host {
+  display: block;
+}
+
+// ── Individual card ──────────────────────────────────────────
+
+.game-card {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  // padding-top reserves space for the absolute-positioned cost pill + corner icon;
+  // padding-bottom leaves the instance dot its corner.
+  padding: var(--card-padding-top-desktop) var(--card-padding-x-desktop) var(--card-padding-bottom-desktop);
+  gap: 0.25rem;
+
+  width: var(--card-width-desktop);
+  // Min-height leaves room for: cost pill, name (2 lines), gold cost, keyword badges.
+  min-height: var(--card-min-height-desktop);
+
+  background: var(--card-bg);
+  border: var(--border-width-thin) solid var(--border-color);
+  border-top-width: var(--card-accent-border-width); // top accent
+  // Left edge accent stripe
+  border-left-width: var(--card-accent-border-width);
+  border-radius: var(--card-border-radius);
+  cursor: pointer;
+  font-family: "Orbitron", sans-serif;
+
+  transition:
+    transform var(--transition-fast) ease,
+    box-shadow var(--transition-fast) ease,
+    opacity var(--transition-fast) ease,
+    filter var(--transition-fast) ease;
+
+  // WCAG 44px minimum touch target
+  min-width: var(--card-min-touch-width);
+
+  // Focus visible ring
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--theme-cyan);
+    outline-offset: var(--border-width-medium);
+  }
+
+  &:hover {
+    transform: translateY(var(--card-hover-lift, -0.35rem));
+    filter: brightness(var(--card-hover-brightness, 1.1));
+    box-shadow:
+      0 0.5rem 1rem rgba(0, 0, 0, 0.5),
+      0 0 0.6rem var(--card-type-color, rgba(255, 255, 255, 0.2));
+    z-index: 1;
+  }
+
+  &:active { transform: translateY(-0.2rem); }
+
+  @media (max-width: 768px) {
+    width: var(--card-width-tablet);
+    min-height: var(--card-min-height-tablet);
+    padding: var(--card-padding-top-tablet) var(--card-padding-x-desktop) var(--card-padding-bottom-tablet);
+  }
+
+  @media (max-width: 480px) {
+    width: var(--card-width-mobile);
+    min-width: var(--card-width-mobile);
+    min-height: var(--card-min-height-mobile);
+    padding: var(--card-padding-top-mobile) var(--card-padding-x-mobile) var(--card-padding-bottom-mobile);
+    gap: 0.1rem;
+    font-size: var(--font-size-3xs);
+  }
+}
+
+// ─── Card layer stack (z-index) ───
+//   0: .game-card::before         → art zone radial gradient
+//   0: .game-card::after          → scan-line texture (+ rare shimmer override)
+//   1: .game-card > *             → all children (name, type-icon, gold-cost)
+//   2: .game-card__cost, .game-card__upgraded-badge → always on top
+
+// Art zone foundation — top portion of the card is a pseudo-element layer
+// with a radial gradient per card type. Creates a colored "art splash" visual identity.
+.game-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--card-art-zone-height);
+  pointer-events: none;
+  z-index: 0;
+  // Backdrop pattern (layer 1) + fallback base gradient (layer 2).
+  background-image: var(--card-backdrop-image, none),
+    radial-gradient(ellipse at 50% 60%, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
+  background-size: auto, cover;
+  background-repeat: repeat, no-repeat;
+  transition: opacity var(--transition-fast) ease;
+}
+
+// Ensure all card content layers above the art-zone pseudo
+.game-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+// Scan-line CRT texture
+.game-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0,
+    transparent 1px,
+    var(--card-scanline-color) 1px,
+    var(--card-scanline-color) 2px
+  );
+  opacity: var(--card-scanline-opacity);
+  mix-blend-mode: overlay;
+}
+
+// ── Card type accent borders (top + left edge) ───────────────
+
+@each $type, $color in $card-type-colors {
+  .game-card--frame-#{$type} {
+    border-top-color: #{$color};
+    border-left-color: #{$color};
+
+    .game-card__type-icon {
+      color: #{$color};
+    }
+  }
+}
+
+// Per-type art-zone gradients
+
+@supports not (background: color-mix(in srgb, red 50%, transparent)) {
+  .game-card--frame-tower::before {
+    background-image: var(--card-backdrop-image, none),
+      radial-gradient(
+        ellipse at 50% 60%,
+        rgba(255, 102, 0, var(--card-art-tower-opacity-inner)) 0%,
+        rgba(255, 102, 0, var(--card-art-tower-opacity-outer)) 65%,
+        transparent 100%
+      );
+  }
+  .game-card--upgraded::before {
+    background-image: var(--card-backdrop-image, none),
+      radial-gradient(ellipse at 50% 30%, rgba(255, 215, 0, 0.2) 0%, transparent 60%);
+  }
+}
+
+.game-card--frame-tower::before {
+  background-image: var(--card-backdrop-image, none),
+    radial-gradient(
+      ellipse at 50% 60%,
+      color-mix(in srgb, var(--card-tower-accent, var(--tower-color-basic)) 50%, transparent) 0%,
+      color-mix(in srgb, var(--card-tower-accent, var(--tower-color-basic)) 10%, transparent) 65%,
+      transparent 100%
+    );
+  background-size: auto, cover;
+  background-repeat: repeat, no-repeat;
+}
+
+.game-card--frame-spell::before {
+  background-image: var(--card-backdrop-image, none),
+    radial-gradient(
+      ellipse at 50% 60%,
+      rgba(0, 255, 255, var(--card-art-spell-opacity-inner)) 0%,
+      rgba(0, 255, 255, var(--card-art-spell-opacity-outer)) 65%,
+      transparent 100%
+    );
+  background-size: auto, cover;
+  background-repeat: repeat, no-repeat;
+}
+
+.game-card--frame-modifier::before {
+  background-image: var(--card-backdrop-image, none),
+    radial-gradient(
+      ellipse at 50% 60%,
+      rgba(140, 90, 200, var(--card-art-modifier-opacity-inner)) 0%,
+      rgba(140, 90, 200, var(--card-art-modifier-opacity-outer)) 65%,
+      transparent 100%
+    );
+  background-size: auto, cover;
+  background-repeat: repeat, no-repeat;
+}
+
+.game-card--frame-utility::before {
+  background-image: var(--card-backdrop-image, none),
+    radial-gradient(
+      ellipse at 50% 60%,
+      rgba(80, 255, 136, var(--card-art-utility-opacity-inner)) 0%,
+      rgba(80, 255, 136, var(--card-art-utility-opacity-outer)) 65%,
+      transparent 100%
+    );
+  background-size: auto, cover;
+  background-repeat: repeat, no-repeat;
+}
+
+// Expose per-type accent as a CSS custom property for hover glow + upgraded blend.
+.game-card--frame-tower    { --card-type-color: var(--card-tower-accent, #{map-get($card-type-colors, tower)}); }
+.game-card--frame-spell    { --card-type-color: #{map-get($card-type-colors, spell)}; }
+.game-card--frame-modifier { --card-type-color: #{map-get($card-type-colors, modifier)}; }
+.game-card--frame-utility  { --card-type-color: #{map-get($card-type-colors, utility)}; }
+
+// ── Card rarity glow ─────────────────────────────────────────
+
+.game-card {
+  --card-glow-color: transparent;
+  --card-glow-blur: 0rem;
+}
+
+.game-card--starter,
+.game-card--common {
+  border-color: var(--card-rarity-common-border);
+}
+
+.game-card--uncommon {
+  --card-glow-color: var(--card-rarity-uncommon-glow-outer);
+  --card-glow-blur: 0.5rem;
+  border-color: var(--card-rarity-uncommon-border);
+  box-shadow:
+    0 0 var(--card-glow-blur) var(--card-glow-color),
+    inset 0 0 0.25rem var(--card-rarity-uncommon-glow-inner);
+}
+
+.game-card--rare {
+  --card-glow-color: var(--card-rarity-rare-glow-outer);
+  --card-glow-blur: 0.6rem;
+  border-color: var(--card-rarity-rare-border);
+  box-shadow:
+    0 0 var(--card-glow-blur) var(--card-glow-color),
+    inset 0 0 0.3rem var(--card-rarity-rare-glow-inner);
+}
+
+// Rare-card foil shimmer — diagonal gold band sweeps across every 3s.
+.game-card--rare::after {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 1px,
+      var(--card-scanline-color) 1px,
+      var(--card-scanline-color) 2px
+    ),
+    linear-gradient(
+      115deg,
+      transparent 40%,
+      rgba(255, 215, 0, 0.18) 48%,
+      rgba(255, 255, 255, 0.35) 50%,
+      rgba(255, 215, 0, 0.18) 52%,
+      transparent 60%
+    );
+  background-size: 100% 2px, 300% 100%;
+  background-position: 0 0, -150% 0;
+  animation: game-card-rare-shimmer var(--card-rarity-rare-shimmer-duration) ease-in-out infinite;
+}
+
+@keyframes game-card-rare-shimmer {
+  0%, 100% { background-position: 0 0, -150% 0; }
+  50%       { background-position: 0 0,  150% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-card--rare::after {
+    animation: none;
+    background-position: 0 0, 0 0;
+  }
+}
+
+body.reduce-motion .game-card--rare::after { animation: none; background-position: 0 0, 0 0; }
+
+// ── Framed-card system ───────────────────────────────────────
+//
+// Archetype trim ring + rarity glow composed in a single box-shadow.
+
+.game-card--frame-tower {
+  transition:
+    transform var(--transition-fast) ease,
+    box-shadow var(--transition-fast) ease,
+    opacity var(--transition-fast) ease;
+  box-shadow:
+    inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral)),
+    0 0 var(--card-glow-blur) var(--card-glow-color);
+
+  &:hover {
+    box-shadow:
+      inset 0 0 0 var(--card-trim-width-hover, 3px) var(--archetype-trim-color-strong, var(--card-trim-neutral-strong)),
+      0 0 var(--card-glow-blur) var(--card-glow-color),
+      0 0.5rem 1rem rgba(0, 0, 0, 0.5),
+      0 0 0.6rem var(--card-type-color, rgba(255, 255, 255, 0.2));
+  }
+}
+
+.game-card--frame-spell {
+  transition:
+    transform var(--transition-fast) ease,
+    box-shadow var(--transition-fast) ease,
+    opacity var(--transition-fast) ease;
+  box-shadow:
+    inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral)),
+    0 0 var(--card-glow-blur) var(--card-glow-color);
+
+  &:hover {
+    box-shadow:
+      inset 0 0 0 var(--card-trim-width-hover, 3px) var(--archetype-trim-color-strong, var(--card-trim-neutral-strong)),
+      0 0 var(--card-glow-blur) var(--card-glow-color),
+      0 0.5rem 1rem rgba(0, 0, 0, 0.5),
+      0 0 0.6rem var(--card-type-color, rgba(255, 255, 255, 0.2));
+  }
+}
+
+.game-card--frame-modifier {
+  transition:
+    transform var(--transition-fast) ease,
+    box-shadow var(--transition-fast) ease,
+    opacity var(--transition-fast) ease;
+  box-shadow:
+    inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral)),
+    0 0 var(--card-glow-blur) var(--card-glow-color);
+
+  &:hover {
+    box-shadow:
+      inset 0 0 0 var(--card-trim-width-hover, 3px) var(--archetype-trim-color-strong, var(--card-trim-neutral-strong)),
+      0 0 var(--card-glow-blur) var(--card-glow-color),
+      0 0.5rem 1rem rgba(0, 0, 0, 0.5),
+      0 0 0.6rem var(--card-type-color, rgba(255, 255, 255, 0.2));
+  }
+}
+
+.game-card--frame-utility {
+  transition:
+    transform var(--transition-fast) ease,
+    box-shadow var(--transition-fast) ease,
+    opacity var(--transition-fast) ease;
+  box-shadow:
+    inset 0 0 0 var(--card-trim-width, 2px) var(--archetype-trim-color, var(--card-trim-neutral)),
+    0 0 var(--card-glow-blur) var(--card-glow-color);
+
+  &:hover {
+    box-shadow:
+      inset 0 0 0 var(--card-trim-width-hover, 3px) var(--archetype-trim-color-strong, var(--card-trim-neutral-strong)),
+      0 0 var(--card-glow-blur) var(--card-glow-color),
+      0 0.5rem 1rem rgba(0, 0, 0, 0.5),
+      0 0 0 0.6rem var(--card-type-color, rgba(255, 255, 255, 0.2));
+  }
+}
+
+// Upgraded state polish
+.game-card--upgraded {
+  --card-glow-color: var(--card-upgraded-glow-outer);
+  --card-glow-blur: 0.4rem;
+  border-top-width: var(--card-upgraded-border-width);
+  box-shadow:
+    inset 0 0 0.4rem var(--card-upgraded-glow-inner),
+    0 0 var(--card-glow-blur) var(--card-glow-color);
+
+  // Blend art zone toward gold to signal power-up while preserving type identity.
+  &::before {
+    background-image:
+      var(--card-backdrop-image, none),
+      radial-gradient(
+        ellipse at 50% 30%,
+        rgba(255, 215, 0, 0.2) 0%,
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse at 50% 60%,
+        color-mix(in srgb, var(--card-type-color, rgba(255, 255, 255, 0.2)) 50%, transparent) 0%,
+        color-mix(in srgb, var(--card-type-color, rgba(255, 255, 255, 0.2)) 10%, transparent) 65%,
+        transparent 100%
+      );
+    background-size: auto, cover, cover;
+    background-repeat: repeat, no-repeat, no-repeat;
+  }
+}
+
+// ── Card internals ───────────────────────────────────────────
+
+// Cost pip — top-right square corner chip.
+// Specificity bump: `.game-card .game-card__cost` (0,4,0) beats `.game-card > *` (0,3,0)
+// so position: absolute wins.
+.game-card .game-card__cost {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  width: 1.6rem;
+  height: 1.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 5, 20, 0.85);
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.22);
+  border-radius: 0.25rem;
+  color: var(--text-dim);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-base);
+  font-weight: 800;
+  line-height: 1;
+  z-index: 2;
+  pointer-events: none;
+
+  @media (max-width: 480px) {
+    top: 0.25rem;
+    right: 0.25rem;
+    width: 1.1rem;
+    height: 1.1rem;
+    font-size: var(--font-size-xs);
+  }
+}
+
+// Upgraded "+" badge — top-left square chip
+.game-card .game-card__upgraded-badge {
+  position: absolute;
+  top: 0.4rem;
+  left: 0.4rem;
+  width: 1.6rem;
+  height: 1.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 5, 20, 0.85);
+  border: var(--border-width-thin) solid rgba(255, 215, 0, 0.65);
+  border-radius: 0.25rem;
+  color: var(--game-gold);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-base);
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 0 0.6rem rgba(255, 215, 0, 0.9);
+  letter-spacing: 0;
+  z-index: 2;
+
+  @media (max-width: 480px) {
+    top: 0.25rem;
+    left: 0.25rem;
+    width: 1.1rem;
+    height: 1.1rem;
+    font-size: var(--font-size-xs);
+  }
+}
+
+// Tower mesh thumbnail — pinned to top of card
+.game-card .game-card__art-thumbnail {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6rem;
+  width: auto;
+  margin: 0;
+  object-fit: contain;
+  pointer-events: none;
+  z-index: 1;
+
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(0, 0, 0, 0.10) 100%);
+  border-bottom: var(--border-width-thin) solid rgba(255, 255, 255, 0.10);
+  padding: 0.3rem;
+  box-sizing: border-box;
+
+  @media (max-width: 768px) {
+    height: 5.2rem;
+  }
+
+  @media (max-width: 480px) {
+    height: 3.6rem;
+    padding: 0.2rem;
+  }
+}
+
+// Effect glyph — hero art for non-tower cards
+.game-card .game-card__art-glyph {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6rem;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(0, 0, 0, 0.12) 100%);
+  border-bottom: var(--border-width-thin) solid rgba(255, 255, 255, 0.08);
+  box-sizing: border-box;
+  padding: 0.3rem;
+
+  color: var(--card-type-spell);
+
+  app-icon {
+    opacity: 0.85;
+    filter: drop-shadow(0 0 6px currentColor);
+  }
+
+  @media (max-width: 768px) {
+    height: 5.2rem;
+    app-icon {
+      transform: scale(0.85);
+    }
+  }
+
+  @media (max-width: 480px) {
+    height: 3.6rem;
+    padding: 0.2rem;
+    app-icon {
+      transform: scale(0.6);
+    }
+  }
+}
+
+// Per-type glyph tint
+.game-card.game-card--frame-spell .game-card__art-glyph    { color: var(--card-type-spell); }
+.game-card.game-card--frame-modifier .game-card__art-glyph { color: var(--card-type-modifier); }
+.game-card.game-card--frame-utility .game-card__art-glyph  { color: var(--card-type-utility); }
+
+// Secondary glyph — small bottom-right accent for 2-tuple effectGlyph
+.game-card .game-card__art-glyph-secondary {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+
+  background: rgba(0, 0, 0, 0.45);
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  padding: 0.18rem;
+
+  app-icon {
+    opacity: 0.95;
+    filter: none;
+  }
+
+  @media (max-width: 480px) {
+    right: 0.2rem;
+    bottom: 0.2rem;
+    padding: 0.1rem;
+  }
+}
+
+// Card name
+.game-card__name {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  color: var(--text-color);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  text-align: center;
+  line-height: 1.15;
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: none;
+
+  @media (max-width: 768px) {
+    font-size: var(--font-size-2xs);
+  }
+
+  @media (max-width: 480px) {
+    font-size: var(--font-size-3xs);
+  }
+}
+
+// Gold cost — tower cards only
+.game-card__gold-cost {
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  color: var(--gold-color, #f5c542);
+  text-align: center;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  position: relative;
+  z-index: 1;
+
+  @media (max-width: 480px) {
+    font-size: var(--font-size-3xs);
+  }
+}
+
+// Type icon — bottom-right corner chip
+.game-card--frame-tower .game-card__type-icon {
+  display: none; // hidden for tower cards; thumbnail already conveys type
+}
+
+.game-card .game-card__type-icon {
+  position: absolute;
+  bottom: 0.4rem;
+  right: 0.4rem;
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  @media (max-width: 480px) {
+    top: 0.3rem;
+    right: 0.3rem;
+    width: 1rem;
+    height: 1rem;
+  }
+}
+
+// ── Keyword icon badges ──────────────────────────────────────
+
+.game-card__keywords {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.1rem 0;
+  position: relative;
+  z-index: 1;
+
+  @media (max-width: 480px) {
+    display: none;
+  }
+}
+
+.game-card__keyword {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  min-width: 1rem;
+  border-radius: 50%;
+  border: var(--border-width-thin) solid;
+  background: rgba(10, 5, 20, 0.7);
+  cursor: help;
+}
+
+.game-card__keyword--terraform {
+  color: var(--keyword-color-terraform, var(--theme-cyan));
+  border-color: rgba(0, 255, 255, 0.45);
+}
+
+.game-card__keyword--link {
+  color: var(--keyword-color-link, var(--theme-purple-light));
+  border-color: rgba(180, 130, 240, 0.45);
+}
+
+.game-card__keyword--innate {
+  color: var(--keyword-color-innate, var(--action-success));
+  border-color: rgba(80, 255, 136, 0.55);
+}
+
+.game-card__keyword--retain {
+  color: var(--keyword-color-retain, #ffaa66);
+  border-color: rgba(255, 170, 102, 0.5);
+}
+
+.game-card__keyword--ethereal {
+  color: var(--keyword-color-ethereal, var(--theme-purple-light));
+  border-color: rgba(180, 130, 240, 0.55);
+}
+
+.game-card__keyword--exhaust {
+  color: var(--keyword-color-exhaust, #ff8866);
+  border-color: rgba(255, 136, 102, 0.55);
+}

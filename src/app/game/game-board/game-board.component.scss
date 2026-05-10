@@ -261,6 +261,15 @@
       color: var(--panel-blue-accent);
     }
 
+    .spawn-preview__arrival {
+      font-size: var(--font-size-3xs);
+      font-weight: 500;
+      color: var(--text-muted);
+      opacity: 0.7;
+      margin-right: 0.25rem;
+      letter-spacing: 0.025em;
+    }
+
     .spawn-preview__spawns {
       display: flex;
       flex-wrap: nowrap;
@@ -369,6 +378,24 @@
     &--stuck {
       animation: end-turn-stuck-pulse 2s ease-in-out infinite;
       border-color: var(--theme-cyan);
+    }
+
+    // Leak warning — projected enemies will reach the exit on next-turn
+    // resolution. Red border + amber glow so the player notices before
+    // committing to End Turn. Visual takes precedence over --stuck.
+    &--leak-warning {
+      border-color: var(--game-health, #e85d75);
+      box-shadow: 0 0 1.5rem rgba(232, 93, 117, 0.45);
+    }
+
+    .end-turn-leak-warning {
+      display: block;
+      font-size: var(--font-size-2xs);
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: var(--game-health, #e85d75);
+      text-transform: uppercase;
+      margin-top: 0.125rem;
     }
   }
 

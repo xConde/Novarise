@@ -279,7 +279,7 @@ describe('StatusEffectService', () => {
       let totalDamage = 0;
       enemyServiceSpy.damageEnemy.and.callFake((_id: string, dmg: number) => {
         totalDamage += dmg;
-        return { killed: false, spawnedEnemies: [] };
+        return { killed: false, spawnedEnemies: [], damageDealt: dmg, shieldHit: false };
       });
 
       const enemy = createEnemy('e1', 999, 4);
@@ -304,7 +304,7 @@ describe('StatusEffectService', () => {
       let damageCalled = false;
       enemyServiceSpy.damageEnemy.and.callFake((_id: string, _dmg: number) => {
         damageCalled = true;
-        return { killed: false, spawnedEnemies: [] };
+        return { killed: false, spawnedEnemies: [], damageDealt: _dmg, shieldHit: false };
       });
 
       const enemy = createEnemy('e1', 999, 4);

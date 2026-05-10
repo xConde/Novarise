@@ -33,6 +33,7 @@ import {
   RELIC_EFFECT_CONFIG,
   REWARD_CONFIG,
   REWARD_RARITY_WEIGHTS,
+  CARD_PITY_THRESHOLD,
   REST_CONFIG,
   RUN_CONFIG,
   SHOP_CONFIG,
@@ -92,6 +93,20 @@ export class RunService {
 
   /** Current shop items (generated on entering shop node). */
   private shopItems: ShopItem[] = [];
+
+  /**
+   * Per-run reward telemetry — in-memory only, reset at startNewRun. Tracks
+   * what rarity distribution the run actually saw so future analysis layers
+   * (player profile, debug overlay, telemetry pipeline) can read it without
+   * each one re-instrumenting pickCardRewards.
+   */
+  private rewardTelemetry = {
+    totalDraws: 0,
+    common: 0,
+    uncommon: 0,
+    rare: 0,
+    pityFires: 0,
+  };
 
   /** Current event (generated on entering event node). */
   private currentEvent: RunEvent | null = null;
@@ -241,6 +256,7 @@ export class RunService {
     this.currentEvent = null;
     this.runRng = null;
     this.lastShownDominantArchetype = null;
+    this.resetRewardTelemetry();
 
     const seed = Date.now();
     const config = this.applyAscensionToConfig(DEFAULT_RUN_CONFIG, ascensionLevel);
@@ -539,14 +555,41 @@ export class RunService {
     // snapshot — both reads hit the same deck state so they agree.
     const dominant = this.deckService.getDominantArchetype();
 
+    // Pity-timer state — drives the "guaranteed rare every CARD_PITY_THRESHOLD
+    // consecutive non-rare picks" floor. Read off the run state, mutate locally,
+    // commit at the end so an early return path doesn't poison the counter.
+    let pityCounter = this.runState.cardPityCounter ?? 0;
+
     const picked: CardReward[] = [];
     for (let i = 0; i < count; i++) {
-      const rarity = this.pickWeightedRarity(rarityWeights, byRarity, rng);
+      const pityForceRare = pityCounter >= CARD_PITY_THRESHOLD && byRarity[CardRarity.RARE].length > 0;
+      const rarity = pityForceRare
+        ? CardRarity.RARE
+        : this.pickWeightedRarity(rarityWeights, byRarity, rng);
       if (rarity === null) continue;
       const pool = byRarity[rarity];
       if (pool.length === 0) continue;
       const card = this.pickArchetypeAwareCard(pool, dominant, rng);
       picked.push({ type: 'card', cardId: card.id });
+      // Telemetry — increment per-rarity bucket + total + pity-fires when
+      // applicable so future analysis can correlate distribution with runs.
+      this.rewardTelemetry.totalDraws++;
+      if (rarity === CardRarity.RARE) this.rewardTelemetry.rare++;
+      else if (rarity === CardRarity.UNCOMMON) this.rewardTelemetry.uncommon++;
+      else if (rarity === CardRarity.COMMON) this.rewardTelemetry.common++;
+      if (pityForceRare) this.rewardTelemetry.pityFires++;
+      // Counter mechanics: rare resets, non-rare increments.
+      if (rarity === CardRarity.RARE) {
+        pityCounter = 0;
+      } else {
+        pityCounter++;
+      }
+    }
+
+    // Persist the updated counter onto the run state so it carries across
+    // the next reward generation.
+    if (pityCounter !== (this.runState.cardPityCounter ?? 0)) {
+      this.updateState({ ...this.runState, cardPityCounter: pityCounter });
     }
 
     // Every offered card counts as seen — QA user wants "what haven't I
@@ -792,7 +835,8 @@ export class RunService {
   removeCardFromShop(instanceId: string): boolean {
     const state = this.runState;
     if (!state) return false;
-    if (state.gold < SHOP_CONFIG.cardRemoveCost) return false;
+    const cost = this.getCardRemoveCost();
+    if (state.gold < cost) return false;
 
     const allCards = this.deckService.getAllCards();
     const target = allCards.find(c => c.instanceId === instanceId);
@@ -814,8 +858,73 @@ export class RunService {
 
     this.updateState({
       ...state,
-      gold: state.gold - SHOP_CONFIG.cardRemoveCost,
+      gold: state.gold - cost,
       deckCardIds: newDeckCardIds,
+    });
+    this.persist();
+    return true;
+  }
+
+  /**
+   * Live-scaled cost of the shop card-removal service. Applies the same
+   * SHOP_PRICE_MULTIPLIER ascension scaling that other shop items use, so
+   * removal becomes proportionally pricier at higher ascensions rather than
+   * staying fixed at the base 75g.
+   */
+  getCardRemoveCost(): number {
+    const state = this.runState;
+    if (!state) return SHOP_CONFIG.cardRemoveCost;
+    const ascEffects = getAscensionEffects(state.ascensionLevel);
+    const priceMultiplier = ascEffects.get(AscensionEffectType.SHOP_PRICE_MULTIPLIER) ?? 1;
+    return Math.round(SHOP_CONFIG.cardRemoveCost * priceMultiplier);
+  }
+
+  /**
+   * Live-scaled cost of the shop card-upgrade service. Mirrors getCardRemoveCost
+   * using SHOP_CONFIG.cardUpgradeCost (base 100g) and SHOP_PRICE_MULTIPLIER
+   * ascension scaling. Returns base cost when no run is active.
+   */
+  getCardUpgradeCost(): number {
+    const state = this.runState;
+    if (!state) return SHOP_CONFIG.cardUpgradeCost;
+    const ascEffects = getAscensionEffects(state.ascensionLevel);
+    const priceMultiplier = ascEffects.get(AscensionEffectType.SHOP_PRICE_MULTIPLIER) ?? 1;
+    return Math.round(SHOP_CONFIG.cardUpgradeCost * priceMultiplier);
+  }
+
+  /**
+   * Pay {@link SHOP_CONFIG.cardUpgradeCost} gold to upgrade a card at the shop.
+   * Returns true on success. One-use-per-visit is enforced by ShopScreenComponent.
+   *
+   * Validation:
+   *   - run state must exist
+   *   - player must have enough gold
+   *   - card must currently exist in any deck pile
+   *   - card must NOT be a starter card (StS convention)
+   *   - card must NOT already be upgraded
+   *   - card must have at least one upgrade payload (upgradedEffect or upgradedEnergyCost)
+   */
+  upgradeCardFromShop(instanceId: string): boolean {
+    const state = this.runState;
+    if (!state) return false;
+    const cost = this.getCardUpgradeCost();
+    if (state.gold < cost) return false;
+
+    const allCards = this.deckService.getAllCards();
+    const target = allCards.find(c => c.instanceId === instanceId);
+    if (!target) return false;
+
+    const def = CARD_DEFINITIONS[target.cardId as CardId];
+    if (!def || def.rarity === CardRarity.STARTER) return false;
+    if (target.upgraded) return false;
+    if (def.upgradedEffect === undefined && def.upgradedEnergyCost === undefined) return false;
+
+    const upgraded = this.deckService.upgradeCard(instanceId);
+    if (!upgraded) return false;
+
+    this.updateState({
+      ...state,
+      gold: state.gold - cost,
     });
     this.persist();
     return true;
@@ -1179,5 +1288,31 @@ export class RunService {
     this.deckService.clear();
     this.itemService.resetForRun();
     this.runStateFlagService.resetForRun();
+    this.resetRewardTelemetry();
+  }
+
+  /**
+   * Read-only snapshot of the current run's reward distribution. Tracks
+   * card-pick counts per rarity, total draws, and pity-fire count. Reset
+   * at startNewRun. In-memory only — not persisted to checkpoints.
+   * Future telemetry layers (debug overlay, profile aggregation, external
+   * pipeline) read this without re-instrumenting pickCardRewards.
+   */
+  getRewardTelemetry(): Readonly<{
+    totalDraws: number;
+    common: number;
+    uncommon: number;
+    rare: number;
+    pityFires: number;
+  }> {
+    return { ...this.rewardTelemetry };
+  }
+
+  private resetRewardTelemetry(): void {
+    this.rewardTelemetry.totalDraws = 0;
+    this.rewardTelemetry.common = 0;
+    this.rewardTelemetry.uncommon = 0;
+    this.rewardTelemetry.rare = 0;
+    this.rewardTelemetry.pityFires = 0;
   }
 }

@@ -2,6 +2,7 @@ import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 
 import { TowerType, MAX_TOWER_LEVEL } from '../models/tower.model';
+import { DamagePopupService } from './damage-popup.service';
 import { GamePhase } from '../models/game-state.model';
 import { GameStateService } from './game-state.service';
 import { GameStatsService } from './game-stats.service';
@@ -158,6 +159,8 @@ export class CardPlayService {
      * is skipped; aim cache simply becomes stale until the next enemy event.
      */
     @Optional() private targetPreviewService?: TargetPreviewService,
+    // @Optional() — not provided in pre-popup test beds; popups silently skipped when absent.
+    @Optional() private damagePopupService?: DamagePopupService,
   ) {}
 
   /**
@@ -488,7 +491,10 @@ export class CardPlayService {
         ) {
           const damage = Math.floor(enemy.maxHealth * pct);
           if (damage > 0) {
-            this.enemyService.damageEnemy(enemy.id, damage);
+            const dmgResult = this.enemyService.damageEnemy(enemy.id, damage);
+            if (!dmgResult.killed && (dmgResult.damageDealt > 0 || dmgResult.shieldHit)) {
+              this.damagePopupService?.accumulate(enemy.id, dmgResult.damageDealt, enemy.position, this.sceneService.getScene(), dmgResult.shieldHit);
+            }
           }
         }
       });
@@ -611,7 +617,10 @@ export class CardPlayService {
               enemy.gridPosition.col === col &&
               !enemy.dying
             ) {
-              this.enemyService.damageEnemy(enemy.id, totalDamage);
+              const dmgResult = this.enemyService.damageEnemy(enemy.id, totalDamage);
+              if (!dmgResult.killed && (dmgResult.damageDealt > 0 || dmgResult.shieldHit)) {
+                this.damagePopupService?.accumulate(enemy.id, dmgResult.damageDealt, enemy.position, this.sceneService.getScene(), dmgResult.shieldHit);
+              }
             }
           });
         }

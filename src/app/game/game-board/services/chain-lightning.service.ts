@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy } from '../models/enemy.model';
 import { PlacedTower, TowerStats } from '../models/tower.model';
@@ -9,6 +9,7 @@ import { EnemyService } from './enemy.service';
 import { StatusEffectService } from './status-effect.service';
 import { CombatVFXService } from './combat-vfx.service';
 import { dist2d } from '../utils/coordinate-utils';
+import { DamagePopupService } from './damage-popup.service';
 
 /**
  * Handles chain lightning logic for the CHAIN tower type.
@@ -25,6 +26,8 @@ export class ChainLightningService {
     private enemyService: EnemyService,
     private statusEffectService: StatusEffectService,
     private combatVFXService: CombatVFXService,
+    // @Optional() — not provided in pre-popup test beds; popups silently skipped when absent.
+    @Optional() private damagePopupService?: DamagePopupService,
   ) {}
 
   /**
@@ -96,6 +99,9 @@ export class ChainLightningService {
         this.enemyService.startHitFlash(currentTarget.id);
         if (stats.statusEffect) {
           this.statusEffectService.apply(currentTarget.id, stats.statusEffect, turnNumber);
+        }
+        if (chainResult.damageDealt > 0 || chainResult.shieldHit) {
+          this.damagePopupService?.accumulate(currentTarget.id, chainResult.damageDealt, currentTarget.position, scene, chainResult.shieldHit);
         }
       }
       // Mini-swarm meshes from chain kills are added to scene here

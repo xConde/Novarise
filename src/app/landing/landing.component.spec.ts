@@ -172,22 +172,53 @@ describe('LandingComponent', () => {
     });
   });
 
-  describe('getAscensionPreview()', () => {
-    it('returns null at A0', () => {
+  describe('getAscensionStack()', () => {
+    it('returns empty array at A0', () => {
       component.selectedAscension = 0;
-      expect(component.getAscensionPreview()).toBeNull();
+      expect(component.getAscensionStack()).toEqual([]);
     });
 
-    it('returns a string containing A3 description at A3', () => {
-      component.selectedAscension = 3;
-      const preview = component.getAscensionPreview();
-      expect(preview).toBe('A3: Start with 20 less gold');
+    it('returns A1..A_N modifiers in order at A_N', () => {
+      component.selectedAscension = 5;
+      const stack = component.getAscensionStack();
+      expect(stack.length).toBe(5);
+      expect(stack[0].level).toBe(1);
+      expect(stack[4].level).toBe(5);
     });
 
-    it('returns a string containing A18 description at A18', () => {
-      component.selectedAscension = 18;
-      const preview = component.getAscensionPreview();
-      expect(preview).toBe('A18: Your starting relic is drawn from common stock only');
+    it('returns full 20-entry stack at A20', () => {
+      component.selectedAscension = 20;
+      expect(component.getAscensionStack().length).toBe(20);
+    });
+  });
+
+  describe('highest-beaten badge', () => {
+    it('highestBeatenAscension is maxAscension - 1 when maxAscension > 0', () => {
+      component.maxAscension = 5;
+      expect(component.highestBeatenAscension).toBe(4);
+    });
+
+    it('highestBeatenAscension floors at 0', () => {
+      component.maxAscension = 0;
+      expect(component.highestBeatenAscension).toBe(0);
+    });
+
+    it('showBeatenBadge is false when no run beaten yet', () => {
+      component.maxAscension = 0;
+      runPersistence.isAscensionMastered.and.returnValue(false);
+      expect(component.showBeatenBadge).toBeFalse();
+    });
+
+    it('showBeatenBadge is false when mastered (A20 pill takes precedence)', () => {
+      component.maxAscension = 20;
+      runPersistence.isAscensionMastered.and.returnValue(true);
+      expect(component.showBeatenBadge).toBeFalse();
+    });
+
+    it('showBeatenBadge is true between A1 and A19', () => {
+      component.maxAscension = 5;
+      runPersistence.isAscensionMastered.and.returnValue(false);
+      expect(component.showBeatenBadge).toBeTrue();
     });
   });
 

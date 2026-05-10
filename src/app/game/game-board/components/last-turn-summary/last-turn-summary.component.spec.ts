@@ -13,6 +13,7 @@ function makeRecord(overrides: Partial<TurnEventRecord> = {}): TurnEventRecord {
     killsByTower: [],
     goldEarned: 0,
     livesLost: 0,
+    predictedLivesLost: -1,
     timestamp: Date.now(),
     ...overrides,
   };
@@ -231,6 +232,40 @@ describe('LastTurnSummaryComponent', () => {
         .querySelectorAll('.last-turn-summary__sep');
       // No separator pipes when there's only one stat
       expect(seps.length).toBe(0);
+    });
+  });
+
+  describe('leak prediction delta', () => {
+    it('returns null when prediction was not captured', () => {
+      const row = makeRecord({ livesLost: 2, predictedLivesLost: -1 });
+      expect(component.leakPredictionDelta(row)).toBeNull();
+    });
+
+    it('returns null when prediction matched actual', () => {
+      const row = makeRecord({ livesLost: 2, predictedLivesLost: 2 });
+      expect(component.leakPredictionDelta(row)).toBeNull();
+    });
+
+    it('returns "higher" delta when actual > predicted (towers under-killed)', () => {
+      const row = makeRecord({ livesLost: 5, predictedLivesLost: 3 });
+      const delta = component.leakPredictionDelta(row);
+      expect(delta).toEqual({ kind: 'higher', text: '(+2)' });
+    });
+
+    it('returns "lower" delta when actual < predicted (towers over-killed)', () => {
+      const row = makeRecord({ livesLost: 1, predictedLivesLost: 4 });
+      const delta = component.leakPredictionDelta(row);
+      expect(delta).toEqual({ kind: 'lower', text: '(-3)' });
+    });
+
+    it('title includes prediction when captured', () => {
+      const row = makeRecord({ livesLost: 2, predictedLivesLost: 5 });
+      expect(component.leakPredictionTitle(row)).toBe('2 lives lost (predicted 5)');
+    });
+
+    it('title omits prediction when not captured', () => {
+      const row = makeRecord({ livesLost: 1, predictedLivesLost: -1 });
+      expect(component.leakPredictionTitle(row)).toBe('1 life lost');
     });
   });
 

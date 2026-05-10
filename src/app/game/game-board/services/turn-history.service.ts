@@ -25,6 +25,13 @@ export interface TurnEventRecord {
   killsByTower: TurnKillAttribution[];
   goldEarned: number;
   livesLost: number;
+  /**
+   * Lives projected to be lost on this turn's resolution, captured BEFORE the
+   * turn resolves. Compared against `livesLost` post-resolution to teach the
+   * forward-prediction system to the player. -1 means "not captured" (older
+   * checkpoint records or restoration paths that bypass the projection hook).
+   */
+  predictedLivesLost: number;
   timestamp: number;
 }
 
@@ -58,8 +65,18 @@ export class TurnHistoryService {
       killsByTower: [],
       goldEarned: 0,
       livesLost: 0,
+      predictedLivesLost: -1,
       timestamp: Date.now(),
     };
+  }
+
+  /**
+   * Record the forward-prediction's lives-lost projection for this turn.
+   * Called from GameBoardComponent.endTurn() BEFORE the wave resolves so
+   * the comparison-vs-actual is meaningful.
+   */
+  recordPredictedLivesLost(amount: number): void {
+    if (this.current && amount >= 0) this.current.predictedLivesLost = amount;
   }
 
   recordCardPlayed(): void {
@@ -138,10 +155,14 @@ export class TurnHistoryService {
   }
 
   /** Restore the rolling buffer from checkpoint data. Clears any in-flight
-   * current turn and expanded-row tracking is the component's concern. */
+   * current turn and expanded-row tracking is the component's concern.
+   * Older serialized records may lack predictedLivesLost — default to -1
+   * (meaning "not captured") rather than 0, so the UI distinguishes
+   * "predicted no leaks" from "no prediction recorded". */
   restore(records: readonly TurnEventRecord[]): void {
     const copied = records.map(r => ({
       ...r,
+      predictedLivesLost: r.predictedLivesLost ?? -1,
       killsByTower: r.killsByTower.map(e => ({ ...e })),
     }));
     this.recordsSubject.next(copied);

@@ -24,6 +24,7 @@ import { ElevationService } from './elevation.service';
 import { TowerGraphService } from './tower-graph.service';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
+import { DamagePopupService } from './damage-popup.service';
 
 describe('TowerCombatService', () => {
   let service: TowerCombatService;
@@ -5471,5 +5472,107 @@ describe('TowerCombatService HARMONIC', () => {
     // firing happens from the far tower if an enemy is in its range —
     // not in this test). Assert upper bound: no passenger propagation.
     expect(result.fired.length).toBeLessThanOrEqual(1);
+  });
+});
+
+// ── Non-lethal damage popup wiring ──────────────────────────────────────
+
+describe('TowerCombatService non-lethal popup wiring', () => {
+  let service: TowerCombatService;
+  let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
+  let enemyMap: Map<string, Enemy>;
+  let mockScene: THREE.Scene;
+  let damagePopupSpy: jasmine.SpyObj<DamagePopupService>;
+
+  const ROW = 10;
+  const COL = 12;
+  const WORLD_X = -0.5;
+  const WORLD_Z = 0;
+
+  const makeEnemy = (id: string, health: number): Enemy =>
+    createTestEnemy(id, WORLD_X, WORLD_Z, health);
+
+  beforeEach(() => {
+    enemyMap = new Map();
+    enemyServiceSpy = createEnemyServiceSpy(enemyMap);
+
+    const pathfindingSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService',
+      ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset'],
+    );
+    pathfindingSpy.getPathToExitLength.and.returnValue(0);
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: enemyServiceSpy },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+        { provide: PathfindingService, useValue: pathfindingSpy },
+      ],
+    });
+
+    service = TestBed.inject(TowerCombatService);
+    mockScene = new THREE.Scene();
+    damagePopupSpy = jasmine.createSpyObj<DamagePopupService>('DamagePopupService', ['spawn', 'accumulate', 'flush', 'flushOne', 'update', 'cleanup']);
+    (service as unknown as { damagePopupService: DamagePopupService }).damagePopupService = damagePopupSpy;
+  });
+
+  afterEach(() => {
+    mockScene.clear();
+  });
+
+  it('accumulates a popup when a BASIC tower hits but does not kill an enemy', () => {
+    service.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group());
+    // High-health enemy — guaranteed non-lethal
+    const enemy = makeEnemy('e1', 10000);
+    enemyMap.set('e1', enemy);
+
+    service.fireTurn(mockScene, 1);
+
+    expect(damagePopupSpy.accumulate).toHaveBeenCalled();
+    const [enemyId, dmg, pos, , isShield] = damagePopupSpy.accumulate.calls.mostRecent().args;
+    expect(enemyId).toBe('e1');
+    expect(dmg).toBeGreaterThan(0);
+    expect(pos).toEqual(jasmine.objectContaining({ x: jasmine.any(Number) }));
+    expect(isShield).toBe(false);
+  });
+
+  it('does NOT accumulate a popup when the hit kills the enemy (kills go through game-render kill path)', () => {
+    service.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group());
+    // Exactly-1-hp enemy — one hit kills
+    const enemy = makeEnemy('e1', 1);
+    enemyMap.set('e1', enemy);
+
+    service.fireTurn(mockScene, 1);
+
+    expect(damagePopupSpy.accumulate).not.toHaveBeenCalled();
+  });
+
+  it('accumulates a shield popup when hit is fully shield-absorbed (damageDealt=0, shieldHit=true)', () => {
+    enemyServiceSpy.damageEnemy.and.returnValue({
+      killed: false,
+      spawnedEnemies: [],
+      damageDealt: 0,
+      shieldHit: true,
+    });
+    service.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group());
+    const enemy = makeEnemy('e1', 10000);
+    enemyMap.set('e1', enemy);
+
+    service.fireTurn(mockScene, 1);
+
+    expect(damagePopupSpy.accumulate).toHaveBeenCalled();
+    const [enemyId, dmg, , , isShield] = damagePopupSpy.accumulate.calls.mostRecent().args;
+    expect(enemyId).toBe('e1');
+    expect(dmg).toBe(0);
+    expect(isShield).toBe(true);
   });
 });

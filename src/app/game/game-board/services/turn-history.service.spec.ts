@@ -50,6 +50,38 @@ describe('TurnHistoryService', () => {
     expect(r.livesLost).toBe(1);
   });
 
+  describe('predictedLivesLost', () => {
+    it('defaults to -1 (not captured) on a fresh turn', () => {
+      service.beginTurn(1);
+      const r = service.endTurn()!;
+      expect(r.predictedLivesLost).toBe(-1);
+    });
+
+    it('recordPredictedLivesLost stores the projection', () => {
+      service.beginTurn(1);
+      service.recordPredictedLivesLost(3);
+      const r = service.endTurn()!;
+      expect(r.predictedLivesLost).toBe(3);
+    });
+
+    it('recordPredictedLivesLost ignores negative values', () => {
+      service.beginTurn(1);
+      service.recordPredictedLivesLost(-5);
+      const r = service.endTurn()!;
+      expect(r.predictedLivesLost).toBe(-1);
+    });
+
+    it('restore defaults predictedLivesLost to -1 on legacy records lacking the field', () => {
+      const legacy = [{
+        turnNumber: 1, cardsPlayed: 0, kills: 0, damageDealt: 0,
+        killsByTower: [], goldEarned: 0, livesLost: 0, timestamp: 1,
+      } as unknown as TurnEventRecord];
+      service.restore(legacy);
+      const restored = service.getRecords()[0];
+      expect(restored.predictedLivesLost).toBe(-1);
+    });
+  });
+
   it('rolling buffer caps at 5 records', () => {
     for (let i = 1; i <= 6; i++) {
       service.beginTurn(i);
@@ -224,6 +256,7 @@ describe('TurnHistoryService', () => {
         killsByTower: [{ type: TowerType.BASIC, level: 1, count: 2 }],
         goldEarned: 15,
         livesLost: 0,
+        predictedLivesLost: -1,
         timestamp: 1234,
       }];
       let emitCount = 0;
@@ -247,6 +280,7 @@ describe('TurnHistoryService', () => {
         killsByTower: [{ type: TowerType.BASIC, level: 1, count: 1 }],
         goldEarned: 0,
         livesLost: 0,
+        predictedLivesLost: -1,
         timestamp: 1,
       }];
       service.restore(records);

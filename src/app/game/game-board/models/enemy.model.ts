@@ -347,4 +347,8 @@ export const MINI_SWARM_STATS = {
 export interface DamageResult {
   killed: boolean;
   spawnedEnemies: Enemy[];
+  /** Damage actually applied to HP (post-shield, post-elevation). 0 when fully shield-absorbed. */
+  damageDealt: number;
+  /** True when ANY portion of the hit was absorbed by shield (full or partial). */
+  shieldHit: boolean;
 }

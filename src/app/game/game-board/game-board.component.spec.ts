@@ -11,6 +11,10 @@ import { GameStatsService } from './services/game-stats.service';
 import { PlayerProfileService } from '../../core/services/player-profile.service';
 import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService } from './services/minimap.service';
+import { ForwardSimulationService } from './services/forward-simulation.service';
+import { EnemyIntentService } from './services/enemy-intent.service';
+import { TowerFireZonePreviewService } from './services/tower-fire-zone-preview.service';
+import { ProjectileVisualService } from './services/projectile-visual.service';
 import { SettingsService } from '../../core/services/settings.service';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase } from './models/game-state.model';
 import { TowerType, TowerSpecialization, PlacedTower, TargetingMode } from './models/tower.model';
@@ -245,6 +249,34 @@ describe('GameBoardComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  // Guards against a misconfigured providers array silently no-opping the
+  // legibility-stack services. All four use @Optional() injection in
+  // GameRenderService — if any of them is dropped from GameBoardComponent.providers,
+  // the entire feature stack quietly disappears in production with no
+  // failing test. This integration spec resolves each via the component's
+  // own injector to verify they're registered.
+  describe('legibility-stack provider registration', () => {
+    it('ForwardSimulationService is registered in component scope', () => {
+      const svc = fixture.debugElement.injector.get(ForwardSimulationService);
+      expect(svc).toBeTruthy();
+    });
+
+    it('EnemyIntentService is registered in component scope', () => {
+      const svc = fixture.debugElement.injector.get(EnemyIntentService);
+      expect(svc).toBeTruthy();
+    });
+
+    it('TowerFireZonePreviewService is registered in component scope', () => {
+      const svc = fixture.debugElement.injector.get(TowerFireZonePreviewService);
+      expect(svc).toBeTruthy();
+    });
+
+    it('ProjectileVisualService is registered in component scope', () => {
+      const svc = fixture.debugElement.injector.get(ProjectileVisualService);
+      expect(svc).toBeTruthy();
+    });
   });
 
   describe('goToEditor', () => {
@@ -1317,6 +1349,184 @@ describe('GameBoardComponent', () => {
 
     it('rangeVisualizationService should be injected', () => {
       expect((component as unknown as TestableGameBoardComponent).rangeVisualizationService).toBeTruthy();
+    });
+  });
+
+  describe('activeAscensionModifiers', () => {
+    it('returns empty array when no run is active', () => {
+      // No runService.startNewRun called in this fixture path → runState is null.
+      expect(component.currentAscensionLevel).toBe(0);
+      expect(component.activeAscensionModifiers).toEqual([]);
+    });
+
+    it('returns levels A1..A_N when run is at ascension N', () => {
+      const runService = fixture.debugElement.injector.get(RunService);
+      const fakeState = { ascensionLevel: 5 } as Partial<import('../../run/models/run-state.model').RunState>;
+      Object.defineProperty(runService, 'runState', { get: () => fakeState, configurable: true });
+
+      expect(component.currentAscensionLevel).toBe(5);
+      expect(component.activeAscensionModifiers.length).toBe(5);
+      // First modifier is A1 (Hardened); last is A5 (Fortified)
+      expect(component.activeAscensionModifiers[0].level).toBe(1);
+      expect(component.activeAscensionModifiers[4].level).toBe(5);
+    });
+
+    it('returns empty array when ascensionLevel is 0', () => {
+      const runService = fixture.debugElement.injector.get(RunService);
+      const fakeState = { ascensionLevel: 0 } as Partial<import('../../run/models/run-state.model').RunState>;
+      Object.defineProperty(runService, 'runState', { get: () => fakeState, configurable: true });
+
+      expect(component.activeAscensionModifiers).toEqual([]);
+    });
+  });
+
+  describe('projectedLeaksNextTurn', () => {
+    function makeEnemyAtPathIndex(id: string, type: EnemyType, pathLen: number, pathIndex: number) {
+      const path = Array.from({ length: pathLen }, (_, i) => ({ x: i, y: 0, f: 0, g: 0, h: 0 }));
+      return {
+        id,
+        type,
+        path,
+        pathIndex,
+        gridPosition: { row: 0, col: pathIndex },
+        position: { x: pathIndex, y: 0, z: 0 },
+        health: 10, maxHealth: 10, speed: 1, value: 5,
+        distanceTraveled: 0, leakDamage: 1,
+      } as unknown as import('./models/enemy.model').Enemy;
+    }
+
+    it('returns 0 when no enemies are present', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'getEnemies').and.returnValue(new Map());
+      expect(component.projectedLeaksNextTurn).toBe(0);
+    });
+
+    it('counts enemies projected to reach exit on next turn', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      // BASIC at 1 tile/turn, 1 tile from end → leaks next turn
+      // BASIC at 1 tile/turn, 5 tiles from end → does not leak next turn
+      spyOn(enemyService, 'getEnemies').and.returnValue(new Map([
+        ['e1', makeEnemyAtPathIndex('e1', EnemyType.BASIC, 5, 3)],
+        ['e2', makeEnemyAtPathIndex('e2', EnemyType.BASIC, 10, 4)],
+      ]));
+      expect(component.projectedLeaksNextTurn).toBe(1);
+    });
+
+    it('skips enemies that are dying', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      const dying = makeEnemyAtPathIndex('e1', EnemyType.BASIC, 5, 3);
+      (dying as unknown as { dying: boolean }).dying = true;
+      spyOn(enemyService, 'getEnemies').and.returnValue(new Map([['e1', dying]]));
+      expect(component.projectedLeaksNextTurn).toBe(0);
+    });
+
+    it('factors in SLOW tile reduction from StatusEffectService', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      const statusEffectService = fixture.debugElement.injector.get(StatusEffectService);
+      // FAST at 2 tiles/turn would leak from index 7 of length 10 (3 tiles, 2/turn → 2 turns to exit)
+      // With SLOW (-1 tile reduction), tilesToMove = 1; 3 tiles left → 3 turns; not leaking next turn
+      spyOn(enemyService, 'getEnemies').and.returnValue(new Map([
+        ['e1', makeEnemyAtPathIndex('e1', EnemyType.FAST, 10, 7)],
+      ]));
+      spyOn(statusEffectService, 'getSlowTileReduction').and.returnValue(1);
+      expect(component.projectedLeaksNextTurn).toBe(0);
+    });
+
+    it('projectedLeakerSummary lists enemy type names', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      // Two BASIC and one FAST all 1 tile from end at 1 tile/turn → all leak next turn
+      spyOn(enemyService, 'getEnemies').and.returnValue(new Map([
+        ['e1', makeEnemyAtPathIndex('e1', EnemyType.BASIC, 5, 3)],
+        ['e2', makeEnemyAtPathIndex('e2', EnemyType.BASIC, 5, 3)],
+        ['e3', makeEnemyAtPathIndex('e3', EnemyType.FAST, 5, 3)],
+      ]));
+      expect(component.projectedLeakerSummary).toContain('Basic ×2');
+      expect(component.projectedLeakerSummary).toContain('Fast');
+    });
+
+    it('projectedLeakerSummary is empty when no leaks projected', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'getEnemies').and.returnValue(new Map());
+      expect(component.projectedLeakerSummary).toBe('');
+    });
+  });
+
+  describe('getEnemyTooltip', () => {
+    it('includes name, description, HP, and tilesPerTurn for a known enemy', () => {
+      const tip = component.getEnemyTooltip(EnemyType.BASIC);
+      expect(tip).toContain('Basic');
+      expect(tip).toContain('HP:');
+      expect(tip).toContain('/turn');
+      expect(tip).toContain('leak');
+    });
+
+    it('uses singular "tile" when tilesPerTurn is 1', () => {
+      // BASIC has tilesPerTurn = 1
+      const tip = component.getEnemyTooltip(EnemyType.BASIC);
+      expect(tip).toContain('1 tile/turn');
+    });
+
+    it('uses plural "tiles" when tilesPerTurn > 1', () => {
+      // FAST has tilesPerTurn = 2
+      const tip = component.getEnemyTooltip(EnemyType.FAST);
+      expect(tip).toContain('tiles/turn');
+    });
+
+    it('appends immunity list when present', () => {
+      // FLYING is immune to Slow
+      const tip = component.getEnemyTooltip(EnemyType.FLYING);
+      expect(tip).toContain('Immune:');
+    });
+
+    it('includes traversal estimate when path is non-trivial', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      // 11 tiles in path → 10 to traverse → BASIC at 1 tile/turn → 10 turns
+      spyOn(enemyService, 'getPathToExit').and.returnValue(
+        Array.from({ length: 11 }, (_, i) => ({ x: i, z: 0 })),
+      );
+      const tip = component.getEnemyTooltip(EnemyType.BASIC);
+      expect(tip).toContain('~10 turns to exit');
+    });
+
+    it('omits traversal estimate when path is empty or trivial', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'getPathToExit').and.returnValue([]);
+      const tip = component.getEnemyTooltip(EnemyType.BASIC);
+      expect(tip).not.toContain('to exit');
+    });
+  });
+
+  describe('getEarliestArrivalTurn', () => {
+    it('returns null for an empty spawn group', () => {
+      expect(component.getEarliestArrivalTurn({ turnOffset: 2, spawns: [] })).toBeNull();
+    });
+
+    it('returns null when no path is set', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'getPathToExit').and.returnValue([]);
+      const arrival = component.getEarliestArrivalTurn({
+        turnOffset: 1,
+        spawns: [{ type: EnemyType.BASIC, count: 1 }],
+      });
+      expect(arrival).toBeNull();
+    });
+
+    it('uses fastest enemy in group to compute earliest exit', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      // 11-tile path → 10 to walk
+      spyOn(enemyService, 'getPathToExit').and.returnValue(
+        Array.from({ length: 11 }, (_, i) => ({ x: i, z: 0 })),
+      );
+      // Mixed group: BASIC (1/turn) + FAST (2/turn) — FAST wins, 10/2 = 5 turns
+      // Spawn at T+2 → exits T+2+5 = T+7
+      const arrival = component.getEarliestArrivalTurn({
+        turnOffset: 2,
+        spawns: [
+          { type: EnemyType.BASIC, count: 3 },
+          { type: EnemyType.FAST, count: 1 },
+        ],
+      });
+      expect(arrival).toBe(7);
     });
   });
 
@@ -2533,6 +2743,7 @@ describe('GameBoardComponent', () => {
         firedTypes: new Set<TowerType>(),
         hitCount: 0,
         exitCount: 0,
+        livesLostThisFrame: 0,
         leaked: false,
         defeatTriggered: false,
         waveCompletion: null,
@@ -2555,6 +2766,7 @@ describe('GameBoardComponent', () => {
         firedTypes: new Set<TowerType>(),
         hitCount: 0,
         exitCount: 0,
+        livesLostThisFrame: 0,
         leaked: false,
         defeatTriggered: false,
         waveCompletion: null,

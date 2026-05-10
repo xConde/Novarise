@@ -134,6 +134,19 @@ describe('RunSummaryComponent', () => {
     expect(component.ascensionLabel).toBe('Ascension 5');
   });
 
+  it('activeAscensionModifiers returns empty when ascensionLevel is 0', () => {
+    component.runState = makeRunState({ ascensionLevel: 0 });
+    expect(component.activeAscensionModifiers).toEqual([]);
+  });
+
+  it('activeAscensionModifiers returns A1..A_N in order when ascensionLevel > 0', () => {
+    component.runState = makeRunState({ ascensionLevel: 5 });
+    const mods = component.activeAscensionModifiers;
+    expect(mods.length).toBe(5);
+    expect(mods[0].level).toBe(1);
+    expect(mods[4].level).toBe(5);
+  });
+
   it('emits returnToMenu when return button is clicked', () => {
     let emitted = false;
     component.returnToMenu.subscribe(() => (emitted = true));
@@ -144,14 +157,26 @@ describe('RunSummaryComponent', () => {
     expect(emitted).toBeTrue();
   });
 
-  it('emits startNewRun when new run button is clicked', () => {
-    let emitted = false;
-    component.startNewRun.subscribe(() => (emitted = true));
+  it('emits startNewRun with the ascension level just played when new run button is clicked', () => {
+    component.runState = makeRunState({ ascensionLevel: 7 });
+    fixture.detectChanges();
+    let emittedLevel: number | undefined;
+    component.startNewRun.subscribe(level => (emittedLevel = level));
 
     const btn = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.run-summary__btn--primary');
     btn?.click();
 
-    expect(emitted).toBeTrue();
+    expect(emittedLevel).toBe(7);
+  });
+
+  it('emits startNewRun with 0 when ascensionLevel was 0', () => {
+    let emittedLevel: number | undefined;
+    component.startNewRun.subscribe(level => (emittedLevel = level));
+
+    const btn = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.run-summary__btn--primary');
+    btn?.click();
+
+    expect(emittedLevel).toBe(0);
   });
 
   it('displays the score prominently', () => {

@@ -110,8 +110,9 @@ describe('RestScreenComponent', () => {
       expect(component.upgradableCards[0].instanceId).toBe('c1');
     });
 
-    it('upgradableCards filters out cards with no upgradedEffect', () => {
-      // SALVAGE has no upgradedEffect, GOLD_RUSH does
+    it('upgradableCards filters out cards with no upgrade payload (no upgradedEffect AND no upgradedEnergyCost)', () => {
+      // SALVAGE has neither upgradedEffect nor upgradedEnergyCost; GOLD_RUSH has upgradedEffect.
+      // Cost-only-upgrade cards (upgradedEnergyCost defined, upgradedEffect undefined) are also valid candidates.
       component.deckCards = [
         makeCard('c0', CardId.SALVAGE, false),
         makeCard('c1', CardId.GOLD_RUSH, false),
@@ -119,6 +120,13 @@ describe('RestScreenComponent', () => {
       const upgradable = component.upgradableCards;
       expect(upgradable.map(c => c.instanceId)).not.toContain('c0');
       expect(upgradable.map(c => c.instanceId)).toContain('c1');
+    });
+
+    it('upgradableCards includes cards with upgradedEnergyCost (cost-only upgrade)', () => {
+      // ARCHITECT has both upgradedEffect and upgradedEnergyCost — exercises the OR branch positively.
+      component.deckCards = [makeCard('c0', CardId.ARCHITECT, false)];
+      const upgradable = component.upgradableCards;
+      expect(upgradable.map(c => c.instanceId)).toContain('c0');
     });
 
     it('showUpgradePanel() switches activeAction to "upgrade"', () => {

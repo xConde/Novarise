@@ -3,8 +3,10 @@ import {
   Component,
   EventEmitter,
   Input,
+  Optional,
   Output,
 } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import {
   CardDefinition,
   CardType,
@@ -12,15 +14,25 @@ import {
 } from '../../run/models/card.model';
 import { TOWER_CONFIGS, TowerType } from '../../game/game-board/models/tower.model';
 import { ARCHETYPE_DISPLAY } from '../../run/constants/archetype.constants';
+import { IconComponent } from '@shared/components/icon/icon.component';
+import { TowerThumbnailService } from '@core/services/tower-thumbnail.service';
 
 /**
- * Presentational card tile for the Codex grid. Static view of a
+ * Presentational card tile for the Codex grid AND any picker surface
+ * (rest-screen upgrade, shop card-remove, shop card-upgrade) that needs
+ * the full card visual identity (frame silhouette, archetype trim,
+ * type icon, glyph hero art, rarity footer). Static view of a
  * CardDefinition — no energy / pending / playable state. Click emits
- * `selected` and the parent opens the detail modal. When `desaturated`
+ * `selected` and the parent decides what happens. When `desaturated`
  * is true the tile renders as a card-back silhouette (undiscovered).
+ *
+ * Standalone so non-Library modules can import the component directly
+ * without pulling in the whole LibraryModule.
  */
 @Component({
   selector: 'app-library-card-tile',
+  standalone: true,
+  imports: [CommonModule, IconComponent],
   templateUrl: './library-card-tile.component.html',
   styleUrls: ['./library-card-tile.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -35,8 +47,26 @@ export class LibraryCardTileComponent {
 
   readonly CardType = CardType;
 
+  constructor(
+    @Optional() private towerThumbnailService: TowerThumbnailService | null = null,
+  ) {}
+
   onClick(): void {
     this.selected.emit(this.definition);
+  }
+
+  /**
+   * 3-D tower mesh thumbnail (PNG data URL) for tower cards. Mirrors
+   * card-hand's getTowerThumbnailUrl — without it, tower tiles render an
+   * empty colored backdrop and read as half-finished. Returns null when
+   * the card is non-tower or the service is unavailable (no WebGL in
+   * test environments).
+   */
+  get towerThumbnailUrl(): string | null {
+    if (!this.towerThumbnailService) return null;
+    const effect = this.definition.effect;
+    if (effect.type !== 'tower') return null;
+    return this.towerThumbnailService.getThumbnail(effect.towerType);
   }
 
   /**

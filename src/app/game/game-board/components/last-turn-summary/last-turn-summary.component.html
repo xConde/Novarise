@@ -51,8 +51,13 @@
                   aria-hidden="true">|</span>
             <span class="last-turn-summary__stat last-turn-summary__stat--danger"
                   *ngIf="row.livesLost > 0"
-                  [attr.title]="row.livesLost + ' life' + (row.livesLost === 1 ? '' : 's') + ' lost'">
-              &minus;{{ row.livesLost }}<span class="last-turn-summary__unit">&hearts;</span>
+                  [attr.title]="leakPredictionTitle(row)">
+              &minus;{{ row.livesLost }}<span class="last-turn-summary__unit">&hearts;</span><span
+                    class="last-turn-summary__delta"
+                    *ngIf="leakPredictionDelta(row) as delta"
+                    [class.last-turn-summary__delta--high]="delta.kind === 'higher'"
+                    [class.last-turn-summary__delta--low]="delta.kind === 'lower'"
+                    aria-hidden="true">{{ delta.text }}</span>
             </span>
             <span class="last-turn-summary__cards"
                   *ngIf="row.cardsPlayed > 0"

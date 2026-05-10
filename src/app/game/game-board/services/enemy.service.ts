@@ -509,7 +509,7 @@ export class EnemyService {
    * `spawnedEnemies` (non-empty only when a SWARM enemy dies).
    */
   damageEnemy(enemyId: string, damage: number): DamageResult {
-    const noOp: DamageResult = { killed: false, spawnedEnemies: [] };
+    const noOp: DamageResult = { killed: false, spawnedEnemies: [], damageDealt: 0, shieldHit: false };
     const enemy = this.enemies.get(enemyId);
     if (!enemy || enemy.health <= 0) return noOp;
 
@@ -535,26 +535,42 @@ export class EnemyService {
         if (enemy.shield === 0) {
           this.enemyMeshFactory.removeShieldMesh(enemy);
         }
-        return noOp; // Health untouched
+        return { killed: false, spawnedEnemies: [], damageDealt: 0, shieldHit: true };
       } else {
         // Shield breaks; carry remainder to health
         const remainder = damage - enemy.shield;
         enemy.shield = 0;
         this.enemyMeshFactory.removeShieldMesh(enemy);
         damage = remainder;
+        // Fall through with shieldHit=true; damageDealt will be the remainder below
+        // --- Apply remainder to health ---
+        enemy.health -= damage;
+
+        if (enemy.health > 0) {
+          return { killed: false, spawnedEnemies: [], damageDealt: damage, shieldHit: true };
+        }
+
+        // --- Enemy died (partial shield + lethal remainder) ---
+        const spawnedOnShieldBreak = this.resolveSwarmDeath(enemy);
+        return { killed: true, spawnedEnemies: spawnedOnShieldBreak, damageDealt: damage, shieldHit: true };
       }
     }
 
-    // --- Apply to health ---
+    // --- Apply to health (no shield) ---
     enemy.health -= damage;
 
     if (enemy.health > 0) {
-      return { killed: false, spawnedEnemies: [] };
+      return { killed: false, spawnedEnemies: [], damageDealt: damage, shieldHit: false };
     }
 
     // --- Enemy died ---
-    const spawnedEnemies: Enemy[] = [];
+    const spawnedEnemies = this.resolveSwarmDeath(enemy);
+    return { killed: true, spawnedEnemies, damageDealt: damage, shieldHit: false };
+  }
 
+  /** Spawns mini-swarm enemies when a SWARM enemy dies. Returns the spawned list (may be empty). */
+  private resolveSwarmDeath(enemy: Enemy): Enemy[] {
+    const spawnedEnemies: Enemy[] = [];
     // SWARM death: spawn mini-enemies (only if this is NOT already a mini-swarm)
     if (enemy.type === EnemyType.SWARM && !enemy.isMiniSwarm) {
       const parentStats = ENEMY_STATS[EnemyType.SWARM];
@@ -566,8 +582,7 @@ export class EnemyService {
         }
       }
     }
-
-    return { killed: true, spawnedEnemies };
+    return spawnedEnemies;
   }
 
   /**

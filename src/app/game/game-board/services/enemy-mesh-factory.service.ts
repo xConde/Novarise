@@ -1,7 +1,7 @@
 import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_STATS } from '../models/enemy.model';
-import { HEALTH_BAR_CONFIG, SHIELD_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
+import { HEALTH_BAR_CONFIG, HEALTH_BAR_PREDICTED_CONFIG, SHIELD_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { BOSS_CROWN_CONFIG, SHIELD_BREAK_CONFIG, WYRM_ASCENDANT_VISUAL_CONFIG } from '../constants/effects.constants';
 import { GeometryRegistryService } from './geometry-registry.service';
 import { MaterialRegistryService } from './material-registry.service';
@@ -64,9 +64,26 @@ export class EnemyMeshFactoryService {
     const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
     healthBarFg.position.set(0, barY + 0.001, 0);
 
+    // Predicted-damage overlay: faded red segment showing HP that will be
+    // lost when towers fire next turn. Anchored to the right edge of the FG
+    // bar; scale.x and position.x are updated each frame by EnemyHealthService.
+    // Hidden initially (no damage projected until towers aim).
+    const predictedGeometry = this.plane(barWidth, barHeight);
+    // Per-instance — transparent:true and opacity mutation require unique material.
+    const predictedMaterial = new THREE.MeshBasicMaterial({
+      color: HEALTH_BAR_PREDICTED_CONFIG.color,
+      transparent: true,
+      opacity: HEALTH_BAR_PREDICTED_CONFIG.opacity,
+      side: THREE.DoubleSide,
+    });
+    const healthBarPredicted = new THREE.Mesh(predictedGeometry, predictedMaterial);
+    healthBarPredicted.position.set(0, barY + HEALTH_BAR_PREDICTED_CONFIG.zLift, 0);
+    healthBarPredicted.visible = false;
+
     mesh.add(healthBarBg);
     mesh.add(healthBarFg);
-    mesh.userData = { healthBarBg, healthBarFg };
+    mesh.add(healthBarPredicted);
+    mesh.userData = { healthBarBg, healthBarFg, healthBarPredicted };
 
     // Add shield visual for SHIELDED enemies (dome mesh + shield HP bar)
     if (enemy.type === EnemyType.SHIELDED && enemy.shield !== undefined && enemy.shield > 0) {
@@ -288,9 +305,22 @@ export class EnemyMeshFactoryService {
     const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
     healthBarFg.position.set(0, barY + 0.001, 0);
 
+    // Predicted-damage overlay — same pattern as createEnemyMesh above.
+    const predictedGeometry = this.plane(barWidth, barHeight);
+    const predictedMaterial = new THREE.MeshBasicMaterial({
+      color: HEALTH_BAR_PREDICTED_CONFIG.color,
+      transparent: true,
+      opacity: HEALTH_BAR_PREDICTED_CONFIG.opacity,
+      side: THREE.DoubleSide,
+    });
+    const healthBarPredicted = new THREE.Mesh(predictedGeometry, predictedMaterial);
+    healthBarPredicted.position.set(0, barY + HEALTH_BAR_PREDICTED_CONFIG.zLift, 0);
+    healthBarPredicted.visible = false;
+
     mesh.add(healthBarBg);
     mesh.add(healthBarFg);
-    mesh.userData = { healthBarBg, healthBarFg };
+    mesh.add(healthBarPredicted);
+    mesh.userData = { healthBarBg, healthBarFg, healthBarPredicted };
 
     return mesh;
   }

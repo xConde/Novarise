@@ -179,10 +179,21 @@
   --transition-medium: 0.3s;
   --transition-slow: 1s;
 
-  /* Z-Index Scale */
+  /* Z-Index Scale
+     Stack from bottom to top:
+       base (1)  → in-flow content
+       overlay (10) → HUD overlays anchored to gameplay
+       modal (100) → in-game modals (card-detail, pile-inspector)
+       tutorial (900–901) → tutorial spotlight + dialog
+       tooltip (950) → card tooltips, must read above tutorial dialogs
+       app-chrome (1999–2000) → settings cog + global app nav, always topmost */
   --z-index-base: 1;
   --z-index-overlay: 10;
   --z-index-modal: 100;
+  --z-index-tutorial: 900;
+  --z-index-tutorial-card: 901;
+  --z-index-tooltip: 950;
+  --z-index-app-chrome: 2000;
 
   /* ── Run Mode ────────────────────────────────────────── */
 

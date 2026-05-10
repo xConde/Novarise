@@ -79,6 +79,15 @@ export interface RunState {
   readonly itemInventory?: SerializedItemInventory;
   /** Run-state flags persisted at run level. Absent in saves made before H5. */
   readonly runStateFlags?: SerializedRunStateFlags;
+  /**
+   * Consecutive non-rare card-reward picks since the last rare. When this
+   * reaches `CARD_PITY_THRESHOLD`, the next card pick is forced to RARE
+   * (and the counter resets). Genre-standard pity timer — players who
+   * hit a long unlucky streak get a guaranteed rare without bumping the
+   * baseline 60/30/10 weights for everyone. Absent in pre-pity saves —
+   * default to 0 on restore.
+   */
+  readonly cardPityCounter?: number;
 }
 
 export function createInitialRunState(
@@ -103,6 +112,7 @@ export function createInitialRunState(
     status: RunStatus.IN_PROGRESS,
     startedAt: Date.now(),
     score: 0,
+    cardPityCounter: 0,
   };
 }
 

@@ -202,6 +202,7 @@ describe('Cartographer integration — Group A: PathMutation + card flow', () =>
 
     const enemySpy = jasmine.createSpyObj<EnemyService>('EnemyService', ['repathAffectedEnemies', 'getEnemies', 'damageEnemy']);
     enemySpy.getEnemies.and.returnValue(new Map() as never);
+    enemySpy.damageEnemy.and.returnValue({ killed: false, spawnedEnemies: [], damageDealt: 0, shieldHit: false });
 
     const elevationSpy = jasmine.createSpyObj<ElevationService>('ElevationService', [
       'raise', 'depress', 'getElevation', 'getMaxElevation', 'getElevationMap',
@@ -426,6 +427,7 @@ describe('Cartographer integration — Group B: CARTOGRAPHER_SEAL', () => {
 
     const enemySpy = jasmine.createSpyObj<EnemyService>('EnemyService', ['repathAffectedEnemies', 'getEnemies', 'damageEnemy']);
     enemySpy.getEnemies.and.returnValue(new Map() as never);
+    enemySpy.damageEnemy.and.returnValue({ killed: false, spawnedEnemies: [], damageDealt: 0, shieldHit: false });
 
     const elevationSpy2 = jasmine.createSpyObj<ElevationService>('ElevationService', [
       'raise', 'depress', 'getElevation', 'getMaxElevation', 'getElevationMap',

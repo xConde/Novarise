@@ -36,6 +36,28 @@ export const HEALTH_BAR_CONFIG = {
 };
 
 /**
+ * Predicted-damage overlay — the faded red segment on health bars showing
+ * HP that will be lost when towers fire next turn.
+ *
+ * Rendered as a third mesh (healthBarPredicted) anchored to the RIGHT edge
+ * of the current HP foreground, growing leftward as projected damage rises.
+ *
+ * v1 limitations (documented here, not bugs):
+ * - Only primary-target damage is projected. SPLASH, CHAIN, and MORTAR
+ *   secondary hits are excluded — under-estimation is intentional.
+ * - FIRE_RATE, LINKWORK, QUICK_DRAW, and archetype modifiers are excluded.
+ * - Assumes current targeting does not shift before towers fire.
+ */
+export const HEALTH_BAR_PREDICTED_CONFIG = {
+  /** Hex color matching colorRed — signals damage to the player. */
+  color: 0xe85d75,
+  /** Semi-transparent so the FG bar is visible beneath the overlay. */
+  opacity: 0.6,
+  /** Z-lift above healthBarFg to prevent z-fighting. */
+  zLift: 0.002,
+} as const;
+
+/**
  * Shield bar — a second bar rendered above the health bar for SHIELDED enemies.
  * Makes absorbed damage visible so players understand why the HP bar isn't
  * moving while towers are hitting the target.

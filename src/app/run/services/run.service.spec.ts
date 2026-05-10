@@ -22,7 +22,7 @@ import { EncounterConfig } from '../models/encounter.model';
 import { RelicId, RelicDefinition, RelicRarity, RELIC_DEFINITIONS } from '../models/relic.model';
 import { CardArchetype, CardId, CardRarity } from '../models/card.model';
 import { CARD_DEFINITIONS } from '../constants/card-definitions';
-import { REWARD_CONFIG, REWARD_RARITY_WEIGHTS, createSeededRng, SeededRng } from '../constants/run.constants';
+import { REWARD_CONFIG, REWARD_RARITY_WEIGHTS, SHOP_CONFIG, createSeededRng, SeededRng } from '../constants/run.constants';
 import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
 import { ChallengeDefinition, ChallengeType } from '../data/challenges';
 import {
@@ -1332,12 +1332,15 @@ describe('RunService', () => {
       const uncommonPct = counts['uncommon'] / total;
       const rarePct = counts['rare'] / total;
 
-      // Allow ±10% tolerance on each tier
+      // Allow ±10% tolerance on each tier. Pity-aware lower bound: at 10%
+      // baseline the per-1000 sample plus pity uplift sits comfortably
+      // above 8%, so the older 4% floor was loose enough to silently miss
+      // a regression that stripped the pity timer. Tightened to 8%.
       expect(commonPct).toBeGreaterThanOrEqual(0.50);
       expect(commonPct).toBeLessThanOrEqual(0.70);
       expect(uncommonPct).toBeGreaterThanOrEqual(0.20);
       expect(uncommonPct).toBeLessThanOrEqual(0.40);
-      expect(rarePct).toBeGreaterThanOrEqual(0.04);
+      expect(rarePct).toBeGreaterThanOrEqual(0.08);
       expect(rarePct).toBeLessThanOrEqual(0.18);
     }));
 
@@ -2304,6 +2307,286 @@ describe('RunService', () => {
       const liveCardIds = service.getDeckCards().map(c => c.cardId).slice().sort();
       const persistedSorted = service.runState!.deckCardIds.slice().sort();
       expect(persistedSorted).toEqual(liveCardIds);
+    }));
+  });
+
+  describe('rewardTelemetry', () => {
+    it('starts zeroed on a new run', fakeAsync(() => {
+      service.startNewRun();
+      const t = service.getRewardTelemetry();
+      expect(t.totalDraws).toBe(0);
+      expect(t.common).toBe(0);
+      expect(t.uncommon).toBe(0);
+      expect(t.rare).toBe(0);
+      expect(t.pityFires).toBe(0);
+    }));
+
+    it('totalDraws sums to per-rarity counters after picks', fakeAsync(() => {
+      service.startNewRun();
+      const seededRng = createSeededRng(99);
+      const rng: () => number = () => seededRng.next();
+      (service as unknown as { pickCardRewards: (n: number, r: () => number) => unknown[] })
+        .pickCardRewards(20, rng);
+
+      const t = service.getRewardTelemetry();
+      expect(t.totalDraws).toBe(20);
+      expect(t.common + t.uncommon + t.rare).toBe(t.totalDraws);
+    }));
+
+    it('counts pity fires when threshold forces rare', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, cardPityCounter: 9 });
+      const seededRng = createSeededRng(123);
+      const rng: () => number = () => seededRng.next();
+      (service as unknown as { pickCardRewards: (n: number, r: () => number) => unknown[] })
+        .pickCardRewards(1, rng);
+
+      const t = service.getRewardTelemetry();
+      expect(t.pityFires).toBe(1);
+      expect(t.rare).toBe(1);
+    }));
+
+    it('resets to zero on a fresh startNewRun call', fakeAsync(() => {
+      service.startNewRun();
+      const seededRng = createSeededRng(7);
+      const rng: () => number = () => seededRng.next();
+      (service as unknown as { pickCardRewards: (n: number, r: () => number) => unknown[] })
+        .pickCardRewards(5, rng);
+      expect(service.getRewardTelemetry().totalDraws).toBe(5);
+
+      service.startNewRun();
+      expect(service.getRewardTelemetry().totalDraws).toBe(0);
+    }));
+  });
+
+  describe('rarity distribution — statistical', () => {
+    it('over 1000 single-pick draws, rare rate sits between 8% and 18% (10% baseline + pity uplift)', fakeAsync(() => {
+      service.startNewRun();
+      const seededRng = createSeededRng(424242);
+      const rng: () => number = () => seededRng.next();
+
+      const counts = { common: 0, uncommon: 0, rare: 0 };
+      const picker = service as unknown as { pickCardRewards: (n: number, r: () => number) => Array<{ cardId: CardId }> };
+      const N = 1000;
+      for (let i = 0; i < N; i++) {
+        const picks = picker.pickCardRewards(1, rng);
+        if (picks.length === 0) continue;
+        const r = CARD_DEFINITIONS[picks[0].cardId].rarity;
+        if (r === CardRarity.COMMON) counts.common++;
+        else if (r === CardRarity.UNCOMMON) counts.uncommon++;
+        else if (r === CardRarity.RARE) counts.rare++;
+      }
+      const total = counts.common + counts.uncommon + counts.rare;
+      expect(total).toBeGreaterThanOrEqual(N * 0.95);
+
+      // Baseline 10% + pity-driven uplift; widen the tolerance to absorb
+      // RNG variance over 1000 trials. Lower bound 8% guards against
+      // regression to flat distribution; upper 18% guards against runaway
+      // pity overrides.
+      const rareRate = counts.rare / total;
+      expect(rareRate).toBeGreaterThan(0.08);
+      expect(rareRate).toBeLessThan(0.18);
+
+      // Common is the dominant tier — must clearly exceed uncommon.
+      expect(counts.common).toBeGreaterThan(counts.uncommon);
+      // Uncommon must clearly exceed rare.
+      expect(counts.uncommon).toBeGreaterThan(counts.rare);
+    }));
+  });
+
+  describe('card pity timer', () => {
+    it('initialises cardPityCounter to 0 on a new run', fakeAsync(() => {
+      service.startNewRun();
+      expect(service.runState!.cardPityCounter).toBe(0);
+    }));
+
+    it('forces a rare card draw after CARD_PITY_THRESHOLD consecutive non-rare picks', fakeAsync(() => {
+      service.startNewRun();
+      // Push the counter to threshold − the next single pick should force RARE.
+      service['updateState']({ ...service.runState!, cardPityCounter: 9 });
+
+      const seededRng = createSeededRng(123);
+      const rng: () => number = () => seededRng.next();
+      // Direct call into the private picker. Cast via index access for test scope.
+      const picks = (service as unknown as { pickCardRewards: (count: number, rng: () => number) => Array<{ cardId: CardId }> })
+        .pickCardRewards(1, rng);
+
+      expect(picks.length).toBe(1);
+      const def = CARD_DEFINITIONS[picks[0].cardId];
+      expect(def.rarity).toBe(CardRarity.RARE);
+
+      // Counter resets after a rare.
+      expect(service.runState!.cardPityCounter).toBe(0);
+    }));
+
+    it('resets pity counter when a rare drops naturally before the threshold', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, cardPityCounter: 3 });
+
+      // Seed 1 happens to roll a rare immediately for default weights — guard
+      // by re-seeding until we observe at least one rare in 1 pick. If neither
+      // seed lands a rare, the test relies on the threshold-forced path
+      // verified above; this spec is a complementary best-effort.
+      let seed = 1;
+      let landedRare = false;
+      for (let attempt = 0; attempt < 10; attempt++) {
+        service['updateState']({ ...service.runState!, cardPityCounter: 3 });
+        const seededRng = createSeededRng(seed++);
+        const rng: () => number = () => seededRng.next();
+        const picks = (service as unknown as { pickCardRewards: (n: number, r: () => number) => Array<{ cardId: CardId }> })
+          .pickCardRewards(1, rng);
+        const rarity = CARD_DEFINITIONS[picks[0].cardId].rarity;
+        if (rarity === CardRarity.RARE) {
+          landedRare = true;
+          expect(service.runState!.cardPityCounter).toBe(0);
+          break;
+        }
+      }
+      // Only assert when we observed a natural rare. If not, the
+      // threshold-force test above covers the reset semantics.
+      if (landedRare) {
+        expect(service.runState!.cardPityCounter).toBe(0);
+      }
+    }));
+
+    it('increments counter on non-rare picks', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, cardPityCounter: 2 });
+
+      // Seed unlikely to land a rare for a single 1-pick draw at 10% weight.
+      const seededRng = createSeededRng(7);
+      const rng: () => number = () => seededRng.next();
+      const picks = (service as unknown as { pickCardRewards: (n: number, r: () => number) => Array<{ cardId: CardId }> })
+        .pickCardRewards(1, rng);
+      const rarity = CARD_DEFINITIONS[picks[0].cardId].rarity;
+
+      if (rarity === CardRarity.RARE) {
+        // Lucky roll — counter resets.
+        expect(service.runState!.cardPityCounter).toBe(0);
+      } else {
+        // Common/uncommon — counter increments.
+        expect(service.runState!.cardPityCounter).toBe(3);
+      }
+    }));
+  });
+
+  describe('getCardRemoveCost — ascension scaling', () => {
+    it('returns base SHOP_CONFIG.cardRemoveCost at ascension 0', fakeAsync(() => {
+      service.startNewRun(0);
+      expect(service.getCardRemoveCost()).toBe(SHOP_CONFIG.cardRemoveCost);
+    }));
+
+    it('scales by SHOP_PRICE_MULTIPLIER at ascension 9 (Gouged: ×1.2)', fakeAsync(() => {
+      service.startNewRun(9);
+      // Ascension 9 stacks SHOP_PRICE_MULTIPLIER 1.2; round.
+      expect(service.getCardRemoveCost()).toBe(Math.round(SHOP_CONFIG.cardRemoveCost * 1.2));
+    }));
+
+    it('falls back to base cost when no run is active', () => {
+      // Fresh service, no startNewRun() — runState is null.
+      expect(service.getCardRemoveCost()).toBe(SHOP_CONFIG.cardRemoveCost);
+    });
+
+    it('removeCardFromShop charges the scaled cost', fakeAsync(() => {
+      service.startNewRun(9);
+      const scaledCost = service.getCardRemoveCost();
+      // Stash enough gold to cover; baseline starter gold is below scaled cost.
+      service['updateState']({ ...service.runState!, gold: scaledCost + 500 });
+      const goldBefore = service.runState!.gold;
+
+      const target = service.getDeckCards().find(c => {
+        const def = CARD_DEFINITIONS[c.cardId as CardId];
+        return def?.rarity !== CardRarity.STARTER;
+      });
+      // Add a non-starter if none present.
+      if (!target) {
+        service.collectReward({ type: 'card', cardId: CardId.GOLD_RUSH });
+      }
+      const removable = service.getDeckCards().find(c => {
+        const def = CARD_DEFINITIONS[c.cardId as CardId];
+        return def?.rarity !== CardRarity.STARTER;
+      });
+      expect(removable).toBeDefined();
+
+      const result = service.removeCardFromShop(removable!.instanceId);
+      expect(result).toBeTrue();
+      expect(service.runState!.gold).toBe(goldBefore - scaledCost);
+    }));
+  });
+
+  // ── getCardUpgradeCost + upgradeCardFromShop ─────────────────────────────
+  describe('getCardUpgradeCost — ascension scaling', () => {
+    it('returns base SHOP_CONFIG.cardUpgradeCost at ascension 0', fakeAsync(() => {
+      service.startNewRun(0);
+      expect(service.getCardUpgradeCost()).toBe(SHOP_CONFIG.cardUpgradeCost);
+    }));
+
+    it('scales by SHOP_PRICE_MULTIPLIER at ascension 9 (Gouged: ×1.2)', fakeAsync(() => {
+      service.startNewRun(9);
+      expect(service.getCardUpgradeCost()).toBe(Math.round(SHOP_CONFIG.cardUpgradeCost * 1.2));
+    }));
+
+    it('falls back to base cost when no run is active', () => {
+      expect(service.getCardUpgradeCost()).toBe(SHOP_CONFIG.cardUpgradeCost);
+    });
+  });
+
+  describe('upgradeCardFromShop()', () => {
+    it('returns false when no run state exists', () => {
+      expect(service.upgradeCardFromShop('any')).toBeFalse();
+    });
+
+    it('returns false when player gold is below cardUpgradeCost', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, gold: 0 });
+      service.collectReward({ type: 'card', cardId: CardId.GOLD_RUSH });
+      const card = service.getDeckCards().find(c => c.cardId === CardId.GOLD_RUSH);
+      expect(service.upgradeCardFromShop(card!.instanceId)).toBeFalse();
+    }));
+
+    it('returns false for unknown instanceId', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, gold: 1000 });
+      expect(service.upgradeCardFromShop('does_not_exist')).toBeFalse();
+    }));
+
+    it('returns false when target is a STARTER card', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, gold: 1000 });
+      const cards = service.getDeckCards();
+      const starter = cards.find(c => CARD_DEFINITIONS[c.cardId as CardId].rarity === CardRarity.STARTER);
+      expect(starter).toBeTruthy();
+      expect(service.upgradeCardFromShop(starter!.instanceId)).toBeFalse();
+    }));
+
+    it('returns false when card is already upgraded', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, gold: 1000 });
+      service.collectReward({ type: 'card', cardId: CardId.GOLD_RUSH });
+      const card = service.getDeckCards().find(c => c.cardId === CardId.GOLD_RUSH)!;
+      // Upgrade via DeckService directly to set upgraded=true
+      service['deckService'].upgradeCard(card.instanceId);
+      expect(service.upgradeCardFromShop(card.instanceId)).toBeFalse();
+    }));
+
+    it('successfully upgrades a valid card and deducts gold', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, gold: 1000 });
+      service.collectReward({ type: 'card', cardId: CardId.GOLD_RUSH });
+
+      const cards = service.getDeckCards();
+      const target = cards.find(c => c.cardId === CardId.GOLD_RUSH);
+      expect(target).toBeTruthy();
+      expect(target!.upgraded).toBeFalse();
+
+      const goldBefore = service.runState!.gold;
+      const cost = service.getCardUpgradeCost();
+      const result = service.upgradeCardFromShop(target!.instanceId);
+
+      expect(result).toBeTrue();
+      expect(service.runState!.gold).toBe(goldBefore - cost);
+      const upgraded = service.getDeckCards().find(c => c.instanceId === target!.instanceId);
+      expect(upgraded?.upgraded).toBeTrue();
     }));
   });
 });

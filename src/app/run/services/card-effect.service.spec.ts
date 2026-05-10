@@ -495,7 +495,7 @@ describe('CardEffectService', () => {
       statusEffectSpy.hasEffect.and.callFake(
         (id: string, type: StatusEffectType) => type === StatusEffectType.BURN,
       );
-      enemyServiceSpy.damageEnemy.and.returnValue({ killed: false, spawnedEnemies: [] });
+      enemyServiceSpy.damageEnemy.and.returnValue({ killed: false, spawnedEnemies: [], damageDealt: 0, shieldHit: false });
 
       service.applySpell(spellEffect('detonate', 25), makeCtx({ currentTurn: 3 }));
 
@@ -510,7 +510,7 @@ describe('CardEffectService', () => {
       statusEffectSpy.hasEffect.and.callFake(
         (id: string, type: StatusEffectType) => type === StatusEffectType.BURN,
       );
-      enemyServiceSpy.damageEnemy.and.returnValue({ killed: false, spawnedEnemies: [] });
+      enemyServiceSpy.damageEnemy.and.returnValue({ killed: false, spawnedEnemies: [], damageDealt: 0, shieldHit: false });
 
       service.applySpell(spellEffect('detonate', 25), makeCtx());
 
@@ -526,7 +526,7 @@ describe('CardEffectService', () => {
       statusEffectSpy.hasEffect.and.callFake(
         (id: string, type: StatusEffectType) => id === 'e1' && type === StatusEffectType.BURN,
       );
-      enemyServiceSpy.damageEnemy.and.returnValue({ killed: false, spawnedEnemies: [] });
+      enemyServiceSpy.damageEnemy.and.returnValue({ killed: false, spawnedEnemies: [], damageDealt: 0, shieldHit: false });
 
       service.applySpell(spellEffect('detonate', 25), makeCtx());
 
@@ -570,7 +570,7 @@ describe('CardEffectService', () => {
       statusEffectSpy.hasEffect.and.callFake(
         (id: string, type: StatusEffectType) => type === StatusEffectType.BURN,
       );
-      enemyServiceSpy.damageEnemy.and.returnValue({ killed: false, spawnedEnemies: [] });
+      enemyServiceSpy.damageEnemy.and.returnValue({ killed: false, spawnedEnemies: [], damageDealt: 0, shieldHit: false });
 
       service.applySpell(spellEffect('detonate', 35), makeCtx());
 
@@ -587,7 +587,7 @@ describe('CardEffectService', () => {
       statusEffectSpy.hasEffect.and.callFake(
         (id: string, type: StatusEffectType) => type === StatusEffectType.BURN,
       );
-      enemyServiceSpy.damageEnemy.and.returnValue({ killed: false, spawnedEnemies: [] });
+      enemyServiceSpy.damageEnemy.and.returnValue({ killed: false, spawnedEnemies: [], damageDealt: 0, shieldHit: false });
 
       service.applySpell(spellEffect('detonate', 25), makeCtx());
 

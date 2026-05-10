@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { RunPersistenceService } from '../run/services/run-persistence.service';
 import { RunService } from '../run/services/run.service';
-import { ASCENSION_LEVELS, MAX_ASCENSION_LEVEL } from '../run/models/ascension.model';
+import { ASCENSION_LEVELS, AscensionLevel, MAX_ASCENSION_LEVEL } from '../run/models/ascension.model';
 
 /**
  * Phase 9: Landing component repurposed as the Run Hub.
@@ -55,18 +55,36 @@ export class LandingComponent implements OnInit {
   }
 
   /**
-   * Returns a one-line preview of the cumulative modifier for the selected
-   * ascension level, or null at A0 (no modifiers active).
+   * The full A1 → A_selected modifier stack. Players picking A5 should see
+   * that ALL of A1..A5 modifiers stack, not just the topmost level. Empty
+   * when selectedAscension is 0.
    */
-  getAscensionPreview(): string | null {
-    if (this.selectedAscension === 0) return null;
-    const def = ASCENSION_LEVELS[this.selectedAscension - 1];
-    return `A${this.selectedAscension}: ${def.description}`;
+  getAscensionStack(): readonly AscensionLevel[] {
+    if (this.selectedAscension <= 0) return [];
+    return ASCENSION_LEVELS.slice(0, this.selectedAscension);
   }
 
   /** Whether the player has mastered ascension (beaten A20). */
   get isAscensionMastered(): boolean {
     return this.runPersistence.isAscensionMastered();
+  }
+
+  /**
+   * Highest ascension level the player has beaten. maxAscension is the
+   * highest-unlocked level (= beaten + 1), so this returns maxAscension - 1
+   * floored at 0. Returns 0 when no ascension has been beaten yet.
+   */
+  get highestBeatenAscension(): number {
+    return Math.max(0, this.maxAscension - 1);
+  }
+
+  /**
+   * True when a "Best: A_N" badge should display on the selector — not
+   * when the player has mastered (A20 ✓ pill takes precedence) and not
+   * when they haven't beaten anything past A0 yet.
+   */
+  get showBeatenBadge(): boolean {
+    return !this.isAscensionMastered && this.highestBeatenAscension >= 1;
   }
 
   /** Start a brand-new run. Clears any saved run first — confirmation UI
