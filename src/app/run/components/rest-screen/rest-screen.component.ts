@@ -42,30 +42,9 @@ export class RestScreenComponent {
     });
   }
 
-  /** Human-readable name for a card instance. */
-  getCardName(card: CardInstance): string {
-    return getCardDefinition(card.cardId).name;
-  }
-
   /** Returns the CardDefinition for an instance — used by app-library-card-tile. */
   getCardDefinitionForInstance(card: CardInstance): CardDefinition {
     return getCardDefinition(card.cardId);
-  }
-
-  /** Current (pre-upgrade) description for a card instance. */
-  getCardDescription(card: CardInstance): string {
-    const def = getCardDefinition(card.cardId);
-    return def.description;
-  }
-
-  /**
-   * Preview of the description AFTER upgrading. Falls back to the base
-   * description with a "+ " prefix when the card hasn't authored an
-   * upgradedDescription yet, so the player always gets *something*.
-   */
-  getCardUpgradedDescription(card: CardInstance): string {
-    const def = getCardDefinition(card.cardId);
-    return def.upgradedDescription ?? `+ ${def.description}`;
   }
 
   rest(): void {

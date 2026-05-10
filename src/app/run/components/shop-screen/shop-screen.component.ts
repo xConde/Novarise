@@ -191,14 +191,10 @@ export class ShopScreenComponent implements OnChanges {
     this.cardRemoved.emit(card.instanceId);
   }
 
-  /** Display name for a card instance — delegates to definition lookup. */
+  /** Display name for a card instance — delegates to definition lookup.
+   *  Used by the success banner to echo back which card the player picked. */
   getCardName(card: CardInstance): string {
     return getCardDefinition(card.cardId).name;
-  }
-
-  /** Description shown next to the name in the picker. */
-  getCardDescription(card: CardInstance): string {
-    return getCardDefinition(card.cardId).description;
   }
 
   /** Returns the CardDefinition for an instance — used by app-library-card-tile. */
@@ -249,9 +245,4 @@ export class ShopScreenComponent implements OnChanges {
     this.cardUpgraded.emit(card.instanceId);
   }
 
-  /** Preview of the description AFTER upgrading — mirrors rest-screen helper. */
-  getCardUpgradedDescription(card: CardInstance): string {
-    const def = getCardDefinition(card.cardId);
-    return def.upgradedDescription ?? `+ ${def.description}`;
-  }
 }
