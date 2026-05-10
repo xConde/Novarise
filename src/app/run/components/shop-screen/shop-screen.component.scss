@@ -413,7 +413,7 @@
   width: 100%;
   /* Wider in picker mode so the card grid has room to breathe; the
      non-picker chrome (open button, success banner) stays centered. */
-  max-width: 48rem;
+  max-width: 64rem;
 
   &__success {
     display: flex;
@@ -478,21 +478,22 @@
   }
 
   &__list {
-    /* Picker scale matches rest-screen: 10rem cards on a 10rem grid track. */
-    --card-width-desktop:      10rem;
-    --card-min-height-desktop: 14rem;
-    --card-width-tablet:       9rem;
-    --card-min-height-tablet:  12.6rem;
+    /* Picker scale matches rest-screen: 11rem cards on an 11rem grid track. */
+    --card-width-desktop:      11rem;
+    --card-min-height-desktop: 15.4rem;
+    --card-width-tablet:       9.5rem;
+    --card-min-height-tablet:  13.3rem;
 
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fill, 10rem);
+    grid-template-columns: repeat(auto-fill, 11rem);
     justify-content: center;
+    align-content: start;
     gap: var(--spacing-sm);
     width: 100%;
-    max-height: 32rem;
+    max-height: 36rem;
     overflow-y: auto;
     padding-right: var(--spacing-xs);
   }
@@ -517,7 +518,7 @@
   align-items: center;
   gap: var(--spacing-xs);
   width: 100%;
-  max-width: 48rem;
+  max-width: 64rem;
 
   &__success {
     display: flex;

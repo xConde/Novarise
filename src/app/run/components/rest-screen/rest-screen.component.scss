@@ -258,24 +258,29 @@
 .rest-card-list {
   /* Picker context wants more presence than the 7rem in-hand card —
      scope the card sizing tokens up so app-game-card renders at picker
-     scale without touching the in-game hand. Grid columns track the
-     same width so cells aren't oversized vs the card inside them. */
-  --card-width-desktop:      10rem;
-  --card-min-height-desktop: 14rem;
-  --card-width-tablet:       9rem;
-  --card-min-height-tablet:  12.6rem;
+     scale without touching the in-game hand. Grid track matches card
+     width so cells aren't oversized vs the card inside them. */
+  --card-width-desktop:      11rem;
+  --card-min-height-desktop: 15.4rem;
+  --card-width-tablet:       9.5rem;
+  --card-min-height-tablet:  13.3rem;
 
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, 10rem);
+  grid-template-columns: repeat(auto-fill, 11rem);
   justify-content: center;
-  gap: var(--spacing-md) var(--spacing-sm);
+  /* align-content: start prevents the grid from spreading rows vertically
+     when the flex parent gives it more height than the rows need. Without
+     this, two rows of cards float in the middle of half a screen of dead
+     space because the default align-content is stretch. */
+  align-content: start;
+  gap: var(--spacing-sm);
   width: 100%;
   // Default cap for non-upgrading layouts (the upgrading variant
   // overrides this with flex: 1 inside .rest-screen--upgrading).
-  max-height: min(50vh, 32rem);
+  max-height: min(60vh, 36rem);
   overflow-y: auto;
   padding-right: var(--spacing-xs);
 }
@@ -303,9 +308,10 @@
     flex: 1;
     min-height: 0; // allow children to shrink for overflow scroll
     width: 100%;
-    /* 72rem fits ~6 cards/row at 10rem each + gaps — denser than the 56rem
-       cap that left half the screen empty on wide viewports. */
-    max-width: 72rem;
+    /* 96rem fits ~7-8 cards/row at 11rem each + gaps on a wide viewport
+       so the grid actually fills the screen instead of pooling in a
+       narrow column. */
+    max-width: 96rem;
     display: flex;
     flex-direction: column;
     align-items: center;
