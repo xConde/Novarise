@@ -1,0 +1,82 @@
+<button
+  class="game-card"
+  [ngClass]="[
+    'game-card--frame-' + definition.type,
+    'game-card--' + definition.rarity
+  ]"
+  [class.game-card--upgraded]="upgraded"
+  [attr.aria-label]="ariaLabel"
+  [style.--card-tower-accent]="towerAccent"
+  [style.--archetype-trim-color]="archetypeTrimColor"
+  [style.--archetype-trim-color-strong]="archetypeTrimColorStrong"
+  (click)="onClick()"
+  type="button">
+
+  <!-- Cost pip -->
+  <span class="game-card__cost"
+        [attr.aria-label]="effectiveEnergyCost + ' energy'">
+    {{ effectiveEnergyCost }}
+  </span>
+
+  <!-- Upgraded badge -->
+  <span class="game-card__upgraded-badge" *ngIf="upgraded" aria-hidden="true">+</span>
+
+  <!-- Type icon — bottom-right corner chip -->
+  <span class="game-card__type-icon" aria-hidden="true">
+    <app-icon *ngIf="definition.type === CardType.TOWER" name="crosshair" [size]="20"></app-icon>
+    <app-icon *ngIf="definition.type === CardType.SPELL" name="bolt" [size]="20"></app-icon>
+    <app-icon *ngIf="definition.type === CardType.MODIFIER" name="shield" [size]="20"></app-icon>
+    <app-icon *ngIf="definition.type === CardType.UTILITY" name="gear" [size]="20"></app-icon>
+  </span>
+
+  <!-- Tower mesh thumbnail — rendered PNG from the actual 3-D model -->
+  <img *ngIf="definition.type === CardType.TOWER && towerThumbnailUrl"
+       class="game-card__art-thumbnail"
+       [src]="towerThumbnailUrl"
+       alt=""
+       aria-hidden="true">
+
+  <!-- Effect glyph — hero art for non-tower cards -->
+  <span *ngIf="definition.type !== CardType.TOWER && primaryGlyph as glyph"
+        class="game-card__art-glyph"
+        aria-hidden="true">
+    <app-icon [name]="glyph" [size]="64"></app-icon>
+    <span *ngIf="secondaryGlyph as sg" class="game-card__art-glyph-secondary">
+      <app-icon [name]="sg" [size]="28"></app-icon>
+    </span>
+  </span>
+
+  <!-- Card name -->
+  <span class="game-card__name">{{ definition.name }}</span>
+
+  <!-- Gold cost — tower cards only -->
+  <span class="game-card__gold-cost" *ngIf="goldCost !== null" [attr.aria-label]="goldCost + ' gold'">
+    {{ goldCost }}g
+  </span>
+
+  <!-- Keyword icon badges: terraform / link / innate / retain / ethereal / exhaust
+       Hidden on starter cards (mirrors card-hand behaviour). -->
+  <span class="game-card__keywords"
+        *ngIf="definition.rarity !== CardRarity.STARTER && hasKeywords"
+        [attr.aria-label]="keywordAriaLabel">
+    <span *ngIf="definition.terraform" class="game-card__keyword game-card__keyword--terraform" aria-label="Terraform">
+      <app-icon name="kw-terraform" [size]="14"></app-icon>
+    </span>
+    <span *ngIf="definition.link" class="game-card__keyword game-card__keyword--link" aria-label="Link">
+      <app-icon name="kw-link" [size]="14"></app-icon>
+    </span>
+    <span *ngIf="definition.innate" class="game-card__keyword game-card__keyword--innate" aria-label="Innate">
+      <app-icon name="kw-innate" [size]="14"></app-icon>
+    </span>
+    <span *ngIf="definition.retain" class="game-card__keyword game-card__keyword--retain" aria-label="Retain">
+      <app-icon name="kw-retain" [size]="14"></app-icon>
+    </span>
+    <span *ngIf="definition.ethereal" class="game-card__keyword game-card__keyword--ethereal" aria-label="Ethereal">
+      <app-icon name="kw-ethereal" [size]="14"></app-icon>
+    </span>
+    <span *ngIf="definition.exhaust" class="game-card__keyword game-card__keyword--exhaust" aria-label="Exhaust">
+      <app-icon name="kw-exhaust" [size]="14"></app-icon>
+    </span>
+  </span>
+
+</button>

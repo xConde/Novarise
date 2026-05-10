@@ -42,7 +42,7 @@ export class RestScreenComponent {
     });
   }
 
-  /** Returns the CardDefinition for an instance — used by app-library-card-tile. */
+  /** Returns the CardDefinition for an instance — used by app-game-card. */
   getCardDefinitionForInstance(card: CardInstance): CardDefinition {
     return getCardDefinition(card.cardId);
   }

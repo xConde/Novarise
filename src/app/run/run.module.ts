@@ -14,7 +14,7 @@ import { RunSummaryComponent } from './components/run-summary/run-summary.compon
 import { CardDraftComponent } from './components/card-draft/card-draft.component';
 import { IconComponent } from '@shared/components/icon/icon.component';
 import { DescriptionTextComponent } from '@shared/components/description-text/description-text.component';
-import { LibraryCardTileComponent } from '../library/components/library-card-tile.component';
+import { GameCardComponent } from '@shared/components/game-card/game-card.component';
 
 @NgModule({
   declarations: [
@@ -35,7 +35,7 @@ import { LibraryCardTileComponent } from '../library/components/library-card-til
     RouterModule.forChild([{ path: '', component: RunComponent }]),
     IconComponent,
     DescriptionTextComponent,
-    LibraryCardTileComponent,
+    GameCardComponent,
   ],
 })
 export class RunModule {}

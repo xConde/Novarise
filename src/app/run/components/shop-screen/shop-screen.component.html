@@ -180,11 +180,14 @@
           class="shop-card-upgrade__item"
           role="listitem"
         >
-          <app-library-card-tile
+          <app-game-card
             [definition]="getCardDefinitionForInstance(card)"
-            [showUpgraded]="true"
+            [upgraded]="true"
             (selected)="selectCardToUpgrade(card)"
-          ></app-library-card-tile>
+          ></app-game-card>
+          <p class="shop-card-upgrade__preview" aria-hidden="true">
+            &#8594; {{ getCardDefinitionForInstance(card).upgradedDescription ?? '+ ' + getCardDefinitionForInstance(card).description }}
+          </p>
         </li>
       </ul>
       <button
@@ -243,10 +246,10 @@
           class="shop-card-remove__item"
           role="listitem"
         >
-          <app-library-card-tile
+          <app-game-card
             [definition]="getCardDefinitionForInstance(card)"
             (selected)="selectCardToRemove(card)"
-          ></app-library-card-tile>
+          ></app-game-card>
         </li>
       </ul>
       <button

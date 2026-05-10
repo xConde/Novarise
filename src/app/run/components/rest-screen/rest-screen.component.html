@@ -51,11 +51,14 @@
         class="rest-card-item"
         role="listitem"
       >
-        <app-library-card-tile
+        <app-game-card
           [definition]="getCardDefinitionForInstance(card)"
-          [showUpgraded]="true"
+          [upgraded]="true"
           (selected)="selectCardToUpgrade(card)"
-        ></app-library-card-tile>
+        ></app-game-card>
+        <p class="rest-card-item__upgrade-preview" aria-hidden="true">
+          &#8594; {{ getCardDefinitionForInstance(card).upgradedDescription ?? '+ ' + getCardDefinitionForInstance(card).description }}
+        </p>
       </li>
     </ul>
     <button
