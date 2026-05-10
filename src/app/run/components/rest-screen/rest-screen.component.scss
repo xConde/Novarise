@@ -256,22 +256,26 @@
 }
 
 .rest-card-list {
+  /* Picker context wants more presence than the 7rem in-hand card —
+     scope the card sizing tokens up so app-game-card renders at picker
+     scale without touching the in-game hand. Grid columns track the
+     same width so cells aren't oversized vs the card inside them. */
+  --card-width-desktop:      10rem;
+  --card-min-height-desktop: 14rem;
+  --card-width-tablet:       9rem;
+  --card-min-height-tablet:  12.6rem;
+
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  /* Card-shaped columns: ~11rem wide caps each tile near in-game card
-     proportions. minmax(11rem, 13rem) prevents sprawl on wide panels —
-     library-tile aspect-ratio is 22:32 so 13rem wide → ~19rem tall. */
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 13rem));
+  grid-template-columns: repeat(auto-fill, 10rem);
   justify-content: center;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-md) var(--spacing-sm);
   width: 100%;
   // Default cap for non-upgrading layouts (the upgrading variant
   // overrides this with flex: 1 inside .rest-screen--upgrading).
-  // min() lets short viewports cap at viewport height; tall viewports
-  // cap at 28rem so the picker doesn't dominate a 4K monitor.
-  max-height: min(50vh, 28rem);
+  max-height: min(50vh, 32rem);
   overflow-y: auto;
   padding-right: var(--spacing-xs);
 }
@@ -299,7 +303,9 @@
     flex: 1;
     min-height: 0; // allow children to shrink for overflow scroll
     width: 100%;
-    max-width: 56rem;
+    /* 72rem fits ~6 cards/row at 10rem each + gaps — denser than the 56rem
+       cap that left half the screen empty on wide viewports. */
+    max-width: 72rem;
     display: flex;
     flex-direction: column;
     align-items: center;

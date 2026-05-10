@@ -411,7 +411,9 @@
   align-items: center;
   gap: var(--spacing-xs);
   width: 100%;
-  max-width: 32rem;
+  /* Wider in picker mode so the card grid has room to breathe; the
+     non-picker chrome (open button, success banner) stays centered. */
+  max-width: 48rem;
 
   &__success {
     display: flex;
@@ -476,15 +478,21 @@
   }
 
   &__list {
+    /* Picker scale matches rest-screen: 10rem cards on a 10rem grid track. */
+    --card-width-desktop:      10rem;
+    --card-min-height-desktop: 14rem;
+    --card-width-tablet:       9rem;
+    --card-min-height-tablet:  12.6rem;
+
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(11rem, 13rem));
+    grid-template-columns: repeat(auto-fill, 10rem);
     justify-content: center;
     gap: var(--spacing-sm);
     width: 100%;
-    max-height: 28rem;
+    max-height: 32rem;
     overflow-y: auto;
     padding-right: var(--spacing-xs);
   }
@@ -509,7 +517,7 @@
   align-items: center;
   gap: var(--spacing-xs);
   width: 100%;
-  max-width: 32rem;
+  max-width: 48rem;
 
   &__success {
     display: flex;
@@ -574,15 +582,22 @@
   }
 
   &__list {
+    /* Picker scale matches rest-screen: 10rem cards on a 10rem grid track.
+       Each row also leaves room for the upgrade-preview caption below. */
+    --card-width-desktop:      10rem;
+    --card-min-height-desktop: 14rem;
+    --card-width-tablet:       9rem;
+    --card-min-height-tablet:  12.6rem;
+
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(11rem, 13rem));
+    grid-template-columns: repeat(auto-fill, 10rem);
     justify-content: center;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-md) var(--spacing-sm);
     width: 100%;
-    max-height: 28rem;
+    max-height: 32rem;
     overflow-y: auto;
     padding-right: var(--spacing-xs);
   }
