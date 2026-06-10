@@ -68,7 +68,9 @@
           class="tile__archetype tile__archetype--{{ definition.archetype }}">
       {{ definition.archetype }}
     </span>
-    <p class="tile__description">{{ effectiveDescription }}</p>
+    <p class="tile__description">
+      <app-description-text [description]="effectiveDescription" [iconSize]="12"></app-description-text>
+    </p>
   </div>
 
   <!-- UNDISCOVERED silhouette: centered glyph, no name/description. -->
