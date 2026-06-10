@@ -235,4 +235,42 @@ describe('GameCardComponent', () => {
       }
     });
   });
+
+  describe('per-tower-type icon mapping (towerTypeIconName)', () => {
+    it('SNIPER tower card returns tower-sniper, not the generic crosshair', () => {
+      createFixture(CardId.TOWER_SNIPER);
+      expect(component.towerTypeIconName).toBe('tower-sniper');
+      expect(component.towerTypeIconName).not.toBe('crosshair');
+    });
+
+    it('BASIC tower card returns tower-basic', () => {
+      createFixture(CardId.TOWER_BASIC);
+      expect(component.towerTypeIconName).toBe('tower-basic');
+    });
+
+    it('SPLASH tower card returns tower-splash', () => {
+      createFixture(CardId.TOWER_SPLASH);
+      expect(component.towerTypeIconName).toBe('tower-splash');
+    });
+
+    it('SLOW tower card returns tower-slow', () => {
+      createFixture(CardId.TOWER_SLOW);
+      expect(component.towerTypeIconName).toBe('tower-slow');
+    });
+
+    it('CHAIN tower card returns tower-chain', () => {
+      createFixture(CardId.TOWER_CHAIN);
+      expect(component.towerTypeIconName).toBe('tower-chain');
+    });
+
+    it('MORTAR tower card returns tower-mortar', () => {
+      createFixture(CardId.TOWER_MORTAR);
+      expect(component.towerTypeIconName).toBe('tower-mortar');
+    });
+
+    it('non-tower card returns crosshair', () => {
+      createFixture(CardId.LIGHTNING_STRIKE);
+      expect(component.towerTypeIconName).toBe('crosshair');
+    });
+  });
 });

@@ -23,6 +23,8 @@ import { getCardDefinition, getEffectiveEnergyCost } from '../../../../run/const
 import { TOWER_CONFIGS, TowerType } from '../../models/tower.model';
 import { RelicService } from '../../../../run/services/relic.service';
 import { ARCHETYPE_DISPLAY } from '../../../../run/constants/archetype.constants';
+import { IconName } from '@shared/components/icon/icon-registry';
+import { towerTypeToIconName } from '@shared/components/icon/tower-icon.utils';
 import { TowerThumbnailService } from '@core/services/tower-thumbnail.service';
 
 /** Pre-computed view model for a single card in hand. */
@@ -113,6 +115,17 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
     if (!('towerType' in card.definition.effect)) return null;
     const towerType = (card.definition.effect as { type: 'tower'; towerType: TowerType }).towerType;
     return this.towerThumbnailService.getThumbnail(towerType);
+  }
+
+  /**
+   * Returns the per-tower icon name for a tower card.
+   * Replaces the generic crosshair so each TowerType shows its own glyph.
+   * Falls back to 'crosshair' for non-tower cards.
+   */
+  getTowerTypeIconName(card: HandCard): IconName {
+    const effect = card.definition.effect;
+    if (effect.type !== 'tower') return 'crosshair';
+    return towerTypeToIconName(effect.towerType);
   }
 
   /**

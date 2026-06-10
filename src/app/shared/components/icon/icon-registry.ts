@@ -9,7 +9,9 @@ export type IconName =
   | 'kw-terraform' | 'kw-link' | 'kw-exhaust' | 'kw-retain' | 'kw-innate' | 'kw-ethereal'
   | 'arch-cartographer' | 'arch-highground' | 'arch-conduit' | 'arch-neutral'
   | 'fx-damage' | 'fx-burn' | 'fx-poison' | 'fx-slow' | 'fx-heal' | 'fx-gold'
-  | 'fx-draw' | 'fx-energy' | 'fx-buff' | 'fx-scout' | 'fx-recycle' | 'fx-link';
+  | 'fx-draw' | 'fx-energy' | 'fx-buff' | 'fx-scout' | 'fx-recycle' | 'fx-link'
+  // Per-tower-type icons (replaces generic crosshair on tower cards)
+  | 'tower-basic' | 'tower-sniper' | 'tower-splash' | 'tower-slow' | 'tower-chain' | 'tower-mortar';
 
 export interface IconDef {
   readonly viewBox: string;
@@ -70,4 +72,11 @@ export const ICON_REGISTRY: Record<IconName, IconDef> = {
   'fx-scout':           { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
   'fx-recycle':         { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
   'fx-link':            { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  // Per-tower-type icons — same stroke/viewBox conventions as other icons
+  'tower-basic':   { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'tower-sniper':  { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'tower-splash':  { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'tower-slow':    { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'tower-chain':   { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
+  'tower-mortar':  { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.5' },
 };

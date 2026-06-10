@@ -2,7 +2,7 @@ import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } fr
 import { Router } from '@angular/router';
 import { Observable, Subscription } from 'rxjs';
 import { GameBoardService } from './game-board.service';
-import { disposeGroup } from './utils/three-utils';
+import { disposeGroup, isWebglAvailable } from './utils/three-utils';
 import { BlockType } from './models/game-board-tile';
 import { SceneService } from './services/scene.service';
 import { EnemyService } from './services/enemy.service';
@@ -78,7 +78,9 @@ import { AscensionModifierService } from './services/ascension-modifier.service'
 import { ASCENSION_LEVELS, AscensionLevel } from '../../run/models/ascension.model';
 import { TurnHistoryService, TurnEventRecord } from './services/turn-history.service';
 import { TurnBannerService } from './services/turn-banner.service';
+import { BossBannerService } from './services/boss-banner.service';
 import { PathBlockedWarningService } from './services/path-blocked-warning.service';
+import { UI_CONFIG } from './constants/ui.constants';
 import { ItemCallbacksWiringService } from './services/item-callbacks-wiring.service';
 import { SpawnPreviewViewService } from './services/spawn-preview-view.service';
 import { EncounterBootstrapService } from './services/encounter-bootstrap.service';
@@ -166,7 +168,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, PathBlockedWarningService, ItemCallbacksWiringService, SpawnPreviewViewService, EncounterBootstrapService, CheckpointRestoreCoordinatorService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, GeometryRegistryService, MaterialRegistryService, TextSpritePoolService, VfxPoolService, TowerGraphService, LinkMeshService, TowerDecalLibraryService, TargetPreviewService, AimLineService, ForwardSimulationService, EnemyIntentService, TowerFireZonePreviewService, ProjectileVisualService]
+  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, TurnBannerService, BossBannerService, PathBlockedWarningService, ItemCallbacksWiringService, SpawnPreviewViewService, EncounterBootstrapService, CheckpointRestoreCoordinatorService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, GeometryRegistryService, MaterialRegistryService, TextSpritePoolService, VfxPoolService, TowerGraphService, LinkMeshService, TowerDecalLibraryService, TargetPreviewService, AimLineService, ForwardSimulationService, EnemyIntentService, TowerFireZonePreviewService, ProjectileVisualService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -279,6 +281,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Game initialization failure (WebGL not supported or canvas creation failed)
   initializationFailed = false;
+
+  // Victory/defeat dwell overlay — shown briefly before routing back to /run.
+  // Design choice: exit is automatic (no user button) — the overlay appears on
+  // phase transition and routes after UI_CONFIG.endOverlayDwellMs (~1.2 s) so
+  // the player has a moment to register the outcome before the hard cut.
+  showEndOverlay = false;
+  endOverlayIsVictory = false;
+  private endOverlayDwellTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Pile inspector — which pile is currently being inspected (null = closed)
   inspectedPile: 'draw' | 'discard' | 'exhaust' | null = null;
@@ -454,7 +464,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.modifierScoreMultiplier = calculateModifierScoreMultiplier(state.activeModifiers);
 
       // Terminal phase: record encounter result and route back to the run hub.
-      // There is no standalone scoring overlay — run summary is shown by the run module.
+      // A brief dwell overlay (VICTORY gold flash / DEFEAT red vignette) is shown for
+      // UI_CONFIG.endOverlayDwellMs before the automatic navigation fires. The overlay
+      // has no interactive button — exit is always automatic after the dwell.
       if (
         (state.phase === GamePhase.VICTORY || state.phase === GamePhase.DEFEAT) &&
         prevPhase !== GamePhase.VICTORY &&
@@ -476,7 +488,20 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           completedChallenges: this.lastCompletedChallenges,
         };
         this.runService.recordEncounterResult(result);
-        this.router.navigate(['/run']);
+
+        // Show dwell overlay, then navigate after the dwell period.
+        // checkpoint clear + reward flow already happened inside waveCombat.endTurn();
+        // recordEncounterResult above stashes the result for RunService to consume
+        // at /run — navigation order does not affect those operations.
+        this.showEndOverlay = true;
+        this.endOverlayIsVictory = isVictory;
+        if (this.endOverlayDwellTimer !== null) {
+          clearTimeout(this.endOverlayDwellTimer);
+        }
+        this.endOverlayDwellTimer = setTimeout(() => {
+          this.endOverlayDwellTimer = null;
+          this.router.navigate(['/run']);
+        }, UI_CONFIG.endOverlayDwellMs);
         return;
       }
 
@@ -514,6 +539,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.energySub = this.deckService.energy$.subscribe(e => { this.energyState = e; });
 
     this.musicService.playTheme(encounter.isBoss ? 'boss' : 'combat');
+
+    // Skip ALL Three.js initialisation when WebGL is unavailable. The
+    // template shows WebglFallbackComponent instead of the canvas.
+    if (!this.detectWebgl()) {
+      this.initializationFailed = true;
+      return;
+    }
+
     this.sceneService.initScene();
     this.sceneService.initCamera();
     this.sceneService.initLights();
@@ -587,7 +620,21 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.encounterBootstrap.bootstrapFresh();
   }
 
+  /**
+   * Instance seam over the isWebglAvailable() utility so specs can stub the
+   * probe result — ES module exports are not spyable under this project's
+   * compilation settings. Production behaviour is identical to calling the
+   * utility directly.
+   */
+  protected detectWebgl(): boolean {
+    return isWebglAvailable();
+  }
+
   ngAfterViewInit(): void {
+    // WebGL was detected as unavailable in ngOnInit — skip renderer setup entirely.
+    if (this.initializationFailed) {
+      return;
+    }
     try {
       this.sceneService.initRenderer(
         this.canvasContainer.nativeElement,
@@ -1639,6 +1686,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.pathBlockedWarningService.cleanup();
     this.turnBannerService.cleanup();
+    this.waveCombat.bossBanner.cleanup();
+
+    if (this.endOverlayDwellTimer !== null) {
+      clearTimeout(this.endOverlayDwellTimer);
+      this.endOverlayDwellTimer = null;
+    }
 
     this.waveCombat.cleanup();
     this.tutorialFacade.cleanup();

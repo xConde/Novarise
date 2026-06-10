@@ -204,4 +204,18 @@ export const ENEMY_VISUAL_CONFIG = {
 export const UI_CONFIG = {
   /** Duration in ms before the "path blocked" warning banner auto-dismisses. */
   pathBlockedDismissMs: 2000,
+  /** Duration in ms that the boss-intro banner stays visible before fading. */
+  bossBannerVisibleMs: 2800,
+  /**
+   * Dwell time in ms before the victory/defeat end overlay routes back to /run.
+   * The overlay appears immediately on phase transition; navigation fires after
+   * this delay so the player has a moment to register the outcome.
+   */
+  endOverlayDwellMs: 1200,
+} as const;
+
+/** Copy strings for the boss-intro banner. Named constants — no inline literals. */
+export const BOSS_BANNER_COPY = {
+  novaSovereign: '⚠ THE SOVEREIGN MANIFESTS',
+  generic:       '⚠ BOSS INCOMING',
 } as const;

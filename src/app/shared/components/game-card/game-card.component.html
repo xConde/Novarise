@@ -21,9 +21,11 @@
   <!-- Upgraded badge -->
   <span class="game-card__upgraded-badge" *ngIf="upgraded" aria-hidden="true">+</span>
 
-  <!-- Type icon — bottom-right corner chip -->
+  <!-- Type icon — bottom-right corner chip.
+       Tower cards show the per-tower-type glyph (towerTypeIconName) rather
+       than the generic crosshair, so BASIC/SNIPER/etc. are visually distinct. -->
   <span class="game-card__type-icon" aria-hidden="true">
-    <app-icon *ngIf="definition.type === CardType.TOWER" name="crosshair" [size]="20"></app-icon>
+    <app-icon *ngIf="definition.type === CardType.TOWER" [name]="towerTypeIconName" [size]="20"></app-icon>
     <app-icon *ngIf="definition.type === CardType.SPELL" name="bolt" [size]="20"></app-icon>
     <app-icon *ngIf="definition.type === CardType.MODIFIER" name="shield" [size]="20"></app-icon>
     <app-icon *ngIf="definition.type === CardType.UTILITY" name="gear" [size]="20"></app-icon>

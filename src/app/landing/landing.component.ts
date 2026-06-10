@@ -5,6 +5,9 @@ import { RunService } from '../run/services/run.service';
 import { MusicService } from '../core/services/music.service';
 import { ASCENSION_LEVELS, AscensionLevel, MAX_ASCENSION_LEVEL } from '../run/models/ascension.model';
 
+/** Number of animated star particles in the title-screen backdrop. */
+const STAR_PARTICLE_COUNT = 24;
+
 /**
  * Phase 9: Landing component repurposed as the Run Hub.
  *
@@ -34,6 +37,22 @@ export class LandingComponent implements OnInit {
   /** Currently selected ascension for the next run. Defaults to maxAscension. */
   selectedAscension = 0;
 
+  /**
+   * True after the first tick of ngOnInit — drives the CSS entrance animation
+   * that stages the title, subtitle, and CTA buttons into view. Set
+   * synchronously (no rAF) because Angular's change detection will pick it up
+   * on the next tick via the microtask queue, giving the browser one paint
+   * with `entered = false` so the `landing-content--entered` class lands as a
+   * genuine transition rather than an immediate jump.
+   */
+  entered = false;
+
+  /** Star particles for the animated backdrop — indices only; CSS handles layout. */
+  readonly starParticles: readonly number[] = Array.from(
+    { length: STAR_PARTICLE_COUNT },
+    (_, i) => i,
+  );
+
   constructor(
     private router: Router,
     private runPersistence: RunPersistenceService,
@@ -47,6 +66,9 @@ export class LandingComponent implements OnInit {
     // Default to highest unlocked level so returning players don't have to step up.
     this.selectedAscension = this.maxAscension;
     this.musicService.playTheme('hub');
+    // Defer to next microtask so Angular renders one frame with entered=false,
+    // making the CSS transition a genuine animation rather than an instant jump.
+    Promise.resolve().then(() => { this.entered = true; });
   }
 
   /** Step the ascension selector by delta, clamped to [0, maxAscension]. */

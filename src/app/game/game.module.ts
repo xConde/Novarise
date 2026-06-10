@@ -18,6 +18,7 @@ import { LastTurnSummaryComponent } from './game-board/components/last-turn-summ
 import { CardDetailComponent } from './game-board/components/card-detail/card-detail.component';
 import { IconComponent } from '@shared/components/icon/icon.component';
 import { DescriptionTextComponent } from '@shared/components/description-text/description-text.component';
+import { WebglFallbackComponent } from '@shared/components/webgl-fallback/webgl-fallback.component';
 
 @NgModule({
   declarations: [
@@ -37,6 +38,7 @@ import { DescriptionTextComponent } from '@shared/components/description-text/de
     RouterModule.forChild([{ path: '', component: GameComponent, canDeactivate: [gameLeaveGuard] }]),
     IconComponent,
     DescriptionTextComponent,
+    WebglFallbackComponent,
   ],
   // PathMutationService / ElevationService / LineOfSightService / TerraformMaterialPoolService
   // live on GameBoardComponent.providers, NOT here. Each one transitively depends on

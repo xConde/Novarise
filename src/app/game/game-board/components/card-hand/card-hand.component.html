@@ -65,9 +65,10 @@
       <!-- Upgraded indicator -->
       <span class="card__upgraded-badge" *ngIf="card.instance.upgraded" aria-hidden="true">+</span>
 
-      <!-- Type icon — small corner chip (top-right) signalling card type. -->
+      <!-- Type icon — small corner chip (top-right) signalling card type.
+           Tower cards show the per-tower-type glyph via getTowerTypeIconName. -->
       <span class="card__type-icon" aria-hidden="true">
-        <app-icon *ngIf="card.definition.type === CardType.TOWER" name="crosshair" [size]="20"></app-icon>
+        <app-icon *ngIf="card.definition.type === CardType.TOWER" [name]="getTowerTypeIconName(card)" [size]="20"></app-icon>
         <app-icon *ngIf="card.definition.type === CardType.SPELL" name="bolt" [size]="20"></app-icon>
         <app-icon *ngIf="card.definition.type === CardType.MODIFIER" name="shield" [size]="20"></app-icon>
         <app-icon *ngIf="card.definition.type === CardType.UTILITY" name="gear" [size]="20"></app-icon>

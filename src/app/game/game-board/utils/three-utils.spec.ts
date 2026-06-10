@@ -6,8 +6,49 @@ import {
   disposeMesh,
   disposeGroup,
   getMaterials,
+  isWebglAvailable,
   RendererPolicy
 } from './three-utils';
+
+describe('isWebglAvailable', () => {
+  let createElementSpy: jasmine.Spy;
+  let fakeCanvas: { getContext: jasmine.Spy };
+
+  beforeEach(() => {
+    fakeCanvas = { getContext: jasmine.createSpy('getContext') };
+    createElementSpy = spyOn(document, 'createElement').and.returnValue(
+      fakeCanvas as unknown as HTMLElement
+    );
+  });
+
+  afterEach(() => {
+    createElementSpy.and.callThrough();
+  });
+
+  it('returns true when webgl2 context is available', () => {
+    fakeCanvas.getContext.and.callFake((type: string) =>
+      type === 'webgl2' ? {} : null
+    );
+    expect(isWebglAvailable()).toBeTrue();
+  });
+
+  it('returns true when only webgl (v1) context is available', () => {
+    fakeCanvas.getContext.and.callFake((type: string) =>
+      type === 'webgl' ? {} : null
+    );
+    expect(isWebglAvailable()).toBeTrue();
+  });
+
+  it('returns false when both webgl2 and webgl return null', () => {
+    fakeCanvas.getContext.and.returnValue(null);
+    expect(isWebglAvailable()).toBeFalse();
+  });
+
+  it('returns false when getContext throws (driver crash / blocked context)', () => {
+    fakeCanvas.getContext.and.throwError('WebGL not supported');
+    expect(isWebglAvailable()).toBeFalse();
+  });
+});
 
 describe('applyRendererPolicy', () => {
   let renderer: jasmine.SpyObj<THREE.WebGLRenderer> & {

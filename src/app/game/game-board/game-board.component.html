@@ -183,6 +183,18 @@
             aria-hidden="true">⚠ {{ projectedLeaksNextTurn }} leak<ng-container *ngIf="projectedLeaksNextTurn !== 1">s</ng-container></span>
     </button>
 
+    <!-- Boss-intro banner — fires once when a wave containing a boss-tier enemy begins.
+         Owned by BossBannerService (via waveCombat.bossBanner); copy and duration are
+         constants in ui.constants.ts. Paired with screen shake + boss-roar SFX. -->
+    <!-- aria-live: assertive — short-lived announcement, must not wait in polite queue -->
+    <div class="boss-intro-banner"
+         *ngIf="waveCombat.bossBanner.showBanner"
+         role="alert"
+         aria-live="assertive"
+         aria-atomic="true">
+      {{ waveCombat.bossBanner.text }}
+    </div>
+
     <!-- Turn start banner — fades in/out when a new turn begins -->
     <!-- aria-live: assertive — 1.2s lifespan too short for polite queue to catch -->
     <div class="turn-start-banner"
@@ -380,14 +392,8 @@
        the canvas row AND the card hand row. Absolute with inset: 0 covers the
        entire .board-container, blocking interaction with underlying UI. -->
 
-  <!-- Game Initialization Failure Overlay -->
-  <div class="context-lost-overlay" *ngIf="initializationFailed" role="alert" aria-live="assertive">
-    <div class="context-lost-content">
-      <h2 class="context-lost-title">Game Failed to Load</h2>
-      <p class="context-lost-message">Game failed to initialize. Your browser may not support WebGL.</p>
-      <button class="context-lost-back-btn" (click)="goBackToRunHub()">Go Back</button>
-    </div>
-  </div>
+  <!-- WebGL unavailable fallback — replaces the entire canvas when WebGL cannot be initialised -->
+  <app-webgl-fallback *ngIf="initializationFailed"></app-webgl-fallback>
 
   <!-- WebGL Context Lost Overlay -->
   <div class="context-lost-overlay" *ngIf="contextLost" role="alert" aria-live="assertive">
@@ -528,6 +534,21 @@
       <p class="pause-menu__auto-hint" *ngIf="autoPaused">Game auto-paused — tab was inactive</p>
       <p class="pause-menu__hint" aria-hidden="true">P or ESC to resume</p>
     </div>
+  </div>
+
+  <!-- Victory/defeat dwell overlay — covers the entire board for ~1.2s before
+       automatic navigation to /run. No interactive button: exit is always timed.
+       Reduce-motion: overlay appears instantly, animation is suppressed via CSS. -->
+  <div class="end-combat-overlay"
+       *ngIf="showEndOverlay"
+       [class.end-combat-overlay--victory]="endOverlayIsVictory"
+       [class.end-combat-overlay--defeat]="!endOverlayIsVictory"
+       role="status"
+       aria-live="assertive"
+       aria-atomic="true">
+    <span class="end-combat-overlay__label">
+      {{ endOverlayIsVictory ? 'VICTORY' : 'DEFEAT' }}
+    </span>
   </div>
 
 </div>

@@ -1,5 +1,27 @@
 import * as THREE from 'three';
 
+/**
+ * Return true when the browser can create a WebGL rendering context.
+ *
+ * Probes webgl2 first, falls back to webgl. The temporary canvas is never
+ * attached to the DOM. Wrapped in try/catch so driver bugs that throw
+ * (rather than returning null) are treated as unavailable.
+ *
+ * Call this BEFORE any Three.js scene initialisation to skip the entire
+ * renderer setup on unsupported devices.
+ */
+export function isWebglAvailable(): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(
+      canvas.getContext('webgl2') ||
+      canvas.getContext('webgl')
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Dispose a Three.js material, handling both single Material and Material[] forms. */
 export function disposeMaterial(material: THREE.Material | THREE.Material[]): void {
   if (Array.isArray(material)) {

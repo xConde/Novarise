@@ -113,6 +113,8 @@ export const SFX_CONFIGS: Record<string, SfxConfigEntry> = {
     duration: 0.15,
     volume: 0.25,
   } as SfxConfig,
+
+  // Bright ascending chirp for tower upgrade confirmation (duplicate key removed above)
 };
 
 // ---
@@ -161,6 +163,11 @@ export interface AudioConfig {
   victory: ArpeggioConfig;
   /** Descending dissonant tone signalling a life lost (~200Hz → 80Hz, square wave). */
   lifeLoss: ToneConfig;
+  /**
+   * Boss-intro roar: low descending sawtooth tone layered with a short noise burst.
+   * Plays once when a boss-wave begins, paired with the boss-intro banner.
+   */
+  bossRoar: EnemyDeathConfig;
 }
 
 export const AUDIO_CONFIG: AudioConfig = {
@@ -267,5 +274,18 @@ export const AUDIO_CONFIG: AudioConfig = {
     duration: 0.3,
     oscillatorType: 'square',
     gain: 0.35,
+  },
+
+  // Boss-intro roar: 80→30 Hz sawtooth over 1.2s (deep, ominous descent) + a
+  // short noise burst (0.35s, 0.18 gain) layered on top for a percussive snap.
+  // Mirrors enemyDeath config shape so playBossRoar() can reuse playNoise().
+  bossRoar: {
+    frequency: 80,
+    endFrequency: 30,
+    duration: 1.2,
+    oscillatorType: 'sawtooth',
+    gain: 0.35,
+    noiseGain: 0.18,
+    noiseDuration: 0.35,
   },
 };

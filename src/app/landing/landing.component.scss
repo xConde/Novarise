@@ -1,11 +1,74 @@
-// M5 S1: Home shell — CSS Grid with named template areas. Reserved slots
-// for [glow] background, [content] center column, [version] footer.
-// Mobile breakpoints scale grid track sizes (--landing-content-width)
-// rather than reshuffling areas.
+// ── Title-screen animation tokens ────────────────────────────────────────────
+// All durations/sizes are named here — no magic numbers per project conventions.
+// CSS :root custom properties for values needed in keyframes (non-SCSS context).
+
+:root {
+  // Backdrop layers
+  --ls-sky-top: #000308;
+  --ls-sky-mid: #04071a;
+  --ls-sky-bottom: #080218;
+  --ls-horizon-color: rgba(106, 74, 138, 0.18);
+  --ls-horizon-wide-color: rgba(30, 10, 60, 0.12);
+  --ls-spire-fill: rgba(12, 8, 20, 0.9);
+  --ls-spire-edge: rgba(80, 55, 110, 0.6);
+  --ls-spire-apex: rgba(160, 120, 220, 0.55);
+  --ls-spire-window: rgba(60, 44, 88, 0.55);
+  --ls-spire-window-lit: rgba(180, 140, 255, 0.7);
+  --ls-star-color: rgba(220, 210, 240, 0.7);
+
+  // Horizon glow animation
+  --ls-horizon-breathe-dur: 6s;
+  // Star drift
+  --ls-star-drift-dur-base: 18s;    // slowest particle cycle
+  --ls-star-drift-dur-range: 14s;   // range above base (per-particle via nth-child)
+  // Entrance animation
+  --ls-enter-dur: 0.8s;
+  --ls-enter-stagger-title: 0s;
+  --ls-enter-stagger-subtitle: 0.15s;
+  --ls-enter-stagger-cta: 0.3s;
+  --ls-enter-stagger-ascension: 0.45s;
+}
+
+// ── Keyframes ────────────────────────────────────────────────────────────────
+
+@keyframes ls-horizon-breathe {
+  0%, 100% { opacity: 0.7; }
+  50%       { opacity: 1; }
+}
+
+@keyframes ls-star-drift {
+  0%   { transform: translateY(0)    translateX(0);    opacity: 0; }
+  8%   { opacity: 1; }
+  92%  { opacity: 0.8; }
+  100% { transform: translateY(-30px) translateX(6px); opacity: 0; }
+}
+
+@keyframes ls-enter-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ls-title-glow-pulse {
+  0%, 100% {
+    text-shadow:
+      0 0 24px var(--theme-purple-glow),
+      0 0 48px var(--theme-purple-glow),
+      0 0  8px rgba(255, 255, 255, 0.08);
+  }
+  50% {
+    text-shadow:
+      0 0 32px var(--theme-purple-a60),
+      0 0 64px var(--theme-purple-a40),
+      0 0 12px rgba(255, 255, 255, 0.15);
+  }
+}
+
+// ── Layout ───────────────────────────────────────────────────────────────────
+
 .landing-container {
   display: grid;
   grid-template-rows: 1fr [content] auto 1fr [version] auto;
-  grid-template-columns: 1fr [content] minmax(280px, min(480px, 85vw)) 1fr;
+  grid-template-columns: 1fr [content] minmax(280px, min(520px, 88vw)) 1fr;
   grid-template-areas:
     ".       .       ."
     ".       content ."
@@ -17,65 +80,262 @@
   position: relative;
   overflow: hidden;
   padding: var(--spacing-md);
+}
 
-  // Subtle radial gradient behind content (decorative — does not occupy a grid slot)
-  &::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: min(600px, 80vw);
-    height: min(600px, 80vw);
-    transform: translate(-50%, -50%);
-    background: radial-gradient(circle, var(--theme-purple-glow) 0%, transparent 70%);
-    pointer-events: none;
-    opacity: 0.4;
+// ── Backdrop ─────────────────────────────────────────────────────────────────
+
+.landing-backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+// Layer 1 — deep-space sky
+.landing-backdrop__sky {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    var(--ls-sky-top)    0%,
+    var(--ls-sky-mid)   45%,
+    var(--ls-sky-bottom) 100%
+  );
+}
+
+// Layer 2 — Spire silhouette wrapper (bottom-anchored, centred)
+.landing-backdrop__spire-wrap {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(320px, 55vw);
+  // Tall enough for the SVG viewBox proportion: 600/400 = 1.5
+  height: min(480px, 82.5vw);
+  overflow: visible;
+}
+
+.landing-backdrop__spire {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+
+  .spire__body {
+    fill: var(--ls-spire-fill);
+    stroke: var(--ls-spire-edge);
+    stroke-width: 1;
+  }
+
+  .spire__fin-left,
+  .spire__fin-right {
+    fill: var(--ls-spire-fill);
+    stroke: var(--ls-spire-edge);
+    stroke-width: 0.75;
+    opacity: 0.75;
+  }
+
+  .spire__apex {
+    fill: var(--ls-spire-apex);
+    filter: blur(1px);
+  }
+
+  .spire__window {
+    fill: var(--ls-spire-window);
+  }
+
+  .spire__window--lit {
+    fill: var(--ls-spire-window-lit);
+    filter: blur(0.5px);
   }
 }
+
+// Layer 3 — drifting star particles
+.landing-backdrop__stars {
+  position: absolute;
+  inset: 0;
+}
+
+// Each star is absolutely positioned using CSS custom properties driven by
+// nth-child modular arithmetic. 24 particles, spread across width/upper 70%
+// of height. Durations stagger so they don't drift in lock-step.
+.star-particle {
+  position: absolute;
+  display: block;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--ls-star-color);
+  animation: ls-star-drift var(--ls-star-drift-dur-base) ease-in-out infinite;
+
+  // Use nth-child to spread position + timing across 24 particles.
+  // Each set of 6 shares a vertical band; within each set, horizontal
+  // positions and durations step to avoid clustering.
+
+  // Band 1 (particles 1-6): left strip
+  &:nth-child(1)  { left:  4%; top: 12%; animation-delay:  0.0s; animation-duration: 18s; }
+  &:nth-child(2)  { left:  9%; top: 35%; animation-delay: -4.5s; animation-duration: 22s; }
+  &:nth-child(3)  { left: 13%; top:  8%; animation-delay: -9.0s; animation-duration: 20s; }
+  &:nth-child(4)  { left:  7%; top: 55%; animation-delay: -2.0s; animation-duration: 25s; }
+  &:nth-child(5)  { left: 17%; top: 25%; animation-delay: -7.5s; animation-duration: 19s; }
+  &:nth-child(6)  { left: 11%; top: 68%; animation-delay: -1.0s; animation-duration: 28s; }
+
+  // Band 2 (particles 7-12): left-centre
+  &:nth-child(7)  { left: 25%; top:  6%; animation-delay: -3.5s; animation-duration: 21s; }
+  &:nth-child(8)  { left: 30%; top: 42%; animation-delay: -8.0s; animation-duration: 24s; }
+  &:nth-child(9)  { left: 35%; top: 18%; animation-delay: -5.5s; animation-duration: 17s; }
+  &:nth-child(10) { left: 28%; top: 62%; animation-delay: -0.5s; animation-duration: 30s; }
+  &:nth-child(11) { left: 22%; top: 48%; animation-delay: -6.0s; animation-duration: 23s; }
+  &:nth-child(12) { left: 38%; top: 75%; animation-delay: -3.0s; animation-duration: 26s; }
+
+  // Band 3 (particles 13-18): right-centre
+  &:nth-child(13) { left: 62%; top:  9%; animation-delay: -4.0s; animation-duration: 20s; }
+  &:nth-child(14) { left: 68%; top: 38%; animation-delay: -1.5s; animation-duration: 18s; }
+  &:nth-child(15) { left: 72%; top: 15%; animation-delay: -7.0s; animation-duration: 22s; }
+  &:nth-child(16) { left: 65%; top: 58%; animation-delay: -9.5s; animation-duration: 27s; }
+  &:nth-child(17) { left: 58%; top: 30%; animation-delay: -2.5s; animation-duration: 19s; }
+  &:nth-child(18) { left: 75%; top: 72%; animation-delay: -5.0s; animation-duration: 24s; }
+
+  // Band 4 (particles 19-24): right strip
+  &:nth-child(19) { left: 84%; top:  5%; animation-delay: -6.5s; animation-duration: 21s; }
+  &:nth-child(20) { left: 89%; top: 28%; animation-delay: -3.8s; animation-duration: 29s; }
+  &:nth-child(21) { left: 93%; top: 52%; animation-delay: -8.5s; animation-duration: 23s; }
+  &:nth-child(22) { left: 80%; top: 18%; animation-delay: -0.8s; animation-duration: 17s; }
+  &:nth-child(23) { left: 87%; top: 65%; animation-delay: -5.8s; animation-duration: 25s; }
+  &:nth-child(24) { left: 95%; top: 42%; animation-delay: -2.8s; animation-duration: 31s; }
+}
+
+// Layer 4 — horizon glow
+.landing-backdrop__horizon {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 140%;
+  height: 45%;
+  // Two stacked radials: tight purple core + wide indigo spread
+  background:
+    radial-gradient(ellipse 55% 40% at 50% 100%, var(--ls-horizon-color) 0%, transparent 70%),
+    radial-gradient(ellipse 100% 60% at 50% 100%, var(--ls-horizon-wide-color) 0%, transparent 80%);
+  animation: ls-horizon-breathe var(--ls-horizon-breathe-dur) ease-in-out infinite;
+}
+
+// ── Foreground content ────────────────────────────────────────────────────────
 
 .landing-content {
   grid-area: content;
   display: grid;
-  grid-template-rows: [title] auto [subtitle] auto [actions] auto;
+  grid-template-rows: [title] auto [actions] auto [ascension] auto;
   justify-items: center;
   gap: var(--spacing-lg);
   position: relative;
   z-index: 1;
 }
 
+// Entrance animation — each child group staggers in when .entered is added.
+// Default state (before entered): children are invisible + shifted down.
+// Once entered, each group transitions to opacity:1 / translateY(0).
+.landing-content {
+  .landing-title-block,
+  .landing-actions,
+  .ascension-panel {
+    opacity: 0;
+    transform: translateY(18px);
+    transition:
+      opacity var(--ls-enter-dur) ease,
+      transform var(--ls-enter-dur) ease;
+  }
+
+  .landing-title-block {
+    transition-delay: var(--ls-enter-stagger-title);
+  }
+
+  .landing-actions {
+    transition-delay: var(--ls-enter-stagger-cta);
+  }
+
+  .ascension-panel {
+    transition-delay: var(--ls-enter-stagger-ascension);
+  }
+
+  &--entered {
+    .landing-title-block,
+    .landing-actions,
+    .ascension-panel {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+// ── Title block ───────────────────────────────────────────────────────────────
+
+.landing-title-block {
+  display: grid;
+  grid-template-rows: [eyebrow] auto [title] auto [subtitle] auto;
+  justify-items: center;
+  gap: var(--spacing-xs);
+}
+
+.landing-eyebrow {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  letter-spacing: 0.45em;
+  text-transform: uppercase;
+  color: var(--theme-purple-mid);
+  margin: 0 0 var(--spacing-sm);
+  opacity: 0.8;
+}
+
 .landing-title {
   font-family: "Orbitron", sans-serif;
-  font-size: clamp(2rem, 5.5vw, 4rem);
-  font-weight: 700;
-  letter-spacing: clamp(0.2em, 0.4em, 0.4em);
+  font-size: clamp(2.4rem, 6.5vw, 4.8rem);
+  font-weight: 800;
+  letter-spacing: clamp(0.25em, 0.45em, 0.5em);
+  // Layered glow: sharp inner + wide purple halo + faint gold sheen
   color: var(--theme-purple-lighter);
-  text-shadow: 0 0 20px var(--theme-purple-glow),
-               0 0 40px var(--theme-purple-glow);
+  text-shadow:
+    0 0  8px rgba(255, 255, 255, 0.12),
+    0 0 24px var(--theme-purple-glow),
+    0 0 48px var(--theme-purple-glow),
+    0 0 80px var(--theme-purple-a20);
+  animation: ls-title-glow-pulse 5s ease-in-out infinite;
   margin: 0;
-  justify-self: stretch;
   text-align: center;
+  // Subtle gold sheen via background-clip text (degrades gracefully)
+  background: linear-gradient(
+    180deg,
+    var(--theme-purple-lighter) 40%,
+    rgba(230, 215, 255, 0.85) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  // Restore glow via filter:drop-shadow (text-shadow doesn't apply to clipped text)
+  filter:
+    drop-shadow(0 0 16px var(--theme-purple-a60))
+    drop-shadow(0 0 40px var(--theme-purple-a30));
 }
 
 .landing-subtitle {
   font-family: "Orbitron", sans-serif;
   font-size: var(--font-size-small);
   color: var(--theme-purple-mid);
-  letter-spacing: 0.3em;
+  letter-spacing: 0.28em;
   text-transform: uppercase;
-  margin: 0;
-  justify-self: stretch;
+  margin: var(--spacing-sm) 0 0;
   text-align: center;
 }
 
+// ── CTA buttons ───────────────────────────────────────────────────────────────
+
 .landing-actions {
-  // M5 S1: grid with reserved slots for each action button (content-driven
-  // ordering preserved by *ngIf order, but the grid tracks are uniform).
   display: grid;
   grid-auto-rows: minmax(2.75rem, auto); // WCAG min touch target
   gap: var(--spacing-md);
   width: 100%;
-  max-width: 280px;
-  margin-top: var(--spacing-2xl);
+  max-width: 300px;
+  margin-top: var(--spacing-xl);
 }
 
 .landing-btn {
@@ -89,10 +349,11 @@
   font-weight: 600;
   letter-spacing: 0.1em;
   cursor: pointer;
-  transition: background var(--transition-fast) ease,
-              box-shadow var(--transition-fast) ease,
-              border-color var(--transition-fast) ease,
-              transform var(--transition-fast) ease;
+  transition:
+    background var(--transition-fast) ease,
+    box-shadow var(--transition-fast) ease,
+    border-color var(--transition-fast) ease,
+    transform var(--transition-fast) ease;
 
   &:hover {
     background: var(--theme-purple-a50);
@@ -110,6 +371,28 @@
     outline-offset: 2px;
   }
 
+  // Hero CTA — Continue Run (appears only when a saved run exists)
+  // Uses gold treatment to match in-game "victory" palette and signal
+  // this is the highest-priority action on the screen.
+  &--hero {
+    background: var(--game-gold-a15);
+    border-color: var(--game-gold-a50);
+    color: var(--game-gold);
+    box-shadow: 0 0 10px var(--game-gold-a25);
+
+    &:hover {
+      background: var(--game-gold-a25);
+      border-color: var(--game-gold-a60);
+      box-shadow: 0 0 20px var(--game-gold-a40), 0 0 4px var(--game-gold-a25);
+      color: #fff;
+    }
+
+    &:focus-visible {
+      outline-color: var(--game-gold);
+    }
+  }
+
+  // Primary — Start Run (hero role when no saved run exists)
   &--primary {
     background: var(--theme-purple-a50);
     border-color: var(--theme-purple-light);
@@ -120,44 +403,28 @@
       box-shadow: 0 0 16px var(--theme-purple-glow);
     }
   }
+
+  // Secondary / muted — Profile
+  &--muted {
+    opacity: 0.6;
+    &:hover { opacity: 1; }
+  }
 }
 
-.landing-btn__progress {
-  display: block;
-  font-size: var(--font-size-xs);
-  letter-spacing: 0.08em;
-  color: var(--theme-purple-mid);
-  margin-top: 2px;
-  opacity: 0.85;
-}
+// ── Ascension panel ───────────────────────────────────────────────────────────
+// Compact, visually subordinate panel — returns players see this; new players
+// never do. Sits below the CTAs with a subtle separator.
 
-.landing-version {
-  // M5 S1: assigned to the [version] grid row instead of position:absolute.
-  grid-area: version;
-  justify-self: end;
-  align-self: end;
-  padding-right: var(--spacing-md);
-  padding-bottom: var(--spacing-md);
-  font-size: var(--font-size-xs);
-  color: var(--theme-purple-mid);
-  opacity: 0.5;
-}
-
-// Phase H4 demoted profile button — slightly muted to communicate "secondary action"
-.landing-btn--muted {
-  opacity: 0.65;
-  &:hover { opacity: 1; }
-}
-
-// Ascension unlock cluster — shown only when maxAscension > 0 (returning players).
-// CSS Grid stepper row: [−] [label] [+] with natural column sizing.
-.ascension-selector {
+.ascension-panel {
   display: grid;
   grid-template-rows: [stepper] auto [preview] auto [mastered] auto;
   justify-items: center;
   gap: var(--spacing-xs);
-  margin-top: var(--spacing-lg);
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
   width: 100%;
+  // Faint rule separating ascension cluster from the primary CTAs
+  border-top: var(--border-width-thin) solid var(--game-gold-a25);
 
   &__row {
     display: grid;
@@ -169,7 +436,6 @@
   }
 
   &__step {
-    grid-area: auto;
     width: 2.5rem;
     height: 2.5rem;
     border-radius: var(--border-radius-md);
@@ -180,8 +446,9 @@
     font-size: var(--font-size-base);
     font-weight: 700;
     cursor: pointer;
-    transition: background var(--transition-fast) ease,
-                box-shadow var(--transition-fast) ease;
+    transition:
+      background var(--transition-fast) ease,
+      box-shadow var(--transition-fast) ease;
 
     &:hover:not(:disabled) {
       background: var(--game-gold-a25);
@@ -208,17 +475,6 @@
     letter-spacing: 0.08em;
   }
 
-  &__preview {
-    font-size: var(--font-size-xs);
-    color: var(--game-gold-a60);
-    letter-spacing: 0.05em;
-    margin: 0;
-    text-align: center;
-  }
-
-  // Cumulative stack list — shows all A1..A_selected modifiers so the
-  // player sees the full ladder of pain they're picking up, not just the
-  // topmost level.
   &__stack {
     list-style: none;
     margin: 0;
@@ -251,11 +507,10 @@
   }
 
   &__stack-name {
-    color: var(--game-gold-a80, var(--game-gold-a60));
+    color: var(--game-gold-a60);
     text-align: left;
   }
 
-  // Tiny gold pill shown when player has beaten A20.
   &__mastered {
     display: inline-block;
     padding: 0.1875rem var(--spacing-sm);
@@ -270,16 +525,13 @@
     text-transform: uppercase;
   }
 
-  // Smaller, muted "best beaten" badge — hidden behind the gold-mastered
-  // pill when A20 is cleared. Shows the player their personal record so
-  // the ladder always feels like progress they own.
   &__beaten {
     display: inline-block;
     padding: 0.1rem 0.6rem;
     border-radius: var(--border-radius-md);
     background: var(--game-gold-a08);
     border: var(--border-width-thin) solid var(--game-gold-a25);
-    color: var(--game-gold-a80, var(--game-gold-a60));
+    color: var(--game-gold-a60);
     font-family: "Orbitron", sans-serif;
     font-size: var(--font-size-2xs);
     font-weight: 600;
@@ -287,7 +539,23 @@
   }
 }
 
-// Responsive
+// ── Version badge ─────────────────────────────────────────────────────────────
+
+.landing-version {
+  grid-area: version;
+  justify-self: end;
+  align-self: end;
+  padding-right: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+  font-size: var(--font-size-xs);
+  color: var(--theme-purple-mid);
+  opacity: 0.5;
+  position: relative;
+  z-index: 1;
+}
+
+// ── Responsive ────────────────────────────────────────────────────────────────
+
 @media (max-width: 768px) {
   .landing-content {
     gap: var(--spacing-md);
@@ -295,6 +563,11 @@
 
   .landing-actions {
     margin-top: var(--spacing-lg);
+  }
+
+  .landing-backdrop__spire-wrap {
+    width: min(260px, 65vw);
+    height: min(390px, 97.5vw);
   }
 }
 
@@ -314,5 +587,68 @@
 
   .landing-btn {
     padding: 0.75rem var(--spacing-md);
+  }
+
+  .landing-backdrop__spire-wrap {
+    width: min(200px, 70vw);
+    height: min(300px, 105vw);
+    opacity: 0.65;
+  }
+}
+
+// ── Reduce-motion ─────────────────────────────────────────────────────────────
+// Both mechanisms required: @media (prefers-reduced-motion) AND body.reduce-motion.
+// Under reduce-motion:
+//   - Backdrop freezes to a static composition (never blank — still renders).
+//   - Title glow animation stops at its resting state.
+//   - Entrance reveal is instant (duration 0 — still applies, not skipped).
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-backdrop__horizon {
+    animation: none;
+    opacity: 0.85;
+  }
+
+  .star-particle {
+    animation: none;
+    opacity: 0.5;
+  }
+
+  .landing-title {
+    animation: none;
+  }
+
+  .landing-content {
+    .landing-title-block,
+    .landing-actions,
+    .ascension-panel {
+      transition-duration: 0s;
+      transition-delay: 0s;
+    }
+  }
+}
+
+body.reduce-motion {
+  .landing-backdrop__horizon {
+    animation: none;
+    opacity: 0.85;
+  }
+
+  .star-particle {
+    animation: none;
+    opacity: 0.5;
+  }
+
+  .landing-title {
+    animation: none;
+  }
+
+  .landing-content {
+    .landing-title-block,
+    .landing-actions,
+    .ascension-panel {
+      transition-duration: 0s;
+      transition-delay: 0s;
+    }
   }
 }
