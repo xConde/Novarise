@@ -360,7 +360,7 @@ describe('Ascent Mode — Integration Flow', () => {
   it('should advance to act 2 after act 1 boss defeat', fakeAsync(() => {
     runService.startNewRun();
 
-    // Simulate act 1 complete by calling advanceAct (config.actsCount=2)
+    // Simulate act 1 complete by calling advanceAct (config.actsCount=3)
     runService.advanceAct();
 
     expect(runService.runState!.actIndex).toBe(1);
@@ -370,11 +370,23 @@ describe('Ascent Mode — Integration Flow', () => {
     expect(map!.actIndex).toBe(1);
   }));
 
-  it('should set VICTORY status after act 2 boss defeat', fakeAsync(() => {
+  it('should stay IN_PROGRESS after act 2 boss defeat and advance to act 3', fakeAsync(() => {
     runService.startNewRun();
 
     runService.advanceAct(); // → act 1
-    runService.advanceAct(); // → victory (actsCount=2)
+    runService.advanceAct(); // → act 2 (not final — actsCount=3)
+
+    expect(runService.runState!.actIndex).toBe(2);
+    expect(runService.runState!.status).toBe(RunStatus.IN_PROGRESS);
+    expect(playerProfile.recordRun).not.toHaveBeenCalled();
+  }));
+
+  it('should set VICTORY status after act 3 boss defeat', fakeAsync(() => {
+    runService.startNewRun();
+
+    runService.advanceAct(); // → act 1
+    runService.advanceAct(); // → act 2
+    runService.advanceAct(); // → victory (nextAct=3 >= actsCount=3)
 
     expect(runService.runState!.status).toBe(RunStatus.VICTORY);
     expect(playerProfile.recordRun).toHaveBeenCalled();

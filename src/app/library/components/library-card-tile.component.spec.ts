@@ -2,6 +2,7 @@ import { ChangeDetectorRef } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { LibraryCardTileComponent } from './library-card-tile.component';
 import { IconComponent } from '@shared/components/icon/icon.component';
+import { DescriptionTextComponent } from '@shared/components/description-text/description-text.component';
 import {
   CardDefinition,
   CardId,
@@ -88,7 +89,7 @@ describe('LibraryCardTileComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       // LibraryCardTileComponent is now standalone — imports, not declarations.
-      imports: [LibraryCardTileComponent, IconComponent],
+      imports: [LibraryCardTileComponent, IconComponent, DescriptionTextComponent],
     }).compileComponents();
 
     fixture = TestBed.createComponent(LibraryCardTileComponent);
@@ -173,6 +174,38 @@ describe('LibraryCardTileComponent', () => {
     refresh();
     const desc = fixture.nativeElement.querySelector('.tile__description') as HTMLElement;
     expect(desc.textContent).toContain('Place a basic tower');
+  });
+
+  describe('{kw-*} token rendering', () => {
+    // Regression: tile__description previously used {{ effectiveDescription }} plain
+    // interpolation, so tokens like {kw-exhaust} rendered as raw braces in the Codex.
+    const tokenDef: CardDefinition = {
+      id: CardId.DRAW_TWO,
+      name: 'Token Card',
+      description: 'Draw 2 cards. {kw-exhaust}.',
+      type: CardType.UTILITY,
+      rarity: CardRarity.COMMON,
+      energyCost: 1,
+      upgraded: false,
+      archetype: 'neutral',
+      effect: { type: 'utility', utilityId: 'draw', value: 2 },
+    };
+
+    it('renders an icon element for a {kw-exhaust} token instead of literal text', () => {
+      component.definition = tokenDef;
+      refresh();
+      const desc = fixture.nativeElement.querySelector('.tile__description') as HTMLElement;
+      // DescriptionTextComponent renders icons as .desc-text__icon spans — confirm present.
+      const iconSpan = desc.querySelector('.desc-text__icon');
+      expect(iconSpan).toBeTruthy();
+    });
+
+    it('does NOT render the raw {kw-exhaust} token string in the description', () => {
+      component.definition = tokenDef;
+      refresh();
+      const desc = fixture.nativeElement.querySelector('.tile__description') as HTMLElement;
+      expect(desc.textContent).not.toContain('{kw-exhaust}');
+    });
   });
 
   it('applies tower accent CSS variable for tower cards', () => {

@@ -32,6 +32,8 @@ const ENEMY_TYPE_LABELS: Record<EnemyType, string> = {
   [EnemyType.GLIDER]: 'Glider',
   [EnemyType.TITAN]: 'Titan',
   [EnemyType.WYRM_ASCENDANT]: 'Wyrm Ascendant',
+  // Act 3 final boss
+  [EnemyType.NOVA_SOVEREIGN]: 'Nova Sovereign',
 };
 
 /**

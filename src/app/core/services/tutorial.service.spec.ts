@@ -50,10 +50,10 @@ describe('TutorialService', () => {
     const sub = service.getCurrentStep().subscribe(s => emitted.push(s));
 
     service.startTutorial();
-    service.advanceStep(); // WELCOME → SELECT_TOWER
-    service.advanceStep(); // SELECT_TOWER → PLACE_TOWER
-    service.advanceStep(); // PLACE_TOWER → START_WAVE
-    service.advanceStep(); // START_WAVE → UPGRADE_TOWER
+    service.advanceStep(); // WELCOME → SELECT_TOWER (Your Hand & Energy)
+    service.advanceStep(); // SELECT_TOWER → PLACE_TOWER (Play a Tower Card)
+    service.advanceStep(); // PLACE_TOWER → START_WAVE (Know What's Coming)
+    service.advanceStep(); // START_WAVE → UPGRADE_TOWER (End Your Turn)
     service.advanceStep(); // UPGRADE_TOWER → COMPLETE
 
     sub.unsubscribe();
@@ -70,7 +70,8 @@ describe('TutorialService', () => {
     const sub = service.getCurrentStep().subscribe(s => emitted.push(s));
 
     service.startTutorial();
-    // Advance through all steps: WELCOME → SELECT_TOWER → PLACE_TOWER → START_WAVE → UPGRADE_TOWER → COMPLETE → null
+    // Advance through all steps:
+    // WELCOME → SELECT_TOWER → PLACE_TOWER → START_WAVE → UPGRADE_TOWER → COMPLETE → null
     service.advanceStep();
     service.advanceStep();
     service.advanceStep();
@@ -86,11 +87,11 @@ describe('TutorialService', () => {
 
   it('after completing all steps, isTutorialComplete() returns true', () => {
     service.startTutorial();
-    service.advanceStep();
-    service.advanceStep();
-    service.advanceStep();
-    service.advanceStep();
-    service.advanceStep(); // arrives at COMPLETE
+    service.advanceStep(); // → SELECT_TOWER
+    service.advanceStep(); // → PLACE_TOWER
+    service.advanceStep(); // → START_WAVE
+    service.advanceStep(); // → UPGRADE_TOWER
+    service.advanceStep(); // → COMPLETE
     service.advanceStep(); // advances past COMPLETE → null + marks complete
 
     expect(service.isTutorialComplete()).toBeTrue();
@@ -175,7 +176,8 @@ describe('TutorialService', () => {
   it('getTip() returns correct tip for SELECT_TOWER step', () => {
     const tip: TutorialTip = service.getTip(TutorialStep.SELECT_TOWER);
     expect(tip.step).toBe(TutorialStep.SELECT_TOWER);
-    expect(tip.title).toContain('Tower');
+    // Step repurposed for card-loop tutorial: covers hand + energy, not tower selection bar
+    expect(tip.title).toContain('Hand');
   });
 
   it('getTip() returns correct tip for PLACE_TOWER step', () => {
@@ -322,10 +324,10 @@ describe('TutorialService', () => {
     /** Helper: complete the controls tutorial and record 2 games played. */
     function completeControlsTutorial(svc: TutorialService): void {
       svc.startTutorial();
-      svc.advanceStep(); // WELCOME → SELECT_TOWER
-      svc.advanceStep(); // SELECT_TOWER → PLACE_TOWER
-      svc.advanceStep(); // PLACE_TOWER → START_WAVE
-      svc.advanceStep(); // START_WAVE → UPGRADE_TOWER
+      svc.advanceStep(); // WELCOME → SELECT_TOWER (Your Hand & Energy)
+      svc.advanceStep(); // SELECT_TOWER → PLACE_TOWER (Play a Tower Card)
+      svc.advanceStep(); // PLACE_TOWER → START_WAVE (Know What's Coming)
+      svc.advanceStep(); // START_WAVE → UPGRADE_TOWER (End Your Turn)
       svc.advanceStep(); // UPGRADE_TOWER → COMPLETE
       svc.advanceStep(); // COMPLETE → null + tutorialComplete
     }
@@ -366,13 +368,13 @@ describe('TutorialService', () => {
       expect(tip.title).toBeTruthy();
     });
 
-    it('TIP_WAVE_PREVIEW has a non-empty message about checking wave preview', () => {
+    it('TIP_WAVE_PREVIEW has a non-empty message about deck piles', () => {
       const tip = service.getTip(TutorialStep.TIP_WAVE_PREVIEW);
       expect(tip.message).toBeTruthy();
       expect(tip.title).toBeTruthy();
     });
 
-    it('TIP_UPGRADE has a non-empty message about upgrading towers', () => {
+    it('TIP_UPGRADE has a non-empty message about archetypes or upgrades', () => {
       const tip = service.getTip(TutorialStep.TIP_UPGRADE);
       expect(tip.message).toBeTruthy();
       expect(tip.title).toBeTruthy();
@@ -641,10 +643,10 @@ describe('TutorialService', () => {
 
     it('completes the tutorial when dismissed on the COMPLETE step', () => {
       service.startTutorial();
-      service.advanceStep(); // WELCOME → SELECT_TOWER
-      service.advanceStep(); // SELECT_TOWER → PLACE_TOWER
-      service.advanceStep(); // PLACE_TOWER → START_WAVE
-      service.advanceStep(); // START_WAVE → UPGRADE_TOWER
+      service.advanceStep(); // WELCOME → SELECT_TOWER (Your Hand & Energy)
+      service.advanceStep(); // SELECT_TOWER → PLACE_TOWER (Play a Tower Card)
+      service.advanceStep(); // PLACE_TOWER → START_WAVE (Know What's Coming)
+      service.advanceStep(); // START_WAVE → UPGRADE_TOWER (End Your Turn)
       service.advanceStep(); // UPGRADE_TOWER → COMPLETE
 
       service.dismissOnPlayerAction(); // COMPLETE → null + marks done

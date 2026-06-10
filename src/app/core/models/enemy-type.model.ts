@@ -16,4 +16,6 @@ export enum EnemyType {
   TITAN = 'TITAN',
   // Sprint 39 — Highground archetype: boss counter that is fully immune to elevation damage bonuses
   WYRM_ASCENDANT = 'WYRM_ASCENDANT',
+  // Act 3 final boss — the Nova Sovereign
+  NOVA_SOVEREIGN = 'NOVA_SOVEREIGN',
 }

@@ -4,11 +4,12 @@ import { ENEMY_INFO } from './enemy-info.model';
 describe('ENEMY_INFO', () => {
   const allTypes = Object.values(EnemyType);
 
-  it('should have entries for all 14 EnemyType values', () => {
+  it('should have entries for all 15 EnemyType values', () => {
     // 9 original + MINER (sprint 21) + UNSHAKEABLE (sprint 22) + VEINSEEKER (sprint 23) = 12
     // + GLIDER (sprint 37) + TITAN (sprint 38) = 13
-    // + WYRM_ASCENDANT (sprint 39) = 14.
-    expect(allTypes.length).toBe(14);
+    // + WYRM_ASCENDANT (sprint 39) = 14
+    // + NOVA_SOVEREIGN (Act 3 final boss) = 15.
+    expect(allTypes.length).toBe(15);
     for (const type of allTypes) {
       expect(ENEMY_INFO[type]).withContext(`Missing entry for ${type}`).toBeDefined();
     }
@@ -113,10 +114,10 @@ describe('ENEMY_INFO', () => {
     }
   });
 
-  it('Object.values(ENEMY_INFO) should return 14 entries in a stable order', () => {
-    // Sprint 39: WYRM_ASCENDANT added → 14 entries total.
+  it('Object.values(ENEMY_INFO) should return 15 entries in a stable order', () => {
+    // Sprint 39: WYRM_ASCENDANT → 14. Act 3: NOVA_SOVEREIGN → 15 entries total.
     const infoList = Object.values(ENEMY_INFO);
-    expect(infoList.length).toBe(14);
+    expect(infoList.length).toBe(15);
     for (const info of infoList) {
       // Each item must satisfy the EnemyInfo interface shape
       expect(info.type).toBeDefined();

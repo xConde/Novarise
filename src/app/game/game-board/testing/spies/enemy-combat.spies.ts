@@ -16,7 +16,7 @@ export function createEnemyServiceSpy(
   const methods: (keyof EnemyService)[] = [
     'getEnemies', 'damageEnemy', 'damageStrongestEnemy',
     'spawnEnemy', 'removeEnemy', 'startHitFlash', 'stepEnemiesOneTurn',
-    'buildOccupiedSpawnerSet', 'applyDetour',
+    'buildOccupiedSpawnerSet', 'applyDetour', 'tickNovaSovereignEffects',
   ];
   const spy = jasmine.createSpyObj<EnemyService>('EnemyService', methods);
   spy.getEnemies.and.returnValue(enemyMap);

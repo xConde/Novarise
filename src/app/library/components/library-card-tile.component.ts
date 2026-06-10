@@ -15,6 +15,7 @@ import {
 import { TOWER_CONFIGS, TowerType } from '../../game/game-board/models/tower.model';
 import { ARCHETYPE_DISPLAY } from '../../run/constants/archetype.constants';
 import { IconComponent } from '@shared/components/icon/icon.component';
+import { DescriptionTextComponent } from '@shared/components/description-text/description-text.component';
 import { TowerThumbnailService } from '@core/services/tower-thumbnail.service';
 
 /**
@@ -32,7 +33,7 @@ import { TowerThumbnailService } from '@core/services/tower-thumbnail.service';
 @Component({
   selector: 'app-library-card-tile',
   standalone: true,
-  imports: [CommonModule, IconComponent],
+  imports: [CommonModule, IconComponent, DescriptionTextComponent],
   templateUrl: './library-card-tile.component.html',
   styleUrls: ['./library-card-tile.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,

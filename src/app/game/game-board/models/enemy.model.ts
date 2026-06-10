@@ -42,6 +42,10 @@ export interface Enemy {
   spawnedOnTurn?: number;
   /** True for UNSHAKEABLE elite — skipped by applyDetour, cannot be rerouted. */
   immuneToDetour?: boolean;
+  /** True once NOVA_SOVEREIGN crosses the 50% HP threshold (first time only). */
+  isEnraged?: boolean;
+  /** Tiles-per-turn override applied when NOVA_SOVEREIGN enrages. */
+  enragedTilesPerTurn?: number;
 }
 
 export interface EnemyStats {
@@ -70,6 +74,8 @@ export interface EnemyStats {
    * Default undefined/false for all other enemies.
    */
   halvesElevationDamageBonuses?: boolean;
+  /** Shield HP regenerated per turn — NOVA_SOVEREIGN Aegis mechanic. */
+  shieldRegenPerTurn?: number;
   /**
    * Sprint 39 WYRM_ASCENDANT boss counter — when true, elevation damage bonuses
    * (VANTAGE_POINT and KING_OF_THE_HILL multipliers) are stripped entirely in
@@ -165,6 +171,44 @@ export const WYRM_ASCENDANT_STATS = {
   size: 0.70,
   leakDamage: 6,
 } as const;
+
+/** Named constants for NOVA_SOVEREIGN final boss stats — Act 3 finale. */
+export const NOVA_SOVEREIGN_STATS = {
+  health: 2800,
+  /** Cosmetic speed hint — movement driven by tilesPerTurn. */
+  speed: 0.4,
+  tilesPerTurn: 1,
+  value: 200,
+  /**
+   * Radiant gold — visually distinct from all prior boss colors.
+   * Reads as apex/final threat; different from BOSS magenta, VEINSEEKER crimson,
+   * WYRM_ASCENDANT violet, and UNSHAKEABLE stone.
+   */
+  color: 0xf0c040,
+  /** Larger than WYRM_ASCENDANT (0.70) — the largest unit on the board. */
+  size: 0.85,
+  leakDamage: 10,
+} as const;
+
+/** Starting shield HP for NOVA_SOVEREIGN — large Aegis layer. */
+export const NOVA_SOVEREIGN_MAX_SHIELD = 400;
+
+/** Shield HP regenerated per turn while NOVA_SOVEREIGN is alive. */
+export const NOVA_SOVEREIGN_SHIELD_REGEN_PER_TURN = 80;
+
+/** HP fraction at which NOVA_SOVEREIGN enrages (first time only). */
+export const NOVA_SOVEREIGN_ENRAGE_HP_FRACTION = 0.5;
+
+/** Tiles-per-turn added when NOVA_SOVEREIGN enrages. */
+export const NOVA_SOVEREIGN_ENRAGE_TILES_BONUS = 1;
+
+/**
+ * SLOW resistance factor for NOVA_SOVEREIGN: SLOW tile reduction is halved
+ * (rounded down) before applying. A reduction of 1 becomes 0 for a 1-tile
+ * mover, but this is safe — the enemy still benefits from SLOW speed mutation.
+ * Factor is applied in EnemyService.stepEnemiesOneTurn.
+ */
+export const NOVA_SOVEREIGN_SLOW_RESISTANCE_FACTOR = 0.5;
 
 /** Named constants for TITAN elite stats — sprint 38 Highground archetype. */
 export const TITAN_STATS = {
@@ -314,6 +358,18 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     size: WYRM_ASCENDANT_STATS.size,
     leakDamage: WYRM_ASCENDANT_STATS.leakDamage,
     immuneToElevationDamageBonuses: true,
+  },
+  // Act 3 final boss — Aegis shield regen, slow resistance, enrage at 50% HP
+  [EnemyType.NOVA_SOVEREIGN]: {
+    health: NOVA_SOVEREIGN_STATS.health,
+    speed: NOVA_SOVEREIGN_STATS.speed,
+    tilesPerTurn: NOVA_SOVEREIGN_STATS.tilesPerTurn,
+    value: NOVA_SOVEREIGN_STATS.value,
+    color: NOVA_SOVEREIGN_STATS.color,
+    size: NOVA_SOVEREIGN_STATS.size,
+    leakDamage: NOVA_SOVEREIGN_STATS.leakDamage,
+    maxShield: NOVA_SOVEREIGN_MAX_SHIELD,
+    shieldRegenPerTurn: NOVA_SOVEREIGN_SHIELD_REGEN_PER_TURN,
   },
 };
 

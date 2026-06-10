@@ -4,6 +4,8 @@ import { Subscription } from 'rxjs';
 
 import { RunService } from './services/run.service';
 import { EncounterCheckpointService } from './services/encounter-checkpoint.service';
+import { RunPersistenceService } from './services/run-persistence.service';
+import { MusicService } from '../core/services/music.service';
 import { RunState, RunStatus } from './models/run-state.model';
 import { MapNode, NodeMap, NodeType, getSelectableNodes } from './models/node-map.model';
 import { RelicDefinition, RELIC_DEFINITIONS, RelicId } from './models/relic.model';
@@ -40,7 +42,17 @@ export class RunComponent implements OnInit, OnDestroy {
   activeRelics: RelicDefinition[] = [];
 
   /** Current view mode. */
-  viewMode: 'start' | 'map' | 'reward' | 'shop' | 'rest' | 'event' | 'act-transition' | 'summary' = 'start';
+  viewMode: 'start' | 'map' | 'reward' | 'shop' | 'rest' | 'event' | 'act-transition' | 'epilogue' | 'summary' = 'start';
+
+  /**
+   * The ascension level that was just unlocked by this run's victory.
+   * Set when transitioning to 'epilogue'. 0 when no new level was unlocked
+   * (the player's persisted max already exceeded this run's level + 1).
+   */
+  epilogueUnlockedAscension = 0;
+
+  /** Ascension high-water mark captured at init, before any advanceAct(). */
+  private priorMaxAscension = 0;
 
   /** Boss preset name for the act-transition screen. */
   actTransitionBossName = '';
@@ -74,9 +86,17 @@ export class RunComponent implements OnInit, OnDestroy {
     private runService: RunService,
     private router: Router,
     private encounterCheckpointService: EncounterCheckpointService,
+    private musicService: MusicService,
+    private runPersistence: RunPersistenceService,
   ) {}
 
   ngOnInit(): void {
+    this.musicService.playTheme('hub');
+    // Snapshot the pre-run ascension high-water mark so showEpilogue() can
+    // tell whether THIS victory unlocked a new level. advanceAct() updates
+    // the persisted max before showEpilogue() runs, so reading it later
+    // would always equal the new value.
+    this.priorMaxAscension = this.runPersistence.getMaxAscension();
     this.subscriptions.add(
       this.runService.runState$.subscribe(state => {
         this.runState = state;
@@ -203,7 +223,7 @@ export class RunComponent implements OnInit, OnDestroy {
     }
 
     if (this.runState?.status === RunStatus.VICTORY) {
-      this.viewMode = 'summary';
+      this.showEpilogue();
     } else {
       this.viewMode = 'map';
     }
@@ -213,10 +233,26 @@ export class RunComponent implements OnInit, OnDestroy {
   onActTransitionContinued(): void {
     this.runService.advanceAct();
     if (this.runState?.status === RunStatus.VICTORY) {
-      this.viewMode = 'summary';
+      this.showEpilogue();
     } else {
       this.viewMode = 'map';
     }
+  }
+
+  /** Transition to the victory epilogue screen. Stops music for dramatic silence. */
+  showEpilogue(): void {
+    // advanceAct() calls setMaxAscension(ascensionLevel + 1) — a high-water
+    // mark. Only announce an unlock when this run actually raised it; a
+    // victory at an ascension below the player's existing max unlocks nothing.
+    const candidate = (this.runState?.ascensionLevel ?? 0) + 1;
+    this.epilogueUnlockedAscension = candidate > this.priorMaxAscension ? candidate : 0;
+    this.musicService.stopMusic(2.0);
+    this.viewMode = 'epilogue';
+  }
+
+  /** Continue from epilogue to run summary. */
+  onEpilogueContinued(): void {
+    this.viewMode = 'summary';
   }
 
   /** Rest: heal lives. */

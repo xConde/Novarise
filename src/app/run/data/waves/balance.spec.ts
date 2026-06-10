@@ -494,10 +494,12 @@ describe('Balance — Enemy Stats', () => {
     // Boss HP is 1000 — 10× a Basic (100 HP) and 3.3× a Heavy (300 HP).
     // This 10× ratio between Boss and Basic is a deliberate design decision
     // that makes Boss waves feel categorically different from standard waves.
-    // Boss-tier variants (VEINSEEKER, UNSHAKEABLE, WYRM_ASCENDANT) are excluded: they are
-    // co-equal boss-tier units intentionally matching or exceeding BOSS stats.
+    // Boss-tier variants (VEINSEEKER, UNSHAKEABLE, WYRM_ASCENDANT, NOVA_SOVEREIGN)
+    // are excluded: they are co-equal or apex boss-tier units intentionally
+    // matching or exceeding BOSS stats.
     // WYRM_ASCENDANT (sprint 39): 1400 HP boss counter — exceeds BOSS baseline.
-    const BOSS_TIER_VARIANTS: string[] = [EnemyType.VEINSEEKER, EnemyType.UNSHAKEABLE, EnemyType.WYRM_ASCENDANT];
+    // NOVA_SOVEREIGN (Act 3 final boss): 2800 HP — the apex unit by design.
+    const BOSS_TIER_VARIANTS: string[] = [EnemyType.VEINSEEKER, EnemyType.UNSHAKEABLE, EnemyType.WYRM_ASCENDANT, EnemyType.NOVA_SOVEREIGN];
     const bossHp = ENEMY_STATS[EnemyType.BOSS].health;
     for (const [type, stats] of Object.entries(ENEMY_STATS)) {
       if (type !== EnemyType.BOSS && !BOSS_TIER_VARIANTS.includes(type as EnemyType)) {
@@ -536,9 +538,11 @@ describe('Balance — Enemy Stats', () => {
     // Boss (0.5 t/s) moves slowly enough that a well-placed defense can
     // whittle it down over a long path, but its 1000 HP means you still
     // need sustained fire. The tradeoff makes Boss feel like an attrition fight.
+    // NOVA_SOVEREIGN (0.4 t/s) is excluded — the apex boss is intentionally
+    // even slower (cosmetic speed; movement is tilesPerTurn-driven).
     const bossSpeed = ENEMY_STATS[EnemyType.BOSS].speed;
     for (const [type, stats] of Object.entries(ENEMY_STATS)) {
-      if (type !== EnemyType.BOSS) {
+      if (type !== EnemyType.BOSS && type !== EnemyType.NOVA_SOVEREIGN) {
         expect(bossSpeed)
           .withContext(`Boss speed (${bossSpeed}) should be <= ${type} speed (${stats.speed})`)
           .toBeLessThanOrEqual(stats.speed);

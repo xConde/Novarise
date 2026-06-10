@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { SettingsService } from '../core/services/settings.service';
+import { MusicService } from '../core/services/music.service';
 import { DifficultyLevel } from '../game/game-board/models/game-state.model';
 
 @Component({
@@ -9,6 +10,8 @@ import { DifficultyLevel } from '../game/game-board/models/game-state.model';
 })
 export class SettingsComponent implements OnInit {
   audioMuted = false;
+  musicEnabled = true;
+  musicVolume = 0.4;
   currentDifficulty: DifficultyLevel = DifficultyLevel.NORMAL;
   showFps = false;
   reduceMotion = false;
@@ -22,6 +25,7 @@ export class SettingsComponent implements OnInit {
 
   constructor(
     private settingsService: SettingsService,
+    private musicService: MusicService,
   ) {}
 
   ngOnInit(): void {
@@ -31,6 +35,8 @@ export class SettingsComponent implements OnInit {
   private loadSettings(): void {
     const s = this.settingsService.get();
     this.audioMuted = s.audioMuted;
+    this.musicEnabled = s.musicEnabled;
+    this.musicVolume = s.musicVolume;
     this.currentDifficulty = s.difficulty;
     this.showFps = s.showFps;
     this.reduceMotion = s.reduceMotion;
@@ -42,6 +48,18 @@ export class SettingsComponent implements OnInit {
   toggleAudio(): void {
     this.audioMuted = !this.audioMuted;
     this.settingsService.update({ audioMuted: this.audioMuted });
+  }
+
+  toggleMusic(): void {
+    this.musicEnabled = !this.musicEnabled;
+    this.settingsService.update({ musicEnabled: this.musicEnabled });
+    this.musicService.setMusicEnabled(this.musicEnabled);
+  }
+
+  setMusicVolume(volume: number): void {
+    this.musicVolume = volume;
+    this.settingsService.update({ musicVolume: volume });
+    this.musicService.setMusicVolume(volume);
   }
 
   setDifficulty(difficulty: DifficultyLevel): void {

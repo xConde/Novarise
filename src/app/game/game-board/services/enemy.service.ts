@@ -1,7 +1,7 @@
 import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { Subject, Observable } from 'rxjs';
-import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, DamageResult, GridNode, MINER_DIG_INTERVAL_TURNS, VEINSEEKER_SPEED_BOOST_WINDOW, VEINSEEKER_BOOSTED_TILES_PER_TURN } from '../models/enemy.model';
+import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, DamageResult, GridNode, MINER_DIG_INTERVAL_TURNS, VEINSEEKER_SPEED_BOOST_WINDOW, VEINSEEKER_BOOSTED_TILES_PER_TURN, NOVA_SOVEREIGN_SHIELD_REGEN_PER_TURN, NOVA_SOVEREIGN_ENRAGE_HP_FRACTION, NOVA_SOVEREIGN_ENRAGE_TILES_BONUS, NOVA_SOVEREIGN_SLOW_RESISTANCE_FACTOR } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
@@ -377,13 +377,23 @@ export class EnemyService {
       ) {
         baseTiles = VEINSEEKER_BOOSTED_TILES_PER_TURN;
       }
-      const slowReduction = slowReductionFor(enemy.id);
+      // NOVA_SOVEREIGN enrage: use the elevated tilesPerTurn if enraged
+      if (enemy.type === EnemyType.NOVA_SOVEREIGN && enemy.isEnraged && enemy.enragedTilesPerTurn !== undefined) {
+        baseTiles = enemy.enragedTilesPerTurn;
+      }
+      // NOVA_SOVEREIGN slow resistance: halve the slow tile reduction (round down).
+      // A reduction of 1 → 0 for a 1-tile mover, but the cosmetic speed debuff
+      // from SLOW.apply still fires — only the tile movement is partially resisted.
+      let effectiveSlowReduction = slowReductionFor(enemy.id);
+      if (enemy.type === EnemyType.NOVA_SOVEREIGN && effectiveSlowReduction > 0) {
+        effectiveSlowReduction = Math.floor(effectiveSlowReduction * NOVA_SOVEREIGN_SLOW_RESISTANCE_FACTOR);
+      }
       const enemySpeedReduction = enemySpeedSlow > 0 ? Math.floor(baseTiles * enemySpeedSlow) : 0;
       // Floor at 1 tile/turn — SLOW aura re-applies each turn while enemy is in
       // range, so a 0-floor would permanently freeze any 1-tile mover (BASIC,
       // HEAVY, BOSS, SHIELDED, FLYING). SLOW tower is still effective against
       // 2-tile movers (FAST, SWIFT, SWARM) which drop from 2→1.
-      const tilesToMove = Math.max(1, baseTiles - slowReduction - enemySpeedReduction);
+      const tilesToMove = Math.max(1, baseTiles - effectiveSlowReduction - enemySpeedReduction);
 
       let stepsRemaining = tilesToMove;
       while (stepsRemaining > 0 && enemy.pathIndex < enemy.path.length - 1) {
@@ -723,6 +733,35 @@ export class EnemyService {
         scene,
         'boss',
       );
+    }
+  }
+
+  /**
+   * Tick NOVA_SOVEREIGN-specific per-turn effects:
+   * - Aegis shield regeneration (regens up to maxShield each turn while alive)
+   * - Enrage trigger (first time HP < 50% of max: +1 tilesPerTurn permanently)
+   *
+   * Called once per resolution phase from CombatLoopService after tower fire
+   * and before status-effect ticks, so regen does not nullify turn damage.
+   */
+  tickNovaSovereignEffects(): void {
+    for (const enemy of this.enemies.values()) {
+      if (enemy.type !== EnemyType.NOVA_SOVEREIGN || enemy.health <= 0 || enemy.dying) continue;
+
+      // Aegis shield regeneration — replenish up to maxShield
+      const maxShield = ENEMY_STATS[EnemyType.NOVA_SOVEREIGN].maxShield;
+      if (maxShield !== undefined && enemy.shield !== undefined && enemy.shield < maxShield) {
+        enemy.shield = Math.min(maxShield, enemy.shield + NOVA_SOVEREIGN_SHIELD_REGEN_PER_TURN);
+      }
+
+      // Enrage: first time HP drops below 50% of max HP
+      if (
+        !enemy.isEnraged &&
+        enemy.health < enemy.maxHealth * NOVA_SOVEREIGN_ENRAGE_HP_FRACTION
+      ) {
+        enemy.isEnraged = true;
+        enemy.enragedTilesPerTurn = ENEMY_STATS[EnemyType.NOVA_SOVEREIGN].tilesPerTurn + NOVA_SOVEREIGN_ENRAGE_TILES_BONUS;
+      }
     }
   }
 
@@ -1097,6 +1136,8 @@ export class EnemyService {
       ...(e.shieldBreakTimer !== undefined && { shieldBreakTimer: e.shieldBreakTimer }),
       ...(e.spawnedOnTurn !== undefined && { spawnedOnTurn: e.spawnedOnTurn }),
       ...(e.immuneToDetour !== undefined && { immuneToDetour: e.immuneToDetour }),
+      ...(e.isEnraged !== undefined && { isEnraged: e.isEnraged }),
+      ...(e.enragedTilesPerTurn !== undefined && { enragedTilesPerTurn: e.enragedTilesPerTurn }),
     }));
     return { enemies, enemyCounter: this.enemyCounter };
   }

@@ -399,3 +399,246 @@ export const ACT2_BOSS_PRESETS: BossPreset[] = [
     ],
   },
 ];
+
+// ── Act 3 Boss Presets (8 waves each) ────────────────────────────
+// All rewards scaled ~1.3× act-2. Final wave is always solo NOVA_SOVEREIGN.
+
+export const ACT3_BOSS_PRESETS: BossPreset[] = [
+  /**
+   * Vanguard Convergence — all-elites pressure.
+   *
+   * Heavy archetype threats (TITAN) and UNSHAKEABLE elites force towers to
+   * punch through damage-resistant armor before the Sovereign arrives.
+   * No light chaff — every unit is high-value and hard to drop.
+   */
+  {
+    id: 'vanguard_convergence',
+    name: 'Vanguard Convergence',
+    description: 'An armored column of elites that refuses to break.',
+    waves: [
+      // Wave 1: Armored advance opens the march
+      {
+        entries: [
+          { type: EnemyType.HEAVY, count: 10, spawnInterval: 0.7 },
+          { type: EnemyType.SHIELDED, count: 8, spawnInterval: 0.8 },
+        ],
+        reward: 55,
+      },
+      // Wave 2: Titan escort with heavy screen
+      {
+        entries: [
+          { type: EnemyType.TITAN, count: 3, spawnInterval: 1.2 },
+          { type: EnemyType.HEAVY, count: 10, spawnInterval: 0.6 },
+        ],
+        reward: 65,
+      },
+      // Wave 3: UNSHAKEABLE walls arrive
+      {
+        entries: [
+          { type: EnemyType.UNSHAKEABLE, count: 4, spawnInterval: 1.5 },
+          { type: EnemyType.SHIELDED, count: 10, spawnInterval: 0.5 },
+        ],
+        reward: 75,
+      },
+      // Wave 4: Flanking fast units exploit the armored distraction
+      {
+        entries: [
+          { type: EnemyType.FAST, count: 16, spawnInterval: 0.4 },
+          { type: EnemyType.SWIFT, count: 10, spawnInterval: 0.4 },
+          { type: EnemyType.HEAVY, count: 8, spawnInterval: 0.6 },
+        ],
+        reward: 80,
+      },
+      // Wave 5: Maximum armored pressure — titans and unshakeable together
+      {
+        entries: [
+          { type: EnemyType.TITAN, count: 5, spawnInterval: 1.0 },
+          { type: EnemyType.UNSHAKEABLE, count: 5, spawnInterval: 1.2 },
+          { type: EnemyType.HEAVY, count: 10, spawnInterval: 0.5 },
+        ],
+        reward: 90,
+      },
+      // Wave 6: Shield wall collapses — full swarm breakthrough
+      {
+        entries: [
+          { type: EnemyType.SHIELDED, count: 14, spawnInterval: 0.5 },
+          { type: EnemyType.HEAVY, count: 14, spawnInterval: 0.5 },
+          { type: EnemyType.SWARM, count: 12, spawnInterval: 0.4 },
+        ],
+        reward: 100,
+      },
+      // Wave 7: Titan vanguard — final escort before the Sovereign
+      {
+        entries: [
+          { type: EnemyType.TITAN, count: 6, spawnInterval: 0.9 },
+          { type: EnemyType.UNSHAKEABLE, count: 6, spawnInterval: 1.1 },
+        ],
+        reward: 115,
+      },
+      // Wave 8: The Nova Sovereign arrives
+      {
+        entries: [{ type: EnemyType.NOVA_SOVEREIGN, count: 1, spawnInterval: 0 }],
+        reward: 260,
+      },
+    ],
+  },
+
+  /**
+   * Celestial Deluge — air and swarm overwhelm.
+   *
+   * Wave after wave of flying units and fast-splitting swarms create
+   * target-saturation before the Sovereign descends.
+   */
+  {
+    id: 'celestial_deluge',
+    name: 'Celestial Deluge',
+    description: 'The skies open — air superiority and swarming numbers overwhelm all defenses.',
+    waves: [
+      // Wave 1: Flying vanguard probes for gaps
+      {
+        entries: [
+          { type: EnemyType.FLYING, count: 10, spawnInterval: 0.6 },
+          { type: EnemyType.FAST, count: 10, spawnInterval: 0.5 },
+        ],
+        reward: 52,
+      },
+      // Wave 2: Swarm tide erupts
+      {
+        entries: [
+          { type: EnemyType.SWARM, count: 16, spawnInterval: 0.4 },
+          { type: EnemyType.FLYING, count: 8, spawnInterval: 0.5 },
+        ],
+        reward: 62,
+      },
+      // Wave 3: GLIDER wing joins — elevation immune air threat
+      {
+        entries: [
+          { type: EnemyType.FLYING, count: 14, spawnInterval: 0.4 },
+          { type: EnemyType.SWARM, count: 14, spawnInterval: 0.4 },
+          { type: EnemyType.SWIFT, count: 8, spawnInterval: 0.5 },
+        ],
+        reward: 72,
+      },
+      // Wave 4: Full air and ground simultaneous strike
+      {
+        entries: [
+          { type: EnemyType.FLYING, count: 16, spawnInterval: 0.4 },
+          { type: EnemyType.FAST, count: 16, spawnInterval: 0.4 },
+          { type: EnemyType.SWARM, count: 10, spawnInterval: 0.4 },
+        ],
+        reward: 80,
+      },
+      // Wave 5: Aerial armada — maximum sky coverage
+      {
+        entries: [
+          { type: EnemyType.FLYING, count: 20, spawnInterval: 0.4 },
+          { type: EnemyType.SWARM, count: 18, spawnInterval: 0.4 },
+        ],
+        reward: 90,
+      },
+      // Wave 6: Combined arms climax — everything in the sky and on the ground
+      {
+        entries: [
+          { type: EnemyType.FLYING, count: 18, spawnInterval: 0.4 },
+          { type: EnemyType.SWIFT, count: 14, spawnInterval: 0.4 },
+          { type: EnemyType.SWARM, count: 16, spawnInterval: 0.4 },
+          { type: EnemyType.FAST, count: 12, spawnInterval: 0.4 },
+        ],
+        reward: 104,
+      },
+      // Wave 7: Final deluge — swarm saturation + aerial escorts
+      {
+        entries: [
+          { type: EnemyType.SWARM, count: 22, spawnInterval: 0.4 },
+          { type: EnemyType.FLYING, count: 18, spawnInterval: 0.4 },
+        ],
+        reward: 118,
+      },
+      // Wave 8: The Nova Sovereign descends
+      {
+        entries: [{ type: EnemyType.NOVA_SOVEREIGN, count: 1, spawnInterval: 0 }],
+        reward: 260,
+      },
+    ],
+  },
+
+  /**
+   * Ironclad March — armored death-march.
+   *
+   * A relentless, methodical advance of shielded heavies with fast
+   * breakthrough units. No flying evasion — raw frontal pressure.
+   * Slow-resistant TITAN escorts the Sovereign.
+   */
+  {
+    id: 'ironclad_march',
+    name: 'Ironclad March',
+    description: 'Armored columns backed by shielded walls — methodical, relentless, unstoppable.',
+    waves: [
+      // Wave 1: Shielded line advances
+      {
+        entries: [
+          { type: EnemyType.SHIELDED, count: 10, spawnInterval: 0.8 },
+          { type: EnemyType.HEAVY, count: 8, spawnInterval: 0.7 },
+        ],
+        reward: 52,
+      },
+      // Wave 2: Fast flankers exploit the armored distraction
+      {
+        entries: [
+          { type: EnemyType.FAST, count: 18, spawnInterval: 0.4 },
+          { type: EnemyType.SWIFT, count: 12, spawnInterval: 0.4 },
+        ],
+        reward: 60,
+      },
+      // Wave 3: Double-heavy iron press
+      {
+        entries: [
+          { type: EnemyType.HEAVY, count: 14, spawnInterval: 0.5 },
+          { type: EnemyType.SHIELDED, count: 12, spawnInterval: 0.6 },
+        ],
+        reward: 72,
+      },
+      // Wave 4: Titan vanguard leads the iron tide
+      {
+        entries: [
+          { type: EnemyType.TITAN, count: 4, spawnInterval: 1.1 },
+          { type: EnemyType.HEAVY, count: 14, spawnInterval: 0.5 },
+          { type: EnemyType.SHIELDED, count: 10, spawnInterval: 0.6 },
+        ],
+        reward: 82,
+      },
+      // Wave 5: Full march — every armored unit type deployed
+      {
+        entries: [
+          { type: EnemyType.SHIELDED, count: 16, spawnInterval: 0.5 },
+          { type: EnemyType.HEAVY, count: 16, spawnInterval: 0.5 },
+          { type: EnemyType.FAST, count: 12, spawnInterval: 0.4 },
+        ],
+        reward: 92,
+      },
+      // Wave 6: UNSHAKEABLE walls punctuate the march
+      {
+        entries: [
+          { type: EnemyType.UNSHAKEABLE, count: 6, spawnInterval: 1.2 },
+          { type: EnemyType.TITAN, count: 5, spawnInterval: 1.0 },
+          { type: EnemyType.SHIELDED, count: 12, spawnInterval: 0.5 },
+        ],
+        reward: 104,
+      },
+      // Wave 7: Final ironclad push — maximum frontal pressure
+      {
+        entries: [
+          { type: EnemyType.HEAVY, count: 18, spawnInterval: 0.4 },
+          { type: EnemyType.SHIELDED, count: 16, spawnInterval: 0.5 },
+          { type: EnemyType.TITAN, count: 6, spawnInterval: 0.9 },
+        ],
+        reward: 118,
+      },
+      // Wave 8: The Nova Sovereign leads the final march
+      {
+        entries: [{ type: EnemyType.NOVA_SOVEREIGN, count: 1, spawnInterval: 0 }],
+        reward: 260,
+      },
+    ],
+  },
+];

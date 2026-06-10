@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { DifficultyLevel } from '../../game/game-board/models/game-state.model';
 import { StorageService } from './storage.service';
 import { GameSettings } from '../models/settings.model';
+import { DEFAULT_MUSIC_VOLUME } from '../constants/music.constants';
 
 export { GameSettings } from '../models/settings.model';
 
@@ -9,6 +10,8 @@ const STORAGE_KEY = 'novarise-settings';
 
 const DEFAULT_SETTINGS: GameSettings = {
   audioMuted: false,
+  musicEnabled: true,
+  musicVolume: DEFAULT_MUSIC_VOLUME,
   difficulty: DifficultyLevel.NORMAL,
   showFps: false,
   reduceMotion: false,

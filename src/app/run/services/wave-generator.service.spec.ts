@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { WaveGeneratorService } from './wave-generator.service';
 import { EnemyType } from '../../game/game-board/models/enemy.model';
 import { ENCOUNTER_CONFIG } from '../constants/run.constants';
-import { ACT1_BOSS_PRESETS, ACT2_BOSS_PRESETS } from '../constants/boss-presets';
+import { ACT1_BOSS_PRESETS, ACT2_BOSS_PRESETS, ACT3_BOSS_PRESETS } from '../constants/boss-presets';
 
 describe('WaveGeneratorService', () => {
   let service: WaveGeneratorService;
@@ -219,6 +219,107 @@ describe('WaveGeneratorService', () => {
     it('should return a preset with a non-empty name', () => {
       const preset = service.getBossPreset(0, 42);
       expect(preset.name.length).toBeGreaterThan(0);
+    });
+
+    it('should return an act 3 preset for actIndex=2', () => {
+      const preset = service.getBossPreset(2, 42);
+      expect(ACT3_BOSS_PRESETS.some(p => p.id === preset.id)).toBeTrue();
+    });
+
+    it('act 3 preset id should be one of the three expected ids', () => {
+      const validIds = new Set(['vanguard_convergence', 'celestial_deluge', 'ironclad_march']);
+      const preset = service.getBossPreset(2, 42);
+      expect(validIds.has(preset.id)).withContext(`unexpected id "${preset.id}"`).toBeTrue();
+    });
+
+    it('act 3 getBossPreset() is deterministic for the same seed', () => {
+      const preset1 = service.getBossPreset(2, 77);
+      const preset2 = service.getBossPreset(2, 77);
+      expect(preset1.id).toBe(preset2.id);
+    });
+  });
+
+  // ── Act 3 ──────────────────────────────────────────────────
+
+  describe('Act 3', () => {
+    it('each ACT3_BOSS_PRESETS entry has exactly 8 waves', () => {
+      for (const preset of ACT3_BOSS_PRESETS) {
+        expect(preset.waves.length)
+          .withContext(`preset "${preset.id}" should have 8 waves`)
+          .toBe(8);
+      }
+    });
+
+    it('each ACT3_BOSS_PRESETS entry last wave has exactly 1 NOVA_SOVEREIGN entry', () => {
+      for (const preset of ACT3_BOSS_PRESETS) {
+        const finalWave = preset.waves[preset.waves.length - 1];
+        const sovereignEntries = finalWave.entries!.filter(e => e.type === EnemyType.NOVA_SOVEREIGN);
+        expect(sovereignEntries.length)
+          .withContext(`preset "${preset.id}" final wave sovereign entry count`)
+          .toBe(1);
+        expect(sovereignEntries[0].count)
+          .withContext(`preset "${preset.id}" NOVA_SOVEREIGN count`)
+          .toBe(1);
+      }
+    });
+
+    it('generateCombatWaves() for actIndex=2 produces strictly more enemies than actIndex=1 (same row and seed)', () => {
+      const row = 4;
+      const seed = 42;
+      const act2Waves = service.generateCombatWaves(row, 1, seed);
+      const act3Waves = service.generateCombatWaves(row, 2, seed);
+      const act2Total = act2Waves.reduce((s, w) => s + w.entries!.reduce((es, e) => es + e.count, 0), 0);
+      const act3Total = act3Waves.reduce((s, w) => s + w.entries!.reduce((es, e) => es + e.count, 0), 0);
+      expect(act3Total).toBeGreaterThan(act2Total);
+    });
+
+    it('generateCombatWaves() for actIndex=2, row<5 does not include TITAN', () => {
+      // ACT3_BASE_POOL has no TITAN; TITAN only appears at row >= ACT3_HEAVY_MIN_ROW (5)
+      for (let seed = 0; seed < 5; seed++) {
+        const waves = service.generateCombatWaves(4, 2, seed * 100 + 7);
+        waves.forEach(w => {
+          w.entries!.forEach(e => {
+            expect(e.type)
+              .withContext(`row 4 act 3 seed ${seed} should not contain TITAN`)
+              .not.toBe(EnemyType.TITAN);
+          });
+        });
+      }
+    });
+
+    it('generateCombatWaves() for actIndex=2, row>=5 may include TITAN', () => {
+      // Run many seeds until at least one produces TITAN in the heavy pool
+      let foundTitan = false;
+      for (let seed = 0; seed < 200; seed++) {
+        const waves = service.generateCombatWaves(5, 2, seed * 31 + 3);
+        for (const w of waves) {
+          if (w.entries!.some(e => e.type === EnemyType.TITAN)) {
+            foundTitan = true;
+            break;
+          }
+        }
+        if (foundTitan) break;
+      }
+      expect(foundTitan).withContext('TITAN should appear in act 3 row 5+ within 200 seeds').toBeTrue();
+    });
+
+    it('generateBossWaves() for actIndex=2 returns 8 waves', () => {
+      const waves = service.generateBossWaves(2, 42);
+      expect(waves.length).toBe(8);
+    });
+
+    it('generateBossWaves() act 3 final wave contains NOVA_SOVEREIGN with spawnInterval 0', () => {
+      const waves = service.generateBossWaves(2, 42);
+      const finalWave = waves[waves.length - 1];
+      const sovereignEntry = finalWave.entries!.find(e => e.type === EnemyType.NOVA_SOVEREIGN);
+      expect(sovereignEntry).withContext('final wave must have NOVA_SOVEREIGN entry').toBeDefined();
+      expect(sovereignEntry!.spawnInterval).toBe(0);
+    });
+
+    it('generateBossWaves() act 3 has more waves than act 2', () => {
+      const act2Waves = service.generateBossWaves(1, 42);
+      const act3Waves = service.generateBossWaves(2, 42);
+      expect(act3Waves.length).toBeGreaterThan(act2Waves.length);
     });
   });
 });

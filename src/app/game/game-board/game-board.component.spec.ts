@@ -1,3 +1,4 @@
+import { ElementRef } from '@angular/core';
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
@@ -115,7 +116,7 @@ interface TestableGameBoardComponent {
   selectPlacedTower(key: string): void;
   refreshTowerInfoPanel(): void;
   setupAutoPause(): void;
-  cleanupGameObjects(): void;
+  cleanupGameObjects(restart?: boolean): void;
   updateChallengeIndicators(): void;
   tryPlaceTower(row: number, col: number): void;
   showPathBlockedWarning(): void;
@@ -2377,6 +2378,36 @@ describe('GameBoardComponent', () => {
 
       expect(meshRegistry.getTileMeshArray().length).toBe(0);
       expect(meshRegistry.getTowerChildrenArray().length).toBe(0);
+    });
+
+    it('re-inits minimap when restart=true (in-component restart path)', () => {
+      // Regression: cleanupGameObjects() calls cleanupScene() which destroys the
+      // minimap canvas. Without re-init, subsequent renders find no canvas and the
+      // minimap is permanently dead for the rest of the component's lifetime.
+      //
+      // NOTE: MinimapService is declared in GameBoardComponent.providers, so the
+      // component-scoped instance shadows the module-level minimapSpy provider.
+      // Spy on the instance the component actually injects.
+      const minimap = fixture.debugElement.injector.get(MinimapService);
+      const initSpy = spyOn(minimap, 'init');
+      // Stub the canvas container — these specs never call detectChanges(), so
+      // pin the ViewChild explicitly rather than rely on creation-pass internals.
+      const container = document.createElement('div');
+      component.canvasContainer = new ElementRef(container);
+
+      (component as unknown as TestableGameBoardComponent).cleanupGameObjects(true);
+
+      expect(initSpy).toHaveBeenCalledOnceWith(container);
+    });
+
+    it('does NOT re-init minimap when restart is omitted (ngOnDestroy path)', () => {
+      const minimap = fixture.debugElement.injector.get(MinimapService);
+      const initSpy = spyOn(minimap, 'init');
+      component.canvasContainer = new ElementRef(document.createElement('div'));
+
+      (component as unknown as TestableGameBoardComponent).cleanupGameObjects();
+
+      expect(initSpy).not.toHaveBeenCalled();
     });
   });
 

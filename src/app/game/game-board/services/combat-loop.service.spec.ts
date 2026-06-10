@@ -127,6 +127,7 @@ describe('CombatLoopService', () => {
       'startDyingAnimation',
       'getLivingEnemyCount',
       'tickMinerDigs',
+      'tickNovaSovereignEffects',
     ]);
     enemySpy.getEnemies.and.returnValue(new Map());
     enemySpy.stepEnemiesOneTurn.and.returnValue([]);

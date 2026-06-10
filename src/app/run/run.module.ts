@@ -11,6 +11,7 @@ import { EventScreenComponent } from './components/event-screen/event-screen.com
 import { RelicInventoryComponent } from './components/relic-inventory/relic-inventory.component';
 import { ActTransitionComponent } from './components/act-transition/act-transition.component';
 import { RunSummaryComponent } from './components/run-summary/run-summary.component';
+import { RunEpilogueComponent } from './components/run-epilogue/run-epilogue.component';
 import { CardDraftComponent } from './components/card-draft/card-draft.component';
 import { IconComponent } from '@shared/components/icon/icon.component';
 import { DescriptionTextComponent } from '@shared/components/description-text/description-text.component';
@@ -27,6 +28,7 @@ import { GameCardComponent } from '@shared/components/game-card/game-card.compon
     RelicInventoryComponent,
     ActTransitionComponent,
     RunSummaryComponent,
+    RunEpilogueComponent,
     CardDraftComponent,
   ],
   imports: [

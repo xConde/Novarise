@@ -103,8 +103,8 @@ describe('RunState Model', () => {
       expect(DEFAULT_RUN_CONFIG.startingGold).toBe(150);
     });
 
-    it('should have actsCount of 2', () => {
-      expect(DEFAULT_RUN_CONFIG.actsCount).toBe(2);
+    it('should have actsCount of 3', () => {
+      expect(DEFAULT_RUN_CONFIG.actsCount).toBe(3);
     });
 
     it('should have nodesPerAct of 12', () => {

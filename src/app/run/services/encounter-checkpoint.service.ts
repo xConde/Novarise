@@ -105,6 +105,15 @@ export class EncounterCheckpointService {
       data['version'] = 10;
       return data;
     },
+    // 10 → 11: add isEnraged and enragedTilesPerTurn fields to enemy snapshots.
+    // These are optional fields on NOVA_SOVEREIGN instances only; pre-v11
+    // saves simply don't have them, and undefined is the correct default
+    // (not enraged). No per-enemy iteration needed — the restore path reads
+    // these fields directly from each enemy object; absent = not enraged.
+    10: (data) => {
+      data['version'] = 11;
+      return data;
+    },
   };
 
   /**

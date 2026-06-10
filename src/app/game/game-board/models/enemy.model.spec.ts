@@ -160,11 +160,13 @@ describe('Enemy Model', () => {
     describe('BOSS enemy stats', () => {
       it('should have highest health and lowest speed among non-elite types', () => {
         const boss = ENEMY_STATS[EnemyType.BOSS];
-        // Boss-tier variants (VEINSEEKER, UNSHAKEABLE, WYRM_ASCENDANT) are excluded: they
-        // are co-equal boss-tier units, not subordinate enemy types.
+        // Boss-tier variants (VEINSEEKER, UNSHAKEABLE, WYRM_ASCENDANT, NOVA_SOVEREIGN)
+        // are excluded: they are co-equal or apex boss-tier units, not subordinate
+        // enemy types.
         // VEINSEEKER (sprint 23) shares BOSS health (1000) and exceeds BOSS value (100 vs 50).
         // WYRM_ASCENDANT (sprint 39): 1400 HP > BOSS 1000 HP by design — apex boss counter.
-        const BOSS_TIER_VARIANTS: string[] = [EnemyType.VEINSEEKER, EnemyType.UNSHAKEABLE, EnemyType.WYRM_ASCENDANT];
+        // NOVA_SOVEREIGN (Act 3): 2800 HP / 0.4 speed / 200 value — final boss exceeds BOSS on all axes.
+        const BOSS_TIER_VARIANTS: string[] = [EnemyType.VEINSEEKER, EnemyType.UNSHAKEABLE, EnemyType.WYRM_ASCENDANT, EnemyType.NOVA_SOVEREIGN];
 
         Object.entries(ENEMY_STATS).forEach(([type, stats]) => {
           if (type !== EnemyType.BOSS && !BOSS_TIER_VARIANTS.includes(type)) {
@@ -181,7 +183,7 @@ describe('Enemy Model', () => {
         expect(boss.speed).toBe(0.5);
         expect(boss.value).toBe(50);
         expect(boss.color).toBe(0xc848b8); // UX-40 rich magenta
-        expect(boss.size).toBe(0.6); // Largest
+        expect(boss.size).toBe(0.6); // Largest standard type (NOVA_SOVEREIGN at 0.85 is the apex unit)
       });
     });
   });

@@ -233,6 +233,11 @@ export class CombatLoopService {
       this.accumulateKillByTower(killInfo.towerType, killInfo.towerLevel, frameKillsByTower);
     }
 
+    // 5b-pre. NOVA_SOVEREIGN per-turn effects — Aegis shield regen and enrage
+    // trigger. Called after tower fire so regen doesn't nullify turn damage,
+    // and before status-effect ticks so enrage state is visible to DoT logic.
+    this.enemyService.tickNovaSovereignEffects();
+
     // 5b. Status effect tick — DoT damage, duration expiry. DoT kills are
     // attributed to the 'dot' bucket (no tower owner) and don't count toward
     // frameDamageDealt (which reflects "offensive pressure from towers").

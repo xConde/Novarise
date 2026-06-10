@@ -11,6 +11,7 @@ import { GameStateService } from './services/game-state.service';
 import { WaveService } from './services/wave.service';
 import { TowerCombatService } from './services/tower-combat.service';
 import { AudioService } from './services/audio.service';
+import { MusicService } from '../../core/services/music.service';
 import { ParticleService } from './services/particle.service';
 import { ScreenShakeService } from './services/screen-shake.service';
 import { GoldPopupService } from './services/gold-popup.service';
@@ -411,6 +412,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private targetPreviewService: TargetPreviewService,
     private forwardSimulationService: ForwardSimulationService,
     private statusEffectService: StatusEffectService,
+    private musicService: MusicService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -511,6 +513,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.deckSub = this.deckService.deckState$.subscribe(s => { this.deckState = s; });
     this.energySub = this.deckService.energy$.subscribe(e => { this.energyState = e; });
 
+    this.musicService.playTheme(encounter.isBoss ? 'boss' : 'combat');
     this.sceneService.initScene();
     this.sceneService.initCamera();
     this.sceneService.initLights();
@@ -1203,18 +1206,36 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     );
   }
 
-  /** Shared cleanup for game objects — called from ngOnDestroy(). */
-  private cleanupGameObjects(): void {
+  /**
+   * Shared cleanup for game objects — called from ngOnDestroy() and any
+   * in-component restart path.
+   *
+   * @param restart When true the component lifecycle continues after this
+   *   call (e.g. a "restart without navigation" path).  The minimap canvas
+   *   is re-created so subsequent renders work correctly.  When false
+   *   (default, ngOnDestroy) the component is about to be torn down so
+   *   re-init is skipped.
+   */
+  private cleanupGameObjects(restart = false): void {
     // Clean up enemies — snapshot keys to avoid mutating Map during iteration
     for (const id of Array.from(this.enemyService.getEnemies().keys())) {
       this.enemyService.removeEnemy(id, this.sceneService.getScene());
     }
 
-    // Delegate Three.js disposal + service cleanup to GameSessionService
+    // Delegate Three.js disposal + service cleanup to GameSessionService.
+    // cleanupScene() calls minimapService.cleanup() which removes the canvas.
     this.gameSessionService.cleanupScene();
     // cleanupScene clears maps and gridLines in the registry; rebuild derives empty arrays
     this.meshRegistry.rebuildTileMeshArray();
     this.meshRegistry.rebuildTowerChildrenArray();
+
+    // Re-init minimap on restart paths so the canvas is available for the
+    // next render cycle.  MinimapService.init() is idempotent — a double-call
+    // is safe but the restart flag avoids the unnecessary DOM work in the
+    // ngOnDestroy path.
+    if (restart) {
+      this.minimapService.init(this.canvasContainer.nativeElement);
+    }
 
     // Reset component-owned UI state that references disposed objects
     this.showPathOverlay = false;
@@ -1670,6 +1691,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.cleanupGameObjects();
     }
 
+    this.musicService.stopMusic(2);
     this.audioService.cleanup();
     this.particleService.cleanup(this.sceneService.getScene());
     this.goldPopupService.cleanup(this.sceneService.getScene());

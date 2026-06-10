@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { WaveDefinition, WaveEntry } from '../../game/game-board/models/wave.model';
 import { EnemyType } from '../../game/game-board/models/enemy.model';
 import { ENCOUNTER_CONFIG, SeededRng, createSeededRng } from '../constants/run.constants';
-import { BossPreset, ACT1_BOSS_PRESETS, ACT2_BOSS_PRESETS } from '../constants/boss-presets';
+import { BossPreset, ACT1_BOSS_PRESETS, ACT2_BOSS_PRESETS, ACT3_BOSS_PRESETS } from '../constants/boss-presets';
 
 // ── Enemy pool constants ───────────────────────────────────────
 
@@ -17,6 +17,22 @@ const ACT2_BASE_POOL: EnemyType[] = [
   EnemyType.SHIELDED, EnemyType.SWARM,
 ];
 const ACT2_FLYING_POOL: EnemyType[] = [...ACT2_BASE_POOL, EnemyType.FLYING];
+
+/**
+ * Act 3 base pool — full act-2 roster plus heavier archetype threats.
+ * TITAN and WYRM_ASCENDANT are boss-tier counters from Highground archetype
+ * and appear here only in the heavy/late tier; VEINSEEKER is a Cartographer
+ * boss counter and is intentionally excluded from random pools (too disruptive
+ * in procedural contexts).
+ */
+const ACT3_BASE_POOL: EnemyType[] = [
+  EnemyType.BASIC, EnemyType.FAST, EnemyType.HEAVY, EnemyType.SWIFT,
+  EnemyType.SHIELDED, EnemyType.SWARM, EnemyType.FLYING,
+];
+const ACT3_HEAVY_POOL: EnemyType[] = [...ACT3_BASE_POOL, EnemyType.TITAN];
+
+/** Row in act 3 at which the heavy pool (includes TITAN) appears. */
+const ACT3_HEAVY_MIN_ROW = 5;
 
 /** Row thresholds for act 1 enemy pool tiers. */
 const ACT1_EARLY_MAX_ROW = 3;
@@ -97,7 +113,7 @@ export class WaveGeneratorService {
    */
   getBossPreset(actIndex: number, seed: number): BossPreset {
     const rng = createSeededRng(seed);
-    const presets = actIndex === 0 ? ACT1_BOSS_PRESETS : ACT2_BOSS_PRESETS;
+    const presets = actIndex === 0 ? ACT1_BOSS_PRESETS : actIndex === 1 ? ACT2_BOSS_PRESETS : ACT3_BOSS_PRESETS;
     return presets[Math.floor(rng.next() * presets.length)];
   }
 
@@ -153,9 +169,14 @@ function getEnemyPool(row: number, actIndex: number): EnemyType[] {
     if (row <= ACT1_MID_MAX_ROW) return ACT1_MID_POOL;
     return ACT1_LATE_POOL;
   }
-  // Act 2+
-  if (row >= ACT2_FLYING_MIN_ROW) return ACT2_FLYING_POOL;
-  return ACT2_BASE_POOL;
+  if (actIndex === 1) {
+    // Act 2: flying enemies appear mid-act
+    if (row >= ACT2_FLYING_MIN_ROW) return ACT2_FLYING_POOL;
+    return ACT2_BASE_POOL;
+  }
+  // Act 3: full roster; heavier elite type (TITAN) appears past mid-act
+  if (row >= ACT3_HEAVY_MIN_ROW) return ACT3_HEAVY_POOL;
+  return ACT3_BASE_POOL;
 }
 
 /**
@@ -168,6 +189,12 @@ function computeEnemyCount(row: number, actIndex: number, rng: SeededRng): numbe
   );
   if (actIndex > 0) {
     count = Math.floor(count * ENCOUNTER_CONFIG.enemyCountActMultiplier);
+  }
+  // Act 3 applies an additional multiplier on top of the act-2 multiplier.
+  // CRITICAL: this branch runs ONLY for actIndex >= 2 — acts 1/2 are not touched,
+  // preserving existing deterministic-RNG output for those acts.
+  if (actIndex >= 2) {
+    count = Math.floor(count * ENCOUNTER_CONFIG.enemyCountAct3Multiplier);
   }
   // Small random variance (+/- 1) to avoid identical waves
   count += Math.floor(rng.next() * 3) - 1;

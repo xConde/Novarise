@@ -2,7 +2,7 @@ import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_STATS } from '../models/enemy.model';
 import { HEALTH_BAR_CONFIG, HEALTH_BAR_PREDICTED_CONFIG, SHIELD_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
-import { BOSS_CROWN_CONFIG, SHIELD_BREAK_CONFIG, WYRM_ASCENDANT_VISUAL_CONFIG } from '../constants/effects.constants';
+import { BOSS_CROWN_CONFIG, SHIELD_BREAK_CONFIG, WYRM_ASCENDANT_VISUAL_CONFIG, NOVA_SOVEREIGN_VISUAL_CONFIG } from '../constants/effects.constants';
 import { GeometryRegistryService } from './geometry-registry.service';
 import { MaterialRegistryService } from './material-registry.service';
 
@@ -85,8 +85,8 @@ export class EnemyMeshFactoryService {
     mesh.add(healthBarPredicted);
     mesh.userData = { healthBarBg, healthBarFg, healthBarPredicted };
 
-    // Add shield visual for SHIELDED enemies (dome mesh + shield HP bar)
-    if (enemy.type === EnemyType.SHIELDED && enemy.shield !== undefined && enemy.shield > 0) {
+    // Add shield visual for SHIELDED and NOVA_SOVEREIGN enemies (dome mesh + shield HP bar)
+    if ((enemy.type === EnemyType.SHIELDED || enemy.type === EnemyType.NOVA_SOVEREIGN) && enemy.shield !== undefined && enemy.shield > 0) {
       const shieldMesh = this.createShieldMesh(stats.size);
       mesh.add(shieldMesh);
       mesh.userData['shieldMesh'] = shieldMesh;
@@ -121,6 +121,10 @@ export class EnemyMeshFactoryService {
 
     if (enemy.type === EnemyType.WYRM_ASCENDANT) {
       this.createWyrmEyeGlow(mesh, stats.size);
+    }
+
+    if (enemy.type === EnemyType.NOVA_SOVEREIGN) {
+      this.createNovaSovereignOrbShards(mesh, stats.size, stats.color);
     }
 
     return mesh;
@@ -173,6 +177,10 @@ export class EnemyMeshFactoryService {
 
       case EnemyType.WYRM_ASCENDANT:
         return this.cyl(size * 0.65, size * 0.80, size * 2.2, 10);
+
+      case EnemyType.NOVA_SOVEREIGN:
+        // Obelisk-like octagonal prism — imposing crowned pillar
+        return this.cyl(size * 0.55, size * 0.45, size * 2.6, 8);
 
       case EnemyType.BASIC:
       default:
@@ -239,6 +247,47 @@ export class EnemyMeshFactoryService {
     eyeRing.castShadow = true;
     mesh.add(eyeRing);
     mesh.userData['wyrmEyeGlow'] = eyeRing;
+  }
+
+  /**
+   * Create 3 orbiting shard rings around NOVA_SOVEREIGN to reinforce
+   * its "crowned obelisk" silhouette. The rings rotate at different
+   * Y-axis angles so they read as orbiting debris.
+   *
+   * Each shard ring is a flat torus disposed with the enemy mesh via
+   * Three.js traverse — no manual disposal needed.
+   */
+  createNovaSovereignOrbShards(mesh: THREE.Mesh, size: number, color: number): void {
+    const shardAngles = NOVA_SOVEREIGN_VISUAL_CONFIG.orbShardAngles;
+    for (let i = 0; i < shardAngles.length; i++) {
+      const shardGeometry = this.geometryRegistry
+        ? this.geometryRegistry.getTorus(
+            size * NOVA_SOVEREIGN_VISUAL_CONFIG.orbRadiusMultiplier,
+            size * NOVA_SOVEREIGN_VISUAL_CONFIG.orbTubeMultiplier,
+            NOVA_SOVEREIGN_VISUAL_CONFIG.orbRadialSegments,
+            NOVA_SOVEREIGN_VISUAL_CONFIG.orbTubularSegments,
+          )
+        : new THREE.TorusGeometry(
+            size * NOVA_SOVEREIGN_VISUAL_CONFIG.orbRadiusMultiplier,
+            size * NOVA_SOVEREIGN_VISUAL_CONFIG.orbTubeMultiplier,
+            NOVA_SOVEREIGN_VISUAL_CONFIG.orbRadialSegments,
+            NOVA_SOVEREIGN_VISUAL_CONFIG.orbTubularSegments,
+          );
+      // Per-instance — status tinting mutates emissive
+      const shardMaterial = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: NOVA_SOVEREIGN_VISUAL_CONFIG.orbEmissiveIntensity,
+        roughness: NOVA_SOVEREIGN_VISUAL_CONFIG.orbRoughness,
+        metalness: NOVA_SOVEREIGN_VISUAL_CONFIG.orbMetalness,
+      });
+      const shardRing = new THREE.Mesh(shardGeometry, shardMaterial);
+      shardRing.rotation.x = shardAngles[i];
+      shardRing.position.y = size * NOVA_SOVEREIGN_VISUAL_CONFIG.orbYOffsetMultiplier;
+      shardRing.castShadow = true;
+      mesh.add(shardRing);
+      mesh.userData[`novaSovereignOrb${i}`] = shardRing;
+    }
   }
 
   createShieldMesh(enemySize: number): THREE.Mesh {

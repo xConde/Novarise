@@ -9,10 +9,35 @@
         <span class="setting-label">Audio</span>
         <button
           class="setting-toggle"
+          data-setting="audio"
           [class.active]="!audioMuted"
           (click)="toggleAudio()"
           [attr.aria-pressed]="!audioMuted"
         >{{ audioMuted ? 'Muted' : 'On' }}</button>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Music</span>
+        <button
+          class="setting-toggle"
+          data-setting="music"
+          [class.active]="musicEnabled"
+          (click)="toggleMusic()"
+          [attr.aria-pressed]="musicEnabled"
+          aria-label="Toggle music"
+        >{{ musicEnabled ? 'On' : 'Off' }}</button>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Music Volume</span>
+        <input
+          type="range"
+          class="setting-slider"
+          min="0"
+          max="1"
+          step="0.05"
+          [value]="musicVolume"
+          (input)="setMusicVolume(+$any($event.target).value)"
+          [attr.aria-label]="'Music volume: ' + (musicVolume | percent)"
+        />
       </div>
       <div class="setting-row">
         <span class="setting-label">Difficulty</span>
@@ -30,6 +55,7 @@
         <span class="setting-label">Show FPS</span>
         <button
           class="setting-toggle"
+          data-setting="fps"
           [class.active]="showFps"
           (click)="toggleFps()"
           [attr.aria-pressed]="showFps"
@@ -39,6 +65,7 @@
         <span class="setting-label">Reduce Motion</span>
         <button
           class="setting-toggle"
+          data-setting="reduce-motion"
           [class.active]="reduceMotion"
           (click)="toggleReduceMotion()"
           [attr.aria-pressed]="reduceMotion"

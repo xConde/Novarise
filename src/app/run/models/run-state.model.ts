@@ -24,7 +24,7 @@ export interface RunConfig {
 export const DEFAULT_RUN_CONFIG: RunConfig = {
   startingLives: 20,
   startingGold: 150,
-  actsCount: 2,
+  actsCount: 3,
   nodesPerAct: 12,
 };
 

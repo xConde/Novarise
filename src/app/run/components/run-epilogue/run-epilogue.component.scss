@@ -1,0 +1,220 @@
+// ── Stage-reveal animation ────────────────────────────────────────────────────
+
+@keyframes epilogue-fade-up {
+  from { opacity: 0; transform: translateY(var(--spacing-lg)); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+// ── Root overlay ──────────────────────────────────────────────────────────────
+
+.run-epilogue {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xl);
+  padding: var(--spacing-2xl) var(--spacing-lg);
+  text-align: center;
+  color: var(--text-color);
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(255, 215, 0, 0.10), transparent 60%),
+    radial-gradient(ellipse at 50% 100%, rgba(0, 255, 136, 0.06), transparent 50%),
+    rgba(4, 3, 10, 0.97);
+  z-index: 200;
+  overflow: hidden;
+}
+
+// ── Stage A: Title ────────────────────────────────────────────────────────────
+
+.run-epilogue__title-block {
+  opacity: 0;
+  transform: translateY(var(--spacing-lg));
+  transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+
+  &--visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.run-epilogue__eyebrow {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--game-gold);
+  margin: 0 0 var(--spacing-sm);
+  opacity: 0.85;
+}
+
+.run-epilogue__title {
+  font-family: "Orbitron", sans-serif;
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--game-victory);
+  margin: 0;
+  text-shadow:
+    0 0 40px rgba(0, 255, 136, 0.55),
+    0 0 80px rgba(0, 255, 136, 0.20);
+}
+
+// ── Stage B: Copy ─────────────────────────────────────────────────────────────
+
+.run-epilogue__copy {
+  opacity: 0;
+  transform: translateY(var(--spacing-lg));
+  transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+  max-width: 38rem;
+
+  &--visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.run-epilogue__line {
+  font-size: var(--font-size-base);
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.80);
+  margin: 0 0 var(--spacing-md);
+
+  &--debrief {
+    font-size: var(--font-size-small);
+    color: rgba(255, 255, 255, 0.40);
+    letter-spacing: 0.06em;
+    margin-top: var(--spacing-sm);
+    margin-bottom: 0;
+  }
+}
+
+// ── Stage C: Ascension unlock ─────────────────────────────────────────────────
+
+.run-epilogue__ascension {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border: 1px solid rgba(255, 215, 0, 0.40);
+  border-radius: 4px;
+  background: rgba(255, 215, 0, 0.08);
+  opacity: 0;
+  transform: translateY(var(--spacing-md));
+  transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+
+  &--visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.run-epilogue__ascension-icon {
+  font-size: var(--font-size-small);
+  color: var(--game-gold);
+}
+
+.run-epilogue__ascension-text {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--game-gold);
+}
+
+// ── Stage D: Continue button ──────────────────────────────────────────────────
+
+.run-epilogue__actions {
+  opacity: 0;
+  transition: opacity 0.6s ease-out;
+
+  &--visible {
+    opacity: 1;
+  }
+}
+
+.run-epilogue__btn {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: var(--spacing-md) var(--spacing-2xl);
+  border: 1px solid var(--theme-purple-light);
+  border-radius: 4px;
+  background: linear-gradient(135deg, var(--theme-purple), var(--theme-purple-lighter));
+  color: var(--text-color);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 0 16px rgba(106, 74, 138, 0.45);
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 24px rgba(106, 74, 138, 0.65);
+  }
+
+  &:disabled {
+    pointer-events: none;
+    opacity: 0;
+  }
+}
+
+// ── Responsive ────────────────────────────────────────────────────────────────
+
+@media (max-width: 640px) {
+  .run-epilogue__title {
+    font-size: clamp(1.5rem, 8vw, 2.5rem);
+  }
+
+  .run-epilogue__copy {
+    padding: 0 var(--spacing-sm);
+  }
+}
+
+// ── Reduced-motion: collapse all staged reveals to instant-visible ────────────
+
+@media (prefers-reduced-motion: reduce) {
+  .run-epilogue__title-block,
+  .run-epilogue__copy,
+  .run-epilogue__ascension,
+  .run-epilogue__actions {
+    transition: none !important;
+  }
+
+  .run-epilogue__title-block,
+  .run-epilogue__copy,
+  .run-epilogue__actions {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+  }
+
+  .run-epilogue__ascension {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+  }
+
+  .run-epilogue__btn:disabled {
+    pointer-events: auto;
+    opacity: 1;
+  }
+}
+
+body.reduce-motion {
+  .run-epilogue__title-block,
+  .run-epilogue__copy,
+  .run-epilogue__ascension,
+  .run-epilogue__actions {
+    transition: none !important;
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+  }
+
+  .run-epilogue__btn:disabled {
+    pointer-events: auto;
+    opacity: 1;
+  }
+}

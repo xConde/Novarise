@@ -102,6 +102,8 @@ export function createSettingsServiceSpy(): jasmine.SpyObj<SettingsService> {
   ]);
   const defaultSettings: GameSettings = {
     audioMuted: false,
+    musicEnabled: true,
+    musicVolume: 0.4,
     difficulty: DifficultyLevel.NORMAL,
     showFps: false,
     reduceMotion: false,
