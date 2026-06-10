@@ -198,6 +198,16 @@ export class AudioService {
     this.playTone(cfg.frequency, cfg.endFrequency, cfg.duration, cfg.oscillatorType, cfg.gain);
   }
 
+  /**
+   * Boss-intro roar: low descending sawtooth (80→30 Hz, 1.2s) layered with a
+   * short noise burst. Played once when the boss-intro banner fires.
+   */
+  playBossRoar(): void {
+    const cfg = AUDIO_CONFIG.bossRoar;
+    this.playTone(cfg.frequency, cfg.endFrequency, cfg.duration, cfg.oscillatorType, cfg.gain);
+    this.playNoise(cfg.noiseGain, cfg.noiseDuration);
+  }
+
   playDefeat(): void {
     const cfg = AUDIO_CONFIG.defeat;
     this.playTone(cfg.frequency, cfg.endFrequency, cfg.duration, cfg.oscillatorType, cfg.gain);

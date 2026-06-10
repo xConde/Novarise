@@ -1,5 +1,7 @@
 import { fakeAsync, tick } from '@angular/core/testing';
 import { WaveCombatFacadeService, WaveCombatCallbacks } from './wave-combat-facade.service';
+import { BossBannerService } from './boss-banner.service';
+import { EnemyType } from '../models/enemy.model';
 
 interface TestableWaveCombatFacadeService {
   waveClearTimerId: ReturnType<typeof setTimeout> | null;
@@ -73,6 +75,7 @@ describe('WaveCombatFacadeService', () => {
   let encounterCheckpointService: jasmine.SpyObj<EncounterCheckpointService>;
   let wavePreviewService: jasmine.SpyObj<WavePreviewService>;
   let turnHistoryService: jasmine.SpyObj<TurnHistoryService>;
+  let bossBannerService: jasmine.SpyObj<BossBannerService>;
 
   const defaultState = {
     phase: GamePhase.INTERMISSION,
@@ -105,7 +108,8 @@ describe('WaveCombatFacadeService', () => {
 
     combatVFXService = jasmine.createSpyObj('CombatVFXService', ['tickMortarZoneVisualsForTurn']);
     screenShakeService = jasmine.createSpyObj('ScreenShakeService', ['trigger']);
-    audioService = jasmine.createSpyObj('AudioService', ['playWaveStart']);
+    audioService = jasmine.createSpyObj('AudioService', ['playWaveStart', 'playBossRoar']);
+    bossBannerService = jasmine.createSpyObj('BossBannerService', ['flash', 'cleanup']);
 
     deckService = jasmine.createSpyObj('DeckService', ['discardHand', 'drawForWave', 'serializeState', 'getRngState']);
     (deckService.serializeState as jasmine.Spy).and.returnValue({});
@@ -222,6 +226,7 @@ describe('WaveCombatFacadeService', () => {
         spy.serialize.and.returnValue({ virtualEdges: [], disruptedUntil: [] });
         return spy;
       })(),
+      bossBannerService,
     );
   });
 
@@ -518,6 +523,84 @@ describe('WaveCombatFacadeService', () => {
       const saved = (encounterCheckpointService.saveCheckpoint as jasmine.Spy).calls.mostRecent().args[0];
       expect(saved.deckRngState).toBeUndefined();
     }));
+  });
+
+  describe('boss banner — maybeTriggerBossBanner()', () => {
+    function makeWaveWithEnemies(...types: EnemyType[]): object {
+      return { entries: types.map(t => ({ type: t, count: 1, spawnInterval: 0 })), reward: 100 };
+    }
+
+    function makeEncounterWithWaves(waves: object[]): object {
+      return { nodeId: 'n1', nodeType: 'boss', campaignMapId: 'm1', waves, goldReward: 0, isElite: false, isBoss: true };
+    }
+
+    it('does NOT flash boss banner on a normal (non-boss) wave', () => {
+      runService.getCurrentEncounter.and.returnValue(
+        makeEncounterWithWaves([makeWaveWithEnemies(EnemyType.BASIC, EnemyType.FAST)]) as never
+      );
+      // INTERMISSION → COMBAT so startWave() runs to completion and the banner
+      // check is genuinely reached (a COMBAT initial phase would early-return
+      // at the phase guard, making this negative assertion vacuous).
+      gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 1, phase: GamePhase.INTERMISSION }));
+      gameStateService.startWave.and.callFake(() => {
+        gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 1, phase: GamePhase.COMBAT }));
+      });
+      service.startWave();
+      expect(bossBannerService.flash).not.toHaveBeenCalled();
+      expect(audioService.playBossRoar).not.toHaveBeenCalled();
+    });
+
+    it('flashes boss banner with generic copy when wave has BOSS type', () => {
+      runService.getCurrentEncounter.and.returnValue(
+        makeEncounterWithWaves([
+          makeWaveWithEnemies(EnemyType.BASIC),
+          makeWaveWithEnemies(EnemyType.BOSS),
+        ]) as never
+      );
+      // Simulate starting wave 2 (1-indexed) — getState() called multiple times by startWave()
+      gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 2, phase: GamePhase.INTERMISSION }));
+      // After startWave() call the state returns COMBAT
+      gameStateService.startWave.and.callFake(() => {
+        gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 2, phase: GamePhase.COMBAT }));
+      });
+      service.startWave();
+      expect(bossBannerService.flash).toHaveBeenCalledWith('⚠ BOSS INCOMING');
+      expect(audioService.playBossRoar).toHaveBeenCalled();
+    });
+
+    it('flashes boss banner with NOVA_SOVEREIGN copy when wave has NOVA_SOVEREIGN type', () => {
+      runService.getCurrentEncounter.and.returnValue(
+        makeEncounterWithWaves([
+          makeWaveWithEnemies(EnemyType.NOVA_SOVEREIGN),
+        ]) as never
+      );
+      gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 1, phase: GamePhase.INTERMISSION }));
+      gameStateService.startWave.and.callFake(() => {
+        gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 1, phase: GamePhase.COMBAT }));
+      });
+      service.startWave();
+      expect(bossBannerService.flash).toHaveBeenCalledWith('⚠ THE SOVEREIGN MANIFESTS');
+    });
+
+    it('triggers screen shake when a boss wave starts', () => {
+      runService.getCurrentEncounter.and.returnValue(
+        makeEncounterWithWaves([makeWaveWithEnemies(EnemyType.BOSS)]) as never
+      );
+      gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 1, phase: GamePhase.INTERMISSION }));
+      gameStateService.startWave.and.callFake(() => {
+        gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 1, phase: GamePhase.COMBAT }));
+      });
+      service.startWave();
+      // screenShakeService.trigger is also called during endTurn; the boss wave path calls it with
+      // specific args (0.25, 0.6) — check it was called at least once with those values.
+      expect(screenShakeService.trigger).toHaveBeenCalledWith(0.25, 0.6);
+    });
+
+    it('does NOT flash boss banner when encounter is null', () => {
+      runService.getCurrentEncounter.and.returnValue(null);
+      service.startWave();
+      expect(bossBannerService.flash).not.toHaveBeenCalled();
+    });
   });
 
   describe('cleanup()', () => {

@@ -1,5 +1,5 @@
 import { ElementRef } from '@angular/core';
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ComponentFixture, TestBed, discardPeriodicTasks, fakeAsync, flush, tick } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
 import * as THREE from 'three';
@@ -79,6 +79,12 @@ import { TowerMeshLifecycleService } from './services/tower-mesh-lifecycle.servi
 import { TowerPreviewService } from './services/tower-preview.service';
 import { EncounterConfig } from '../../run/models/encounter.model';
 import { NodeType } from '../../run/models/node-map.model';
+import { LinkMeshService } from './services/link-mesh.service';
+import { WaveCombatFacadeService } from './services/wave-combat-facade.service';
+import { TutorialFacadeService } from './services/tutorial-facade.service';
+import { ItemCallbacksWiringService } from './services/item-callbacks-wiring.service';
+import { EncounterBootstrapService } from './services/encounter-bootstrap.service';
+import { UI_CONFIG } from './constants/ui.constants';
 
 // ---------------------------------------------------------------------------
 // Test-only interfaces — allow typed access to private fields/methods without
@@ -123,6 +129,9 @@ interface TestableGameBoardComponent {
   refreshPathOverlay(): void;
   updateTileHighlights(): void;
   deselectTower(): void;
+  detectWebgl(): boolean;
+  renderGameBoard(): void;
+  addGridLines(): void;
 }
 
 /** Exposes the internal challengeTrackingService field of TowerInteractionService. */
@@ -3044,4 +3053,136 @@ describe('GameBoardComponent', () => {
     });
   });
 
+  describe('WebGL unavailable fallback', () => {
+    let comp: TestableGameBoardComponent;
+    let webglSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      // detectWebgl is the component's protected instance seam over the
+      // isWebglAvailable() utility — ES module exports are not spyable.
+      comp = component as unknown as TestableGameBoardComponent;
+      webglSpy = spyOn(comp, 'detectWebgl');
+    });
+
+    it('initializationFailed stays false and scene init runs when WebGL is available', () => {
+      webglSpy.and.returnValue(true);
+
+      // Stub the heavy init surface ngOnInit reaches on the available path.
+      // We must NOT boot the real Three.js pipeline: headless Chrome has no
+      // WebGL, so a full detectChanges() would run ngAfterViewInit, fail
+      // renderer creation, flip initializationFailed mid-cycle, and throw
+      // NG0100. Calling ngOnInit() directly avoids ngAfterViewInit and
+      // template binding checks entirely.
+      const injector = fixture.debugElement.injector;
+      const sceneService = injector.get(SceneService);
+      const initSceneSpy = spyOn(sceneService, 'initScene');
+      spyOn(sceneService, 'initCamera');
+      spyOn(sceneService, 'initLights');
+      spyOn(sceneService, 'initSkybox');
+      spyOn(sceneService, 'initParticles');
+      spyOn(injector.get(LinkMeshService), 'attachScene');
+      spyOn(injector.get(WaveCombatFacadeService), 'init');
+      spyOn(injector.get(TutorialFacadeService), 'init');
+      spyOn(injector.get(ItemCallbacksWiringService), 'wire');
+      spyOn(injector.get(EncounterBootstrapService), 'bootstrapFresh');
+      spyOn(comp, 'renderGameBoard');
+      spyOn(comp, 'addGridLines');
+
+      component.ngOnInit();
+
+      expect(component.initializationFailed).toBeFalse();
+      // Discriminating assertion vs the unavailable path: scene init DID run.
+      expect(initSceneSpy).toHaveBeenCalled();
+    });
+
+    it('sets initializationFailed to true when WebGL is unavailable', () => {
+      webglSpy.and.returnValue(false);
+      fixture.detectChanges();
+      expect(component.initializationFailed).toBeTrue();
+    });
+
+    it('does not call sceneService.initScene when WebGL is unavailable', () => {
+      webglSpy.and.returnValue(false);
+      const initSceneSpy = spyOn(comp.sceneService, 'initScene');
+      fixture.detectChanges();
+      expect(initSceneSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Victory/defeat dwell overlay ─────────────────────────────────────────────
+  describe('end-combat overlay', () => {
+    let gameStateService: GameStateService;
+    let navigateSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      // The terminal-phase block lives inside the stateSubscription wired in
+      // ngOnInit — which this spec file's outer beforeEach deliberately skips
+      // (no detectChanges; Three.js needs a canvas). Follow the "WebGL
+      // unavailable fallback" pattern: stub the component's detectWebgl seam
+      // as unavailable so ngOnInit wires its subscriptions and bails before
+      // any Three.js setup. The RunService spy already provides a run +
+      // encounter so the run-guard passes without navigating away.
+      spyOn(component as unknown as TestableGameBoardComponent, 'detectWebgl').and.returnValue(false);
+      fixture.detectChanges();
+      gameStateService = fixture.debugElement.injector.get(GameStateService);
+      // Spy navigation AFTER ngOnInit so the dwell assertions see only the
+      // terminal-phase navigate, and no real RouterTestingModule navigation
+      // runs inside fakeAsync zones.
+      navigateSpy = spyOn(TestBed.inject(Router), 'navigate');
+    });
+
+    it('showEndOverlay starts as false', () => {
+      expect(component.showEndOverlay).toBeFalse();
+    });
+
+    it('showEndOverlay becomes true on VICTORY phase transition', fakeAsync(() => {
+      gameStateService.setMaxWaves(1);
+      gameStateService.startWave();
+      gameStateService.completeWave(0); // wave 1 === maxWaves 1 → VICTORY
+      expect(component.showEndOverlay).toBeTrue();
+      expect(component.endOverlayIsVictory).toBeTrue();
+      tick(UI_CONFIG.endOverlayDwellMs); // consume dwell timer
+    }));
+
+    it('showEndOverlay becomes true on DEFEAT phase transition', fakeAsync(() => {
+      gameStateService.startWave();
+      gameStateService.loseLife(gameStateService.getState().lives); // → DEFEAT
+      expect(component.showEndOverlay).toBeTrue();
+      expect(component.endOverlayIsVictory).toBeFalse();
+      tick(UI_CONFIG.endOverlayDwellMs);
+    }));
+
+    it('navigates to /run only after the dwell period on VICTORY', fakeAsync(() => {
+      gameStateService.setMaxWaves(1);
+      gameStateService.startWave();
+      gameStateService.completeWave(0); // → VICTORY
+      expect(navigateSpy).not.toHaveBeenCalledWith(['/run']);
+      tick(UI_CONFIG.endOverlayDwellMs - 1);
+      expect(navigateSpy).not.toHaveBeenCalledWith(['/run']);
+      tick(1); // dwell elapses
+      expect(navigateSpy).toHaveBeenCalledWith(['/run']);
+    }));
+
+    it('navigates to /run only after the dwell period on DEFEAT', fakeAsync(() => {
+      gameStateService.startWave();
+      gameStateService.loseLife(gameStateService.getState().lives); // → DEFEAT
+      expect(navigateSpy).not.toHaveBeenCalledWith(['/run']);
+      tick(UI_CONFIG.endOverlayDwellMs);
+      expect(navigateSpy).toHaveBeenCalledWith(['/run']);
+    }));
+
+    it('clears the dwell timer on destroy — no navigation fires after teardown', fakeAsync(() => {
+      gameStateService.setMaxWaves(1);
+      gameStateService.startWave();
+      gameStateService.completeWave(0); // → VICTORY, starts dwell timer
+      expect(component.showEndOverlay).toBeTrue();
+      // Destroy before the dwell expires — ngOnDestroy must clear the timer
+      fixture.destroy();
+      flush(); // run any remaining macrotasks (e.g. music fade) — dwell must be gone
+      discardPeriodicTasks();
+      expect(navigateSpy).not.toHaveBeenCalledWith(['/run']);
+    }));
+  });
+
 });
+

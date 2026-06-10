@@ -1,0 +1,110 @@
+/* WebGL unavailable full-screen fallback panel */
+
+.webgl-fallback {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-color);
+  z-index: 9999;
+  padding: 1.5rem;
+}
+
+.webgl-fallback__panel {
+  max-width: 36rem;
+  width: 100%;
+  background: var(--nav-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  padding: 2.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  text-align: center;
+}
+
+.webgl-fallback__icon {
+  font-size: 3rem;
+  color: var(--theme-purple-light);
+  line-height: 1;
+}
+
+.webgl-fallback__title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-color);
+  letter-spacing: 0.02em;
+}
+
+.webgl-fallback__body {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--theme-purple-mid);
+  line-height: 1.6;
+}
+
+.webgl-fallback__tips {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  text-align: left;
+  width: 100%;
+
+  li {
+    font-size: 0.88rem;
+    color: var(--theme-purple-mid);
+    line-height: 1.55;
+    padding-left: 1.1rem;
+    position: relative;
+
+    &::before {
+      content: '–';
+      position: absolute;
+      left: 0;
+      color: var(--theme-purple-light);
+    }
+
+    strong {
+      color: var(--text-color);
+    }
+  }
+}
+
+.webgl-fallback__back-btn {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.6rem 1.75rem;
+  background: var(--theme-purple-a20);
+  border: 1px solid var(--theme-purple-a50);
+  border-radius: 0.35rem;
+  color: var(--theme-purple-lighter);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  letter-spacing: 0.04em;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--theme-purple-a35);
+    border-color: var(--theme-purple-a70);
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--theme-purple-light);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .webgl-fallback__back-btn {
+    transition: none;
+  }
+}

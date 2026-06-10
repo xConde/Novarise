@@ -621,6 +621,141 @@ body.reduce-motion .board-container .path-blocked-warning { animation: none; }
 body.reduce-motion .board-container .context-lost-hint { animation: none; }
 
 
+// ── Boss-intro banner ─────────────────────────────────────────────────────────
+// Fires once when a boss-tier enemy (BOSS / NOVA_SOVEREIGN) wave begins.
+// Darker + taller than the turn-start banner; uses the warning amber palette
+// so it reads differently from the cyan turn banner at a glance.
+
+.board-container .boss-intro-banner {
+  position: absolute;
+  top: calc(var(--shell-end-turn-top) + 6rem);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--spacing-md) var(--spacing-2xl);
+  background: rgba(8, 4, 0, 0.95);
+  border: 2px solid var(--game-gold);
+  border-radius: var(--border-radius-md);
+  color: var(--game-gold);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-lg);
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: calc(var(--z-index-overlay) + 2);
+  box-shadow:
+    0 0 1.5rem rgba(255, 200, 0, 0.45),
+    0 0 3rem rgba(255, 100, 0, 0.2);
+  white-space: nowrap;
+  animation: boss-banner-flash 2.8s ease-out forwards;
+}
+
+@keyframes boss-banner-flash {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(-0.75rem) scale(0.85); }
+  12%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.06); }
+  22%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  78%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container .boss-intro-banner {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+body.reduce-motion .board-container .boss-intro-banner { animation: none; opacity: 1; }
+
+
+// ── Victory / defeat dwell overlay ───────────────────────────────────────────
+// Full-board overlay that dwells for ~1.2s before automatic /run navigation.
+// Victory: gold flash background + emerald title glow (mirrors run-epilogue).
+// Defeat:  dark red vignette + crimson title.
+
+.board-container .end-combat-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: calc(var(--z-index-overlay) + 10);
+  pointer-events: none;  // no button — exit is timed
+
+  &--victory {
+    background:
+      radial-gradient(ellipse at 50% 40%, rgba(255, 215, 0, 0.18), transparent 65%),
+      radial-gradient(ellipse at 50% 100%, rgba(0, 255, 136, 0.10), transparent 55%),
+      rgba(4, 3, 10, 0.88);
+    animation: victory-flash 1.2s ease-out forwards;
+  }
+
+  &--defeat {
+    background:
+      radial-gradient(ellipse at 50% 40%, rgba(180, 30, 30, 0.22), transparent 65%),
+      rgba(4, 3, 10, 0.90);
+    animation: defeat-fade 1.2s ease-out forwards;
+  }
+}
+
+.board-container .end-combat-overlay__label {
+  font-family: "Orbitron", sans-serif;
+  font-size: clamp(2.2rem, 7vw, 4rem);
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+
+  .end-combat-overlay--victory & {
+    color: var(--game-victory, #00ff88);
+    text-shadow:
+      0 0 40px rgba(0, 255, 136, 0.65),
+      0 0 80px rgba(0, 255, 136, 0.25);
+    animation: victory-label-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  .end-combat-overlay--defeat & {
+    color: #e04a3a;
+    text-shadow:
+      0 0 30px rgba(224, 74, 58, 0.6),
+      0 0 60px rgba(224, 74, 58, 0.2);
+    animation: defeat-label-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+}
+
+@keyframes victory-flash {
+  0%   { opacity: 0; }
+  15%  { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+@keyframes defeat-fade {
+  0%   { opacity: 0; }
+  20%  { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+@keyframes victory-label-in {
+  0%   { opacity: 0; transform: scale(0.80) translateY(0.5rem); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes defeat-label-in {
+  0%   { opacity: 0; transform: scale(0.80) translateY(0.5rem); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container .end-combat-overlay,
+  .board-container .end-combat-overlay__label {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+body.reduce-motion .board-container .end-combat-overlay { animation: none; opacity: 1; }
+body.reduce-motion .board-container .end-combat-overlay__label { animation: none; opacity: 1; }
+
+
 // ── Placement mode indicator — floats in canvas area during tower placement ──
 
 .board-container .placement-indicator {

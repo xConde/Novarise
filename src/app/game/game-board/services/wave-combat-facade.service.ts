@@ -30,6 +30,10 @@ import { TowerType } from '../models/tower.model';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
 import { TowerGraphService } from './tower-graph.service';
+import { BossBannerService } from './boss-banner.service';
+import { EnemyType } from '../models/enemy.model';
+import { getWaveEnemyTypes } from '../models/wave.model';
+import { BOSS_BANNER_COPY } from '../constants/ui.constants';
 
 /** Callbacks that WaveCombatFacadeService calls back into the component for concerns
  *  it cannot own (template-bound state, pending card state). */
@@ -105,6 +109,7 @@ export class WaveCombatFacadeService {
     private pathMutationService: PathMutationService,
     private elevationService: ElevationService,
     private towerGraphService: TowerGraphService,
+    public bossBanner: BossBannerService,
   ) {}
 
   /** Register component callbacks. Call in ngOnInit before any wave interaction. */
@@ -172,10 +177,44 @@ export class WaveCombatFacadeService {
     }
     const modEffects = this.gameStateService.getModifierEffects();
     const waveCountMult = modEffects.waveCountMultiplier ?? 1;
-    this.waveService.startWave(this.gameStateService.getState().wave, this.sceneService.getScene(), waveCountMult);
+    // Read the post-startWave state ONCE and reuse it for both the wave-service
+    // call and the boss-banner check. startWave() makes exactly three getState()
+    // calls (phase guard, post-startWave hand check, this read) — adding a fourth
+    // would break callers/tests that stub a fixed sequence of states.
+    const postStartState = this.gameStateService.getState();
+    this.waveService.startWave(postStartState.wave, this.sceneService.getScene(), waveCountMult);
 
     this.audioService.playWaveStart();
     this.triggerWaveStartPulse();
+    this.maybeTriggerBossBanner(postStartState?.wave);
+  }
+
+  /**
+   * If the given wave (1-indexed) contains a BOSS or NOVA_SOVEREIGN enemy,
+   * fire the boss-intro banner, screen shake, and boss-roar SFX.
+   * Uses the current encounter's waves array for wave-level detection;
+   * falls back silently if the wave number, encounter, or waves array is
+   * unavailable (defensive: never let banner cosmetics break wave start).
+   */
+  private maybeTriggerBossBanner(waveNumber: number | undefined): void {
+    if (waveNumber === undefined) return;
+    const encounter = this.runService.getCurrentEncounter();
+
+    // wave array is 0-indexed; waveNumber is 1-indexed after startWave().
+    const waveDef = encounter?.waves?.[waveNumber - 1];
+    if (!waveDef) return;
+
+    const types = getWaveEnemyTypes(waveDef);
+    const hasBoss = types.has(EnemyType.BOSS) || types.has(EnemyType.NOVA_SOVEREIGN);
+    if (!hasBoss) return;
+
+    const copy = types.has(EnemyType.NOVA_SOVEREIGN)
+      ? BOSS_BANNER_COPY.novaSovereign
+      : BOSS_BANNER_COPY.generic;
+
+    this.bossBanner.flash(copy);
+    this.audioService.playBossRoar();
+    this.screenShakeService.trigger(0.25, 0.6);
   }
 
   /**
