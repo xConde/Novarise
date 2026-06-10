@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
-import { TouchInteractionService } from './touch-interaction.service';
+import { TouchInteractionService, TouchPlacementCallbacks } from './touch-interaction.service';
 import { SceneService } from './scene.service';
 import { GameStateService } from './game-state.service';
 import { GameBoardService } from '../game-board.service';
@@ -290,6 +290,232 @@ describe('TouchInteractionService', () => {
       spyOn(service, 'cleanup');
       service.ngOnDestroy();
       expect(service.cleanup).toHaveBeenCalled();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Two-step touch placement
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Helper: build a minimal TouchPlacementCallbacks stub.
+   * - `coord`: what resolveTileCoord returns (null = off-board miss)
+   * - `canPlace`: what canPlaceAt returns (default true = valid tile)
+   */
+  function makePlacementCallbacks(
+    opts: {
+      isPlaceMode?: boolean;
+      coord?: { row: number; col: number } | null;
+      canPlace?: boolean;
+    } = {}
+  ): {
+    callbacks: TouchPlacementCallbacks;
+    showPreviewAt: jasmine.Spy;
+    hidePreview: jasmine.Spy;
+    confirmPlacement: jasmine.Spy;
+    onPendingTileChanged: jasmine.Spy;
+  } {
+    const inPlaceMode = opts.isPlaceMode ?? true;
+    const coord = opts.coord !== undefined ? opts.coord : { row: 2, col: 3 };
+    const canPlaceResult = opts.canPlace !== undefined ? opts.canPlace : true;
+    const showPreviewAt = jasmine.createSpy('showPreviewAt');
+    const hidePreview = jasmine.createSpy('hidePreview');
+    const confirmPlacement = jasmine.createSpy('confirmPlacement');
+    const onPendingTileChanged = jasmine.createSpy('onPendingTileChanged');
+
+    const callbacks: TouchPlacementCallbacks = {
+      isPlaceMode: () => inPlaceMode,
+      resolveTileCoord: () => coord,
+      canPlaceAt: () => canPlaceResult,
+      showPreviewAt,
+      hidePreview,
+      confirmPlacement,
+      onPendingTileChanged,
+    };
+    return { callbacks, showPreviewAt, hidePreview, confirmPlacement, onPendingTileChanged };
+  }
+
+  /** Fire a touch-end event that reads as a short tap at (x, y). */
+  function fireTap(x: number, y: number): void {
+    svc.touchStartX = x;
+    svc.touchStartY = y;
+    svc.touchStartTime = performance.now() - 50; // 50ms < 300ms threshold
+    svc.touchIsDragging = false;
+    const touch = { clientX: x, clientY: y } as Touch;
+    const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
+    svc.touchEndHandler(event);
+  }
+
+  describe('two-step touch placement — initPlacementCallbacks()', () => {
+    it('first tap on a valid tile shows preview and does NOT confirm', () => {
+      const canvas = makeCanvas();
+      service.init(canvas, () => {});
+      const { callbacks, showPreviewAt, confirmPlacement } = makePlacementCallbacks({
+        coord: { row: 1, col: 2 },
+      });
+      service.initPlacementCallbacks(callbacks);
+
+      fireTap(100, 200);
+
+      expect(showPreviewAt).toHaveBeenCalledOnceWith(1, 2);
+      expect(confirmPlacement).not.toHaveBeenCalled();
+    });
+
+    it('first tap notifies onPendingTileChanged(true)', () => {
+      const canvas = makeCanvas();
+      service.init(canvas, () => {});
+      const { callbacks, onPendingTileChanged } = makePlacementCallbacks({
+        coord: { row: 0, col: 0 },
+      });
+      service.initPlacementCallbacks(callbacks);
+
+      fireTap(10, 10);
+
+      expect(onPendingTileChanged).toHaveBeenCalledWith(true);
+    });
+
+    it('second tap on the same tile confirms placement exactly once', () => {
+      const canvas = makeCanvas();
+      service.init(canvas, () => {});
+      const { callbacks, confirmPlacement, showPreviewAt } = makePlacementCallbacks({
+        coord: { row: 2, col: 3 },
+      });
+      service.initPlacementCallbacks(callbacks);
+
+      fireTap(100, 100); // first tap — sets pendingTile
+      fireTap(100, 100); // second tap — same tile, confirms
+
+      expect(confirmPlacement).toHaveBeenCalledOnceWith(2, 3);
+      // showPreviewAt called only once (first tap)
+      expect(showPreviewAt).toHaveBeenCalledTimes(1);
+    });
+
+    it('second tap on the same tile notifies onPendingTileChanged(false) on confirm', () => {
+      const canvas = makeCanvas();
+      service.init(canvas, () => {});
+      const { callbacks, onPendingTileChanged } = makePlacementCallbacks({
+        coord: { row: 2, col: 3 },
+      });
+      service.initPlacementCallbacks(callbacks);
+
+      fireTap(100, 100); // first tap
+      onPendingTileChanged.calls.reset();
+      fireTap(100, 100); // second tap — confirm, pending cleared
+
+      expect(onPendingTileChanged).toHaveBeenCalledWith(false);
+    });
+
+    it('retarget: tapping a different tile moves the preview (stays in step one)', () => {
+      const canvas = makeCanvas();
+      service.init(canvas, () => {});
+
+      let tapCount = 0;
+      const coords = [{ row: 1, col: 1 }, { row: 3, col: 4 }];
+      const showPreviewAt = jasmine.createSpy('showPreviewAt');
+      const confirmPlacement = jasmine.createSpy('confirmPlacement');
+      const onPendingTileChanged = jasmine.createSpy('onPendingTileChanged');
+
+      const callbacks: TouchPlacementCallbacks = {
+        isPlaceMode: () => true,
+        resolveTileCoord: () => coords[tapCount < 1 ? 0 : 1],
+        canPlaceAt: () => true,
+        showPreviewAt,
+        hidePreview: jasmine.createSpy('hidePreview'),
+        confirmPlacement,
+        onPendingTileChanged,
+      };
+      service.initPlacementCallbacks(callbacks);
+
+      fireTap(50, 50);   // first tap → tile (1,1)
+      tapCount = 1;
+      fireTap(200, 200); // second tap → different tile (3,4) → retarget, NOT confirm
+
+      expect(confirmPlacement).not.toHaveBeenCalled();
+      expect(showPreviewAt).toHaveBeenCalledTimes(2);
+      expect(showPreviewAt).toHaveBeenCalledWith(1, 1);
+      expect(showPreviewAt).toHaveBeenCalledWith(3, 4);
+      // getPendingTile should track the latest tile
+      expect(service.getPendingTile()).toEqual({ row: 3, col: 4 });
+    });
+
+    it('tapping off-board (resolveTileCoord returns null) cancels the pending preview', () => {
+      const canvas = makeCanvas();
+      service.init(canvas, () => {});
+      const { callbacks, hidePreview, onPendingTileChanged } = makePlacementCallbacks({
+        coord: { row: 1, col: 1 },
+      });
+      service.initPlacementCallbacks(callbacks);
+
+      fireTap(100, 100); // first tap — sets pending tile
+
+      // Now configure resolveTileCoord to return null (off-board miss)
+      (callbacks as unknown as { resolveTileCoord: () => null }).resolveTileCoord = () => null;
+      fireTap(999, 999); // tap off-board
+
+      expect(hidePreview).toHaveBeenCalled();
+      expect(onPendingTileChanged).toHaveBeenCalledWith(false);
+      expect(service.getPendingTile()).toBeNull();
+    });
+
+    it('tapping a structurally invalid tile (canPlaceAt=false) cancels the pending preview', () => {
+      const canvas = makeCanvas();
+      service.init(canvas, () => {});
+      // canPlace: false → occupied / wall / path-blocking tile
+      const { callbacks, hidePreview, onPendingTileChanged } = makePlacementCallbacks({
+        coord: { row: 2, col: 2 },
+        canPlace: false,
+      });
+      service.initPlacementCallbacks(callbacks);
+
+      fireTap(100, 100); // tap invalid tile — should NOT set pending
+
+      expect(hidePreview).toHaveBeenCalled();
+      expect(onPendingTileChanged).not.toHaveBeenCalledWith(true);
+      expect(service.getPendingTile()).toBeNull();
+    });
+
+    it('placing mode exit via clearPendingTile() resets pending state', () => {
+      const canvas = makeCanvas();
+      service.init(canvas, () => {});
+      const { callbacks, onPendingTileChanged } = makePlacementCallbacks({
+        coord: { row: 0, col: 0 },
+      });
+      service.initPlacementCallbacks(callbacks);
+
+      fireTap(10, 10); // set pending tile
+      service.clearPendingTile(); // simulate cancelPlacement() call
+
+      expect(service.getPendingTile()).toBeNull();
+      expect(onPendingTileChanged).toHaveBeenCalledWith(false);
+    });
+
+    it('does not intercept taps when not in place mode — forwards to onTap', () => {
+      let tapped = false;
+      const canvas = makeCanvas();
+      service.init(canvas, () => { tapped = true; });
+      const { callbacks } = makePlacementCallbacks({ isPlaceMode: false });
+      service.initPlacementCallbacks(callbacks);
+
+      fireTap(100, 100);
+
+      expect(tapped).toBeTrue();
+    });
+
+    it('cleanup() clears pending tile and nulls placement callbacks', () => {
+      const canvas = makeCanvas();
+      service.init(canvas, () => {});
+      const { callbacks, onPendingTileChanged } = makePlacementCallbacks({
+        coord: { row: 1, col: 1 },
+      });
+      service.initPlacementCallbacks(callbacks);
+
+      fireTap(10, 10); // set a pending tile
+      onPendingTileChanged.calls.reset();
+      service.cleanup();
+
+      expect(service.getPendingTile()).toBeNull();
+      // onPendingTileChanged notified during cleanup
+      expect(onPendingTileChanged).toHaveBeenCalledWith(false);
     });
   });
 });

@@ -159,7 +159,12 @@
          aria-live="polite">
       <app-icon name="crosshair" [size]="16" aria-hidden="true"></app-icon>
       <span class="placement-indicator__text">Place tower on the board</span>
-      <span class="placement-indicator__hint">Right-click to cancel</span>
+      <!-- Touch: swap hint based on two-step placement state -->
+      <span class="placement-indicator__hint placement-indicator__hint--confirm"
+            *ngIf="touchHasPendingTile; else desktopHint">Tap again to confirm</span>
+      <ng-template #desktopHint>
+        <span class="placement-indicator__hint">Right-click to cancel</span>
+      </ng-template>
     </div>
 
     <!-- Phase 4: End Turn button — only during combat (turn-based). -->

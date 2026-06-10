@@ -249,6 +249,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   set sellConfirmPending(v: boolean) { this.towerSelectionService.sellConfirmPending = v; }
   /** Tower type currently being previewed on touch devices (first tap). Null = no preview open. */
   previewTowerType: TowerType | null = null;
+  /**
+   * Two-step touch placement: true while a pending-preview tile is anchored
+   * (first tap done, awaiting second tap on same tile to confirm).
+   * Drives the "Tap again to confirm" affordance in the placement indicator.
+   */
+  touchHasPendingTile = false;
   targetingModeLabels = TARGETING_MODE_LABELS;
   /**
    * Pre-computed badge map — one array per EnemyType, built once at field initialisation.
@@ -692,6 +698,39 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }),
     });
     this.touchInteraction.init(canvas, (x, y) => this.boardPointer.handleInteraction(x, y));
+    this.touchInteraction.initPlacementCallbacks({
+      isPlaceMode: () => this.isPlaceMode,
+      resolveTileCoord: (x, y) => this.boardPointer.resolveTileAtClientPoint(x, y),
+      canPlaceAt: (row, col) => this.gameBoardService.canPlaceTower(row, col),
+      showPreviewAt: (row, col) => {
+        if (!this.selectedTowerType) return;
+        const tileCost = this.gameStateService.getEffectiveTowerCost(this.selectedTowerType);
+        const canPlace = this.gameBoardService.canPlaceTower(row, col)
+          && this.gameStateService.canAfford(tileCost);
+        this.towerPreviewService.showPreview(
+          this.selectedTowerType, row, col, canPlace, this.sceneService.getScene()
+        );
+        if (this.gameBoardService.canPlaceTower(row, col)) {
+          this.rangeVisualizationService.showForPosition(
+            this.selectedTowerType, row, col,
+            this.gameBoardService.getBoardWidth(),
+            this.gameBoardService.getBoardHeight(),
+            this.gameBoardService.getTileSize(),
+            this.sceneService.getScene()
+          );
+        } else {
+          this.rangeVisualizationService.hideHoverRange(this.sceneService.getScene());
+        }
+      },
+      hidePreview: () => {
+        if (this.sceneService.getScene()) {
+          this.towerPreviewService.hidePreview(this.sceneService.getScene());
+          this.rangeVisualizationService.hideHoverRange(this.sceneService.getScene());
+        }
+      },
+      confirmPlacement: (row, col) => this.onTilePlace(row, col),
+      onPendingTileChanged: (hasPendingTile) => { this.touchHasPendingTile = hasPendingTile; },
+    });
 
     this.towerPlacementService.init(
       this.boardPointer.raycaster,
@@ -868,6 +907,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Also hide the hover-range ring left over from PLACE mode
     // (RangeVisualizationService.showForPosition).
     this.rangeVisualizationService.hideHoverRange(this.sceneService.getScene());
+    // Clear two-step touch placement pending state so the confirm hint
+    // disappears and the service doesn't carry stale tile state.
+    this.touchInteraction.clearPendingTile();
+    this.touchHasPendingTile = false;
   }
 
   /** Whether a tower type is selected for placement (PLACE mode).
