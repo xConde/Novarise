@@ -419,18 +419,29 @@ describe('RunService', () => {
     expect(service.runState!.actIndex).toBe(1);
   }));
 
-  it('advanceAct() sets VICTORY status when final act (actsCount=2) is complete', fakeAsync(() => {
+  it('advanceAct() sets VICTORY status when final act (actsCount=3) is complete', fakeAsync(() => {
     service.startNewRun();
-    service.advanceAct(); // move to act 1
-    service.advanceAct(); // act 1 → complete (actsCount=2)
+    service.advanceAct(); // act 0 → 1
+    service.advanceAct(); // act 1 → 2
+    service.advanceAct(); // act 2 → complete (nextAct=3 >= actsCount=3)
     expect(service.runState!.status).toBe(RunStatus.VICTORY);
   }));
 
   it('advanceAct() calls persistence.setMaxAscension() on victory', fakeAsync(() => {
     service.startNewRun(); // ascensionLevel = 0
     service.advanceAct();
+    service.advanceAct();
     service.advanceAct(); // triggers victory at level 0 → records level 1
     expect(persistence.setMaxAscension).toHaveBeenCalledWith(1);
+  }));
+
+  it('advanceAct() on actIndex=1 (actsCount=3) advances to actIndex=2, status stays IN_PROGRESS', fakeAsync(() => {
+    // DEFAULT_RUN_CONFIG has actsCount=3 — act 0 → 1 → 2 → victory
+    service.startNewRun();
+    service.advanceAct(); // act 0 → 1
+    service.advanceAct(); // act 1 → 2 (not final — final is >= actsCount=3)
+    expect(service.runState!.actIndex).toBe(2);
+    expect(service.runState!.status).toBe(RunStatus.IN_PROGRESS);
   }));
 
   // ── abandonRun ───────────────────────────────────────────────

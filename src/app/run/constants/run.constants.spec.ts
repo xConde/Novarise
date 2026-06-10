@@ -144,6 +144,21 @@ describe('Ascent Constants', () => {
       // 9/11 ≈ 0.818 → late
       expect(getMapTierForNode(1, 9, totalRows)).toBe('act2_late');
     });
+
+    it('should return act3_early for act 2, row 0', () => {
+      // 0/11 = 0 → early
+      expect(getMapTierForNode(2, 0, totalRows)).toBe('act3_early');
+    });
+
+    it('should return act3_mid for act 2, row 5', () => {
+      // 5/11 ≈ 0.454 → mid
+      expect(getMapTierForNode(2, 5, totalRows)).toBe('act3_mid');
+    });
+
+    it('should return act3_late for act 2, row 8', () => {
+      // 8/11 ≈ 0.727 → late
+      expect(getMapTierForNode(2, 8, totalRows)).toBe('act3_late');
+    });
   });
 
   describe('NODE_MAP_CONFIG', () => {
@@ -213,6 +228,12 @@ describe('Ascent Constants', () => {
       expect(CAMPAIGN_MAP_TIERS['act2_early']).toBeDefined();
       expect(CAMPAIGN_MAP_TIERS['act2_mid']).toBeDefined();
       expect(CAMPAIGN_MAP_TIERS['act2_late']).toBeDefined();
+    });
+
+    it('should have entries for act3_early, act3_mid, act3_late', () => {
+      expect(CAMPAIGN_MAP_TIERS['act3_early']).toBeDefined();
+      expect(CAMPAIGN_MAP_TIERS['act3_mid']).toBeDefined();
+      expect(CAMPAIGN_MAP_TIERS['act3_late']).toBeDefined();
     });
 
     it('each tier should have at least one campaign map', () => {

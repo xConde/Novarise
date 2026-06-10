@@ -53,6 +53,8 @@ export const ENCOUNTER_CONFIG = {
   enemyCountBasePerWave: 5,
   enemyCountGrowthPerRow: 0.5,
   enemyCountActMultiplier: 1.4,
+  /** Act 3 applies this additionally on top of the act-2 multiplier (actIndex >= 2). */
+  enemyCountAct3Multiplier: 1.25,
 
   /** Elite encounter multipliers. */
   eliteHealthMultiplier: 1.5,
@@ -73,6 +75,9 @@ export const CAMPAIGN_MAP_TIERS: Record<string, string[]> = {
   act2_early: ['campaign_05', 'campaign_06', 'campaign_07', 'campaign_08'],
   act2_mid: ['campaign_09', 'campaign_10', 'campaign_11', 'campaign_12'],
   act2_late: ['campaign_13', 'campaign_14', 'campaign_15', 'campaign_16'],
+  act3_early: ['campaign_11', 'campaign_12', 'campaign_13', 'campaign_14'],
+  act3_mid: ['campaign_13', 'campaign_14', 'campaign_15', 'campaign_16'],
+  act3_late: ['campaign_15', 'campaign_16', 'campaign_15', 'campaign_16'],
 };
 
 /**
