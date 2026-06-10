@@ -51,9 +51,14 @@ consistent empty/loading states. WebGL-unavailable fallback screen.
 
 ## Phase 3 — Events & economy depth
 
-Event pool 18 → 40+, multi-stage/chained events, archetype-flavored
-events, consumables category (post-merge-handoff §3a), shop card-remove
-slot, relic re-tiering after playtest data.
+Corrected 2026-06-10 after code verification: consumables (8 ItemTypes,
+ItemService, shop slot, HUD peek, combat callbacks), event chains
+(3 flag-gated chains), and shop card-remove/upgrade slots ALL already
+shipped — the original audit items were stale. Remaining substance:
+event pool 19 → 40+ (more chains, item-reward events, card-economy
+events), archetype-flavored event eligibility (does not exist), softer
+event repeat behavior (uniform pool today — same event can repeat
+back-to-back). Relic re-tiering still deferred pending playtest data.
 
 ## Phase 4 — Siegeworks (archetype 4)
 

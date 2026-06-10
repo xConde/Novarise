@@ -122,6 +122,12 @@ export interface RunEvent {
    * is called and the event is excluded from future rolls.
    */
   readonly firesOncePerRun?: boolean;
+  /**
+   * If set, this event is only eligible when DeckService.getDominantArchetype()
+   * returns this archetype. 'neutral' is NOT a valid value here — use only
+   * 'cartographer' | 'highground' | 'conduit'.
+   */
+  readonly requiresDominantArchetype?: 'cartographer' | 'highground' | 'conduit';
 }
 
 export interface EventChoice {

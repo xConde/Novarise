@@ -984,6 +984,9 @@ export class RunService {
       this.runStateFlagService.markEventConsumed(event.id);
     }
 
+    // Soft no-repeat: mark event seen unconditionally when it resolves.
+    this.runStateFlagService.markEventSeen(event.id);
+
     // Check for death by event
     const newStatus = newLives <= 0 ? RunStatus.DEFEAT : state.status;
     if (newLives <= 0) newLives = 0;
@@ -1026,7 +1029,8 @@ export class RunService {
   generateEvent(): void {
     const rng = this.getRng();
 
-    // Filter eligible events by run-state flag requirements and once-per-run consumption.
+    // Filter eligible events by flag requirements, once-per-run, and archetype gating.
+    const dominantArchetype = this.deckService.getDominantArchetype();
     const eligibleEvents = RUN_EVENTS.filter(e => {
       if (e.requiresFlag !== undefined && !this.runStateFlagService.hasFlag(e.requiresFlag)) {
         return false;
@@ -1037,13 +1041,21 @@ export class RunService {
       if (e.firesOncePerRun && this.runStateFlagService.isEventConsumed(e.id)) {
         return false;
       }
+      if (e.requiresDominantArchetype !== undefined && e.requiresDominantArchetype !== dominantArchetype) {
+        return false;
+      }
       return true;
     });
 
-    // Fall back to all events if every event is gated (shouldn't happen with current data).
+    // Fall back to all events if every event is gated.
     const pool = eligibleEvents.length > 0 ? eligibleEvents : [...RUN_EVENTS];
-    const index = Math.floor(rng() * pool.length);
-    this.currentEvent = pool[index];
+
+    // Soft no-repeat: prefer unseen events within the pool; fall back to full pool when all seen.
+    // Single rng() call regardless of which branch — preserves determinism.
+    const unseenPool = pool.filter(e => !this.runStateFlagService.isEventSeen(e.id));
+    const finalPool = unseenPool.length > 0 ? unseenPool : pool;
+    const index = Math.floor(rng() * finalPool.length);
+    this.currentEvent = finalPool[index];
   }
 
   /** Reveal an unknown node type (used for UNKNOWN nodes). */

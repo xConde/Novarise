@@ -1493,20 +1493,25 @@ describe('RunService', () => {
 
     /**
      * Helper: calls the real generateEvent() across every possible RNG index by
-     * forcing Math.random to return (i + 0.5) / poolSize for i in [0, poolSize).
-     * Returns the set of distinct event IDs produced.
+     * forcing Math.random to sweep (i + 0.5) / N for i in [0, N), where
+     * N = RUN_EVENTS.length. The eligible pool can never exceed the full
+     * catalog, so the sample stride over the actual pool is always ≤ 1 —
+     * guaranteeing every pool slot is hit regardless of how many events are
+     * filtered out (flags, consumption, archetype gating) or how many events
+     * the catalog grows to. Returns the set of distinct event IDs produced.
      *
      * Uses service['runRng'] = null to bypass SeededRng and use Math.random.
      */
-    function collectAllGeneratedEventIds(runSvc: RunService, poolSize: number): Set<string> {
+    function collectAllGeneratedEventIds(runSvc: RunService): Set<string> {
       const tSvc = runSvc as unknown as TestableRunService;
       const savedRng = tSvc.runRng;
       tSvc.runRng = null;
 
+      const sampleCount = RUN_EVENTS.length;
       const ids = new Set<string>();
       const spy = spyOn(Math, 'random');
-      for (let i = 0; i < poolSize; i++) {
-        spy.and.returnValue((i + 0.5) / poolSize);
+      for (let i = 0; i < sampleCount; i++) {
+        spy.and.returnValue((i + 0.5) / sampleCount);
         runSvc.generateEvent();
         const evt = runSvc.getCurrentEvent();
         if (evt) ids.add(evt.id);
@@ -1518,13 +1523,11 @@ describe('RunService', () => {
 
     it('excludes events where requiresFlag is set but flag is missing', fakeAsync(() => {
       // Spec exercises the real generateEvent() filter.
-      // Without IDOL_BARGAIN_TAKEN/MERCHANT_AIDED/SCOUT_SAVED set, the three Part-2
-      // chain events (requiresFlag gated) must never appear in any pool slot.
-      // Pool size without any flags = 22 total - 3 Part-2 gated = 19.
+      // Without any chain flags set, the Part-2 chain events (requiresFlag
+      // gated) must never appear in any pool slot.
       service.startNewRun();
       // No flags set.
-      const POOL_SIZE_NO_FLAGS = 19;
-      const ids = collectAllGeneratedEventIds(service, POOL_SIZE_NO_FLAGS);
+      const ids = collectAllGeneratedEventIds(service);
 
       expect(ids.has('wandering_merchant_return')).toBeFalse();
       expect(ids.has('cursed_idol_reckoning')).toBeFalse();
@@ -1534,25 +1537,22 @@ describe('RunService', () => {
     }));
 
     it('includes an event when requiresFlag is set AND the flag is present', fakeAsync(() => {
-      // With IDOL_BARGAIN_TAKEN set, cursed_idol_reckoning enters the eligible pool.
-      // Pool: 22 - 2 (other Part-2 events) - 1 (cursed_idol_offer excluded via requiresFlagAbsent) = 19.
+      // With IDOL_BARGAIN_TAKEN set, cursed_idol_reckoning enters the eligible
+      // pool (and cursed_idol_offer exits via requiresFlagAbsent).
       service.startNewRun();
       flagService.setFlag(FLAG_KEYS.IDOL_BARGAIN_TAKEN);
-      const POOL_SIZE_WITH_IDOL_FLAG = 19;
-      const ids = collectAllGeneratedEventIds(service, POOL_SIZE_WITH_IDOL_FLAG);
+      const ids = collectAllGeneratedEventIds(service);
 
       expect(ids.has('cursed_idol_reckoning')).toBeTrue();
     }));
 
     it('excludes events where requiresFlagAbsent is set and flag IS present', fakeAsync(() => {
-      // With MERCHANT_AIDED set, wandering_merchant_intro is excluded.
-      // wandering_merchant_return enters the pool (requiresFlag satisfied).
-      // wandering_merchant_intro exits (requiresFlagAbsent fails).
-      // Net pool size: 22 - 2 (other Part-2 gated) = 20, same size since one swaps.
+      // With MERCHANT_AIDED set, wandering_merchant_intro is excluded
+      // (requiresFlagAbsent fails) and wandering_merchant_return enters the
+      // pool (requiresFlag satisfied) — the chain parts swap.
       service.startNewRun();
       flagService.setFlag(FLAG_KEYS.MERCHANT_AIDED);
-      const POOL_SIZE_WITH_MERCHANT_FLAG = 20;
-      const ids = collectAllGeneratedEventIds(service, POOL_SIZE_WITH_MERCHANT_FLAG);
+      const ids = collectAllGeneratedEventIds(service);
 
       // wandering_merchant_intro is excluded because requiresFlagAbsent: MERCHANT_AIDED is set
       expect(ids.has('wandering_merchant_intro')).toBeFalse();
@@ -1562,11 +1562,9 @@ describe('RunService', () => {
 
     it('includes a requiresFlagAbsent event when the flag is NOT set', fakeAsync(() => {
       // Without MERCHANT_AIDED set, wandering_merchant_intro is in the eligible pool.
-      // Pool size without any flags = 19.
       service.startNewRun();
       // No flags set — merchant_aided absent.
-      const POOL_SIZE_NO_FLAGS = 19;
-      const ids = collectAllGeneratedEventIds(service, POOL_SIZE_NO_FLAGS);
+      const ids = collectAllGeneratedEventIds(service);
 
       expect(ids.has('wandering_merchant_intro')).toBeTrue();
     }));
@@ -1577,9 +1575,7 @@ describe('RunService', () => {
       service.startNewRun();
       flagService.setFlag(FLAG_KEYS.IDOL_BARGAIN_TAKEN);
       flagService.markEventConsumed('cursed_idol_reckoning');
-      // Pool: same as IDOL_BARGAIN_TAKEN case (19) minus the consumed event = 18.
-      const POOL_SIZE_IDOL_FLAG_CONSUMED = 18;
-      const ids = collectAllGeneratedEventIds(service, POOL_SIZE_IDOL_FLAG_CONSUMED);
+      const ids = collectAllGeneratedEventIds(service);
 
       expect(ids.has('cursed_idol_reckoning')).toBeFalse();
     }));

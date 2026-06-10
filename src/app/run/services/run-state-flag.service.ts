@@ -4,6 +4,7 @@ import { BehaviorSubject, Observable } from 'rxjs';
 export interface SerializedRunStateFlags {
   readonly entries: ReadonlyArray<readonly [string, number]>;
   readonly consumedEventIds: readonly string[];
+  readonly seenEventIds?: readonly string[];  // optional for backward compat — absent = empty
 }
 
 /**
@@ -17,6 +18,7 @@ export interface SerializedRunStateFlags {
 export class RunStateFlagService {
   private readonly flagMap = new Map<string, number>();
   private readonly consumedEventIds = new Set<string>();
+  private readonly seenEventIds = new Set<string>();
   private readonly flagsSubject = new BehaviorSubject<ReadonlyMap<string, number>>(
     new Map(this.flagMap),
   );
@@ -58,6 +60,7 @@ export class RunStateFlagService {
   resetForRun(): void {
     this.flagMap.clear();
     this.consumedEventIds.clear();
+    this.seenEventIds.clear();
     this.emit();
   }
 
@@ -73,6 +76,18 @@ export class RunStateFlagService {
     return this.consumedEventIds.has(id);
   }
 
+  // ── Seen Event IDs (soft no-repeat) ───────────────────────────
+
+  /** Mark an event as seen (called when it resolves — soft no-repeat). */
+  markEventSeen(id: string): void {
+    this.seenEventIds.add(id);
+  }
+
+  /** Returns true if the event has been seen this run. */
+  isEventSeen(id: string): boolean {
+    return this.seenEventIds.has(id);
+  }
+
   /** Returns a read-only snapshot of all current flags. */
   getAllFlags(): ReadonlyMap<string, number> {
     return new Map(this.flagMap);
@@ -84,6 +99,7 @@ export class RunStateFlagService {
     return {
       entries: [...this.flagMap.entries()].map(([k, v]) => [k, v] as const),
       consumedEventIds: [...this.consumedEventIds],
+      seenEventIds: [...this.seenEventIds],
     };
   }
 
@@ -99,6 +115,14 @@ export class RunStateFlagService {
       for (const id of s.consumedEventIds) {
         if (typeof id === 'string') {
           this.consumedEventIds.add(id);
+        }
+      }
+    }
+    this.seenEventIds.clear();
+    if (Array.isArray(s.seenEventIds)) {
+      for (const id of s.seenEventIds) {
+        if (typeof id === 'string') {
+          this.seenEventIds.add(id);
         }
       }
     }

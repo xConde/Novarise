@@ -6,6 +6,8 @@ export const FLAG_KEYS = {
   MERCHANT_AIDED: 'merchant_aided',
   IDOL_BARGAIN_TAKEN: 'idol_bargain_taken',
   SCOUT_SAVED: 'scout_saved',
+  DESERTER_ENCOUNTERED: 'deserter_encountered',
+  SIGNAL_RECEIVED: 'signal_received',
 } as const;
 
 export type FlagKey = typeof FLAG_KEYS[keyof typeof FLAG_KEYS];
