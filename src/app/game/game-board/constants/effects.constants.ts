@@ -222,6 +222,27 @@ export const WYRM_ASCENDANT_VISUAL_CONFIG = {
   eyeYOffsetMultiplier: 0.7,
 } as const;
 
+/**
+ * NOVA_SOVEREIGN orbiting shard rings visual config (Act 3 final boss).
+ * Three flat torus rings orbit the obelisk body at different Y angles,
+ * disposed with the enemy mesh via Three.js traverse.
+ */
+export const NOVA_SOVEREIGN_VISUAL_CONFIG = {
+  /** Torus radius as a multiple of enemy size. */
+  orbRadiusMultiplier: 0.90,
+  /** Torus tube radius as a multiple of enemy size. */
+  orbTubeMultiplier: 0.06,
+  orbRadialSegments: 6,
+  orbTubularSegments: 16,
+  /** X-rotation angles for each of the 3 shard rings (radians). */
+  orbShardAngles: [0, Math.PI / 3, -Math.PI / 3] as readonly number[],
+  orbEmissiveIntensity: 1.0,
+  orbRoughness: 0.2,
+  orbMetalness: 0.9,
+  /** Y offset from mesh midpoint — rings orbit at mid-height. */
+  orbYOffsetMultiplier: 0.5,
+} as const;
+
 /** Per-tower-type projectile appearance — color, emissive, scale, and emissive intensity.
  *  CHAIN and SLOW are omitted: CHAIN uses zigzag arc visuals, SLOW has no projectile. */
 export const PROJECTILE_VISUAL_CONFIG: Partial<Record<TowerType, {

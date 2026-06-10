@@ -10,7 +10,8 @@ interface TestableEnemyService {
 import { PathfindingService } from './pathfinding.service';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
-import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS, MINER_STATS, MINER_DIG_INTERVAL_TURNS, UNSHAKEABLE_STATS, VEINSEEKER_STATS, VEINSEEKER_SPEED_BOOST_WINDOW, VEINSEEKER_BOOSTED_TILES_PER_TURN } from '../models/enemy.model';
+import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS, MINER_STATS, MINER_DIG_INTERVAL_TURNS, UNSHAKEABLE_STATS, VEINSEEKER_STATS, VEINSEEKER_SPEED_BOOST_WINDOW, VEINSEEKER_BOOSTED_TILES_PER_TURN, NOVA_SOVEREIGN_SHIELD_REGEN_PER_TURN, NOVA_SOVEREIGN_ENRAGE_TILES_BONUS } from '../models/enemy.model';
+import { CHECKPOINT_VERSION } from '../models/encounter-checkpoint.model';
 import { GameBoardTile } from '../models/game-board-tile';
 import { GameModifier } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
@@ -4338,6 +4339,125 @@ describe('EnemyService', () => {
 
       // TITAN is not immune to exposed — takes +25%.
       expect(titan.health).toBe(healthBefore - 125);
+    });
+  });
+
+  // ── NOVA_SOVEREIGN mechanics ──────────────────────────────────
+
+  describe('NOVA_SOVEREIGN mechanics', () => {
+    it('CHECKPOINT_VERSION is 11', () => {
+      expect(CHECKPOINT_VERSION).toBe(11);
+    });
+
+    it('ENEMY_STATS[NOVA_SOVEREIGN] has expected stat values', () => {
+      const stats = ENEMY_STATS[EnemyType.NOVA_SOVEREIGN];
+      expect(stats.health).toBe(2800);
+      expect(stats.maxShield).toBe(400);
+      expect(stats.shieldRegenPerTurn).toBe(80);
+      expect(stats.leakDamage).toBe(10);
+    });
+
+    it('NOVA_SOVEREIGN size is larger than BOSS size', () => {
+      expect(ENEMY_STATS[EnemyType.NOVA_SOVEREIGN].size)
+        .toBeGreaterThan(ENEMY_STATS[EnemyType.BOSS].size);
+    });
+
+    it('tickNovaSovereignEffects() regenerates shield up to maxShield', () => {
+      const sovereign = service.spawnEnemy(EnemyType.NOVA_SOVEREIGN, mockScene)!;
+      // Drain shield to 0 to test regen from zero
+      sovereign.shield = 0;
+
+      service.tickNovaSovereignEffects();
+
+      expect(sovereign.shield).toBe(NOVA_SOVEREIGN_SHIELD_REGEN_PER_TURN);
+    });
+
+    it('tickNovaSovereignEffects() does not regen shield past maxShield', () => {
+      const sovereign = service.spawnEnemy(EnemyType.NOVA_SOVEREIGN, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.NOVA_SOVEREIGN].maxShield!;
+      // Set shield close to max so regen would overshoot
+      sovereign.shield = maxShield - 10;
+
+      service.tickNovaSovereignEffects();
+
+      expect(sovereign.shield).toBe(maxShield);
+    });
+
+    it('tickNovaSovereignEffects() triggers enrage when HP < 50%', () => {
+      const sovereign = service.spawnEnemy(EnemyType.NOVA_SOVEREIGN, mockScene)!;
+      const baseTilesPerTurn = ENEMY_STATS[EnemyType.NOVA_SOVEREIGN].tilesPerTurn;
+      // Drive health below the 50% enrage threshold
+      sovereign.health = Math.floor(sovereign.maxHealth * 0.49);
+
+      service.tickNovaSovereignEffects();
+
+      expect(sovereign.isEnraged).toBeTrue();
+      expect(sovereign.enragedTilesPerTurn)
+        .toBe(baseTilesPerTurn + NOVA_SOVEREIGN_ENRAGE_TILES_BONUS);
+    });
+
+    it('tickNovaSovereignEffects() enragedTilesPerTurn is strictly greater than base tilesPerTurn', () => {
+      const sovereign = service.spawnEnemy(EnemyType.NOVA_SOVEREIGN, mockScene)!;
+      sovereign.health = Math.floor(sovereign.maxHealth * 0.49);
+
+      service.tickNovaSovereignEffects();
+
+      expect(sovereign.enragedTilesPerTurn!)
+        .toBeGreaterThan(ENEMY_STATS[EnemyType.NOVA_SOVEREIGN].tilesPerTurn);
+    });
+
+    it('tickNovaSovereignEffects() does not enrage twice (no duplicate bonus)', () => {
+      const sovereign = service.spawnEnemy(EnemyType.NOVA_SOVEREIGN, mockScene)!;
+      sovereign.health = Math.floor(sovereign.maxHealth * 0.49);
+      // First tick — triggers enrage
+      service.tickNovaSovereignEffects();
+      const tilesAfterFirstEnrage = sovereign.enragedTilesPerTurn!;
+
+      // Second tick — must not apply bonus again
+      service.tickNovaSovereignEffects();
+
+      expect(sovereign.enragedTilesPerTurn).toBe(tilesAfterFirstEnrage);
+    });
+
+    it('tickNovaSovereignEffects() does not modify enraged flag if already enraged', () => {
+      const sovereign = service.spawnEnemy(EnemyType.NOVA_SOVEREIGN, mockScene)!;
+      sovereign.health = Math.floor(sovereign.maxHealth * 0.49);
+      sovereign.isEnraged = true;
+      sovereign.enragedTilesPerTurn = ENEMY_STATS[EnemyType.NOVA_SOVEREIGN].tilesPerTurn + NOVA_SOVEREIGN_ENRAGE_TILES_BONUS;
+      const tilesBeforeRetick = sovereign.enragedTilesPerTurn;
+
+      service.tickNovaSovereignEffects();
+
+      // isEnraged guard prevents double-apply
+      expect(sovereign.enragedTilesPerTurn).toBe(tilesBeforeRetick);
+    });
+
+    it('tickNovaSovereignEffects() skips dead enemies (health <= 0)', () => {
+      const sovereign = service.spawnEnemy(EnemyType.NOVA_SOVEREIGN, mockScene)!;
+      sovereign.health = 0;
+      sovereign.shield = 0;
+      // Mark as dying so the guard triggers
+      sovereign.dying = true;
+
+      service.tickNovaSovereignEffects();
+
+      // Shield should remain 0 — dead enemy is skipped
+      expect(sovereign.shield).toBe(0);
+    });
+
+    it('NOVA_SOVEREIGN with SLOW moves at least 1 tile despite slow reduction halving', () => {
+      // NOVA_SOVEREIGN has tilesPerTurn=1. SLOW normally gives reduction=1, which
+      // would freeze it. With NOVA_SOVEREIGN_SLOW_RESISTANCE_FACTOR=0.5,
+      // floor(1 * 0.5) = 0 effective reduction → enemy still advances 1 tile.
+      const sovereign = service.spawnEnemy(EnemyType.NOVA_SOVEREIGN, mockScene)!;
+      const initialPathIndex = sovereign.pathIndex;
+
+      // Provide a slow reduction of 1 (what SLOW status would give a normal enemy)
+      service.stepEnemiesOneTurn(() => 1);
+
+      // Despite the provided slow reduction of 1, NOVA_SOVEREIGN resistance halves
+      // it to 0 — so it advances its normal tilesPerTurn=1 tiles.
+      expect(sovereign.pathIndex).toBeGreaterThan(initialPathIndex);
     });
   });
 });

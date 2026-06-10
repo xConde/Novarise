@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Enemy, EnemyType, ENEMY_STATS, VEINSEEKER_BOOSTED_TILES_PER_TURN } from '../models/enemy.model';
+import { Enemy, EnemyType, ENEMY_STATS, VEINSEEKER_BOOSTED_TILES_PER_TURN, NOVA_SOVEREIGN_SLOW_RESISTANCE_FACTOR } from '../models/enemy.model';
 import { PlacedTower, getEffectiveStats } from '../models/tower.model';
 
 /**
@@ -108,7 +108,9 @@ export class ForwardSimulationService {
     return total;
   }
 
-  // Mirrors stepEnemiesOneTurn:373-386 — the canonical movement math.
+  // Mirrors stepEnemiesOneTurn:373-396 — the canonical movement math.
+  // Same precedence as the live engine: VEINSEEKER boost, then NOVA_SOVEREIGN
+  // enrage override, then NOVA_SOVEREIGN halved slow reduction.
   // Floor at 1 tile/turn matches the live engine's anti-freeze guarantee.
   private tilesPerTurnFor(
     enemy: Enemy,
@@ -120,7 +122,18 @@ export class ForwardSimulationService {
     if (enemy.type === EnemyType.VEINSEEKER && veinseekerBoosted) {
       baseTiles = VEINSEEKER_BOOSTED_TILES_PER_TURN;
     }
+    // NOVA_SOVEREIGN enrage: use the per-instance elevated tilesPerTurn.
+    if (enemy.type === EnemyType.NOVA_SOVEREIGN && enemy.isEnraged && enemy.enragedTilesPerTurn !== undefined) {
+      baseTiles = enemy.enragedTilesPerTurn;
+    }
+    // NOVA_SOVEREIGN slow resistance: halve the slow tile reduction (round
+    // down) — identical math to the live engine so the intent UI does not
+    // overpredict SLOW effectiveness against the final boss.
+    let effectiveSlowReduction = slowTileReduction;
+    if (enemy.type === EnemyType.NOVA_SOVEREIGN && effectiveSlowReduction > 0) {
+      effectiveSlowReduction = Math.floor(effectiveSlowReduction * NOVA_SOVEREIGN_SLOW_RESISTANCE_FACTOR);
+    }
     const enemySpeedReduction = enemySpeedSlow > 0 ? Math.floor(baseTiles * enemySpeedSlow) : 0;
-    return Math.max(1, baseTiles - slowTileReduction - enemySpeedReduction);
+    return Math.max(1, baseTiles - effectiveSlowReduction - enemySpeedReduction);
   }
 }

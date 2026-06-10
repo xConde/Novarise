@@ -106,6 +106,67 @@ describe('ForwardSimulationService', () => {
     });
   });
 
+  describe('NOVA_SOVEREIGN projection', () => {
+    it('predicts base 1 tile/turn for a non-enraged sovereign', () => {
+      // NOVA_SOVEREIGN base tilesPerTurn = 1 → 9 tiles → 9 turns
+      const enemy = makeEnemy({ type: EnemyType.NOVA_SOVEREIGN, path: makePath(10), pathIndex: 0 });
+      expect(svc.projectTurnsToExit(enemy)).toBe(9);
+    });
+
+    it('predicts 2 tiles/turn for an enraged sovereign', () => {
+      // Enrage sets enragedTilesPerTurn = base(1) + bonus(1) = 2 → ceil(9/2) = 5 turns
+      const enemy = makeEnemy({
+        type: EnemyType.NOVA_SOVEREIGN,
+        path: makePath(10),
+        pathIndex: 0,
+        isEnraged: true,
+        enragedTilesPerTurn: 2,
+      });
+      expect(svc.projectTurnsToExit(enemy)).toBe(5);
+    });
+
+    it('projectGridPosition advances 2 tiles/turn for an enraged sovereign', () => {
+      const enemy = makeEnemy({
+        type: EnemyType.NOVA_SOVEREIGN,
+        path: makePath(10),
+        pathIndex: 0,
+        isEnraged: true,
+        enragedTilesPerTurn: 2,
+      });
+      // pathIndex 0 + 2*3 = 6; path[6] → row=0, col=6
+      expect(svc.projectGridPosition(enemy, 3)).toEqual({ row: 0, col: 6 });
+    });
+
+    it('halves a SLOW tile reduction of 1 down to 0 against the sovereign', () => {
+      // Enraged at 2 tiles/turn, slow=1: floor(1 * 0.5) = 0 reduction → still 2
+      // tiles/turn → 5 turns. Without resistance this would be 2−1=1 → 9 turns.
+      const enemy = makeEnemy({
+        type: EnemyType.NOVA_SOVEREIGN,
+        path: makePath(10),
+        pathIndex: 0,
+        isEnraged: true,
+        enragedTilesPerTurn: 2,
+      });
+      expect(svc.projectTurnsToExit(enemy, /*slow*/ 1)).toBe(5);
+    });
+
+    it('does not halve SLOW reduction for non-sovereign enemies', () => {
+      // FAST at 2 tiles/turn with slow=1 takes the full reduction → 1 tile/turn → 9 turns
+      const enemy = makeEnemy({ type: EnemyType.FAST, path: makePath(10), pathIndex: 0 });
+      expect(svc.projectTurnsToExit(enemy, /*slow*/ 1)).toBe(9);
+    });
+
+    it('ignores the enrage flag when enragedTilesPerTurn is undefined (defensive)', () => {
+      const enemy = makeEnemy({
+        type: EnemyType.NOVA_SOVEREIGN,
+        path: makePath(10),
+        pathIndex: 0,
+        isEnraged: true,
+      });
+      expect(svc.projectTurnsToExit(enemy)).toBe(9);
+    });
+  });
+
   describe('projectGridPosition', () => {
     it('returns current gridPosition when path is empty', () => {
       const enemy = makeEnemy({ path: [], gridPosition: { row: 3, col: 4 } });

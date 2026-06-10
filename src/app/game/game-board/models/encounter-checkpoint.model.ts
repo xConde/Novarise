@@ -21,7 +21,7 @@ export type { SerializableTileElevationState };
 export type { SerializableTowerGraphState };
 
 /** Schema version — bump when the shape changes to enable migrations. */
-export const CHECKPOINT_VERSION = 10;
+export const CHECKPOINT_VERSION = 11;
 
 /** Plain-object snapshot of GameState (isPaused omitted — always false on restore). */
 export interface SerializableGameState {
@@ -98,6 +98,10 @@ export interface SerializableEnemy {
   readonly spawnedOnTurn?: number;
   /** True for UNSHAKEABLE elite — immune to DETOUR rerouting. Undefined on all other enemy types. */
   readonly immuneToDetour?: boolean;
+  /** True once NOVA_SOVEREIGN has enraged (first time HP < 50% of max). Undefined on all other enemy types. */
+  readonly isEnraged?: boolean;
+  /** Elevated tilesPerTurn for NOVA_SOVEREIGN after enrage. Undefined on all other enemy types. */
+  readonly enragedTilesPerTurn?: number;
 }
 
 /**

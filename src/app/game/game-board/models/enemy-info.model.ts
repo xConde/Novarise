@@ -189,4 +189,17 @@ export const ENEMY_INFO: Record<EnemyType, EnemyInfo> = {
     color: ENEMY_STATS[EnemyType.WYRM_ASCENDANT].color,
     immunities: ['Elevation damage bonuses'],
   },
+  // Act 3 final boss
+  [EnemyType.NOVA_SOVEREIGN]: {
+    type: EnemyType.NOVA_SOVEREIGN,
+    name: 'Nova Sovereign',
+    description: 'Act 3 final boss. Regenerates its Aegis shield each turn. Resists SLOW tile reduction at half effectiveness. Enrages at 50% HP — permanently gains +1 tile/turn.',
+    health: ENEMY_STATS[EnemyType.NOVA_SOVEREIGN].health,
+    speed: ENEMY_STATS[EnemyType.NOVA_SOVEREIGN].speed,
+    reward: ENEMY_STATS[EnemyType.NOVA_SOVEREIGN].value,
+    leakDamage: ENEMY_STATS[EnemyType.NOVA_SOVEREIGN].leakDamage,
+    special: 'Aegis shield regen per turn; slow resistance (half effect); enrages at 50% HP; 10 leak damage',
+    color: ENEMY_STATS[EnemyType.NOVA_SOVEREIGN].color,
+    immunities: [],
+  },
 };
