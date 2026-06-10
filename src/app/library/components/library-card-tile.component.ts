@@ -15,6 +15,8 @@ import {
 import { TOWER_CONFIGS, TowerType } from '../../game/game-board/models/tower.model';
 import { ARCHETYPE_DISPLAY } from '../../run/constants/archetype.constants';
 import { IconComponent } from '@shared/components/icon/icon.component';
+import { IconName } from '@shared/components/icon/icon-registry';
+import { towerTypeToIconName } from '@shared/components/icon/tower-icon.utils';
 import { DescriptionTextComponent } from '@shared/components/description-text/description-text.component';
 import { TowerThumbnailService } from '@core/services/tower-thumbnail.service';
 
@@ -104,6 +106,16 @@ export class LibraryCardTileComponent {
       case 'siegeworks':
       default:             return 'var(--card-backdrop-neutral)';
     }
+  }
+
+  /**
+   * Per-tower icon name for tower cards — replaces the generic crosshair.
+   * Falls back to 'crosshair' for non-tower cards.
+   */
+  get towerTypeIconName(): IconName {
+    const effect = this.definition.effect;
+    if (effect.type !== 'tower') return 'crosshair';
+    return towerTypeToIconName(effect.towerType);
   }
 
   /**

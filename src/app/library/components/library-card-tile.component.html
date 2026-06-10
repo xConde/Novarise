@@ -34,12 +34,13 @@
   <!-- Upgraded badge (top-center, hidden on undiscovered tiles and no-op upgrades). -->
   <span *ngIf="showUpgraded && !desaturated && hasMeaningfulUpgrade" class="tile__upgraded-badge" aria-hidden="true">+</span>
 
-  <!-- Type icon corner chip. -->
+  <!-- Type icon corner chip.
+       Tower cards show the per-tower-type glyph via towerTypeIconName. -->
   <span class="tile__type-icon" aria-hidden="true">
-    <app-icon *ngIf="definition.type === CardType.TOWER"    name="crosshair" [size]="18"></app-icon>
-    <app-icon *ngIf="definition.type === CardType.SPELL"    name="bolt"      [size]="18"></app-icon>
-    <app-icon *ngIf="definition.type === CardType.MODIFIER" name="shield"    [size]="18"></app-icon>
-    <app-icon *ngIf="definition.type === CardType.UTILITY"  name="gear"      [size]="18"></app-icon>
+    <app-icon *ngIf="definition.type === CardType.TOWER"    [name]="towerTypeIconName" [size]="18"></app-icon>
+    <app-icon *ngIf="definition.type === CardType.SPELL"    name="bolt"                [size]="18"></app-icon>
+    <app-icon *ngIf="definition.type === CardType.MODIFIER" name="shield"              [size]="18"></app-icon>
+    <app-icon *ngIf="definition.type === CardType.UTILITY"  name="gear"                [size]="18"></app-icon>
   </span>
 
   <!-- DISCOVERED body: name, archetype, description. -->

@@ -16,6 +16,8 @@ import {
 import { TOWER_CONFIGS, TowerType } from '../../../game/game-board/models/tower.model';
 import { ARCHETYPE_DISPLAY } from '../../../run/constants/archetype.constants';
 import { IconComponent } from '@shared/components/icon/icon.component';
+import { IconName } from '@shared/components/icon/icon-registry';
+import { towerTypeToIconName } from '@shared/components/icon/tower-icon.utils';
 import { TowerThumbnailService } from '@core/services/tower-thumbnail.service';
 
 /**
@@ -114,6 +116,16 @@ export class GameCardComponent {
     const archetype = this.definition.archetype ?? 'neutral';
     const trimVarStrong = ARCHETYPE_DISPLAY[archetype]?.trimVarStrong ?? '--card-trim-neutral-strong';
     return `var(${trimVarStrong})`;
+  }
+
+  /**
+   * Per-tower icon name for tower cards — replaces the generic crosshair.
+   * Returns 'crosshair' for non-tower cards (fallback handled in towerTypeToIconName).
+   */
+  get towerTypeIconName(): IconName {
+    const effect = this.definition.effect;
+    if (effect.type !== 'tower') return 'crosshair';
+    return towerTypeToIconName(effect.towerType);
   }
 
   /**
