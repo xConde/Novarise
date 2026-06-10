@@ -44,6 +44,10 @@ describe('LandingComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('starParticles has 24 entries', () => {
+    expect(component.starParticles.length).toBe(24);
+  });
+
   it('should render the game title', () => {
     const title = fixture.nativeElement.querySelector('.landing-title');
     expect(title.textContent).toContain('NOVARISE');
@@ -90,11 +94,11 @@ describe('LandingComponent', () => {
       expect(component.hasSavedRun).toBeTrue();
     });
 
-    it('renders Continue Run button as primary', () => {
+    it('renders Continue Run button with hero styling', () => {
       const buttons = Array.from(fixture.nativeElement.querySelectorAll('.landing-btn')) as HTMLElement[];
       const continueBtn = buttons.find(b => b.textContent?.includes('Continue'));
       expect(continueBtn).toBeDefined();
-      expect(continueBtn?.classList.contains('landing-btn--primary')).toBeTrue();
+      expect(continueBtn?.classList.contains('landing-btn--hero')).toBeTrue();
     });
 
     it('Start Run button label switches to "Start New Run"', () => {

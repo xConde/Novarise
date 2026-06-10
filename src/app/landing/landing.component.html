@@ -1,12 +1,83 @@
+<!-- Title-screen backdrop: layered pure-CSS/SVG composition.
+     Layer order (bottom → top): sky gradient, spire silhouette,
+     star-field particles, horizon glow, content. -->
 <div class="landing-container">
-  <div class="landing-content">
-    <h1 class="landing-title">NOVARISE</h1>
-    <p class="landing-subtitle">Card-Driven Tower Defense Roguelite</p>
 
+  <!-- ── Backdrop layers ──────────────────────────────────────── -->
+  <div class="landing-backdrop" aria-hidden="true">
+
+    <!-- Layer 1: deep-space sky gradient (CSS background on the element itself) -->
+    <div class="landing-backdrop__sky"></div>
+
+    <!-- Layer 2: geometric Spire silhouette rising from the bottom -->
+    <div class="landing-backdrop__spire-wrap">
+      <svg class="landing-backdrop__spire"
+           viewBox="0 0 400 600"
+           xmlns="http://www.w3.org/2000/svg"
+           preserveAspectRatio="xMidYMax meet">
+        <!-- Outer spire body: narrow obelisk -->
+        <polygon class="spire__body"
+                 points="200,20 230,300 250,600 150,600 170,300"/>
+        <!-- Mid accent fins -->
+        <polygon class="spire__fin-left"
+                 points="170,280 130,480 150,600 175,400"/>
+        <polygon class="spire__fin-right"
+                 points="230,280 270,480 250,600 225,400"/>
+        <!-- Apex glow cap -->
+        <polygon class="spire__apex"
+                 points="200,20 218,160 200,140 182,160"/>
+        <!-- Window slot grid — 3 columns × 6 rows -->
+        <rect class="spire__window" x="185" y="200" width="8" height="14" rx="1"/>
+        <rect class="spire__window" x="196" y="200" width="8" height="14" rx="1"/>
+        <rect class="spire__window" x="207" y="200" width="8" height="14" rx="1"/>
+        <rect class="spire__window" x="185" y="222" width="8" height="14" rx="1"/>
+        <rect class="spire__window" x="196" y="222" width="8" height="14" rx="1"/>
+        <rect class="spire__window" x="207" y="222" width="8" height="14" rx="1"/>
+        <rect class="spire__window" x="185" y="244" width="8" height="14" rx="1"/>
+        <rect class="spire__window" x="196" y="244" width="8" height="14" rx="1"/>
+        <rect class="spire__window" x="207" y="244" width="8" height="14" rx="1"/>
+        <rect class="spire__window" x="185" y="266" width="8" height="14" rx="1"/>
+        <rect class="spire__window" x="196" y="266" width="8" height="14" rx="1"/>
+        <rect class="spire__window" x="207" y="266" width="8" height="14" rx="1"/>
+        <rect class="spire__window spire__window--lit" x="185" y="288" width="8" height="14" rx="1"/>
+        <rect class="spire__window" x="196" y="288" width="8" height="14" rx="1"/>
+        <rect class="spire__window spire__window--lit" x="207" y="288" width="8" height="14" rx="1"/>
+        <rect class="spire__window" x="185" y="310" width="8" height="14" rx="1"/>
+        <rect class="spire__window spire__window--lit" x="196" y="310" width="8" height="14" rx="1"/>
+        <rect class="spire__window" x="207" y="310" width="8" height="14" rx="1"/>
+      </svg>
+    </div>
+
+    <!-- Layer 3: drifting star-field (CSS animation on each particle) -->
+    <div class="landing-backdrop__stars">
+      <span
+        *ngFor="let p of starParticles"
+        class="star-particle"
+        [attr.data-index]="p">
+      </span>
+    </div>
+
+    <!-- Layer 4: horizon glow — breathing radial -->
+    <div class="landing-backdrop__horizon"></div>
+
+  </div>
+  <!-- ── End backdrop ─────────────────────────────────────────── -->
+
+  <!-- ── Foreground content ───────────────────────────────────── -->
+  <div class="landing-content" [class.landing-content--entered]="entered">
+
+    <!-- Title block -->
+    <div class="landing-title-block">
+      <p class="landing-eyebrow">Defend the Spire</p>
+      <h1 class="landing-title">NOVARISE</h1>
+      <p class="landing-subtitle">Card-Driven Tower Defense Roguelite</p>
+    </div>
+
+    <!-- Primary CTA group -->
     <div class="landing-actions">
       <button
         *ngIf="hasSavedRun"
-        class="landing-btn landing-btn--primary"
+        class="landing-btn landing-btn--hero"
         (click)="continueRun()">
         Continue Run
       </button>
@@ -21,40 +92,43 @@
       </button>
     </div>
 
-    <div class="ascension-selector" *ngIf="maxAscension > 0">
-      <div class="ascension-selector__row">
+    <!-- Ascension panel — shown only for returning players -->
+    <div class="ascension-panel" *ngIf="maxAscension > 0">
+      <div class="ascension-panel__row">
         <button
-          class="ascension-selector__step"
+          class="ascension-panel__step"
           (click)="stepAscension(-1)"
           [disabled]="selectedAscension === 0"
           aria-label="Decrease ascension">−</button>
-        <span class="ascension-selector__label">
+        <span class="ascension-panel__label">
           Ascension: A{{ selectedAscension }}
         </span>
         <button
-          class="ascension-selector__step"
+          class="ascension-panel__step"
           (click)="stepAscension(1)"
           [disabled]="selectedAscension === maxAscension"
           aria-label="Increase ascension">+</button>
       </div>
-      <ul class="ascension-selector__stack"
+      <ul class="ascension-panel__stack"
           *ngIf="getAscensionStack().length > 0"
           [attr.aria-label]="'Ascension ' + selectedAscension + ' modifiers — ' + getAscensionStack().length + ' total'">
         <li *ngFor="let mod of getAscensionStack()"
-            class="ascension-selector__stack-entry"
+            class="ascension-panel__stack-entry"
             [attr.title]="mod.description">
-          <span class="ascension-selector__stack-tier">A{{ mod.level }}</span>
-          <span class="ascension-selector__stack-name">{{ mod.label }}</span>
+          <span class="ascension-panel__stack-tier">A{{ mod.level }}</span>
+          <span class="ascension-panel__stack-name">{{ mod.label }}</span>
         </li>
       </ul>
-      <span class="ascension-selector__mastered" *ngIf="isAscensionMastered">A20 ✓</span>
-      <span class="ascension-selector__beaten"
+      <span class="ascension-panel__mastered" *ngIf="isAscensionMastered">A20 ✓</span>
+      <span class="ascension-panel__beaten"
             *ngIf="showBeatenBadge"
             [attr.aria-label]="'Highest ascension beaten: A' + highestBeatenAscension">
         Best: A{{ highestBeatenAscension }}
       </span>
     </div>
+
   </div>
+  <!-- ── End foreground ───────────────────────────────────────── -->
 
   <span class="landing-version">v0.2.0 · turn-based pivot</span>
 </div>
