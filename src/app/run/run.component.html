@@ -165,6 +165,20 @@
     (continued)="onActTransitionContinued()"
   ></app-act-transition>
 
+  <!-- ── Victory Epilogue ──────────────────────────────────── -->
+  <!--
+    Shown on VICTORY between the final-boss defeat and the run summary.
+    Cold-load / already-passed safety: if RunStatus is VICTORY on init,
+    ngOnInit routes to 'map' (hasActiveRun path) — the run is already
+    cleaned up by advanceAct(). That naturally falls through to summary
+    without stranding the player in the epilogue.
+  -->
+  <app-run-epilogue
+    *ngIf="viewMode === 'epilogue'"
+    [unlockedAscensionLevel]="epilogueUnlockedAscension"
+    (continued)="onEpilogueContinued()"
+  ></app-run-epilogue>
+
   <!-- ── Run Summary ─────────────────────────────────────── -->
   <app-run-summary
     *ngIf="viewMode === 'summary' && runState"

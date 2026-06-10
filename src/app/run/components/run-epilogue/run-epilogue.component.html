@@ -1,0 +1,50 @@
+<div class="run-epilogue" role="main" aria-label="Victory epilogue">
+
+  <!-- ── Stage A: Title moment ─────────────────────────────────────────────── -->
+  <div class="run-epilogue__title-block" [class.run-epilogue__title-block--visible]="titleVisible" aria-live="assertive">
+    <p class="run-epilogue__eyebrow">NOVA SOVEREIGN DEFEATED</p>
+    <h1 class="run-epilogue__title">THE SPIRE STANDS</h1>
+  </div>
+
+  <!-- ── Stage B: Epilogue copy ────────────────────────────────────────────── -->
+  <div class="run-epilogue__copy" [class.run-epilogue__copy--visible]="copyVisible">
+    <p class="run-epilogue__line">
+      The Sovereign's siege lattice collapsed at 0300 hours.
+      Uplink confirmed: the Spire's core transmitters are intact.
+    </p>
+    <p class="run-epilogue__line">
+      What they sent against us was their best—and it wasn't enough.
+      The line held. Engineers are already pulling signal data from
+      the wreckage. The war is not over, but tonight, the Spire endures.
+    </p>
+    <p class="run-epilogue__line run-epilogue__line--debrief">
+      — Field Debrief, Relay Station Gamma-7
+    </p>
+  </div>
+
+  <!-- ── Stage C: Ascension unlock (conditional) ───────────────────────────── -->
+  <div
+    class="run-epilogue__ascension"
+    *ngIf="showAscensionLine"
+    [class.run-epilogue__ascension--visible]="ascensionVisible"
+    aria-live="polite"
+  >
+    <span class="run-epilogue__ascension-icon">▲</span>
+    <span class="run-epilogue__ascension-text">
+      Ascension {{ unlockedAscensionLevel }} unlocked
+    </span>
+  </div>
+
+  <!-- ── Stage D: Continue button ──────────────────────────────────────────── -->
+  <div class="run-epilogue__actions" [class.run-epilogue__actions--visible]="buttonVisible">
+    <button
+      class="run-epilogue__btn"
+      (click)="onContinue()"
+      [disabled]="!buttonVisible"
+      aria-label="Continue to run summary"
+    >
+      Continue
+    </button>
+  </div>
+
+</div>
