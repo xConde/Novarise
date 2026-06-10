@@ -414,7 +414,7 @@ export const ACT3_BOSS_PRESETS: BossPreset[] = [
   {
     id: 'vanguard_convergence',
     name: 'Vanguard Convergence',
-    description: 'An armored column of elites that refuses to break.',
+    description: 'Every elite variant converges at once — Titans, Unshakeables, and shielded guards arriving in overlapping waves.',
     waves: [
       // Wave 1: Armored advance opens the march
       {
