@@ -45,6 +45,8 @@ describe('SettingsService', () => {
   it('should load persisted settings on construction', () => {
     const saved: GameSettings = {
       audioMuted: true,
+      musicEnabled: false,
+      musicVolume: 0.2,
       difficulty: DifficultyLevel.NIGHTMARE,
       showFps: true,
       reduceMotion: true,

@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { RunPersistenceService } from '../run/services/run-persistence.service';
 import { RunService } from '../run/services/run.service';
+import { MusicService } from '../core/services/music.service';
 import { ASCENSION_LEVELS, AscensionLevel, MAX_ASCENSION_LEVEL } from '../run/models/ascension.model';
 
 /**
@@ -37,6 +38,7 @@ export class LandingComponent implements OnInit {
     private router: Router,
     private runPersistence: RunPersistenceService,
     private runService: RunService,
+    private musicService: MusicService,
   ) {}
 
   ngOnInit(): void {
@@ -44,6 +46,7 @@ export class LandingComponent implements OnInit {
     this.maxAscension = this.runPersistence.getMaxAscension();
     // Default to highest unlocked level so returning players don't have to step up.
     this.selectedAscension = this.maxAscension;
+    this.musicService.playTheme('hub');
   }
 
   /** Step the ascension selector by delta, clamped to [0, maxAscension]. */

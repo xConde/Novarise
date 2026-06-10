@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { SettingsComponent } from './settings.component';
 import { SettingsService, GameSettings } from '../core/services/settings.service';
+import { MusicService } from '../core/services/music.service';
 import { DifficultyLevel } from '../game/game-board/models/game-state.model';
 
 describe('SettingsComponent', () => {
@@ -10,6 +11,8 @@ describe('SettingsComponent', () => {
 
   const mockSettings: GameSettings = {
     audioMuted: false,
+    musicEnabled: true,
+    musicVolume: 0.4,
     difficulty: DifficultyLevel.NORMAL,
     showFps: false,
     reduceMotion: false,
@@ -19,10 +22,15 @@ describe('SettingsComponent', () => {
     settingsService = jasmine.createSpyObj('SettingsService', ['get', 'update']);
     settingsService.get.and.returnValue({ ...mockSettings });
 
+    const musicServiceSpy = jasmine.createSpyObj('MusicService', [
+      'playTheme', 'stopMusic', 'setMusicVolume', 'setMusicEnabled', 'cleanup',
+    ]);
+
     await TestBed.configureTestingModule({
       declarations: [SettingsComponent],
       providers: [
         { provide: SettingsService, useValue: settingsService },
+        { provide: MusicService, useValue: musicServiceSpy },
       ]
     }).compileComponents();
 
@@ -80,16 +88,18 @@ describe('SettingsComponent', () => {
   it('should show "On" when audio is not muted', () => {
     component.audioMuted = false;
     fixture.detectChanges();
-    const toggleBtns = fixture.nativeElement.querySelectorAll('.setting-toggle');
-    const audioBtn = toggleBtns[0] as HTMLButtonElement;
+    const audioBtn = fixture.nativeElement.querySelector(
+      '.setting-toggle[data-setting="audio"]'
+    ) as HTMLButtonElement;
     expect((audioBtn.textContent ?? '').trim()).toBe('On');
   });
 
   it('should show "Muted" when audio is muted', () => {
     component.audioMuted = true;
     fixture.detectChanges();
-    const toggleBtns = fixture.nativeElement.querySelectorAll('.setting-toggle');
-    const audioBtn = toggleBtns[0] as HTMLButtonElement;
+    const audioBtn = fixture.nativeElement.querySelector(
+      '.setting-toggle[data-setting="audio"]'
+    ) as HTMLButtonElement;
     expect((audioBtn.textContent ?? '').trim()).toBe('Muted');
   });
 
@@ -112,16 +122,18 @@ describe('SettingsComponent', () => {
   it('should show "On" when FPS counter is enabled', () => {
     component.showFps = true;
     fixture.detectChanges();
-    const toggleBtns = fixture.nativeElement.querySelectorAll('.setting-toggle');
-    const fpsBtn = toggleBtns[1] as HTMLButtonElement;
+    const fpsBtn = fixture.nativeElement.querySelector(
+      '.setting-toggle[data-setting="fps"]'
+    ) as HTMLButtonElement;
     expect((fpsBtn.textContent ?? '').trim()).toBe('On');
   });
 
   it('should show "Off" when FPS counter is disabled', () => {
     component.showFps = false;
     fixture.detectChanges();
-    const toggleBtns = fixture.nativeElement.querySelectorAll('.setting-toggle');
-    const fpsBtn = toggleBtns[1] as HTMLButtonElement;
+    const fpsBtn = fixture.nativeElement.querySelector(
+      '.setting-toggle[data-setting="fps"]'
+    ) as HTMLButtonElement;
     expect((fpsBtn.textContent ?? '').trim()).toBe('Off');
   });
 
@@ -141,6 +153,8 @@ describe('SettingsComponent', () => {
     document.body.classList.remove('reduce-motion');
     settingsService.get.and.returnValue({
       audioMuted: false,
+      musicEnabled: true,
+      musicVolume: 0.4,
       difficulty: DifficultyLevel.NORMAL,
       showFps: false,
       reduceMotion: true,

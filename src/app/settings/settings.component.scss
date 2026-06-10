@@ -140,6 +140,13 @@
   }
 }
 
+.setting-slider {
+  width: 120px;
+  accent-color: var(--theme-purple);
+  cursor: pointer;
+  height: 2.75rem;  // match button height
+}
+
 // ── Responsive ────────────────────────────────────────────────────────────────
 
 @media (max-width: 600px) {

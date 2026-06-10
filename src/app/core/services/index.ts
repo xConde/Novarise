@@ -8,3 +8,4 @@ export * from './settings.service';
 export * from './storage.service';
 export * from './tutorial.service';
 export * from './tower-thumbnail.service';
+export * from './music.service';
