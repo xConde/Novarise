@@ -36,8 +36,15 @@ export class MinimapService {
 
   /**
    * Creates the minimap canvas and appends it to the given container.
+   * Idempotent: if the canvas already exists (e.g. restart without destroy),
+   * cleans up the old canvas before creating a new one so no duplicate nodes
+   * are appended.
    */
   init(container: HTMLElement): void {
+    // Guard against double-init in same component lifecycle (e.g. restart path).
+    if (this.canvas) {
+      this.cleanup();
+    }
     this.canvas = document.createElement('canvas');
     this.canvas.width = MINIMAP_CONFIG.canvasSize;
     this.canvas.height = MINIMAP_CONFIG.canvasSize;
