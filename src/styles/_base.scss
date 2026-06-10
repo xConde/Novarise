@@ -60,6 +60,16 @@ p {
   line-height: 1.5;
 }
 
+/* ── Font Scale ────────────────────────────────────────────────────────────
+   Classes toggled on <html> by SettingsService.applyFontScale().
+   Overriding html font-size rescales every rem-based token automatically.
+   The card-hand and HUD use rem tokens throughout, so they scale too.
+   Limit: surfaces that hard-code px values (rare — mostly px border widths)
+   will not scale. The 3D canvas viewport is unaffected (Three.js uses world
+   units, not CSS sizing). ──────────────────────────────────────────────── */
+html.font-scale-large  { font-size: 115%; } // 1.15 × 16px = 18.4px root
+html.font-scale-larger { font-size: 130%; } // 1.30 × 16px = 20.8px root
+
 /* Accessibility */
 .sr-only {
   position: absolute;

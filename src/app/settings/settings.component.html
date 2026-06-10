@@ -45,6 +45,7 @@
           <button
             *ngFor="let d of difficulties"
             class="setting-option-btn"
+            data-setting="difficulty"
             [class.active]="currentDifficulty === d"
             (click)="setDifficulty(d)"
             [attr.aria-pressed]="currentDifficulty === d"
@@ -70,6 +71,32 @@
           (click)="toggleReduceMotion()"
           [attr.aria-pressed]="reduceMotion"
         >{{ reduceMotion ? 'On' : 'Off' }}</button>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">
+          Colorblind Assist
+          <span class="setting-hint">Enemy &amp; status colours — takes effect next encounter</span>
+        </span>
+        <button
+          class="setting-toggle"
+          data-setting="colorblind"
+          [class.active]="colorblindAssist"
+          (click)="toggleColorblindAssist()"
+          [attr.aria-pressed]="colorblindAssist"
+        >{{ colorblindAssist ? 'On' : 'Off' }}</button>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Text Size</span>
+        <div class="setting-options" role="group" aria-label="Text size">
+          <button
+            *ngFor="let opt of fontScaleOptions"
+            class="setting-option-btn"
+            data-setting="font-scale"
+            [class.active]="currentFontScale === opt.value"
+            (click)="setFontScale(opt.value)"
+            [attr.aria-pressed]="currentFontScale === opt.value"
+          >{{ opt.label }}</button>
+        </div>
       </div>
     </div>
   </div>

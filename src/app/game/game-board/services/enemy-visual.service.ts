@@ -8,7 +8,9 @@ import {
   STATUS_EFFECT_PRIORITY,
   ENEMY_ANIM_CONFIG,
 } from '../constants/effects.constants';
+import { resolveEnemyColor, resolveStatusEmissive } from '../constants/colorblind.constants';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
+import { SettingsService } from '../../../core/services/settings.service';
 
 /**
  * Owns all per-frame visual and particle updates for enemies.
@@ -29,6 +31,8 @@ export class EnemyVisualService {
   /** One shared MeshBasicMaterial per active effect type. */
   private statusParticleMaterials: Partial<Record<StatusEffectType, THREE.MeshBasicMaterial>> = {};
 
+  constructor(private readonly settingsService: SettingsService) {}
+
   // -------------------------------------------------------------------------
   // Public API — called once per render frame by EnemyService
   // -------------------------------------------------------------------------
@@ -48,12 +52,19 @@ export class EnemyVisualService {
       const mat = enemy.mesh.material as THREE.MeshStandardMaterial;
       if (!mat.emissive) return;
 
+      const colorblindAssist = this.settingsService.get().colorblindAssist;
       const effects = activeEffects.get(enemy.id);
       if (effects && effects.length > 0) {
         // Pick highest-priority active effect for visual
         for (const priority of STATUS_EFFECT_PRIORITY) {
           if (effects.includes(priority)) {
-            const visual = STATUS_EFFECT_VISUALS[priority];
+            const defaultVisual = STATUS_EFFECT_VISUALS[priority];
+            const visual = resolveStatusEmissive(
+              priority,
+              defaultVisual.emissiveColor,
+              defaultVisual.emissiveIntensity,
+              colorblindAssist,
+            );
             mat.emissive.setHex(visual.emissiveColor);
             mat.emissiveIntensity = visual.emissiveIntensity;
             this.tintChildMeshes(enemy.mesh, visual.emissiveColor, visual.emissiveIntensity);
@@ -67,9 +78,10 @@ export class EnemyVisualService {
       const baseIntensity = enemy.isMiniSwarm
         ? ENEMY_VISUAL_CONFIG.miniSwarmEmissive
         : ENEMY_VISUAL_CONFIG.baseEmissive;
-      mat.emissive.setHex(stats.color);
+      const baseColor = resolveEnemyColor(enemy.type, stats.color, colorblindAssist);
+      mat.emissive.setHex(baseColor);
       mat.emissiveIntensity = baseIntensity;
-      this.tintChildMeshes(enemy.mesh, stats.color, baseIntensity);
+      this.tintChildMeshes(enemy.mesh, baseColor, baseIntensity);
     });
   }
 

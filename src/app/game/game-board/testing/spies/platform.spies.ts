@@ -107,6 +107,8 @@ export function createSettingsServiceSpy(): jasmine.SpyObj<SettingsService> {
     difficulty: DifficultyLevel.NORMAL,
     showFps: false,
     reduceMotion: false,
+    colorblindAssist: false,
+    fontScale: 1,
   };
   spy.get.and.returnValue(defaultSettings);
   return spy;

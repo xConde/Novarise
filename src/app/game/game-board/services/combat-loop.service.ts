@@ -16,6 +16,8 @@ import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 import { GamePhase } from '../models/game-state.model';
 import { ENEMY_STATS, EnemyType } from '../models/enemy.model';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
+import { resolveEnemyColor } from '../constants/colorblind.constants';
+import { SettingsService } from '../../../core/services/settings.service';
 import { CombatFrameResult, FrameKillEvent, KillInfo, WaveCompletionEvent, GameEndEvent } from '../models/combat-frame.model';
 import { TowerType } from '../models/tower.model';
 import { StatusEffectService } from './status-effect.service';
@@ -86,6 +88,8 @@ export class CombatLoopService {
     @Optional() private towerGraphService?: TowerGraphService,
     // @Optional() — absent in pre-aggregation test beds; flush becomes a no-op.
     @Optional() private damagePopupService?: DamagePopupService,
+    // @Optional() — absent in legacy test beds that don't provide SettingsService explicitly.
+    @Optional() private settingsService?: SettingsService,
   ) {}
 
   /** Phase 4: current turn number, exposed for UI bindings. */
@@ -474,7 +478,11 @@ export class CombatLoopService {
     this.frameKills.push({
       damage: killInfo.damage,
       position: { ...enemy.position },
-      color: ENEMY_STATS[enemy.type]?.color ?? ENEMY_VISUAL_CONFIG.fallbackColor,
+      color: resolveEnemyColor(
+        enemy.type,
+        ENEMY_STATS[enemy.type]?.color ?? ENEMY_VISUAL_CONFIG.fallbackColor,
+        this.settingsService?.get().colorblindAssist ?? false,
+      ),
       value: enemy.value,
     });
 

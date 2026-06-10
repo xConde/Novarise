@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { SettingsComponent } from './settings.component';
-import { SettingsService, GameSettings } from '../core/services/settings.service';
+import { FontScale, SettingsService, GameSettings } from '../core/services/settings.service';
 import { MusicService } from '../core/services/music.service';
 import { DifficultyLevel } from '../game/game-board/models/game-state.model';
 
@@ -16,10 +16,12 @@ describe('SettingsComponent', () => {
     difficulty: DifficultyLevel.NORMAL,
     showFps: false,
     reduceMotion: false,
+    colorblindAssist: false,
+    fontScale: 1,
   };
 
   beforeEach(async () => {
-    settingsService = jasmine.createSpyObj('SettingsService', ['get', 'update']);
+    settingsService = jasmine.createSpyObj('SettingsService', ['get', 'update', 'applyFontScale']);
     settingsService.get.and.returnValue({ ...mockSettings });
 
     const musicServiceSpy = jasmine.createSpyObj('MusicService', [
@@ -41,6 +43,7 @@ describe('SettingsComponent', () => {
 
   afterEach(() => {
     document.body.classList.remove('reduce-motion');
+    document.documentElement.classList.remove('font-scale-large', 'font-scale-larger');
   });
 
   it('should create', () => {
@@ -69,10 +72,10 @@ describe('SettingsComponent', () => {
   });
 
   it('should render 4 difficulty buttons', () => {
-    const allOptionBtns = Array.from(
-      fixture.nativeElement.querySelectorAll('.setting-option-btn')
+    const difficultyBtns = Array.from(
+      fixture.nativeElement.querySelectorAll('.setting-option-btn[data-setting="difficulty"]')
     ) as HTMLButtonElement[];
-    expect(allOptionBtns.length).toBe(4);
+    expect(difficultyBtns.length).toBe(4);
   });
 
   it('should toggle audio and call settingsService.update', () => {
@@ -158,6 +161,8 @@ describe('SettingsComponent', () => {
       difficulty: DifficultyLevel.NORMAL,
       showFps: false,
       reduceMotion: true,
+      colorblindAssist: false,
+      fontScale: 1 as const,
     });
     component.ngOnInit();
     expect(document.body.classList.contains('reduce-motion')).toBe(true);
@@ -182,6 +187,87 @@ describe('SettingsComponent', () => {
       DifficultyLevel.HARD,
       DifficultyLevel.NIGHTMARE,
     ]);
+  });
+
+  // ── Colorblind assist ──────────────────────────────────────────────────────
+
+  it('should load colorblindAssist from settings on init', () => {
+    settingsService.get.and.returnValue({ ...mockSettings, colorblindAssist: true });
+    component.ngOnInit();
+    expect(component.colorblindAssist).toBe(true);
+  });
+
+  it('should toggle colorblindAssist and persist', () => {
+    component.toggleColorblindAssist();
+    expect(component.colorblindAssist).toBe(true);
+    expect(settingsService.update).toHaveBeenCalledWith({ colorblindAssist: true });
+
+    component.toggleColorblindAssist();
+    expect(component.colorblindAssist).toBe(false);
+    expect(settingsService.update).toHaveBeenCalledWith({ colorblindAssist: false });
+  });
+
+  it('should render colorblind toggle with data-setting="colorblind"', () => {
+    const btn = fixture.nativeElement.querySelector(
+      '.setting-toggle[data-setting="colorblind"]'
+    ) as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+  });
+
+  it('should show "Off" when colorblindAssist is false', () => {
+    component.colorblindAssist = false;
+    fixture.detectChanges();
+    const btn = fixture.nativeElement.querySelector(
+      '.setting-toggle[data-setting="colorblind"]'
+    ) as HTMLButtonElement;
+    expect((btn.textContent ?? '').trim()).toBe('Off');
+  });
+
+  it('should show "On" when colorblindAssist is true', () => {
+    component.colorblindAssist = true;
+    fixture.detectChanges();
+    const btn = fixture.nativeElement.querySelector(
+      '.setting-toggle[data-setting="colorblind"]'
+    ) as HTMLButtonElement;
+    expect((btn.textContent ?? '').trim()).toBe('On');
+  });
+
+  // ── Font scale ─────────────────────────────────────────────────────────────
+
+  it('should load fontScale from settings on init', () => {
+    settingsService.get.and.returnValue({ ...mockSettings, fontScale: 1.15 as FontScale });
+    component.ngOnInit();
+    expect(component.currentFontScale).toBe(1.15);
+  });
+
+  it('should expose 3 fontScaleOptions (Normal / Large / Larger)', () => {
+    const labels = component.fontScaleOptions.map(o => o.label);
+    expect(labels).toEqual(['Normal', 'Large', 'Larger']);
+  });
+
+  it('should call setFontScale, persist, and call applyFontScale', () => {
+    component.setFontScale(1.3 as FontScale);
+    expect(component.currentFontScale).toBe(1.3 as FontScale);
+    expect(settingsService.update).toHaveBeenCalledWith({ fontScale: 1.3 as FontScale });
+    expect(settingsService.applyFontScale).toHaveBeenCalledWith(1.3 as FontScale);
+  });
+
+  it('should render font-scale option buttons with data-setting="font-scale"', () => {
+    const btns = fixture.nativeElement.querySelectorAll(
+      '.setting-option-btn[data-setting="font-scale"]'
+    ) as NodeListOf<HTMLButtonElement>;
+    expect(btns.length).toBe(3);
+  });
+
+  it('should mark the active font-scale button with the active class', () => {
+    component.currentFontScale = 1.15 as FontScale;
+    fixture.detectChanges();
+    const btns = Array.from(
+      fixture.nativeElement.querySelectorAll('.setting-option-btn[data-setting="font-scale"]')
+    ) as HTMLButtonElement[];
+    const active = btns.filter(b => b.classList.contains('active'));
+    expect(active.length).toBe(1);
+    expect((active[0].textContent ?? '').trim()).toBe('Large');
   });
 
 });

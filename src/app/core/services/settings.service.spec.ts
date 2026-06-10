@@ -1,4 +1,4 @@
-import { SettingsService, GameSettings } from './settings.service';
+import { FontScale, SettingsService, GameSettings } from './settings.service';
 import { DifficultyLevel } from '../../game/game-board/models/game-state.model';
 import { StorageService } from './storage.service';
 
@@ -22,6 +22,8 @@ describe('SettingsService', () => {
     expect(settings.difficulty).toBe(DifficultyLevel.NORMAL);
     expect(settings.showFps).toBe(false);
     expect(settings.reduceMotion).toBe(false);
+    expect(settings.colorblindAssist).toBe(false);
+    expect(settings.fontScale).toBe(1 as FontScale);
   });
 
   it('should persist settings to localStorage on update', () => {
@@ -50,6 +52,8 @@ describe('SettingsService', () => {
       difficulty: DifficultyLevel.NIGHTMARE,
       showFps: true,
       reduceMotion: true,
+      colorblindAssist: true,
+      fontScale: 1.3 as FontScale,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
 
@@ -59,6 +63,21 @@ describe('SettingsService', () => {
     expect(settings.difficulty).toBe(DifficultyLevel.NIGHTMARE);
     expect(settings.showFps).toBe(true);
     expect(settings.reduceMotion).toBe(true);
+    expect(settings.colorblindAssist).toBe(true);
+    expect(settings.fontScale).toBe(1.3 as FontScale);
+  });
+
+  it('should merge old saves missing colorblindAssist and fontScale with safe defaults', () => {
+    // Simulate a pre-accessibility save (no new keys)
+    const oldSave = { audioMuted: true, musicEnabled: false, musicVolume: 0.5,
+      difficulty: DifficultyLevel.HARD, showFps: false, reduceMotion: false };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(oldSave));
+
+    const freshService = new SettingsService(new StorageService());
+    const settings = freshService.get();
+    expect(settings.colorblindAssist).toBe(false); // default — do not force colorblind on
+    expect(settings.fontScale).toBe(1 as FontScale); // default — do not resize text unexpectedly
+    expect(settings.audioMuted).toBe(true);         // old save value preserved
   });
 
   it('should return defaults when localStorage contains invalid JSON', () => {
@@ -80,7 +99,8 @@ describe('SettingsService', () => {
   });
 
   it('should reset to defaults', () => {
-    service.update({ audioMuted: true, difficulty: DifficultyLevel.NIGHTMARE, showFps: true, reduceMotion: true });
+    service.update({ audioMuted: true, difficulty: DifficultyLevel.NIGHTMARE, showFps: true,
+      reduceMotion: true, colorblindAssist: true, fontScale: 1.3 as FontScale });
     service.reset();
 
     const settings = service.get();
@@ -88,6 +108,8 @@ describe('SettingsService', () => {
     expect(settings.difficulty).toBe(DifficultyLevel.NORMAL);
     expect(settings.showFps).toBe(false);
     expect(settings.reduceMotion).toBe(false);
+    expect(settings.colorblindAssist).toBe(false);
+    expect(settings.fontScale).toBe(1 as FontScale);
   });
 
   it('should return a copy from get() — mutations do not affect stored state', () => {
