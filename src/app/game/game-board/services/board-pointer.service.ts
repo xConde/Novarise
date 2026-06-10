@@ -244,6 +244,32 @@ export class BoardPointerService implements OnDestroy {
   }
 
   /**
+   * Pure-read raycast: resolve (clientX, clientY) to a tile coord without
+   * applying any highlights, selection, or placement side-effects.
+   *
+   * Used by the two-step touch placement flow so TouchInteractionService can
+   * determine which tile was tapped without duplicating raycast logic.
+   *
+   * Returns null when the point misses all tile pickables.
+   */
+  resolveTileAtClientPoint(clientX: number, clientY: number): { row: number; col: number } | null {
+    if (!this.canvas) return null;
+    const rect = this.canvas.getBoundingClientRect();
+    const mouseX = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const mouseY = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+    const tmpMouse = new THREE.Vector2(mouseX, mouseY);
+    const tmpRaycaster = new THREE.Raycaster();
+    tmpRaycaster.setFromCamera(tmpMouse, this.sceneService.getCamera());
+
+    const intersects = tmpRaycaster.intersectObjects(
+      this.meshRegistry.getTilePickables() as THREE.Object3D[],
+    );
+    if (intersects.length === 0) return null;
+    return this.meshRegistry.resolveTileHit(intersects[0]) ?? null;
+  }
+
+  /**
    * Reset the canvas cursor to default. Called by GameBoardComponent on
    * placement-mode exit (Escape, right-click, etc.) so a stale
    * 'not-allowed' cursor from hovering an invalid tile in PLACE mode

@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { SettingsService } from '../core/services/settings.service';
+import { FontScale, SettingsService } from '../core/services/settings.service';
 import { MusicService } from '../core/services/music.service';
 import { DifficultyLevel } from '../game/game-board/models/game-state.model';
 
@@ -15,12 +15,20 @@ export class SettingsComponent implements OnInit {
   currentDifficulty: DifficultyLevel = DifficultyLevel.NORMAL;
   showFps = false;
   reduceMotion = false;
+  colorblindAssist = false;
+  currentFontScale: FontScale = 1;
 
   readonly difficulties: DifficultyLevel[] = [
     DifficultyLevel.EASY,
     DifficultyLevel.NORMAL,
     DifficultyLevel.HARD,
     DifficultyLevel.NIGHTMARE,
+  ];
+
+  readonly fontScaleOptions: { value: FontScale; label: string }[] = [
+    { value: 1,    label: 'Normal' },
+    { value: 1.15, label: 'Large'  },
+    { value: 1.3,  label: 'Larger' },
   ];
 
   constructor(
@@ -40,6 +48,8 @@ export class SettingsComponent implements OnInit {
     this.currentDifficulty = s.difficulty;
     this.showFps = s.showFps;
     this.reduceMotion = s.reduceMotion;
+    this.colorblindAssist = s.colorblindAssist;
+    this.currentFontScale = s.fontScale;
     if (this.reduceMotion) {
       document.body.classList.add('reduce-motion');
     }
@@ -82,4 +92,14 @@ export class SettingsComponent implements OnInit {
     }
   }
 
+  toggleColorblindAssist(): void {
+    this.colorblindAssist = !this.colorblindAssist;
+    this.settingsService.update({ colorblindAssist: this.colorblindAssist });
+  }
+
+  setFontScale(scale: FontScale): void {
+    this.currentFontScale = scale;
+    this.settingsService.update({ fontScale: scale });
+    this.settingsService.applyFontScale(scale);
+  }
 }

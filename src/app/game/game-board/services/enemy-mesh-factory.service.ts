@@ -3,12 +3,15 @@ import * as THREE from 'three';
 import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_STATS } from '../models/enemy.model';
 import { HEALTH_BAR_CONFIG, HEALTH_BAR_PREDICTED_CONFIG, SHIELD_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { BOSS_CROWN_CONFIG, SHIELD_BREAK_CONFIG, WYRM_ASCENDANT_VISUAL_CONFIG, NOVA_SOVEREIGN_VISUAL_CONFIG } from '../constants/effects.constants';
+import { resolveEnemyColor } from '../constants/colorblind.constants';
 import { GeometryRegistryService } from './geometry-registry.service';
 import { MaterialRegistryService } from './material-registry.service';
+import { SettingsService } from '../../../core/services/settings.service';
 
 @Injectable()
 export class EnemyMeshFactoryService {
   constructor(
+    private readonly settingsService: SettingsService,
     @Optional() private readonly geometryRegistry?: GeometryRegistryService,
     @Optional() private readonly materialRegistry?: MaterialRegistryService,
   ) {}
@@ -38,7 +41,9 @@ export class EnemyMeshFactoryService {
     // Enemy body material is per-instance — death fade mutates `transparent`
     // and `opacity`, hit flash + status tinting mutate `emissive`. Caching
     // would alias every enemy of the same type.
-    const material = this.makeEnemyBodyMaterial(stats.color, materialSide);
+    const colorblindAssist = this.settingsService.get().colorblindAssist;
+    const bodyColor = resolveEnemyColor(enemy.type, stats.color, colorblindAssist);
+    const material = this.makeEnemyBodyMaterial(bodyColor, materialSide);
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(enemy.position.x, enemy.position.y, enemy.position.z);
@@ -116,7 +121,7 @@ export class EnemyMeshFactoryService {
     }
 
     if (enemy.type === EnemyType.BOSS) {
-      this.createBossCrown(mesh, stats.size, stats.color);
+      this.createBossCrown(mesh, stats.size, bodyColor);
     }
 
     if (enemy.type === EnemyType.WYRM_ASCENDANT) {
@@ -124,7 +129,7 @@ export class EnemyMeshFactoryService {
     }
 
     if (enemy.type === EnemyType.NOVA_SOVEREIGN) {
-      this.createNovaSovereignOrbShards(mesh, stats.size, stats.color);
+      this.createNovaSovereignOrbShards(mesh, stats.size, bodyColor);
     }
 
     return mesh;
@@ -324,9 +329,14 @@ export class EnemyMeshFactoryService {
     const geometry = this.oct(MINI_SWARM_STATS.size, 0);
     // Mini-swarm body material is per-instance — same mutation surface as
     // regular enemy body (status tint, hit flash, death fade).
+    const miniColor = resolveEnemyColor(
+      EnemyType.SWARM,
+      MINI_SWARM_STATS.color,
+      this.settingsService.get().colorblindAssist,
+    );
     const material = new THREE.MeshStandardMaterial({
-      color: MINI_SWARM_STATS.color,
-      emissive: MINI_SWARM_STATS.color,
+      color: miniColor,
+      emissive: miniColor,
       emissiveIntensity: ENEMY_VISUAL_CONFIG.miniSwarmEmissive,
       roughness: ENEMY_VISUAL_CONFIG.roughness,
       metalness: ENEMY_VISUAL_CONFIG.metalness,
