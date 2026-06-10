@@ -38,14 +38,8 @@ import { CombatVFXService } from './services/combat-vfx.service';
 import { CombatLoopService } from './services/combat-loop.service';
 import { GameModifier, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import {
-  createGameStatsServiceSpy,
   createTutorialServiceSpy,
-  createCombatLoopServiceSpy,
-  createMinimapServiceSpy,
   createSettingsServiceSpy,
-  createTowerAnimationServiceSpy,
-  createGamePauseServiceSpy,
-  createTowerUpgradeVisualServiceSpy,
   createRelicServiceSpy,
   createRunServiceSpy,
   createDeckServiceSpy,
@@ -167,27 +161,16 @@ interface TestableGameRenderService {
 describe('GameBoardComponent', () => {
   let component: GameBoardComponent;
   let fixture: ComponentFixture<GameBoardComponent>;
-  let gameStatsSpy: jasmine.SpyObj<GameStatsService>;
+  // Root/module-scoped services — spies reach the component because they are NOT
+  // in GameBoardComponent.providers, so the module-level provider wins.
   let playerProfileSpy: jasmine.SpyObj<PlayerProfileService>;
-  let damagePopupSpy: jasmine.SpyObj<DamagePopupService>;
-  let minimapSpy: jasmine.SpyObj<MinimapService>;
   let settingsSpy: jasmine.SpyObj<SettingsService>;
   let tutorialSpy: jasmine.SpyObj<TutorialService>;
   let tutorialStep$: BehaviorSubject<TutorialStep | null>;
-  let gameSessionSpy: jasmine.SpyObj<GameSessionService>;
-  let combatLoopSpy: jasmine.SpyObj<CombatLoopService>;
-  let gamePauseSpy: jasmine.SpyObj<GamePauseService>;
 
   beforeEach(async () => {
-    gameStatsSpy = createGameStatsServiceSpy();
-    gamePauseSpy = createGamePauseServiceSpy();
-
     playerProfileSpy = jasmine.createSpyObj('PlayerProfileService', ['recordGameEnd', 'getProfile', 'recordMapScore', 'recordChallengeCompleted', 'resetSession']);
     playerProfileSpy.recordGameEnd.and.returnValue([]);
-
-    damagePopupSpy = jasmine.createSpyObj('DamagePopupService', ['spawn', 'update', 'cleanup']);
-
-    minimapSpy = createMinimapServiceSpy();
 
     settingsSpy = createSettingsServiceSpy();
 
@@ -198,14 +181,18 @@ describe('GameBoardComponent', () => {
     tutorialStep$ = new BehaviorSubject<TutorialStep | null>(null);
     tutorialSpy.getCurrentStep.and.returnValue(tutorialStep$.asObservable());
 
-    gameSessionSpy = jasmine.createSpyObj('GameSessionService', ['resetAllServices', 'cleanupScene']);
-
-    combatLoopSpy = createCombatLoopServiceSpy();
-
     await TestBed.configureTestingModule({
       declarations: [ GameBoardComponent ],
       imports: [ RouterTestingModule ],
       providers: [
+        // Module-scoped (not in component providers — these spies genuinely reach the component)
+        { provide: PlayerProfileService, useValue: playerProfileSpy },
+        { provide: SettingsService, useValue: settingsSpy },
+        { provide: TutorialService, useValue: tutorialSpy },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: RunService, useValue: createRunServiceSpy() },
+        { provide: DeckService, useValue: createDeckServiceSpy() },
+        // Module-level infra (not component-scoped)
         BoardMeshRegistryService,
         GameBoardService,
         MapBridgeService,
@@ -216,36 +203,10 @@ describe('GameBoardComponent', () => {
         EnemyHealthService,
         StatusEffectService,
         CombatVFXService,
-        { provide: GameStatsService, useValue: gameStatsSpy },
-        { provide: PlayerProfileService, useValue: playerProfileSpy },
-        { provide: DamagePopupService, useValue: damagePopupSpy },
-        { provide: MinimapService, useValue: minimapSpy },
-        { provide: SettingsService, useValue: settingsSpy },
-        { provide: TutorialService, useValue: tutorialSpy },
-        { provide: GameSessionService, useValue: gameSessionSpy },
-        { provide: CombatLoopService, useValue: combatLoopSpy },
-        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
-        { provide: GamePauseService, useValue: gamePauseSpy },
-        { provide: TowerUpgradeVisualService, useValue: createTowerUpgradeVisualServiceSpy() },
-        { provide: RelicService, useValue: createRelicServiceSpy() },
-        { provide: RunService, useValue: createRunServiceSpy() },
-        { provide: DeckService, useValue: createDeckServiceSpy() },
         ChallengeDisplayService,
         ChainLightningService,
         TouchInteractionService,
         BoardPointerService,
-        {
-          provide: PathMutationService,
-          useValue: jasmine.createSpyObj<PathMutationService>('PathMutationService', [
-            'setRepathHook', 'tickTurn', 'reset', 'serialize', 'restore', 'swapMesh',
-          ]),
-        },
-        {
-          provide: ElevationService,
-          useValue: jasmine.createSpyObj<ElevationService>('ElevationService', [
-            'tickTurn', 'reset', 'serialize', 'restore', 'getElevation',
-          ]),
-        },
       ]
     })
     .compileComponents();
@@ -2376,13 +2337,11 @@ describe('GameBoardComponent', () => {
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
 
-      // Simulate cleanupScene clearing the registry (the real service does this;
-      // the spy is a no-op so we replicate that side-effect manually).
-      gameSessionSpy.cleanupScene.and.callFake(() => {
-        meshRegistry.tileMeshes.clear();
-        meshRegistry.towerMeshes.clear();
-      });
-
+      // GameSessionService is component-scoped (real instance). Its cleanupScene()
+      // clears tileMeshes and towerMeshes, then cleanupGameObjects() calls
+      // rebuildTileMeshArray() / rebuildTowerChildrenArray() → empty arrays.
+      // No stubbing needed: the real service clears the maps as part of its
+      // disposal logic.
       (component as unknown as TestableGameBoardComponent).cleanupGameObjects();
 
       expect(meshRegistry.getTileMeshArray().length).toBe(0);
@@ -2394,9 +2353,8 @@ describe('GameBoardComponent', () => {
       // minimap canvas. Without re-init, subsequent renders find no canvas and the
       // minimap is permanently dead for the rest of the component's lifetime.
       //
-      // NOTE: MinimapService is declared in GameBoardComponent.providers, so the
-      // component-scoped instance shadows the module-level minimapSpy provider.
-      // Spy on the instance the component actually injects.
+      // MinimapService is component-scoped — get the instance from the component
+      // injector so the spy is attached to what the component actually calls.
       const minimap = fixture.debugElement.injector.get(MinimapService);
       const initSpy = spyOn(minimap, 'init');
       // Stub the canvas container — these specs never call detectChanges(), so
