@@ -23,7 +23,7 @@ describe('CardDetailModalComponent', () => {
 
   const towerDef: CardDefinition = {
     id: CardId.TOWER_BASIC,
-    name: 'Basic Tower',
+    name: 'Pip · Basic',
     description: 'Place a basic tower.',
     type: CardType.TOWER,
     rarity: CardRarity.STARTER,
@@ -82,7 +82,7 @@ describe('CardDetailModalComponent', () => {
     component.definition = towerDef;
     refresh();
     const title = fixture.nativeElement.querySelector('.modal__title') as HTMLElement;
-    expect(title.textContent).toContain('Basic Tower');
+    expect(title.textContent).toContain('Pip · Basic');
   });
 
   it('renders both base and upgraded panels when upgradedEffect is defined', () => {

@@ -1362,7 +1362,7 @@ describe('CARD_DEFINITIONS', () => {
     // Smoke: spot-check specific lines render exactly as written
     it('TOWER_BASIC flavor matches expected text', () => {
       expect(CARD_DEFINITIONS[CardId.TOWER_BASIC].flavorText)
-        .toBe("Cheap. Reliable. Fires at whatever's closest.");
+        .toBe('First on the wall. Last to complain.');
     });
 
     it('PHANTOM_GOLD flavor matches expected text', () => {
