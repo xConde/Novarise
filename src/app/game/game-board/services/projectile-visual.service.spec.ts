@@ -593,7 +593,7 @@ describe('ProjectileVisualService', () => {
       expect(asTestable().entries[2].kind).toBe('arc');
       expect(asTestable().entries[3].kind).toBe('splash');
 
-      // Advance past the longest total lifetime (splash: 0.18 + 0.25 = 0.43s).
+      // Advance past the longest total lifetime (splash: 0.18 + 0.32 = 0.50s).
       const splashTotal = PROJECTILE_SPLASH_CONFIG.travelLifetimeSec
         + PROJECTILE_SPLASH_CONFIG.impactLifetimeSec;
       const maxLifetime = Math.max(
@@ -723,7 +723,7 @@ describe('ProjectileVisualService', () => {
       expect(asTestable().entries[3].kind).toBe('splash');
       expect(asTestable().entries[4].kind).toBe('aura');
 
-      // Advance past the longest total lifetime (aura at 0.45s > splash total 0.43s).
+      // Advance past the longest total lifetime (splash total 0.50s > aura 0.45s).
       const splashTotal = PROJECTILE_SPLASH_CONFIG.travelLifetimeSec
         + PROJECTILE_SPLASH_CONFIG.impactLifetimeSec;
       const maxLifetime = Math.max(
