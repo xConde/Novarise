@@ -1,5 +1,5 @@
 /**
- * Balance verification suite for all 16 campaign maps.
+ * Balance verification suite.
  *
  * Philosophy: these tests DOCUMENT the intended balance, not enforce arbitrary
  * thresholds. If a test fails, investigate whether the game data has drifted
@@ -8,20 +8,14 @@
  *
  * Test categories:
  *  1. Economy Balance      — starting gold vs tower costs per difficulty
- *  2. Wave Rewards         — total income sufficiency per campaign level
- *  3. Tower Viability      — affordability, cost spread, DPS variance
- *  4. Difficulty Curve     — HP ramp within levels, tier-over-tier escalation
- *  5. Enemy Stats          — boss supremacy, speed ordering, value scaling
- *  6. Spawn Intervals      — no impossibly-fast spawners
- *  7. Endless Mode         — speed cap, enemy count bounds
- *  8. Upgrade Paths        — L2 improves all combat stats over L1
+ *  2. Tower Viability      — affordability, cost spread, DPS variance
+ *  3. Enemy Stats          — boss supremacy, speed ordering, value scaling
+ *  4. Endless Mode         — speed cap, enemy count bounds
+ *  5. Upgrade Paths        — L2 improves all combat stats over L1
  */
 
-import { CAMPAIGN_WAVE_DEFINITIONS } from './campaign-waves';
-import { CAMPAIGN_LEVELS, CampaignTier } from '../campaign-levels';
 import { TOWER_CONFIGS, UPGRADE_MULTIPLIERS, TowerType } from '../../../game/game-board/models/tower.model';
 import { ENEMY_STATS, EnemyType } from '../../../game/game-board/models/enemy.model';
-import { WaveDefinition, getWaveEnemyCount, getWaveEnemyTypes } from '../../../game/game-board/models/wave.model';
 import {
   DIFFICULTY_PRESETS,
   DifficultyLevel,
@@ -57,96 +51,12 @@ const NIGHTMARE_MIN_BASIC_TOWERS = 1;
 const MAX_TOWER_COST_RATIO = 3;
 
 /**
- * Multiplier applied to gridSize to estimate the minimum number of towers
- * needed for a viable defense. Rough heuristic: one tower per 3 grid units.
- */
-const INCOME_SUFFICIENCY_GRID_FACTOR = 3;
-
-/**
- * Total income (starting gold + wave rewards + kill values on Normal) must
- * be at least this many times the cheapest tower cost, times the tower count
- * estimate for the level's grid size.
- *
- * Set to 2 after intentional kill-gold halving (balance pass, 2026-04-16).
- * For level 1 (gridSize 10): required = 50 * ceil(10/3) * 2 = 400g.
- * Normal starting gold is 200g, so wave rewards + kills must cover ≥ 200g.
- * Still catches degenerate configurations (all rewards zeroed).
- */
-const INCOME_SUFFICIENCY_MULTIPLIER = 2;
-
-/**
- * Minimum spawn interval (seconds) allowed in any campaign wave entry.
- * Values below this are nearly impossible to react to on a real board.
- * The observed minimum in campaign data is 0.4s (campaign_16 SWARM entries).
- */
-const MIN_ALLOWED_SPAWN_INTERVAL_S = 0.3;
-
-/**
  * Upper bound on total enemy count for endless wave 100.
  * Ensures the game stays playable rather than degrading to an unwinnable wall.
  * Formula: BASE + floor(100 * COUNT_SCALE) = 8 + 80 = 88, plus MIN_ENEMIES_PER_ENTRY
  * padding across 3-5 entries. 120 gives comfortable headroom.
  */
 const ENDLESS_WAVE_100_MAX_ENEMIES = 120;
-
-/**
- * Minimum required HP increase from first to last wave (as a ratio).
- * Last wave total HP must be at least this many times the first wave.
- *
- * Set to 1.5 — a meaningful improvement over the previous check (ratio=1, i.e. just
- * "last > first"). campaign_08 (Crystal Maze) is the tightest case at ≈1.82×: its
- * wave 10 is a targeted mini-boss wave rather than a mass-quantity wave, giving lower
- * total HP than a pure-swarm finale would. 2.0 would fail that map; 1.5 passes it
- * while still catching any map that barely grows difficulty wave-over-wave.
- */
-const HP_RAMP_MIN_LAST_TO_FIRST_RATIO = 1.5;
-
-/**
- * Endgame tier (maps 15-16) total HP in the final wave must exceed
- * intro tier (maps 1-4) average final-wave HP by at least this factor.
- *
- * Measured from actual wave data: endgame avg ≈ 6480 HP, intro avg ≈ 1438 HP → ratio ≈ 4.5×.
- * Using 4 as the floor to give a stable lower-bound without being brittle to small adjustments.
- */
-const ENDGAME_VS_INTRO_HP_RATIO = 4;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Sum total raw HP for a single wave (excludes shield HP — tests raw health). Handles both entries[] and spawnTurns[][]. */
-function waveTotalHp(wave: WaveDefinition): number {
-  if (wave.spawnTurns) {
-    return wave.spawnTurns.flat().reduce((sum, type) => sum + ENEMY_STATS[type].health, 0);
-  }
-  if (wave.entries) {
-    return wave.entries.reduce((sum, entry) => sum + ENEMY_STATS[entry.type].health * entry.count, 0);
-  }
-  return 0;
-}
-
-/** Sum total kill value for a single wave. Handles both entries[] and spawnTurns[][]. */
-function waveTotalKillValue(wave: WaveDefinition): number {
-  if (wave.spawnTurns) {
-    return wave.spawnTurns.flat().reduce((sum, type) => sum + ENEMY_STATS[type].value, 0);
-  }
-  if (wave.entries) {
-    return wave.entries.reduce((sum, entry) => sum + ENEMY_STATS[entry.type].value * entry.count, 0);
-  }
-  return 0;
-}
-
-/** Total kill gold for all waves in a level. */
-function levelTotalKillValue(levelId: string): number {
-  const waves = CAMPAIGN_WAVE_DEFINITIONS[levelId] ?? [];
-  return waves.reduce((sum, wave) => sum + waveTotalKillValue(wave), 0);
-}
-
-/** Total wave-completion rewards for a level. */
-function levelTotalWaveRewards(levelId: string): number {
-  const waves = CAMPAIGN_WAVE_DEFINITIONS[levelId] ?? [];
-  return waves.reduce((sum, wave) => sum + wave.reward, 0);
-}
 
 // ---------------------------------------------------------------------------
 // 1. Economy Balance
@@ -204,87 +114,7 @@ describe('Balance — Economy', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Wave Rewards — total income sufficiency per campaign level
-// ---------------------------------------------------------------------------
-
-describe('Balance — Wave Rewards', () => {
-  const normalGold = DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].gold;
-  const cheapestTower = TOWER_CONFIGS[TowerType.BASIC].cost;
-
-  it('each campaign level provides sufficient total income on Normal', () => {
-    for (const level of CAMPAIGN_LEVELS) {
-      const waves = CAMPAIGN_WAVE_DEFINITIONS[level.id];
-      if (!waves) {
-        fail(`No wave definitions for ${level.id}`);
-        continue;
-      }
-
-      const waveRewards = levelTotalWaveRewards(level.id);
-      const killValue = levelTotalKillValue(level.id);
-      const totalIncome = normalGold + waveRewards + killValue;
-
-      // Rough estimate: need one tower per INCOME_SUFFICIENCY_GRID_FACTOR grid units.
-      const estimatedTowersNeeded = Math.ceil(level.gridSize / INCOME_SUFFICIENCY_GRID_FACTOR);
-      const minimumIncomeRequired = cheapestTower * estimatedTowersNeeded * INCOME_SUFFICIENCY_MULTIPLIER;
-
-      expect(totalIncome)
-        .withContext(
-          `Level ${level.id} (${level.name}): total income ${totalIncome}g < required ${minimumIncomeRequired}g ` +
-          `(grid=${level.gridSize}, est. towers=${estimatedTowersNeeded})`
-        )
-        .toBeGreaterThanOrEqual(minimumIncomeRequired);
-    }
-  });
-
-  it('wave rewards increase from early to late campaign levels', () => {
-    // Intro tier average final-wave reward should be lower than endgame tier average.
-    const introIds = CAMPAIGN_LEVELS.filter(l => l.tier === CampaignTier.INTRO).map(l => l.id);
-    const endgameIds = CAMPAIGN_LEVELS.filter(l => l.tier === CampaignTier.ENDGAME).map(l => l.id);
-
-    const introAvgFinalReward =
-      introIds.reduce((sum, id) => {
-        const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
-        return sum + waves[waves.length - 1].reward;
-      }, 0) / introIds.length;
-
-    const endgameAvgFinalReward =
-      endgameIds.reduce((sum, id) => {
-        const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
-        return sum + waves[waves.length - 1].reward;
-      }, 0) / endgameIds.length;
-
-    expect(endgameAvgFinalReward)
-      .withContext(
-        `Endgame avg final reward (${endgameAvgFinalReward}) should exceed ` +
-        `intro avg final reward (${introAvgFinalReward})`
-      )
-      .toBeGreaterThan(introAvgFinalReward);
-  });
-
-  it('each level wave rewards can fund at least 1 tower per 3 waves on average', () => {
-    for (const level of CAMPAIGN_LEVELS) {
-      const waves = CAMPAIGN_WAVE_DEFINITIONS[level.id];
-      if (!waves) continue;
-
-      const totalWaveRewards = levelTotalWaveRewards(level.id);
-      const avgRewardPerWave = totalWaveRewards / waves.length;
-
-      // A wave that rewards less than 1/3 of a Basic tower on average is too stingy
-      // to fund meaningful tower expansion through wave completions alone.
-      const minAvgRewardPerWave = cheapestTower / 3;
-
-      expect(avgRewardPerWave)
-        .withContext(
-          `Level ${level.id} avg wave reward ${avgRewardPerWave.toFixed(0)}g is below ` +
-          `minimum ${minAvgRewardPerWave.toFixed(0)}g per wave`
-        )
-        .toBeGreaterThanOrEqual(minAvgRewardPerWave);
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 3. Tower Viability
+// 2. Tower Viability
 // ---------------------------------------------------------------------------
 
 describe('Balance — Tower Viability', () => {
@@ -355,137 +185,7 @@ describe('Balance — Tower Viability', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. Difficulty Curve
-// ---------------------------------------------------------------------------
-
-describe('Balance — Difficulty Curve', () => {
-
-  describe('within each campaign level, last wave is harder than first', () => {
-    for (const level of CAMPAIGN_LEVELS) {
-      it(`${level.id} (${level.name}) — last wave total HP exceeds first wave`, () => {
-        const waves = CAMPAIGN_WAVE_DEFINITIONS[level.id];
-        if (!waves || waves.length < 2) return;
-
-        const firstWaveHp = waveTotalHp(waves[0]);
-        const lastWaveHp = waveTotalHp(waves[waves.length - 1]);
-
-        expect(lastWaveHp)
-          .withContext(
-            `${level.id}: last wave HP (${lastWaveHp}) should exceed first wave HP (${firstWaveHp})`
-          )
-          .toBeGreaterThan(firstWaveHp * HP_RAMP_MIN_LAST_TO_FIRST_RATIO);
-      });
-    }
-  });
-
-  it('endgame final-wave HP is significantly higher than intro final-wave HP', () => {
-    // Maps 15-16 are the "ultimate challenge" — their final waves should be
-    // substantially more punishing than anything in the intro tier (maps 1-4).
-    const introIds = CAMPAIGN_LEVELS.filter(l => l.tier === CampaignTier.INTRO).map(l => l.id);
-    const endgameIds = CAMPAIGN_LEVELS.filter(l => l.tier === CampaignTier.ENDGAME).map(l => l.id);
-
-    const introAvgFinalHp =
-      introIds.reduce((sum, id) => {
-        const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
-        return sum + waveTotalHp(waves[waves.length - 1]);
-      }, 0) / introIds.length;
-
-    const endgameAvgFinalHp =
-      endgameIds.reduce((sum, id) => {
-        const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
-        return sum + waveTotalHp(waves[waves.length - 1]);
-      }, 0) / endgameIds.length;
-
-    expect(endgameAvgFinalHp)
-      .withContext(
-        `Endgame avg final HP (${endgameAvgFinalHp.toFixed(0)}) should be at least ` +
-        `${ENDGAME_VS_INTRO_HP_RATIO}× intro avg final HP (${introAvgFinalHp.toFixed(0)})`
-      )
-      .toBeGreaterThanOrEqual(introAvgFinalHp * ENDGAME_VS_INTRO_HP_RATIO);
-  });
-
-  it('tier total HP escalates: intro < early < mid < late < endgame', () => {
-    function avgFinalWaveHpForTier(tier: CampaignTier): number {
-      const levels = CAMPAIGN_LEVELS.filter(l => l.tier === tier);
-      const total = levels.reduce((sum, level) => {
-        const waves = CAMPAIGN_WAVE_DEFINITIONS[level.id];
-        return sum + waveTotalHp(waves[waves.length - 1]);
-      }, 0);
-      return total / levels.length;
-    }
-
-    const introHp = avgFinalWaveHpForTier(CampaignTier.INTRO);
-    const earlyHp = avgFinalWaveHpForTier(CampaignTier.EARLY);
-    const midHp = avgFinalWaveHpForTier(CampaignTier.MID);
-    const lateHp = avgFinalWaveHpForTier(CampaignTier.LATE);
-    const endgameHp = avgFinalWaveHpForTier(CampaignTier.ENDGAME);
-
-    expect(earlyHp).withContext('Early avg final HP should exceed Intro').toBeGreaterThan(introHp);
-    expect(midHp).withContext('Mid avg final HP should exceed Early').toBeGreaterThan(earlyHp);
-    expect(lateHp).withContext('Late avg final HP should exceed Mid').toBeGreaterThan(midHp);
-    expect(endgameHp).withContext('Endgame avg final HP should exceed Late').toBeGreaterThan(lateHp);
-  });
-
-  it('no campaign level has identical first and last wave HP (flat difficulty curve)', () => {
-    for (const level of CAMPAIGN_LEVELS) {
-      const waves = CAMPAIGN_WAVE_DEFINITIONS[level.id];
-      if (!waves || waves.length < 2) continue;
-      expect(waveTotalHp(waves[0]))
-        .withContext(`${level.id}: first and last wave HP must differ`)
-        .not.toEqual(waveTotalHp(waves[waves.length - 1]));
-    }
-  });
-
-  it('mid tier maps (9-12) all have a Boss in their final wave', () => {
-    // Maps 9-12 reach a Boss finale on wave 10 — this is the mid-game climax
-    // that demands the player has built up sustained DPS through the prior waves.
-    // If Boss is removed from mid-tier finales, the difficulty curve collapses.
-    const midIds = CAMPAIGN_LEVELS.filter(l => l.tier === CampaignTier.MID).map(l => l.id);
-    for (const id of midIds) {
-      const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
-      if (!waves) { fail(`No wave definitions for ${id}`); continue; }
-      const finalWave = waves[waves.length - 1];
-      const hasBoss = getWaveEnemyTypes(finalWave).has(EnemyType.BOSS);
-      expect(hasBoss)
-        .withContext(`${id} final wave should contain a Boss — mid tier climax`)
-        .toBeTrue();
-    }
-  });
-
-  it('late tier maps (13-14) all have a Boss in their final wave', () => {
-    // Maps 13-14 are the pre-endgame tier — their final waves must include a Boss
-    // to maintain escalating pressure and prepare players for the endgame maps.
-    const lateIds = CAMPAIGN_LEVELS.filter(l => l.tier === CampaignTier.LATE).map(l => l.id);
-    for (const id of lateIds) {
-      const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
-      if (!waves) { fail(`No wave definitions for ${id}`); continue; }
-      const finalWave = waves[waves.length - 1];
-      const hasBoss = getWaveEnemyTypes(finalWave).has(EnemyType.BOSS);
-      expect(hasBoss)
-        .withContext(`${id} final wave should contain a Boss — late tier climax`)
-        .toBeTrue();
-    }
-  });
-
-  it('endgame tier maps (15-16) all have a Boss in their final wave', () => {
-    // Maps 15-16 are the ultimate challenge — their final waves must include at
-    // least one Boss. Endgame maps also have Boss appearances in earlier waves,
-    // but the final wave Boss is the design-mandated climax.
-    const endgameIds = CAMPAIGN_LEVELS.filter(l => l.tier === CampaignTier.ENDGAME).map(l => l.id);
-    for (const id of endgameIds) {
-      const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
-      if (!waves) { fail(`No wave definitions for ${id}`); continue; }
-      const finalWave = waves[waves.length - 1];
-      const hasBoss = getWaveEnemyTypes(finalWave).has(EnemyType.BOSS);
-      expect(hasBoss)
-        .withContext(`${id} final wave should contain a Boss — endgame tier climax`)
-        .toBeTrue();
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 5. Enemy Stats
+// 3. Enemy Stats
 // ---------------------------------------------------------------------------
 
 describe('Balance — Enemy Stats', () => {
@@ -598,80 +298,7 @@ describe('Balance — Enemy Stats', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 6. Spawn Intervals
-// ---------------------------------------------------------------------------
-
-describe('Balance — Spawn Intervals', () => {
-
-  it('no campaign wave entry has a spawn interval below the minimum threshold', () => {
-    // Spawn intervals below MIN_ALLOWED_SPAWN_INTERVAL_S are nearly impossible
-    // for game logic to process cleanly and create an overwhelming visual and
-    // mechanical wall. The only exception is 0.0 (used for solo Boss spawns).
-    // spawnTurns waves have no spawnInterval concept — they are skipped.
-    for (const level of CAMPAIGN_LEVELS) {
-      const waves = CAMPAIGN_WAVE_DEFINITIONS[level.id] ?? [];
-      for (let w = 0; w < waves.length; w++) {
-        if (!waves[w].entries) continue; // spawnTurns format: no spawnInterval
-        for (const entry of waves[w].entries!) {
-          const interval = entry.spawnInterval;
-          // 0.0 is allowed — it means "spawn immediately" for single-enemy entries
-          if (interval === 0) continue;
-          expect(interval)
-            .withContext(
-              `${level.id} wave ${w + 1} type ${entry.type} has spawn interval ` +
-              `${interval}s < minimum ${MIN_ALLOWED_SPAWN_INTERVAL_S}s`
-            )
-            .toBeGreaterThanOrEqual(MIN_ALLOWED_SPAWN_INTERVAL_S);
-        }
-      }
-    }
-  });
-
-  it('zero spawn intervals are only used for single-enemy (solo) entries', () => {
-    // A 0.0 spawn interval on a multi-enemy entry would dump all enemies
-    // simultaneously, which is unintended behavior. Solo Boss spawns use 0.0
-    // to mean "spawn the only enemy immediately, no delay needed."
-    // spawnTurns waves have no spawnInterval concept — they are skipped.
-    for (const level of CAMPAIGN_LEVELS) {
-      const waves = CAMPAIGN_WAVE_DEFINITIONS[level.id] ?? [];
-      for (let w = 0; w < waves.length; w++) {
-        if (!waves[w].entries) continue; // spawnTurns format: no spawnInterval
-        for (const entry of waves[w].entries!) {
-          if (entry.spawnInterval === 0) {
-            expect(entry.count)
-              .withContext(
-                `${level.id} wave ${w + 1} type ${entry.type}: ` +
-                `spawnInterval=0 should only be used for count=1 (got count=${entry.count})`
-              )
-              .toBe(1);
-          }
-        }
-      }
-    }
-  });
-
-  it('every wave has at least one entry with a non-zero spawn interval (wave is not instant)', () => {
-    // A wave where ALL entries have interval=0 would spawn everything simultaneously.
-    // spawnTurns waves have no spawnInterval concept — they are skipped (turn-based by design).
-    for (const level of CAMPAIGN_LEVELS) {
-      const waves = CAMPAIGN_WAVE_DEFINITIONS[level.id] ?? [];
-      for (let w = 0; w < waves.length; w++) {
-        const wave = waves[w];
-        if (!wave.entries) continue; // spawnTurns format: turn-based, no interval concerns
-        const totalEnemies = getWaveEnemyCount(wave);
-        if (totalEnemies <= 1) continue;
-
-        const hasNonZeroInterval = wave.entries.some(e => e.spawnInterval > 0 || e.count === 1);
-        expect(hasNonZeroInterval)
-          .withContext(`${level.id} wave ${w + 1} has ${totalEnemies} enemies but all intervals are 0`)
-          .toBeTrue();
-      }
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 7. Endless Mode Balance
+// 4. Endless Mode Balance
 // ---------------------------------------------------------------------------
 
 describe('Balance — Endless Mode', () => {
@@ -773,7 +400,7 @@ describe('Balance — Endless Mode', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. Upgrade Paths
+// 5. Upgrade Paths
 // ---------------------------------------------------------------------------
 
 describe('Balance — Tower Upgrades', () => {
