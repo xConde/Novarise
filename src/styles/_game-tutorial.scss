@@ -41,12 +41,17 @@
 }
 
 /* Position by step */
+/* welcome / place_tower / complete: upper-right, below top HUD chrome.
+   Avoids the board center and the card-hand at the bottom.
+   Small screens fall back to a bottom-anchored center position. */
 .tutorial-card--welcome,
 .tutorial-card--place_tower,
 .tutorial-card--complete {
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  top: 8rem;
+  right: 1rem;
+  left: auto;
+  bottom: auto;
+  transform: none;
 }
 
 .tutorial-card--select_tower {
@@ -73,19 +78,18 @@
   transform: translateX(-50%);
 }
 
-/* Strategy tip cards — center-screen. Tips are informational (not
-   anchored to a specific UI element), so center-screen is the cleanest
-   placement that doesn't collide with HUD chrome at the top or the
-   card-hand at the bottom. */
+/* Strategy tip cards — upper-right, matching the welcome/complete anchor.
+   Tips are informational (not anchored to a specific UI element).
+   Upper-right stays clear of the board center and the card-hand. */
 .tutorial-card--tip_placement,
 .tutorial-card--tip_wave_preview,
 .tutorial-card--tip_upgrade,
 .tutorial-card--is-tip {
-  top: 50%;
-  left: 50%;
-  right: auto;
+  top: 8rem;
+  right: 1rem;
+  left: auto;
   bottom: auto;
-  transform: translate(-50%, -50%);
+  transform: none;
 }
 
 /* Fix 5: CSS triangle arrows connecting card to its target element */
@@ -205,6 +209,18 @@ body .tutorial-target-highlight {
     max-width: 90vw;
   }
 
+  /* welcome/place_tower/complete/tips: upper-right still works on tablets.
+     Constrain width so it doesn't bleed off-screen. */
+  .tutorial-card--welcome,
+  .tutorial-card--place_tower,
+  .tutorial-card--complete,
+  .tutorial-card--tip_placement,
+  .tutorial-card--tip_wave_preview,
+  .tutorial-card--tip_upgrade,
+  .tutorial-card--is-tip {
+    max-width: min(340px, calc(100vw - 2rem));
+  }
+
   .tutorial-card--select_tower {
     bottom: 7rem;
   }
@@ -231,6 +247,22 @@ body .tutorial-target-highlight {
 
 @media (max-width: 480px) {
   .tutorial-card {
+    max-width: 85vw;
+  }
+
+  /* On narrow phones fall back to bottom-center — upper-right is too cramped */
+  .tutorial-card--welcome,
+  .tutorial-card--place_tower,
+  .tutorial-card--complete,
+  .tutorial-card--tip_placement,
+  .tutorial-card--tip_wave_preview,
+  .tutorial-card--tip_upgrade,
+  .tutorial-card--is-tip {
+    top: auto;
+    right: auto;
+    bottom: 11rem; /* clear card hand */
+    left: 50%;
+    transform: translateX(-50%);
     max-width: 85vw;
   }
 

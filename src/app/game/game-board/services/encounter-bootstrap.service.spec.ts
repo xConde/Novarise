@@ -5,7 +5,6 @@ import { WaveService } from './wave.service';
 import { CombatLoopService } from './combat-loop.service';
 import { ChallengeDisplayService } from './challenge-display.service';
 import { GamePauseService } from './game-pause.service';
-import { TutorialService } from '../../../core/services/tutorial.service';
 import { AscensionModifierService } from './ascension-modifier.service';
 import { WavePreviewService } from './wave-preview.service';
 import { ElevationService } from './elevation.service';
@@ -23,7 +22,6 @@ describe('EncounterBootstrapService', () => {
   let combatLoopSpy: jasmine.SpyObj<CombatLoopService>;
   let challengeDisplaySpy: jasmine.SpyObj<ChallengeDisplayService>;
   let gamePauseSpy: jasmine.SpyObj<GamePauseService>;
-  let tutorialSpy: jasmine.SpyObj<TutorialService>;
   let ascensionSpy: jasmine.SpyObj<AscensionModifierService>;
   let wavePreviewSpy: jasmine.SpyObj<WavePreviewService>;
   let spawnPreviewSpy: jasmine.SpyObj<SpawnPreviewViewService>;
@@ -68,7 +66,6 @@ describe('EncounterBootstrapService', () => {
     );
     challengeDisplaySpy.updateIndicators.and.returnValue([]);
     gamePauseSpy = jasmine.createSpyObj<GamePauseService>('GamePauseService', ['reset']);
-    tutorialSpy = jasmine.createSpyObj<TutorialService>('TutorialService', ['dismissOnPlayerAction']);
     ascensionSpy = jasmine.createSpyObj<AscensionModifierService>('AscensionModifierService', ['apply']);
     wavePreviewSpy = jasmine.createSpyObj<WavePreviewService>('WavePreviewService', ['resetForEncounter']);
     spawnPreviewSpy = jasmine.createSpyObj<SpawnPreviewViewService>('SpawnPreviewViewService', ['refreshFor']);
@@ -91,7 +88,7 @@ describe('EncounterBootstrapService', () => {
 
     service = new EncounterBootstrapService(
       gameBoardSpy, gameStateSpy, waveSpy, combatLoopSpy, challengeDisplaySpy,
-      gamePauseSpy, tutorialSpy, ascensionSpy, wavePreviewSpy, spawnPreviewSpy,
+      gamePauseSpy, ascensionSpy, wavePreviewSpy, spawnPreviewSpy,
       waveCombatSpy, elevationSpy, runSpy, relicSpy, deckSpy, cardEffectSpy,
     );
   });
@@ -193,10 +190,9 @@ describe('EncounterBootstrapService', () => {
       expect(spawnPreviewSpy.refreshFor).toHaveBeenCalled();
     });
 
-    it('starts the first wave and dismisses tutorial when in run', () => {
+    it('starts the first wave when in run (tutorial dismiss not called — bootstrap is not a player action)', () => {
       runSpy.isInRun.and.returnValue(true);
       service.bootstrapFresh();
-      expect(tutorialSpy.dismissOnPlayerAction).toHaveBeenCalled();
       expect(waveCombatSpy.startWave).toHaveBeenCalled();
     });
 

@@ -6,7 +6,6 @@ import { CombatLoopService } from './combat-loop.service';
 import { ChallengeDisplayService } from './challenge-display.service';
 import { ChallengeIndicator } from '../components/game-hud/game-hud.component';
 import { GamePauseService } from './game-pause.service';
-import { TutorialService } from '../../../core/services/tutorial.service';
 import { AscensionModifierService } from './ascension-modifier.service';
 import { WavePreviewService } from './wave-preview.service';
 import { ElevationService } from './elevation.service';
@@ -43,7 +42,6 @@ export class EncounterBootstrapService {
     private combatLoopService: CombatLoopService,
     private challengeDisplayService: ChallengeDisplayService,
     private gamePauseService: GamePauseService,
-    private tutorialService: TutorialService,
     private ascensionModifier: AscensionModifierService,
     private wavePreviewService: WavePreviewService,
     private spawnPreview: SpawnPreviewViewService,
@@ -113,8 +111,10 @@ export class EncounterBootstrapService {
     this.spawnPreview.refreshFor(this.gameStateService.getState());
 
     if (this.runService.isInRun()) {
-      // Starting a wave counts as the START_WAVE tutorial step by definition.
-      this.tutorialService.dismissOnPlayerAction();
+      // Auto-start the first wave. Tutorial dismissal is NOT called here — the
+      // bootstrap path is not a player action and fires before the player has
+      // seen the WELCOME step. The START_WAVE dismiss fires from
+      // GameBoardComponent.startWave() when the player explicitly ends a turn.
       this.waveCombat.startWave();
     }
 

@@ -237,8 +237,10 @@ export class TutorialService {
       // Skipping during tips — mark tips done
       this.markTipsComplete();
     } else {
-      // Skipping during controls tutorial — mark both done
+      // Skipping during controls tutorial — mark both done so strategy tips
+      // never interrupt a player who has opted out of all onboarding.
       this.markTutorialComplete();
+      this.markTipsComplete();
     }
     this.currentStep$.next(null);
     this.save();
