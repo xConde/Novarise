@@ -4,6 +4,7 @@ import { CardDraftComponent } from './card-draft.component';
 import { CardId, CardRarity, CardType } from '../../models/card.model';
 import { CardReward } from '../../models/encounter.model';
 import { DescriptionTextComponent } from '@shared/components/description-text/description-text.component';
+import { getCardDefinition } from '../../constants/card-definitions';
 
 const MOCK_CHOICES: CardReward[] = [
   { type: 'card', cardId: CardId.GOLD_RUSH },
@@ -130,6 +131,34 @@ describe('CardDraftComponent', () => {
     expect(() => fixture.detectChanges()).not.toThrow();
     const cards = (fixture.nativeElement as HTMLElement).querySelectorAll('.card-draft__card');
     expect(cards.length).toBe(0);
+  });
+
+  describe('description rendering via app-description-text', () => {
+    it('renders description through app-description-text — no raw {kw-*} tokens in DOM output', () => {
+      // DESPERATE_MEASURES description contains "{kw-ethereal}" — it should be
+      // rendered as an icon by DescriptionTextComponent, not interpolated literally.
+      component.cardChoices = [{ type: 'card', cardId: CardId.DESPERATE_MEASURES }];
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      // The raw token must not appear as visible text in the card body.
+      expect(el.textContent).not.toContain('{kw-');
+      // The description element should contain an app-description-text child.
+      const descEl = el.querySelector('.card-draft__description');
+      expect(descEl?.querySelector('app-description-text')).toBeTruthy();
+    });
+
+    it('aria-label strips {kw-*} tokens to plain keyword names', () => {
+      // cardAriaLabel() must replace "{kw-ethereal}" with "Ethereal" so screen
+      // readers announce the keyword by name rather than the raw token syntax.
+      component.cardChoices = [{ type: 'card', cardId: CardId.DESPERATE_MEASURES }];
+      fixture.detectChanges();
+
+      const def = getCardDefinition(CardId.DESPERATE_MEASURES);
+      const label = component.cardAriaLabel({ reward: component.cardChoices[0], definition: def }, 0);
+      expect(label).not.toContain('{kw-');
+      expect(label).toContain('Ethereal');
+    });
   });
 
   describe('hover tooltip', () => {

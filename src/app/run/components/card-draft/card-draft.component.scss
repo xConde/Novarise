@@ -287,6 +287,28 @@
   filter: drop-shadow(0 0 min(0.75rem, var(--card-frame-drop-shadow-blur-max)) var(--game-gold-a50)) !important;
 }
 
+// ── Framed-card badge clearance ───────────────────────────────────────────────
+//
+// clip-path silhouettes cut the top corners of the card polygon. The spell
+// frame (--card-frame-spell-clip--tile) cuts to y=8% of card height (~24px on
+// a 304px card) — the deepest cut of the four types. The hotkey and cost badges
+// default to top: var(--spacing-xs) = 5px, placing them inside the clipped zone
+// and making them partially or fully invisible (the "torn dark shape" artifact).
+//
+// Nudging badge tops to var(--spacing-lg) = 24px clears the spell clip boundary
+// for all frame types. The badges shift ~19px lower than unframed cards; this is
+// intentional — the badge row sits just below where the peak/corner cut ends.
+
+.card-draft__card--frame-tower,
+.card-draft__card--frame-spell,
+.card-draft__card--frame-modifier,
+.card-draft__card--frame-utility {
+  .card-draft__hotkey,
+  .card-draft__cost {
+    top: var(--spacing-lg);
+  }
+}
+
 // ── Card inner elements ───────────────────────────────────────────────────────
 
 .card-draft__hotkey {
@@ -406,19 +428,18 @@
   }
 }
 
-// Effect glyph — hero art for non-tower draft cards. Sits centered between the
-// type-badge and footer. Color tracks per-card-type accent via [data-card-type].
+// Effect glyph — hero art for non-tower draft cards. Sits in the flex column
+// between the card name and the description text, giving it its own art-zone row
+// with no overlap. Mirrors library-card-tile's flow-positioned glyph pattern.
 .card-draft__art-glyph {
-  position: absolute;
-  bottom: var(--spacing-md);
-  left: 50%;
-  transform: translateX(-50%);
+  position: relative;
   display: inline-flex;
+  align-self: center;
   align-items: center;
   justify-content: center;
+  margin: var(--spacing-xs) 0;
   pointer-events: none;
   color: var(--card-type-spell);
-  z-index: 1;
 
   app-icon {
     opacity: 0.8;

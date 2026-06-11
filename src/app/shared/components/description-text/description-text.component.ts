@@ -20,6 +20,19 @@ export type DescriptionSegment = TextSegment | IconSegment;
 const TOKEN_RE = /\{kw-([a-z]+)\}/g;
 
 /**
+ * Strips `{kw-<name>}` tokens from a card description, replacing each with
+ * the capitalized keyword name (e.g. `{kw-ethereal}` → `Ethereal`). Unknown
+ * tokens are passed through as-is. Use this for aria-label strings where an
+ * icon cannot be rendered.
+ */
+export function stripKeywordTokens(description: string): string {
+  if (!description) return '';
+  return description.replace(TOKEN_RE, (_, name: string) =>
+    name.charAt(0).toUpperCase() + name.slice(1),
+  );
+}
+
+/**
  * Parses a card description string into an ordered array of text and icon
  * segments. Unknown `{kw-*}` tokens are passed through as plain text so a
  * typo never silently eats content.
