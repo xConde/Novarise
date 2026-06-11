@@ -1593,13 +1593,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   advanceTutorial() { this.tutorialFacade.advanceTutorial(); }
   skipTutorial() { this.tutorialFacade.skipTutorial(); }
 
-  /** Formats the total COMBAT elapsed time as "MM:SS". */
-  get formattedTime(): string {
-    const totalSeconds = Math.floor(this.gameState.elapsedTime);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  }
 
   get enemiesAlive(): number {
     return this.enemyService.getLivingEnemyCount();
