@@ -25,8 +25,13 @@
 export const PROJECTILE_SPLASH_CONFIG = {
   /** Travel phase duration in seconds (sphere flying from tower to impact). */
   travelLifetimeSec: 0.18,
-  /** Impact phase duration in seconds (ring expanding + fading). */
-  impactLifetimeSec: 0.25,
+  /**
+   * Impact phase duration in seconds (ring expanding + fading).
+   *
+   * Confetti personality: the impact ring is the party — it gets enough
+   * time to fully expand and read before fading, while travel stays snappy.
+   */
+  impactLifetimeSec: 0.32,
   /** Sphere radius for the travel phase (world units). */
   travelRadius: 0.14,
   /** Sphere segment count — kept low; small projectile. */
@@ -49,14 +54,18 @@ export const PROJECTILE_SPLASH_CONFIG = {
  * HITSCAN idiom — instantaneous line-flash from tower to target.
  * Used by SNIPER.  Other towers that also fire instantly (e.g. BASIC)
  * get a different idiom in a later sprint.
+ *
+ * Magpie personality: every hit is a trophy moment — the line lingers at
+ * full opacity slightly longer before fading, giving the shot presence
+ * proportional to the distance it just crossed.
  */
 export const PROJECTILE_HITSCAN_CONFIG = {
   /** Total lifetime in seconds. */
-  lifetimeSec: 0.12,
+  lifetimeSec: 0.15,
   /** Opacity fade-in duration in seconds. */
   fadeInSec: 0.03,
   /** Opacity fade-out starts at lifetimeSec − fadeOutSec. */
-  fadeOutSec: 0.05,
+  fadeOutSec: 0.065,
   /** World-unit Y offset above tower base for the line origin. */
   yOffsetTower: 0.6,
   /** World-unit Y offset above enemy base for the line endpoint. */

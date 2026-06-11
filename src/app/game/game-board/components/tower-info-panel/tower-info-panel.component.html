@@ -1,7 +1,7 @@
 <!-- Tower info panel -->
 <div class="tower-info-panel">
   <div class="tower-info-header">
-    <span class="tower-info-name">{{ towerInfo!.type | titlecase }}</span>
+    <span class="tower-info-name">{{ towerDisplayName(towerInfo!.type) }}</span>
     <span class="tower-info-level">
       <span *ngFor="let star of levelStars(towerInfo!.level)" class="level-star">&#9733;</span>
       <span *ngFor="let star of levelStars(MAX_TOWER_LEVEL - towerInfo!.level)" class="level-star empty">&#9733;</span>
@@ -46,7 +46,7 @@
       Upgrade ({{ upgradeCost }}g)<span class="upgrade-tile-percent" *ngIf="upgradePercent > 0"> +{{ upgradePercent }}%</span>
     </button>
     <span class="max-level-badge" *ngIf="towerInfo!.level >= MAX_TOWER_LEVEL">
-      {{ towerInfo!.specialization ? (towerInfo!.type | titlecase) + ' — ' + specLabel(towerInfo!) : 'MAX' }}
+      {{ towerInfo!.specialization ? towerNickname(towerInfo!.type) + ' — ' + specLabel(towerInfo!) : 'MAX' }}
     </span>
     <button
       class="sell-btn"

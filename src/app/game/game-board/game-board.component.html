@@ -13,9 +13,7 @@
       [wave]="gameState.wave"
       [maxWaves]="gameState.maxWaves"
       [score]="gameState.score"
-      [formattedTime]="formattedTime"
       [isEndless]="gameState.isEndless"
-      [elapsedTime]="gameState.elapsedTime"
       [waveStartPulse]="waveCombat.waveStartPulse"
       [challengeIndicators]="challengeIndicators"
       [isCombat]="gameState.phase === GamePhase.COMBAT"
@@ -329,9 +327,9 @@
     <div class="mode-indicator"
          *ngIf="isPlaceMode && gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT"
          aria-live="polite"
-         [attr.aria-label]="'Placing ' + (selectedTowerType | titlecase) + ' tower'">
+         [attr.aria-label]="'Placing ' + towerIdentities[selectedTowerType!].displayName">
       <span class="mode-label place-mode">
-        {{ selectedTowerType | titlecase }}
+        {{ towerIdentities[selectedTowerType!].displayName }}
       </span>
       <span class="mode-hint">Right-click to cancel</span>
     </div>

@@ -117,12 +117,32 @@ describe('TutorialService', () => {
     expect(service.isTutorialComplete()).toBeTrue();
   });
 
+  it('skipTutorial() during controls tutorial also marks tips complete', () => {
+    service.startTutorial();
+    service.skipTutorial();
+    expect(service.isTipsComplete()).toBeTrue();
+  });
+
   it('skipTutorial() sets current step to null', (done) => {
     service.startTutorial();
     service.skipTutorial();
     service.getCurrentStep().subscribe(step => {
       expect(step).toBeNull();
       done();
+    });
+  });
+
+  it('startTips() is a no-op after skipping the controls tutorial', () => {
+    service.startTutorial();
+    service.skipTutorial();
+    // Simulate reaching "second game" gate
+    service.incrementGamesPlayed();
+    service.incrementGamesPlayed();
+
+    service.startTips();
+
+    service.getCurrentStep().subscribe(step => {
+      expect(step).toBeNull();
     });
   });
 

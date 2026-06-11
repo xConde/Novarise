@@ -379,10 +379,10 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
 
   [CardId.TOWER_BASIC]: {
     id: CardId.TOWER_BASIC,
-    name: 'Basic Tower',
+    name: 'Pip · Basic',
     description: 'Deploy a Basic tower. Always in your opening hand.',
     upgradedDescription: 'Deploy a Basic tower at level 2. Always in your opening hand.',
-    flavorText: "Cheap. Reliable. Fires at whatever's closest.",
+    flavorText: 'First on the wall. Last to complain.',
     type: CardType.TOWER,
     rarity: CardRarity.STARTER,
     energyCost: CARD_VALUES.energyBasic,
@@ -398,10 +398,10 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
 
   [CardId.TOWER_SNIPER]: {
     id: CardId.TOWER_SNIPER,
-    name: 'Sniper Tower',
+    name: 'Magpie · Sniper',
     description: 'Deploy a Sniper tower.',
     upgradedDescription: 'Deploy a Sniper tower at level 2.',
-    flavorText: 'One shot. One target. One mile of patience.',
+    flavorText: "Anything shiny within a mile is legally Magpie's.",
     type: CardType.TOWER,
     rarity: CardRarity.STARTER,
     energyCost: CARD_VALUES.energySniper,
@@ -413,10 +413,10 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
 
   [CardId.TOWER_SPLASH]: {
     id: CardId.TOWER_SPLASH,
-    name: 'Splash Tower',
+    name: 'Confetti · Splash',
     description: 'Deploy a Splash tower.',
     upgradedDescription: 'Deploy a Splash tower at level 2.',
-    flavorText: 'Splash radius is doctrine.',
+    flavorText: 'Every problem looks like an invitation.',
     type: CardType.TOWER,
     rarity: CardRarity.STARTER,
     energyCost: CARD_VALUES.energySplash,
@@ -428,10 +428,10 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
 
   [CardId.TOWER_SLOW]: {
     id: CardId.TOWER_SLOW,
-    name: 'Slow Tower',
+    name: 'Lull · Slow',
     description: 'Deploy a Slow tower.',
     upgradedDescription: 'Deploy a Slow tower at level 2.',
-    flavorText: "It doesn't stop them. It just buys the line time.",
+    flavorText: 'Nothing hurries past. Nothing hurries near.',
     type: CardType.TOWER,
     rarity: CardRarity.STARTER,
     energyCost: CARD_VALUES.energySlow,
@@ -443,10 +443,10 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
 
   [CardId.TOWER_CHAIN]: {
     id: CardId.TOWER_CHAIN,
-    name: 'Chain Tower',
+    name: 'Zigzag · Chain',
     description: 'Deploy a Chain tower.',
     upgradedDescription: 'Deploy a Chain tower at level 2.',
-    flavorText: 'The arc finds its own path through the crowd.',
+    flavorText: 'Never plays the same solo twice.',
     type: CardType.TOWER,
     rarity: CardRarity.STARTER,
     energyCost: CARD_VALUES.energyChain,
@@ -458,10 +458,10 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
 
   [CardId.TOWER_MORTAR]: {
     id: CardId.TOWER_MORTAR,
-    name: 'Mortar Tower',
+    name: 'Kettle · Mortar',
     description: 'Deploy a Mortar tower.',
     upgradedDescription: 'Deploy a Mortar tower at level 2.',
-    flavorText: "It doesn't need to aim. The blast zone does the work.",
+    flavorText: 'Listen for the whistle. Then leave.',
     type: CardType.TOWER,
     rarity: CardRarity.UNCOMMON,
     energyCost: CARD_VALUES.energyMortar,
@@ -493,7 +493,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     name: 'Light Sniper',
     description: 'Deploy a Sniper tower with 30% less damage.',
     upgradedDescription: 'Deploy a Sniper tower at full damage.',
-    flavorText: 'Lighter barrel, faster deploy. You compensate with timing.',
+    flavorText: 'Magpie at half weight. The eye is still sharp.',
     type: CardType.TOWER,
     rarity: CardRarity.COMMON,
     energyCost: CARD_VALUES.energySniperLight,
@@ -523,7 +523,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     name: 'Slow Aura',
     description: 'Deploy a Slow tower with 50% larger aura range.',
     upgradedDescription: 'Deploy a Slow tower with 80% larger aura range.',
-    flavorText: 'The field stretches wide. Nothing in it moves at full speed.',
+    flavorText: "Lull with a longer reach. The calm spreads further.",
     type: CardType.TOWER,
     rarity: CardRarity.COMMON,
     energyCost: CARD_VALUES.energySlowAura,

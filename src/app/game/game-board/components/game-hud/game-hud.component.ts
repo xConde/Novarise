@@ -19,9 +19,7 @@ export class GameHudComponent implements OnChanges, OnDestroy {
   @Input() wave = 0;
   @Input() maxWaves = 0;
   @Input() score = 0;
-  @Input() formattedTime = '00:00';
   @Input() isEndless = false;
-  @Input() elapsedTime = 0;
   @Input() waveStartPulse = false;
   @Input() challengeIndicators: ChallengeIndicator[] = [];
   @Input() isCombat = false;

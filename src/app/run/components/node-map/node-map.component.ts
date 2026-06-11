@@ -258,7 +258,8 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit {
 
   getNodeTooltip(node: MapNode): string {
     const label = this.nodeLabels[node.type] ?? node.type;
-    return `${label} — ${node.campaignMapId}`;
+    const totalRows = this.nodeMap?.rows ?? 0;
+    return totalRows > 0 ? `${label} — row ${node.row + 1} of ${totalRows}` : label;
   }
 
   /** Returns left offset in px, accounting for node size so node center aligns to position. */

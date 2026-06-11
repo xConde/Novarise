@@ -63,14 +63,6 @@ describe('GameHudComponent', () => {
       expect(visible?.textContent?.trim()).toBe('5');
     });
 
-    it('should display formattedTime', () => {
-      component.formattedTime = '02:34';
-      fixture.detectChanges();
-
-      const timeEl = fixture.nativeElement.querySelector('.hud-stat.secondary:nth-child(5) .hud-value');
-      expect(timeEl.textContent.trim()).toBe('02:34');
-    });
-
     it('should render the mobile-only enemies stat when isCombat is true', () => {
       component.isCombat = true;
       component.enemiesRemaining = 7;

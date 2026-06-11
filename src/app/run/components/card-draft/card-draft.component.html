@@ -18,7 +18,7 @@
       (pointercancel)="onCardPointerUp()"
       (focus)="onCardFocus($event, item)"
       (blur)="onCardBlur()"
-      [attr.aria-label]="'Option ' + (i + 1) + '. ' + item.definition.name + ': ' + item.definition.description + '. Type: ' + item.definition.type + '. Cost: ' + item.definition.energyCost + ' energy. Press ' + (i + 1) + ' to pick.'"
+      [attr.aria-label]="cardAriaLabel(item, i)"
       [attr.aria-describedby]="hoveredCard?.reward?.cardId === item.reward.cardId ? hoverTooltipId : null"
       [attr.aria-pressed]="selectedCard === item.reward.cardId"
       [attr.aria-keyshortcuts]="(i + 1).toString()"
@@ -37,8 +37,23 @@
       <!-- Card name -->
       <span class="card-draft__name">{{ item.definition.name }}</span>
 
+      <!-- Effect glyph — hero art for non-tower cards. Sits in flow between
+           the name and description so it occupies its own art-zone row without
+           overlapping the description text. -->
+      <span *ngIf="item.definition.type !== CardType.TOWER && getPrimaryGlyph(item.definition) as primaryGlyph"
+            class="card-draft__art-glyph"
+            [attr.data-card-type]="item.definition.type"
+            aria-hidden="true">
+        <app-icon [name]="primaryGlyph" [size]="48"></app-icon>
+        <span *ngIf="getSecondaryGlyph(item.definition) as secondaryGlyph" class="card-draft__art-glyph-secondary">
+          <app-icon [name]="secondaryGlyph" [size]="20"></app-icon>
+        </span>
+      </span>
+
       <!-- Description -->
-      <span class="card-draft__description">{{ item.definition.description }}</span>
+      <span class="card-draft__description">
+        <app-description-text [description]="item.definition.description"></app-description-text>
+      </span>
 
       <!-- Rarity label -->
       <span class="card-draft__rarity">{{ item.definition.rarity }}</span>
@@ -53,17 +68,6 @@
           <rect x="4" y="4" width="16" height="16" rx="1"
                 stroke="currentColor" stroke-width="1.5" fill="none"/>
         </svg>
-      </span>
-
-      <!-- Effect glyph — hero art for non-tower cards. -->
-      <span *ngIf="item.definition.type !== CardType.TOWER && getPrimaryGlyph(item.definition) as primaryGlyph"
-            class="card-draft__art-glyph"
-            [attr.data-card-type]="item.definition.type"
-            aria-hidden="true">
-        <app-icon [name]="primaryGlyph" [size]="48"></app-icon>
-        <span *ngIf="getSecondaryGlyph(item.definition) as secondaryGlyph" class="card-draft__art-glyph-secondary">
-          <app-icon [name]="secondaryGlyph" [size]="20"></app-icon>
-        </span>
       </span>
 
       <!-- Selected indicator -->

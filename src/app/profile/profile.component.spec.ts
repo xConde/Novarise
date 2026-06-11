@@ -263,12 +263,12 @@ describe('ProfileComponent', () => {
 
     it('should show all tower types even with 0 kills', () => {
       const labels = component.towerKillRows.map((r) => r.label);
-      expect(labels).toContain('Basic');
-      expect(labels).toContain('Sniper');
-      expect(labels).toContain('Splash');
-      expect(labels).toContain('Slow');
-      expect(labels).toContain('Chain');
-      expect(labels).toContain('Mortar');
+      expect(labels).toContain('Pip · Basic');
+      expect(labels).toContain('Magpie · Sniper');
+      expect(labels).toContain('Confetti · Splash');
+      expect(labels).toContain('Lull · Slow');
+      expect(labels).toContain('Zigzag · Chain');
+      expect(labels).toContain('Kettle · Mortar');
     });
 
     it('should set pct=0 for all rows when towerKills is empty', () => {
@@ -285,8 +285,8 @@ describe('ProfileComponent', () => {
       const newFixture = TestBed.createComponent(ProfileComponent);
       newFixture.detectChanges();
       const rows = newFixture.componentInstance.towerKillRows;
-      const basicRow = rows.find((r) => r.label === 'Basic')!;
-      const sniperRow = rows.find((r) => r.label === 'Sniper')!;
+      const basicRow = rows.find((r) => r.label === 'Pip · Basic')!;
+      const sniperRow = rows.find((r) => r.label === 'Magpie · Sniper')!;
       expect(basicRow.pct).toBe(100);
       expect(sniperRow.pct).toBe(50);
     });

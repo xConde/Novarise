@@ -1,5 +1,5 @@
 import { TOWER_INFO } from './tower-info.model';
-import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, TowerSpecialization } from './tower.model';
+import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, TOWER_IDENTITIES, TowerSpecialization } from './tower.model';
 
 describe('TOWER_INFO', () => {
   const ALL_TYPES = Object.values(TowerType) as TowerType[];
@@ -23,6 +23,12 @@ describe('TOWER_INFO', () => {
   it('each entry has a non-empty name', () => {
     ALL_TYPES.forEach(type => {
       expect(TOWER_INFO[type].name.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('each entry name matches TOWER_IDENTITIES displayName', () => {
+    ALL_TYPES.forEach(type => {
+      expect(TOWER_INFO[type].name).toBe(TOWER_IDENTITIES[type].displayName);
     });
   });
 
@@ -76,15 +82,15 @@ describe('TOWER_INFO', () => {
 
   describe('spot-check specific entries', () => {
     it('BASIC entry has correct name', () => {
-      expect(TOWER_INFO[TowerType.BASIC].name).toBe('Basic');
+      expect(TOWER_INFO[TowerType.BASIC].name).toBe('Pip · Basic');
     });
 
     it('SNIPER entry has correct name', () => {
-      expect(TOWER_INFO[TowerType.SNIPER].name).toBe('Sniper');
+      expect(TOWER_INFO[TowerType.SNIPER].name).toBe('Magpie · Sniper');
     });
 
     it('MORTAR entry has correct name', () => {
-      expect(TOWER_INFO[TowerType.MORTAR].name).toBe('Mortar');
+      expect(TOWER_INFO[TowerType.MORTAR].name).toBe('Kettle · Mortar');
     });
 
     it('BASIC alpha is Marksman', () => {

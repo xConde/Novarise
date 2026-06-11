@@ -25,7 +25,7 @@ describe('LibraryCardTileComponent', () => {
 
   const towerDef: CardDefinition = {
     id: CardId.TOWER_BASIC,
-    name: 'Basic Tower',
+    name: 'Pip · Basic',
     description: 'Place a basic tower.',
     type: CardType.TOWER,
     rarity: CardRarity.STARTER,
@@ -106,7 +106,7 @@ describe('LibraryCardTileComponent', () => {
     component.definition = towerDef;
     refresh();
     const el = fixture.nativeElement.querySelector('.tile__name') as HTMLElement;
-    expect(el.textContent?.trim()).toBe('Basic Tower');
+    expect(el.textContent?.trim()).toBe('Pip · Basic');
   });
 
   it('renders the energy cost', () => {

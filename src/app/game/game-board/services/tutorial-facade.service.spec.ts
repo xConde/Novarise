@@ -150,5 +150,24 @@ describe('TutorialFacadeService', () => {
       service.skipTutorial();
       expect(tutorialService.skipTutorial).toHaveBeenCalled();
     });
+
+    it('calls skipTutorial once — service handles both tutorial and tips in one call', () => {
+      service.skipTutorial();
+      expect(tutorialService.skipTutorial).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('getTutorialStepNumber() — WELCOME is always step 1', () => {
+    it('WELCOME yields step 1 — first visible step must be 1/N', () => {
+      service.init();
+      stepSubject.next(TutorialStep.WELCOME);
+      expect(service.getTutorialStepNumber()).toBe(1);
+    });
+
+    it('SELECT_TOWER yields step 2 — advancing from WELCOME gives 2/N', () => {
+      service.init();
+      stepSubject.next(TutorialStep.SELECT_TOWER);
+      expect(service.getTutorialStepNumber()).toBe(2);
+    });
   });
 });

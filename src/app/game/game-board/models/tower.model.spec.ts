@@ -1,4 +1,4 @@
-import { TowerType, TowerSpecialization, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, TOWER_CONFIGS, getEffectiveStats, getUpgradeCost, UPGRADE_COST_CONFIG, MAX_TOWER_LEVEL } from './tower.model';
+import { TowerType, TowerSpecialization, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, TOWER_CONFIGS, TOWER_IDENTITIES, getEffectiveStats, getUpgradeCost, UPGRADE_COST_CONFIG, MAX_TOWER_LEVEL } from './tower.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
 
 describe('Tower Model', () => {
@@ -13,33 +13,76 @@ describe('Tower Model', () => {
     });
 
     it('should have the correct description for BASIC', () => {
-      expect(TOWER_DESCRIPTIONS[TowerType.BASIC]).toBe('Balanced all-rounder');
+      expect(TOWER_DESCRIPTIONS[TowerType.BASIC]).toBe('Steady single-target fire. Pip takes every shift.');
     });
 
     it('should have the correct description for SNIPER', () => {
-      expect(TOWER_DESCRIPTIONS[TowerType.SNIPER]).toBe('Long range, high damage, slow fire');
+      expect(TOWER_DESCRIPTIONS[TowerType.SNIPER]).toBe('Long range, high damage, slow fire. Magpie claims its trophies.');
     });
 
     it('should have the correct description for SPLASH', () => {
-      expect(TOWER_DESCRIPTIONS[TowerType.SPLASH]).toBe('Area damage in a radius');
+      expect(TOWER_DESCRIPTIONS[TowerType.SPLASH]).toBe('Area damage in a radius. Confetti brings the party.');
     });
 
     it('should have the correct description for SLOW', () => {
-      expect(TOWER_DESCRIPTIONS[TowerType.SLOW]).toBe('Slows enemies, no damage');
+      expect(TOWER_DESCRIPTIONS[TowerType.SLOW]).toBe('Slows enemies, deals no damage. Lull keeps the lane calm.');
     });
 
     it('should have the correct description for CHAIN', () => {
-      expect(TOWER_DESCRIPTIONS[TowerType.CHAIN]).toBe('Lightning bounces between enemies');
+      expect(TOWER_DESCRIPTIONS[TowerType.CHAIN]).toBe('Lightning bounces between enemies. Zigzag improvises the path.');
     });
 
     it('should have the correct description for MORTAR', () => {
-      expect(TOWER_DESCRIPTIONS[TowerType.MORTAR]).toBe('Damage zones that burn enemies');
+      expect(TOWER_DESCRIPTIONS[TowerType.MORTAR]).toBe('Burning damage zones. Kettle whistles first.');
     });
 
     it('should have exactly 6 entries matching the 6 TowerType values', () => {
       const descriptionKeys = Object.keys(TOWER_DESCRIPTIONS);
       const towerTypeValues = Object.values(TowerType);
       expect(descriptionKeys.length).toBe(towerTypeValues.length);
+    });
+  });
+
+  describe('TOWER_IDENTITIES', () => {
+    it('should have an entry for every TowerType value', () => {
+      const allTypes = Object.values(TowerType) as TowerType[];
+      allTypes.forEach(type => {
+        expect(TOWER_IDENTITIES[type]).toBeDefined();
+      });
+    });
+
+    it('should have correct nicknames for all towers', () => {
+      expect(TOWER_IDENTITIES[TowerType.BASIC].name).toBe('Pip');
+      expect(TOWER_IDENTITIES[TowerType.SNIPER].name).toBe('Magpie');
+      expect(TOWER_IDENTITIES[TowerType.SPLASH].name).toBe('Confetti');
+      expect(TOWER_IDENTITIES[TowerType.SLOW].name).toBe('Lull');
+      expect(TOWER_IDENTITIES[TowerType.CHAIN].name).toBe('Zigzag');
+      expect(TOWER_IDENTITIES[TowerType.MORTAR].name).toBe('Kettle');
+    });
+
+    it('should have correct categories for all towers', () => {
+      expect(TOWER_IDENTITIES[TowerType.BASIC].category).toBe('Basic');
+      expect(TOWER_IDENTITIES[TowerType.SNIPER].category).toBe('Sniper');
+      expect(TOWER_IDENTITIES[TowerType.SPLASH].category).toBe('Splash');
+      expect(TOWER_IDENTITIES[TowerType.SLOW].category).toBe('Slow');
+      expect(TOWER_IDENTITIES[TowerType.CHAIN].category).toBe('Chain');
+      expect(TOWER_IDENTITIES[TowerType.MORTAR].category).toBe('Mortar');
+    });
+
+    it('should build displayName as "Name · Category" for all towers', () => {
+      const allTypes = Object.values(TowerType) as TowerType[];
+      allTypes.forEach(type => {
+        const id = TOWER_IDENTITIES[type];
+        expect(id.displayName).toBe(`${id.name} · ${id.category}`);
+      });
+    });
+
+    it('BASIC displayName is "Pip · Basic"', () => {
+      expect(TOWER_IDENTITIES[TowerType.BASIC].displayName).toBe('Pip · Basic');
+    });
+
+    it('MORTAR displayName is "Kettle · Mortar"', () => {
+      expect(TOWER_IDENTITIES[TowerType.MORTAR].displayName).toBe('Kettle · Mortar');
     });
   });
 

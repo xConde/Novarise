@@ -10,7 +10,13 @@ export interface PadLayerConfig {
   filterQ: number;        // resonance
   lfoRateHz: number;      // LFO modulation speed
   lfoDepth: number;       // LFO depth (Hz deviation on filter)
-  padGain: number;        // base gain for pad layer (0–1)
+  /**
+   * TOTAL gain of the pad layer (0–1), regardless of voice count.
+   * Each voice is ramped to (padGain / voices) so that adding voices changes
+   * timbre and density but not loudness. The invariant: sum of all voice gains
+   * at steady state === padGain.
+   */
+  padGain: number;
   detune: number;         // cents of detune spread across voices
   voices: number;         // number of oscillator voices in the pad
 }
@@ -48,8 +54,16 @@ export const SCHEDULE_INTERVAL_MS = 200;
 /** How far ahead the scheduler books beats, in seconds. */
 export const SCHEDULE_HORIZON_SECONDS = 0.5;
 
-/** Default master music volume (0–1). */
-export const DEFAULT_MUSIC_VOLUME = 0.4;
+/**
+ * Default master music volume (0–1).
+ *
+ * Target: music peaks near ~2× the effective SFX peak (~0.09 absolute),
+ * keeping background pads below transient game feedback.
+ * SFX effective peak = cfg.volume(0.1–0.3) × AUDIO_CONFIG.masterVolume(0.3) ≈ 0.03–0.09.
+ * At 0.25, boss-theme peak ≈ (padGain 0.26 + bassGain 0.22 + pluckGain 0.18) × 0.25 ≈ 0.165,
+ * which is ~1.8× the SFX high-end — audible background without overriding feedback.
+ */
+export const DEFAULT_MUSIC_VOLUME = 0.25;
 
 /**
  * Minimum gain value for exponential ramps — WebAudio requires > 0.
@@ -62,6 +76,26 @@ export const PAD_FADE_IN_SECONDS = 0.3;
 
 /** Pad gain fade-out time on theme stop, in seconds. */
 export const PAD_FADE_OUT_SECONDS = 0.5;
+
+// ── Dynamics compressor (limiter) constants ──────────────────────────────────
+// The compressor sits between masterGain and destination as a soft limiter,
+// preventing procedural music from clipping at high polyphony.
+// Settings bias toward transparent peak limiting rather than heavy compression.
+
+/** Threshold above which the compressor engages, in dBFS. */
+export const COMPRESSOR_THRESHOLD_DB = -10;
+
+/** Soft-knee width around the threshold, in dB. */
+export const COMPRESSOR_KNEE_DB = 30;
+
+/** Compression ratio applied above the knee; 12:1 approaches limiting. */
+export const COMPRESSOR_RATIO = 12;
+
+/** Compressor attack time constant, in seconds. */
+export const COMPRESSOR_ATTACK_SECONDS = 0.003;
+
+/** Compressor release time constant, in seconds. */
+export const COMPRESSOR_RELEASE_SECONDS = 0.25;
 
 /** Duration of a pluck note envelope, in seconds. */
 export const PLUCK_NOTE_DURATION_SECONDS = 0.2;

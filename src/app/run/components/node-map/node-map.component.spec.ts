@@ -250,19 +250,21 @@ describe('NodeMapComponent', () => {
   });
 
   describe('getNodeTooltip()', () => {
-    it('returns type label and campaignMapId', () => {
-      const node = makeNode({ type: NodeType.ELITE, campaignMapId: 'campaign_05' });
-      expect(component.getNodeTooltip(node)).toBe('Elite — campaign_05');
+    it('includes type label and row position', () => {
+      // makeThreeRowMap() has rows: 3; ELITE node is at row 1
+      const node = makeNode({ type: NodeType.ELITE, row: 1 });
+      expect(component.getNodeTooltip(node)).toBe('Elite — row 2 of 3');
     });
 
-    it('formats boss node correctly', () => {
-      const node = makeNode({ type: NodeType.BOSS, campaignMapId: 'campaign_12' });
-      expect(component.getNodeTooltip(node)).toBe('Boss — campaign_12');
+    it('formats boss node at its row', () => {
+      // BOSS node is at row 2 in a 3-row map
+      const node = makeNode({ type: NodeType.BOSS, row: 2 });
+      expect(component.getNodeTooltip(node)).toBe('Boss — row 3 of 3');
     });
 
-    it('formats rest node correctly', () => {
-      const node = makeNode({ type: NodeType.REST, campaignMapId: 'campaign_03' });
-      expect(component.getNodeTooltip(node)).toBe('Rest — campaign_03');
+    it('formats a start-row node correctly', () => {
+      const node = makeNode({ type: NodeType.REST, row: 0 });
+      expect(component.getNodeTooltip(node)).toBe('Rest — row 1 of 3');
     });
   });
 

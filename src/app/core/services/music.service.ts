@@ -11,6 +11,11 @@ import {
   PAD_FADE_OUT_SECONDS,
   PLUCK_NOTE_DURATION_SECONDS,
   PLUCK_ATTACK_SECONDS,
+  COMPRESSOR_THRESHOLD_DB,
+  COMPRESSOR_KNEE_DB,
+  COMPRESSOR_RATIO,
+  COMPRESSOR_ATTACK_SECONDS,
+  COMPRESSOR_RELEASE_SECONDS,
 } from '../constants/music.constants';
 
 interface ActivePadLayer {
@@ -58,6 +63,7 @@ interface ThemeState {
 export class MusicService {
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  private compressor: DynamicsCompressorNode | null = null;
   private currentTheme: MusicTheme | null = null;
   private pendingTheme: MusicTheme | null = null;
   private autoplayListenersBound = false;
@@ -173,6 +179,8 @@ export class MusicService {
       this.audioContext = null;
     }
 
+    try { this.compressor?.disconnect(); } catch { /* already disconnected */ }
+    this.compressor = null;
     this.masterGain = null;
   }
 
@@ -185,10 +193,22 @@ export class MusicService {
       this.audioContext = new AudioContext();
       this.masterGain = this.audioContext.createGain();
       this.masterGain.gain.setValueAtTime(this.musicVolume, this.audioContext.currentTime);
-      this.masterGain.connect(this.audioContext.destination);
+
+      // Soft limiter: masterGain → compressor → destination.
+      // Prevents procedural polyphony peaks from exceeding ~-10 dBFS.
+      this.compressor = this.audioContext.createDynamicsCompressor();
+      this.compressor.threshold.value = COMPRESSOR_THRESHOLD_DB;
+      this.compressor.knee.value = COMPRESSOR_KNEE_DB;
+      this.compressor.ratio.value = COMPRESSOR_RATIO;
+      this.compressor.attack.value = COMPRESSOR_ATTACK_SECONDS;
+      this.compressor.release.value = COMPRESSOR_RELEASE_SECONDS;
+
+      this.masterGain.connect(this.compressor);
+      this.compressor.connect(this.audioContext.destination);
     } catch {
       this.audioContext = null;
       this.masterGain = null;
+      this.compressor = null;
     }
   }
 
@@ -397,10 +417,13 @@ export class MusicService {
     filter.frequency.setValueAtTime(config.filterCutoff, startTime);
     filter.Q.setValueAtTime(config.filterQ, startTime);
 
-    // Pad output gain
+    // Pad output gain — normalized so total pad level equals padGain regardless
+    // of voice count. Each voice ramps to (padGain / voices); adding voices
+    // changes timbre, not loudness.
+    const perVoiceGain = config.padGain / config.voices;
     const gainNode = ctx.createGain();
     gainNode.gain.setValueAtTime(MUSIC_GAIN_EPSILON, startTime);
-    gainNode.gain.linearRampToValueAtTime(config.padGain, startTime + PAD_FADE_IN_SECONDS);
+    gainNode.gain.linearRampToValueAtTime(perVoiceGain, startTime + PAD_FADE_IN_SECONDS);
 
     // LFO modulates filter frequency for a filter-sweep feel
     const lfoOscillator = ctx.createOscillator();

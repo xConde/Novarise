@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnDestroy, OnChanges, SimpleCha
 import { CardDefinition, CardId, CardRarity, CardType, EffectGlyphName } from '../../models/card.model';
 import { CardReward } from '../../models/encounter.model';
 import { getCardDefinition } from '../../constants/card-definitions';
+import { stripKeywordTokens } from '@shared/components/description-text/description-text.component';
 
 interface DraftCard {
   reward: CardReward;
@@ -264,6 +265,13 @@ export class CardDraftComponent implements OnDestroy, OnChanges {
     const idealLeft = cardCenter - TOOLTIP_WIDTH_ESTIMATE / 2;
     const maxLeft = window.innerWidth - TOOLTIP_WIDTH_ESTIMATE - GAP;
     return Math.max(GAP, Math.min(idealLeft, maxLeft));
+  }
+
+  /** Accessible label for a draft card button. Keyword tokens are resolved to
+   *  plain keyword names so screen readers announce "Ethereal" not "{kw-ethereal}". */
+  cardAriaLabel(item: DraftCard, index: number): string {
+    const desc = stripKeywordTokens(item.definition.description);
+    return `Option ${index + 1}. ${item.definition.name}: ${desc}. Type: ${item.definition.type}. Cost: ${item.definition.energyCost} energy. Press ${index + 1} to pick.`;
   }
 
   hoverTooltipDescription(card: DraftCard): string {
