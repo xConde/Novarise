@@ -22,7 +22,7 @@ import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService } from './services/minimap.service';
 import { SettingsService } from '../../core/services/settings.service';
 import { TowerPreviewService } from './services/tower-preview.service';
-import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, PlacedTower, MAX_TOWER_LEVEL, TARGETING_MODE_LABELS } from './models/tower.model';
+import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_IDENTITIES, PlacedTower, MAX_TOWER_LEVEL, TARGETING_MODE_LABELS } from './models/tower.model';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState } from './models/game-state.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import { EnemyType, ENEMY_STATS, VEINSEEKER_SPEED_BOOST_WINDOW } from './models/enemy.model';
@@ -205,6 +205,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   gameState: GameState;
   towerConfigs = TOWER_CONFIGS;
   towerDescriptions = TOWER_DESCRIPTIONS;
+  towerIdentities = TOWER_IDENTITIES;
   TowerType = TowerType;
   GamePhase = GamePhase;
   DifficultyLevel = DifficultyLevel;

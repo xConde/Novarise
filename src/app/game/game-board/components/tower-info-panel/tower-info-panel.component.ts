@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output, ViewEncapsulation } from '@angular/core';
-import { PlacedTower, TowerSpecialization, TowerType, MAX_TOWER_LEVEL, TOWER_SPECIALIZATIONS } from '../../models/tower.model';
+import { PlacedTower, TowerSpecialization, TowerType, MAX_TOWER_LEVEL, TOWER_SPECIALIZATIONS, TOWER_IDENTITIES } from '../../models/tower.model';
 import { StatusEffectType } from '../../constants/status-effect.constants';
 
 @Component({
@@ -39,5 +39,13 @@ export class TowerInfoPanelComponent {
   specLabel(tower: PlacedTower): string {
     if (!tower.specialization) return '';
     return TOWER_SPECIALIZATIONS[tower.type][tower.specialization].label;
+  }
+
+  towerDisplayName(type: TowerType): string {
+    return TOWER_IDENTITIES[type].displayName;
+  }
+
+  towerNickname(type: TowerType): string {
+    return TOWER_IDENTITIES[type].name;
   }
 }

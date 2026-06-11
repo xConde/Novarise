@@ -272,14 +272,36 @@ export function getSellValue(totalInvested: number): number {
   return Math.round(totalInvested * SELL_REFUND_RATE);
 }
 
+/** Separator used in the display name pattern "Name · Category". */
+export const TOWER_IDENTITY_SEPARATOR = ' · ';
+
+export interface TowerIdentity {
+  name: string;        // crew nickname, e.g. 'Pip'
+  category: string;    // formal category, e.g. 'Basic'
+  displayName: string; // 'Pip · Basic'
+}
+
+function makeIdentity(name: string, category: string): TowerIdentity {
+  return { name, category, displayName: name + TOWER_IDENTITY_SEPARATOR + category };
+}
+
+export const TOWER_IDENTITIES: Record<TowerType, TowerIdentity> = {
+  [TowerType.BASIC]:  makeIdentity('Pip', 'Basic'),
+  [TowerType.SNIPER]: makeIdentity('Magpie', 'Sniper'),
+  [TowerType.SPLASH]: makeIdentity('Confetti', 'Splash'),
+  [TowerType.SLOW]:   makeIdentity('Lull', 'Slow'),
+  [TowerType.CHAIN]:  makeIdentity('Zigzag', 'Chain'),
+  [TowerType.MORTAR]: makeIdentity('Kettle', 'Mortar'),
+};
+
 /** One-line description of each tower's special ability, shown in hover tooltips. */
 export const TOWER_DESCRIPTIONS: Record<TowerType, string> = {
-  [TowerType.BASIC]:  'Balanced all-rounder',
-  [TowerType.SNIPER]: 'Long range, high damage, slow fire',
-  [TowerType.SPLASH]: 'Area damage in a radius',
-  [TowerType.SLOW]:   'Slows enemies, no damage',
-  [TowerType.CHAIN]:  'Lightning bounces between enemies',
-  [TowerType.MORTAR]: 'Damage zones that burn enemies',
+  [TowerType.BASIC]:  'Steady single-target fire. Pip takes every shift.',
+  [TowerType.SNIPER]: 'Long range, high damage, slow fire. Magpie claims its trophies.',
+  [TowerType.SPLASH]: 'Area damage in a radius. Confetti brings the party.',
+  [TowerType.SLOW]:   'Slows enemies, deals no damage. Lull keeps the lane calm.',
+  [TowerType.CHAIN]:  'Lightning bounces between enemies. Zigzag improvises the path.',
+  [TowerType.MORTAR]: 'Burning damage zones. Kettle whistles first.',
 };
 
 /** Resolve effective stats for a tower at a given level (clamped to 1..MAX_TOWER_LEVEL).

@@ -1,4 +1,4 @@
-import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS } from './tower.model';
+import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, TOWER_IDENTITIES } from './tower.model';
 
 export interface TowerSpecInfo {
   label: string;
@@ -17,16 +17,6 @@ export interface TowerInfo {
   beta: TowerSpecInfo;
 }
 
-/** Display names for each tower type shown in the encyclopedia. */
-const TOWER_DISPLAY_NAMES: Record<TowerType, string> = {
-  [TowerType.BASIC]:  'Basic',
-  [TowerType.SNIPER]: 'Sniper',
-  [TowerType.SPLASH]: 'Splash',
-  [TowerType.SLOW]:   'Slow',
-  [TowerType.CHAIN]:  'Chain',
-  [TowerType.MORTAR]: 'Mortar',
-};
-
 /** Pre-computed tower info cards for all tower types. Stats sourced from TOWER_CONFIGS. */
 export const TOWER_INFO: Record<TowerType, TowerInfo> = (
   Object.values(TowerType) as TowerType[]
@@ -35,7 +25,7 @@ export const TOWER_INFO: Record<TowerType, TowerInfo> = (
   const specs = TOWER_SPECIALIZATIONS[type];
   acc[type] = {
     type,
-    name: TOWER_DISPLAY_NAMES[type],
+    name: TOWER_IDENTITIES[type].displayName,
     description: TOWER_DESCRIPTIONS[type],
     damage: cfg.damage,
     range: cfg.range,

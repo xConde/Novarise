@@ -59,16 +59,16 @@ describe('TowerInfoPanelComponent', () => {
   });
 
   describe('tower name', () => {
-    it('should render the tower type as title case', () => {
+    it('should render the tower displayName for BASIC', () => {
       const nameEl = fixture.nativeElement.querySelector('.tower-info-name');
-      expect(nameEl.textContent.trim()).toBe('Basic');
+      expect(nameEl.textContent.trim()).toBe('Pip · Basic');
     });
 
-    it('should render sniper tower type correctly', () => {
+    it('should render the tower displayName for SNIPER', () => {
       component.towerInfo = makeTower({ type: TowerType.SNIPER });
       fixture.detectChanges();
       const nameEl = fixture.nativeElement.querySelector('.tower-info-name');
-      expect(nameEl.textContent.trim()).toBe('Sniper');
+      expect(nameEl.textContent.trim()).toBe('Magpie · Sniper');
     });
   });
 

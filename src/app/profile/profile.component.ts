@@ -7,7 +7,7 @@ import {
   AchievementCategory,
   ACHIEVEMENTS,
 } from '../core/services/player-profile.service';
-import { TowerType } from '../game/game-board/models/tower.model';
+import { TowerType, TOWER_IDENTITIES } from '../game/game-board/models/tower.model';
 
 export interface AchievementCategoryGroup {
   category: AchievementCategory;
@@ -31,15 +31,6 @@ const CATEGORY_LABELS: Record<AchievementCategory, string> = {
 };
 
 const CATEGORY_ORDER: AchievementCategory[] = ['campaign', 'combat', 'endless', 'challenge'];
-
-const TOWER_LABELS: Record<TowerType, string> = {
-  [TowerType.BASIC]:  'Basic',
-  [TowerType.SNIPER]: 'Sniper',
-  [TowerType.SPLASH]: 'Splash',
-  [TowerType.SLOW]:   'Slow',
-  [TowerType.CHAIN]:  'Chain',
-  [TowerType.MORTAR]: 'Mortar',
-};
 
 const ALL_TOWER_TYPES: TowerType[] = [
   TowerType.BASIC,
@@ -108,7 +99,7 @@ export class ProfileComponent implements OnInit {
     const maxKills = Math.max(...counts, 1);
     return ALL_TOWER_TYPES.map((type, i) => ({
       type,
-      label: TOWER_LABELS[type],
+      label: TOWER_IDENTITIES[type].displayName,
       kills: counts[i],
       pct: Math.round((counts[i] / maxKills) * 100),
     }));
