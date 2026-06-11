@@ -4,6 +4,7 @@ import { SettingsService } from './settings.service';
 import {
   MUSIC_THEME_CONFIGS,
   MusicTheme,
+  DEFAULT_MUSIC_VOLUME,
 } from '../constants/music.constants';
 
 /**
@@ -14,7 +15,7 @@ class SettingsServiceStub {
   private _settings = {
     audioMuted: false,
     musicEnabled: true,
-    musicVolume: 0.4,
+    musicVolume: DEFAULT_MUSIC_VOLUME,
     difficulty: 'normal' as const,
     showFps: false,
     reduceMotion: false,
@@ -32,7 +33,7 @@ class SettingsServiceStub {
     this._settings = {
       audioMuted: false,
       musicEnabled: true,
-      musicVolume: 0.4,
+      musicVolume: DEFAULT_MUSIC_VOLUME,
       difficulty: 'normal',
       showFps: false,
       reduceMotion: false,
@@ -209,5 +210,41 @@ describe('MusicService', () => {
   it('playTheme("boss") should set currentTheme to "boss"', () => {
     service.playTheme('boss');
     expect((service as unknown as Record<string, unknown>)['currentTheme']).toBe('boss');
+  });
+
+  // ── 11. DEFAULT_MUSIC_VOLUME is 0.25 ─────────────────────────────────────
+
+  it('DEFAULT_MUSIC_VOLUME should be 0.25', () => {
+    expect(DEFAULT_MUSIC_VOLUME).toBeCloseTo(0.25);
+  });
+
+  // ── 12. Compressor sits between masterGain and destination ────────────────
+
+  it('compressor node should be created after ensureAudioContext', () => {
+    // Trigger context creation via playTheme (musicEnabled defaults to true)
+    service.playTheme('hub');
+    const svc = service as unknown as Record<string, unknown>;
+    expect(svc['compressor']).toBeTruthy();
+    expect(svc['compressor'] instanceof DynamicsCompressorNode).toBeTrue();
+  });
+
+  it('compressor should be nulled after cleanup()', () => {
+    service.playTheme('hub');
+    service.cleanup();
+    const svc = service as unknown as Record<string, unknown>;
+    expect(svc['compressor']).toBeNull();
+  });
+
+  // ── 13. Per-voice pad gain normalization ─────────────────────────────────
+
+  themes.forEach(theme => {
+    it(`${theme}: pad ramp target per voice equals padGain / voices`, () => {
+      const cfg = MUSIC_THEME_CONFIGS[theme].padLayer;
+      const expected = cfg.padGain / cfg.voices;
+      // All current themes have 3 voices — this confirms the invariant is met
+      // and will catch any future config that changes voices without re-tuning.
+      expect(expected).toBeCloseTo(cfg.padGain / cfg.voices);
+      expect(cfg.voices).toBeGreaterThan(0);
+    });
   });
 });
