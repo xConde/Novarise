@@ -113,6 +113,29 @@ describe('TurnHistoryService', () => {
     expect(service.getLastCompletedTurn()).toBeNull();
   });
 
+  describe('hasOpenTurn', () => {
+    it('returns false when no turn has begun', () => {
+      expect(service.hasOpenTurn()).toBe(false);
+    });
+
+    it('returns true after beginTurn', () => {
+      service.beginTurn(1);
+      expect(service.hasOpenTurn()).toBe(true);
+    });
+
+    it('returns false after endTurn finalizes the record', () => {
+      service.beginTurn(1);
+      service.endTurn();
+      expect(service.hasOpenTurn()).toBe(false);
+    });
+
+    it('returns false after restore() clears in-flight turn', () => {
+      service.beginTurn(5);
+      service.restore([]);
+      expect(service.hasOpenTurn()).toBe(false);
+    });
+  });
+
   it('records$ emits updated array after endTurn', (done) => {
     service.records$.subscribe((records: TurnEventRecord[]) => {
       if (records.length === 1) {

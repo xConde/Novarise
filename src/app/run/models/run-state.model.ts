@@ -43,6 +43,12 @@ export interface EncounterResult {
    * `RunService.generateRewards` to compute a per-encounter gold bonus.
    */
   readonly completedChallenges: readonly ChallengeDefinition[];
+  /**
+   * Combat ending gold balance; on victory it becomes the run's gold in the
+   * unified single-pool economy. Optional for backward-compat with pre-unify
+   * saves.
+   */
+  readonly finalGold?: number;
 }
 
 import { CardId } from './card.model';

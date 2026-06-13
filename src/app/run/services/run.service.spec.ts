@@ -22,7 +22,7 @@ import { EncounterConfig } from '../models/encounter.model';
 import { RelicId, RelicDefinition, RelicRarity, RELIC_DEFINITIONS } from '../models/relic.model';
 import { CardArchetype, CardId, CardRarity } from '../models/card.model';
 import { CARD_DEFINITIONS } from '../constants/card-definitions';
-import { REWARD_CONFIG, REWARD_RARITY_WEIGHTS, SHOP_CONFIG, createSeededRng, SeededRng } from '../constants/run.constants';
+import { REWARD_CONFIG, REWARD_RARITY_WEIGHTS, SHOP_CONFIG, REST_HEAL_MIN, createSeededRng, SeededRng } from '../constants/run.constants';
 import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
 import { ChallengeDefinition, ChallengeType } from '../data/challenges';
 import {
@@ -372,7 +372,7 @@ describe('RunService', () => {
     const healAmount = service.computeHealAmount(state);
     const expectedBase = Math.floor(state.maxLives * 0.3);
     const expectedReduced = Math.floor(Math.max(2, expectedBase) * 0.75);
-    expect(healAmount).toBe(Math.max(1, expectedReduced));
+    expect(healAmount).toBe(Math.max(REST_HEAL_MIN, expectedReduced));
   }));
 
   // ── collectReward ─────────────────────────────────────────────
@@ -2594,6 +2594,194 @@ describe('RunService', () => {
       expect(service.runState!.gold).toBe(goldBefore - cost);
       const upgraded = service.getDeckCards().find(c => c.instanceId === target!.instanceId);
       expect(upgraded?.upgraded).toBeTrue();
+    }));
+  });
+
+  // ── Gold carry-back (gold unification) ───────────────────────────────────
+
+  describe('consumePendingEncounterResult() — gold carry-back', () => {
+    it('uses finalGold as the combat ending balance when present', fakeAsync(() => {
+      service.startNewRun();
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+      const goldBonus = 40; // makeEncounterConfig goldReward
+      const finalGold = 999;
+      const result = { ...makeEncounterResult({ victory: true, goldEarned: 50 }), finalGold };
+      service.recordEncounterResult(result as unknown as EncounterResult);
+      service.consumePendingEncounterResult();
+
+      // gold = finalGold + goldBonus (not state.gold + goldEarned + bonus)
+      expect(service.runState!.gold).toBe(finalGold + goldBonus);
+    }));
+
+    it('falls back to state.gold + goldEarned when finalGold is absent', fakeAsync(() => {
+      service.startNewRun();
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+      const goldBefore = service.runState!.gold;
+      const goldBonus = 40;
+      const result = makeEncounterResult({ victory: true, goldEarned: 80, livesLost: 0 });
+      // No finalGold field — simulates old saves / test fixtures
+      service.recordEncounterResult(result);
+      service.consumePendingEncounterResult();
+
+      expect(service.runState!.gold).toBe(goldBefore + 80 + goldBonus);
+    }));
+
+    it('score line uses result.goldEarned, not finalGold', fakeAsync(() => {
+      service.startNewRun();
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+      const result = { ...makeEncounterResult({ victory: true, goldEarned: 50, enemiesKilled: 5 }), finalGold: 999 };
+      service.recordEncounterResult(result as unknown as EncounterResult);
+      service.consumePendingEncounterResult();
+
+      // score = goldEarned (50) + kills * 10 (50) = 100
+      expect(service.runState!.score).toBe(50 + 5 * 10);
+    }));
+  });
+
+  // ── Event card removal — deckCardIds persistence ──────────────────────────
+
+  describe('resolveEvent() — card removal persists deckCardIds', () => {
+    it('deckCardIds in run state reflects deck after removeCard:true', fakeAsync(() => {
+      service.startNewRun();
+      service.selectNode('node_1_0');
+      service.collectReward({ type: 'card', cardId: CardId.GOLD_RUSH });
+
+      const deckService = TestBed.inject(DeckService);
+      const idsBefore = service.runState!.deckCardIds.length;
+
+      svc.currentEvent = {
+        id: 'test_remove_persist',
+        title: 'Test',
+        description: 'Test',
+        choices: [
+          {
+            label: 'Remove',
+            description: 'Remove a card.',
+            outcome: { goldDelta: 0, livesDelta: 0, removeCard: true, description: 'Removed.' },
+          },
+        ],
+      };
+
+      service.resolveEvent(0);
+
+      const liveCardIds = deckService.getAllCards().map(c => c.cardId).slice().sort();
+      const persistedIds = service.runState!.deckCardIds.slice().sort();
+      // deckCardIds must equal the live deck post-removal
+      expect(persistedIds).toEqual(liveCardIds);
+      expect(service.runState!.deckCardIds.length).toBe(idsBefore - 1);
+    }));
+
+    it('deckCardIds is unchanged when removeCard is false', fakeAsync(() => {
+      service.startNewRun();
+      service.selectNode('node_1_0');
+
+      const idsBefore = service.runState!.deckCardIds.slice();
+
+      svc.currentEvent = {
+        id: 'test_no_remove',
+        title: 'Test',
+        description: 'Test',
+        choices: [
+          {
+            label: 'No-op',
+            description: 'Nothing happens.',
+            outcome: { goldDelta: 0, livesDelta: 0, description: 'OK.' },
+          },
+        ],
+      };
+
+      service.resolveEvent(0);
+
+      expect(service.runState!.deckCardIds).toEqual(idsBefore);
+    }));
+  });
+
+  // ── Shop pity counter ─────────────────────────────────────────────────────
+
+  describe('generateShopItems() — shop pity counter', () => {
+    it('forces a RARE card in the shop when cardPityCounter has reached CARD_PITY_THRESHOLD', fakeAsync(() => {
+      service.startNewRun(0);
+      // Set the counter to threshold so the next shop card pick is forced RARE.
+      service['updateState']({ ...service.runState!, cardPityCounter: 9 });
+
+      service.generateShopItems();
+
+      const items = service.getShopItems();
+      const cardItems = items.filter(i => i.item.type === 'card');
+      // At least one shop card slot should have forced a RARE pick.
+      const hasRare = cardItems.some(i => {
+        const def = CARD_DEFINITIONS[(i.item as { cardId: CardId }).cardId];
+        return def?.rarity === CardRarity.RARE;
+      });
+      expect(hasRare).toBeTrue();
+    }));
+
+    it('resets cardPityCounter after a forced-rare shop pick (counter drops below threshold)', fakeAsync(() => {
+      service.startNewRun(0);
+      service['updateState']({ ...service.runState!, cardPityCounter: 9 });
+
+      service.generateShopItems();
+
+      // Pity fired on the first card slot (counter reset to 0), then subsequent
+      // non-rare picks may re-increment it. Counter must be below the threshold,
+      // confirming the pity reset was applied.
+      expect(service.runState!.cardPityCounter ?? 0).toBeLessThan(9);
+    }));
+
+    it('increments cardPityCounter when shop picks are non-rare', fakeAsync(() => {
+      service.startNewRun(0);
+      service['updateState']({ ...service.runState!, cardPityCounter: 0 });
+
+      // Force rng so that all weights land on COMMON (rng always < common/total).
+      svc.runRng = { next: () => 0.0, getState: () => 0, setState: () => {} };
+
+      service.generateShopItems();
+
+      const counter = service.runState!.cardPityCounter ?? 0;
+      const items = service.getShopItems();
+      const cardCount = items.filter(i => i.item.type === 'card').length;
+      // Counter must have advanced by the number of non-rare shop card picks.
+      // At rng=0.0, all picks land COMMON so counter increments for each card slot.
+      expect(counter).toBeGreaterThanOrEqual(cardCount > 0 ? 1 : 0);
+    }));
+  });
+
+  // ── rest-heal floor at REST_HEAL_MIN ─────────────────────────────────────
+
+  describe('restHeal() / computeHealAmount() — REST_HEAL_MIN floor', () => {
+    it('computeHealAmount() returns at least REST_HEAL_MIN even under heavy ascension reduction', fakeAsync(() => {
+      // Simulate extreme reduction: manually override the state to a tiny maxLives
+      // so that base heal computes below REST_HEAL_MIN.
+      service.startNewRun(8); // A8 applies 0.75 REST_HEAL_REDUCTION
+      const state = service.runState!;
+      // Patch maxLives to 5: floor(5 * 0.3) = 1, then 1 * 0.75 = 0.75, floor = 0.
+      // Without REST_HEAL_MIN, this would return Math.max(1, 0) = 1.
+      // With REST_HEAL_MIN = 3, this returns 3.
+      const tinyState = { ...state, maxLives: 5 };
+      const result = service.computeHealAmount(tinyState);
+      expect(result).toBeGreaterThanOrEqual(REST_HEAL_MIN);
+    }));
+
+    it('restHeal() with tiny maxLives heals at least REST_HEAL_MIN lives', fakeAsync(() => {
+      service.startNewRun(8);
+      // Set maxLives and lives low to test the floor.
+      service['updateState']({ ...service.runState!, maxLives: 5, lives: 1 });
+      service.selectNode('node_1_0');
+
+      service.restHeal();
+
+      // Minimum heal must be REST_HEAL_MIN even under A8 reduction.
+      expect(service.runState!.lives).toBeGreaterThanOrEqual(1 + REST_HEAL_MIN);
+    }));
+
+    it('computeHealAmount() at A0 with normal maxLives returns standard heal above REST_HEAL_MIN', fakeAsync(() => {
+      service.startNewRun(0);
+      const state = service.runState!; // maxLives = 20
+      // floor(20 * 0.3) = 6 — well above REST_HEAL_MIN=3
+      expect(service.computeHealAmount(state)).toBe(6);
     }));
   });
 });

@@ -1672,6 +1672,51 @@ describe('GameStateService', () => {
     });
   });
 
+  // --- setEncounterStartGold ---
+
+  describe('setEncounterStartGold', () => {
+    it('sets gold to the supplied amount', () => {
+      service.setEncounterStartGold(350);
+      expect(service.getState().gold).toBe(350);
+    });
+
+    it('sets initialGold to the same amount', () => {
+      service.setEncounterStartGold(350);
+      expect(service.getState().initialGold).toBe(350);
+    });
+
+    it('clamps negative values to 0', () => {
+      service.setEncounterStartGold(-50);
+      expect(service.getState().gold).toBe(0);
+      expect(service.getState().initialGold).toBe(0);
+    });
+
+    it('accepts zero', () => {
+      service.setEncounterStartGold(0);
+      expect(service.getState().gold).toBe(0);
+      expect(service.getState().initialGold).toBe(0);
+    });
+
+    it('emits state after setting encounter start gold', (done) => {
+      let emitCount = 0;
+      service.getState$().subscribe(state => {
+        emitCount++;
+        if (emitCount === 2) {
+          expect(state.gold).toBe(275);
+          expect(state.initialGold).toBe(275);
+          done();
+        }
+      });
+      service.setEncounterStartGold(275);
+    });
+
+    it('gold and initialGold are consistent (atomic write)', () => {
+      service.setEncounterStartGold(150);
+      const state = service.getState();
+      expect(state.gold).toBe(state.initialGold);
+    });
+  });
+
   // --- getEffectiveTowerCost ---
 
   describe('getEffectiveTowerCost', () => {

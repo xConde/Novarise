@@ -48,15 +48,15 @@ describe('EncounterBootstrapService', () => {
     };
   }
 
-  function makeRunState(overrides: Partial<{ lives: number; maxLives: number; ascensionLevel: number }> = {}) {
-    return { lives: 20, maxLives: 20, ascensionLevel: 0, ...overrides };
+  function makeRunState(overrides: Partial<{ lives: number; maxLives: number; ascensionLevel: number; gold: number }> = {}) {
+    return { lives: 20, maxLives: 20, ascensionLevel: 0, gold: 200, ...overrides };
   }
 
   beforeEach(() => {
     gameBoardSpy = jasmine.createSpyObj<GameBoardService>('GameBoardService', ['getGameBoard']);
     gameBoardSpy.getGameBoard.and.returnValue([]);
     gameStateSpy = jasmine.createSpyObj<GameStateService>('GameStateService', [
-      'setInitialLives', 'addGold', 'snapshotInitialGold', 'setMaxWaves', 'getState',
+      'setInitialLives', 'setEncounterStartGold', 'setMaxWaves', 'getState',
     ]);
     gameStateSpy.getState.and.returnValue({ wave: 0, isEndless: false } as ReturnType<GameStateService['getState']>);
     waveSpy = jasmine.createSpyObj<WaveService>('WaveService', ['setCustomWaves']);
@@ -121,8 +121,19 @@ describe('EncounterBootstrapService', () => {
       relicSpy.getStartingGoldBonus.and.returnValue(50);
       service.bootstrapFresh();
       expect(gameStateSpy.setInitialLives).toHaveBeenCalledWith(20, 22);
-      expect(gameStateSpy.addGold).toHaveBeenCalledWith(50);
-      expect(gameStateSpy.snapshotInitialGold).toHaveBeenCalled();
+      // runState.gold (200 default) + relic bonus (50) = 250
+      expect(gameStateSpy.setEncounterStartGold).toHaveBeenCalledWith(250);
+    });
+
+    it('combat starts at runState.gold + relic bonus (not a hardcoded 200g default)', () => {
+      // Use runState.gold = 150 to prove the old hardcoded 200 assumption is gone.
+      Object.defineProperty(runSpy, 'runState', {
+        value: { lives: 20, maxLives: 20, ascensionLevel: 0, gold: 150 },
+        configurable: true,
+      });
+      relicSpy.getStartingGoldBonus.and.returnValue(25);
+      service.bootstrapFresh();
+      expect(gameStateSpy.setEncounterStartGold).toHaveBeenCalledWith(175); // 150 + 25
     });
 
     it('sets custom waves and maxWaves to encounter wave count', () => {
