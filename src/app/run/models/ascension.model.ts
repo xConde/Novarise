@@ -7,6 +7,8 @@
  * secondary effects can be expressed via `additionalEffects`.
  */
 
+import { assertNever } from '../../game/game-board/utils/assert-never';
+
 export enum AscensionEffectType {
   ENEMY_HEALTH_MULTIPLIER = 'enemy_health_multiplier',
   ENEMY_SPEED_MULTIPLIER = 'enemy_speed_multiplier',
@@ -134,5 +136,8 @@ function applyAscensionEffect(
     case AscensionEffectType.STARTING_RELIC_DOWNGRADE:
       effects.set(effect.type, (current ?? 0) + effect.value);
       break;
+
+    default:
+      assertNever(effect.type);
   }
 }

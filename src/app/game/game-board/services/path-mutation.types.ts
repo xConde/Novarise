@@ -1,14 +1,9 @@
 import { BlockType } from '../models/game-board-tile';
+import { MutationOp, MutationRejectionReason } from '../models/path-mutation.model';
 
-/**
- * The type of a path mutation operation performed on the board.
- *
- * - `build`      — convert a WALL tile to a BASE (path) tile
- * - `block`      — convert a BASE tile to a WALL tile
- * - `destroy`    — convert a BASE tile to a WALL tile (enemies on it take damage)
- * - `bridgehead` — convert a WALL tile to a tower-only (non-traversable BASE) tile
- */
-export type MutationOp = 'build' | 'block' | 'destroy' | 'bridgehead';
+// Pure type declarations live in the models layer; re-exported here for
+// backward compatibility with all existing service-layer importers.
+export { MutationOp, MutationRejectionReason } from '../models/path-mutation.model';
 
 /**
  * A single active path mutation entry in the journal.
@@ -29,17 +24,6 @@ export interface PathMutation {
   readonly source: 'card' | 'relic' | 'boss';
   readonly sourceId: string;
 }
-
-/**
- * Reason a mutation was rejected.
- */
-export type MutationRejectionReason =
-  | 'out-of-bounds'
-  | 'spawner-or-exit'
-  | 'tower-occupied'
-  | 'would-block-all-paths'
-  | 'already-mutated-this-turn'
-  | 'no-op';
 
 /**
  * Return value of PathMutationService.build / block / destroy / bridgehead.

@@ -17,7 +17,6 @@ import { CombatVFXService } from './combat-vfx.service';
 import { StatusEffectService } from './status-effect.service';
 import { MinimapService } from './minimap.service';
 import { GameNotificationService } from './game-notification.service';
-import { CardEffectService } from '../../../run/services/card-effect.service';
 import { GameBoardService } from '../game-board.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { GamePhase } from '../models/game-state.model';
@@ -41,7 +40,6 @@ describe('GameRenderService', () => {
   let statusEffect: jasmine.SpyObj<StatusEffectService>;
   let minimap: jasmine.SpyObj<MinimapService>;
   let notification: jasmine.SpyObj<GameNotificationService>;
-  let cardEffect: jasmine.SpyObj<CardEffectService>;
   let gameBoard: jasmine.SpyObj<GameBoardService>;
   let meshRegistry: jasmine.SpyObj<BoardMeshRegistryService>;
   let service: GameRenderService;
@@ -97,7 +95,6 @@ describe('GameRenderService', () => {
       'hide', 'show', 'updateWithEntities', 'buildTerrainCache',
     ]);
     notification = jasmine.createSpyObj<GameNotificationService>('GameNotificationService', ['show']);
-    cardEffect = jasmine.createSpyObj<CardEffectService>('CardEffectService', ['tickWave', 'reset']);
     gameBoard = jasmine.createSpyObj<GameBoardService>('GameBoardService', [
       'getGameBoard', 'getBoardWidth', 'getBoardHeight', 'getSpawnerTiles', 'getExitTiles',
     ]);
@@ -114,7 +111,7 @@ describe('GameRenderService', () => {
     service = new GameRenderService(
       audio, fps, gameInput, scene, gameState, enemy, towerAnim, towerCombat, towerMeshLifecycle,
       particle, goldPopup, damagePopup, screenShake, combatVfx, statusEffect,
-      minimap, notification, cardEffect, gameBoard, meshRegistry,
+      minimap, notification, gameBoard, meshRegistry,
     );
   });
 
@@ -176,7 +173,6 @@ describe('GameRenderService', () => {
       expect(out.interestEarned).toBe(15);
       expect(out.waveCompleted).toEqual({ wave: 4, perfect: false });
       expect(audio.playWaveClear).toHaveBeenCalled();
-      expect(cardEffect.tickWave).toHaveBeenCalled();
     });
 
     it('marks wave as perfect when streakBonus > 0 and emits the streak notification', () => {
@@ -211,7 +207,6 @@ describe('GameRenderService', () => {
       service.processCombatResult(victoryResult, 0.016, 0);
       service.processCombatResult(victoryResult, 0.016, 0);
       expect(audio.playVictory).toHaveBeenCalledTimes(1);
-      expect(cardEffect.reset).toHaveBeenCalled();
     });
 
     it('forwards gameEnd outputs when present', () => {

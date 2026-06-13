@@ -9,9 +9,7 @@ import { GameBoardService } from './game-board.service';
 import { MapBridgeService } from '../../core/services/map-bridge.service';
 import { GameStateService } from './services/game-state.service';
 import { GameStatsService } from './services/game-stats.service';
-import { PlayerProfileService } from '../../core/services/player-profile.service';
-import { DamagePopupService } from './services/damage-popup.service';
-import { MinimapService } from './services/minimap.service';
+import { PlayerProfileService } from '../../core/services/player-profile.service';import { MinimapService } from './services/minimap.service';
 import { ForwardSimulationService } from './services/forward-simulation.service';
 import { EnemyIntentService } from './services/enemy-intent.service';
 import { TowerFireZonePreviewService } from './services/tower-fire-zone-preview.service';
@@ -24,19 +22,11 @@ import { TowerCombatService } from './services/tower-combat.service';
 import { ACHIEVEMENTS } from '../../core/services/player-profile.service';
 import { WaveService } from './services/wave.service';
 import { StatusEffectService } from './services/status-effect.service';
-import { EnemyService } from './services/enemy.service';
-import { EnemyVisualService } from './services/enemy-visual.service';
-import { TutorialService, TutorialStep } from '../../core/services/tutorial.service';
+import { EnemyService } from './services/enemy.service';import { TutorialService, TutorialStep } from '../../core/services/tutorial.service';
 import { BehaviorSubject, of } from 'rxjs';
 import { GameNotificationService, NotificationType } from './services/game-notification.service';
 import { ChallengeTrackingService } from './services/challenge-tracking.service';
-import { GameEndService } from './services/game-end.service';
-import { GameSessionService } from './services/game-session.service';
-import { SceneService } from './services/scene.service';
-import { PathfindingService } from './services/pathfinding.service';
-import { CombatVFXService } from './services/combat-vfx.service';
-import { CombatLoopService } from './services/combat-loop.service';
-import { GameModifier, calculateModifierScoreMultiplier } from './models/game-modifier.model';
+import { GameEndService } from './services/game-end.service';import { SceneService } from './services/scene.service';import { CombatVFXService } from './services/combat-vfx.service';import { GameModifier, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import {
   createTutorialServiceSpy,
   createSettingsServiceSpy,
@@ -47,13 +37,8 @@ import {
 import { RelicService } from '../../run/services/relic.service';
 import { RunService } from '../../run/services/run.service';
 import { DeckService } from '../../run/services/deck.service';
-import { CardId, CardInstance, EnergyState } from '../../run/models/card.model';
-import { TowerAnimationService } from './services/tower-animation.service';
-import { GamePauseService } from './services/game-pause.service';
-import { ChallengeDisplayService } from './services/challenge-display.service';
-import { EnemyHealthService } from './services/enemy-health.service';
-import { ChainLightningService } from './services/chain-lightning.service';
-import { TowerUpgradeVisualService } from './services/tower-upgrade-visual.service';
+import { CardId, CardInstance, EnergyState } from '../../run/models/card.model';import { GamePauseService } from './services/game-pause.service';
+import { ChallengeDisplayService } from './services/challenge-display.service';import { TowerUpgradeVisualService } from './services/tower-upgrade-visual.service';
 import { getAscensionEffects, AscensionEffectType } from '../../run/models/ascension.model';
 import { ENCOUNTER_CONFIG } from '../../run/constants/run.constants';
 import { GameRenderService } from './services/game-render.service';
@@ -62,10 +47,7 @@ import { GameInputService } from './services/game-input.service';
 import { TouchInteractionService } from './services/touch-interaction.service';
 import { BoardPointerService } from './services/board-pointer.service';
 import { CardPlayService } from './services/card-play.service';
-import { TowerInteractionService } from './services/tower-interaction.service';
-import { PathMutationService } from './services/path-mutation.service';
-import { ElevationService } from './services/elevation.service';
-import { TileHighlightService } from './services/tile-highlight.service';
+import { TowerInteractionService } from './services/tower-interaction.service';import { TileHighlightService } from './services/tile-highlight.service';
 import { PathVisualizationService } from './services/path-visualization.service';
 import { RangeVisualizationService } from './services/range-visualization.service';
 import { AudioService } from './services/audio.service';
@@ -193,21 +175,10 @@ describe('GameBoardComponent', () => {
         { provide: RelicService, useValue: createRelicServiceSpy() },
         { provide: RunService, useValue: createRunServiceSpy() },
         { provide: DeckService, useValue: createDeckServiceSpy() },
-        // Module-level infra (not component-scoped)
-        BoardMeshRegistryService,
+        // Module-level infra NOT in component providers: GameBoardService, MapBridgeService, CombatVFXService.
         GameBoardService,
         MapBridgeService,
-        GameStateService,
-        PathfindingService,
-        EnemyService,
-        EnemyVisualService,
-        EnemyHealthService,
-        StatusEffectService,
         CombatVFXService,
-        ChallengeDisplayService,
-        ChainLightningService,
-        TouchInteractionService,
-        BoardPointerService,
       ]
     })
     .compileComponents();

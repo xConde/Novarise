@@ -613,7 +613,7 @@ describe('CardPlayService', () => {
     });
 
     it('returns false for non-terraform effects', () => {
-      const spell = { type: 'spell' as const, spellId: 'gold_rush', value: 0 };
+      const spell = { type: 'spell' as const, spellId: 'gold_rush' as const, value: 0 };
       expect(isTerraformTargetEffect(spell)).toBeFalse();
     });
   });

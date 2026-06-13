@@ -1,9 +1,15 @@
 /**
- * Elevation system shared types — Highground archetype (sprint 25).
+ * Elevation system shared types — Highground archetype.
  *
- * ElevationService uses these; LineOfSightService (sprint 26) will read them;
- * TowerCombatService (sprint 29+) reads ElevationChange for range/damage scaling.
+ * ElevationService uses these; LineOfSightService reads them;
+ * TowerCombatService reads ElevationChange for range/damage scaling.
  */
+
+import { ElevationRejectionReason } from '../models/elevation.model';
+
+// Pure type declarations live in the models layer; re-exported here for
+// backward compatibility with all existing service-layer importers.
+export { ElevationRejectionReason } from '../models/elevation.model';
 
 export type ElevationOp = 'raise' | 'depress' | 'set' | 'collapse';
 
@@ -24,14 +30,6 @@ export interface ElevationChange {
   /** Card definition id, relic id, etc. */
   readonly sourceId: string;
 }
-
-export type ElevationRejectionReason =
-  | 'out-of-bounds'
-  | 'spawner-or-exit'
-  | 'out-of-range'                // exceeds MAX_ELEVATION or MAX_DEPRESS
-  | 'already-changed-this-turn'   // anti-spam: one change per (row,col) per turn
-  | 'no-op'                       // newElevation === priorElevation
-  | 'not-elevated';               // AVALANCHE_ORDER: target tile must have elevation ≥ 1
 
 export interface ElevationResult {
   readonly ok: boolean;

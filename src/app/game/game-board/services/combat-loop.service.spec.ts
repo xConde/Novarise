@@ -7,18 +7,14 @@ import { WaveService } from './wave.service';
 import { TowerCombatService } from './tower-combat.service';
 import { EnemyService } from './enemy.service';
 import { GameStatsService } from './game-stats.service';
-import { GameEndService } from './game-end.service';
-import { StatusEffectService } from './status-effect.service';
-import { RelicService } from '../../../run/services/relic.service';
+import { GameEndService } from './game-end.service';import { RelicService } from '../../../run/services/relic.service';
 import { RunEventBusService, RunEventType } from '../../../run/services/run-event-bus.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { GameNotificationService, NotificationType } from './game-notification.service';
 import { AudioService } from './audio.service';
 import { ScreenShakeService } from './screen-shake.service';
-import { createRelicServiceSpy, createCardEffectServiceSpy } from '../testing';
-import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
-import { PathMutationService } from './path-mutation.service';
-import { ElevationService } from './elevation.service';
+import { createCombatLoopServiceTestProviders } from '../testing';
+import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';import { ElevationService } from './elevation.service';
 import { DamagePopupService } from './damage-popup.service';
 
 import { GamePhase, INITIAL_GAME_STATE, DifficultyLevel } from '../models/game-state.model';
@@ -88,29 +84,6 @@ describe('CombatLoopService', () => {
   }
 
   beforeEach(() => {
-    gameStateSpy = jasmine.createSpyObj('GameStateService', [
-      'getState',
-      'addElapsedTime',
-      'addGoldAndScore',
-      'loseLife',
-      'addStreakBonus',
-      'getStreak',
-      'completeWave',
-      'awardInterest',
-    ]);
-    setupState();
-
-    waveSpy = jasmine.createSpyObj('WaveService', [
-      'spawnForTurn',
-      'isSpawning',
-      'getWaveReward',
-      'getCurrentWaveDefinition',
-    ]);
-    waveSpy.spawnForTurn.and.stub();
-    waveSpy.isSpawning.and.returnValue(true); // default: still spawning (wave not done)
-    waveSpy.getWaveReward.and.returnValue(50);
-    waveSpy.getCurrentWaveDefinition.and.returnValue(null); // default: no wave definition
-
     combatSpy = jasmine.createSpyObj('TowerCombatService', [
       'fireTurn',
       'tickMortarZonesForTurn',
@@ -120,87 +93,26 @@ describe('CombatLoopService', () => {
     combatSpy.tickMortarZonesForTurn.and.returnValue({ kills: [], damageDealt: 0 });
     combatSpy.drainAudioEvents.and.returnValue([]);
 
-    enemySpy = jasmine.createSpyObj('EnemyService', [
-      'getEnemies',
-      'stepEnemiesOneTurn',
-      'removeEnemy',
-      'startDyingAnimation',
-      'getLivingEnemyCount',
-      'tickMinerDigs',
-      'tickNovaSovereignEffects',
-    ]);
-    enemySpy.getEnemies.and.returnValue(new Map());
-    enemySpy.stepEnemiesOneTurn.and.returnValue([]);
-    // Default: no living enemies (wave appears done unless overridden per-test)
-    enemySpy.getLivingEnemyCount.and.returnValue(0);
-
-    gameStatsSpy = jasmine.createSpyObj('GameStatsService', [
-      'recordGoldEarned',
-      'recordEnemyLeaked',
-    ]);
-
-    gameEndSpy = jasmine.createSpyObj('GameEndService', ['isRecorded', 'recordEnd']);
-    gameEndSpy.isRecorded.and.returnValue(false);
-    gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [], completedChallenges: [] });
-
-    eventBusSpy = jasmine.createSpyObj<RunEventBusService>('RunEventBusService', ['emit']);
-
-    scene = new THREE.Scene();
-
-    const statusEffectSpy = jasmine.createSpyObj<StatusEffectService>('StatusEffectService', [
-      'tickTurn',
-      'getSlowTileReduction',
-      'apply',
-      'hasEffect',
-      'getEffects',
-      'getAllActiveEffects',
-      'removeAllEffects',
-      'cleanup',
-    ]);
-    statusEffectSpy.tickTurn.and.returnValue([]);
-    statusEffectSpy.getSlowTileReduction.and.returnValue(0);
-    statusEffectSpy.getAllActiveEffects.and.returnValue(new Map());
-    statusEffectSpy.getEffects.and.returnValue([]);
-
-    notificationSpy = jasmine.createSpyObj<GameNotificationService>('GameNotificationService', ['show', 'dismiss', 'clear', 'getNotifications']);
-    audioSpy = jasmine.createSpyObj<AudioService>('AudioService', [
-      'playTowerFire', 'playEnemyHit', 'playEnemyDeath', 'playWaveStart',
-      'playWaveClear', 'playGoldEarned', 'playTowerPlace', 'playTowerUpgrade',
-      'playTowerSell', 'playDefeat', 'playVictory', 'playLifeLoss',
-      'playAchievementSound', 'playStreakSound', 'playChallengeSound',
-      'playSfx', 'playSequence', 'setVolume', 'toggleMute', 'cleanup',
-      'resetFrameCounters',
-    ]);
-    screenShakeSpy = jasmine.createSpyObj<ScreenShakeService>('ScreenShakeService', ['trigger', 'update', 'cleanup']);
-
     TestBed.configureTestingModule({
-      providers: [
-        CombatLoopService,
-        { provide: GameStateService, useValue: gameStateSpy },
-        { provide: WaveService, useValue: waveSpy },
-        { provide: TowerCombatService, useValue: combatSpy },
-        { provide: EnemyService, useValue: enemySpy },
-        { provide: GameStatsService, useValue: gameStatsSpy },
-        { provide: GameEndService, useValue: gameEndSpy },
-        { provide: StatusEffectService, useValue: statusEffectSpy },
-        { provide: RelicService, useValue: (relicSpy = createRelicServiceSpy()) },
-        { provide: RunEventBusService, useValue: eventBusSpy },
-        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
-        { provide: GameNotificationService, useValue: notificationSpy },
-        { provide: AudioService, useValue: audioSpy },
-        { provide: ScreenShakeService, useValue: screenShakeSpy },
-        {
-          provide: PathMutationService,
-          useValue: jasmine.createSpyObj<PathMutationService>('PathMutationService', ['tickTurn']),
-        },
-        {
-          provide: ElevationService,
-          useValue: jasmine.createSpyObj<ElevationService>('ElevationService', ['tickTurn']),
-        },
-      ],
+      providers: createCombatLoopServiceTestProviders(combatSpy),
     });
 
     service = TestBed.inject(CombatLoopService);
+    // Extract spies from the module so per-test overrides via .and.* work as before.
+    gameStateSpy = TestBed.inject(GameStateService) as jasmine.SpyObj<GameStateService>;
+    waveSpy = TestBed.inject(WaveService) as jasmine.SpyObj<WaveService>;
+    enemySpy = TestBed.inject(EnemyService) as jasmine.SpyObj<EnemyService>;
+    gameStatsSpy = TestBed.inject(GameStatsService) as jasmine.SpyObj<GameStatsService>;
+    gameEndSpy = TestBed.inject(GameEndService) as jasmine.SpyObj<GameEndService>;
+    relicSpy = TestBed.inject(RelicService) as jasmine.SpyObj<RelicService>;
+    eventBusSpy = TestBed.inject(RunEventBusService) as jasmine.SpyObj<RunEventBusService>;
+    notificationSpy = TestBed.inject(GameNotificationService) as jasmine.SpyObj<GameNotificationService>;
+    audioSpy = TestBed.inject(AudioService) as jasmine.SpyObj<AudioService>;
+    screenShakeSpy = TestBed.inject(ScreenShakeService) as jasmine.SpyObj<ScreenShakeService>;
+
+    // Apply the stable COMBAT state that most tests expect.
+    setupState();
+    scene = new THREE.Scene();
   });
 
   afterEach(() => {

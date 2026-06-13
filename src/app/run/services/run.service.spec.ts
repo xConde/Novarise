@@ -25,6 +25,7 @@ import { CARD_DEFINITIONS } from '../constants/card-definitions';
 import { REWARD_CONFIG, REWARD_RARITY_WEIGHTS, SHOP_CONFIG, REST_HEAL_MIN, createSeededRng, SeededRng } from '../constants/run.constants';
 import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
 import { ChallengeDefinition, ChallengeType } from '../data/challenges';
+import { PlayerProfileService } from '../../core/services/player-profile.service';
 import {
   SerializableGameState,
   SerializableWaveState,
@@ -1096,6 +1097,36 @@ describe('RunService', () => {
 
     const stored = service.runState!.encounterResults[0];
     expect(stored.completedChallenges).toEqual(challenges);
+  }));
+
+  it('consumePendingEncounterResult increments completedChallengeCount once per completed challenge', fakeAsync(() => {
+    const profileService = TestBed.inject(PlayerProfileService);
+    const before = profileService.getProfile().completedChallengeCount;
+
+    service.startNewRun();
+    service.prepareEncounter(service.nodeMap!.nodes[0]);
+    service.recordEncounterResult(makeEncounterResult({
+      victory: true,
+      completedChallenges: [makeChallenge('c01_profile_a', 100), makeChallenge('c01_profile_b', 200)],
+    }));
+    service.consumePendingEncounterResult();
+
+    expect(profileService.getProfile().completedChallengeCount).toBe(before + 2);
+  }));
+
+  it('consumePendingEncounterResult does not increment completedChallengeCount on defeat', fakeAsync(() => {
+    const profileService = TestBed.inject(PlayerProfileService);
+    const before = profileService.getProfile().completedChallengeCount;
+
+    service.startNewRun();
+    service.prepareEncounter(service.nodeMap!.nodes[0]);
+    service.recordEncounterResult(makeEncounterResult({
+      victory: false,
+      completedChallenges: [makeChallenge('c01_defeat', 100)],
+    }));
+    service.consumePendingEncounterResult();
+
+    expect(profileService.getProfile().completedChallengeCount).toBe(before);
   }));
 
   // ── stale checkpoint handling ──────────────────────────────────

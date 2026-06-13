@@ -21,7 +21,6 @@ import { CombatVFXService } from './combat-vfx.service';
 import { StatusEffectService } from './status-effect.service';
 import { MinimapService, MinimapTerrainData, MinimapBoardSnapshot } from './minimap.service';
 import { GameNotificationService, NotificationType } from './game-notification.service';
-import { CardEffectService } from '../../../run/services/card-effect.service';
 import { GameBoardService } from '../game-board.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { GamePhase } from '../models/game-state.model';
@@ -90,7 +89,6 @@ export class GameRenderService {
     private statusEffectService: StatusEffectService,
     private minimapService: MinimapService,
     private notificationService: GameNotificationService,
-    private cardEffectService: CardEffectService,
     private gameBoardService: GameBoardService,
     private meshRegistry: BoardMeshRegistryService,
     // @Optional() — not provided in GameRenderService test beds. tickAim
@@ -283,9 +281,6 @@ export class GameRenderService {
       if (wc.resultPhase === GamePhase.VICTORY && !this.victorySoundPlayed) {
         this.victorySoundPlayed = true;
         this.audioService.playVictory();
-        // Expire card modifiers from the final wave and reset for clean state.
-        this.cardEffectService.tickWave();
-        this.cardEffectService.reset();
         // Restore minimap if it was hidden during INTERMISSION on mobile
         if (window.innerWidth <= 480) {
           this.minimapService.show();
@@ -295,8 +290,6 @@ export class GameRenderService {
         output.waveReward = wc.reward;
         output.interestEarned = wc.interestEarned;
         output.waveCompleted = { wave: this.gameStateService.getState().wave, perfect: wc.streakBonus > 0 };
-        // Tick card modifier wave-countdowns.
-        this.cardEffectService.tickWave();
         // Hide minimap during intermission on mobile — frees space for Next Wave button
         if (window.innerWidth <= 480) {
           this.minimapService.hide();

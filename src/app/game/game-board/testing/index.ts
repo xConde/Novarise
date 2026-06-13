@@ -34,3 +34,5 @@ export {
   createCardEffectServiceSpy,
   createScreenShakeServiceSpy,
 } from './test-spies.factory';
+export { createTowerCombatServiceTestProviders } from './spies/tower.spies';
+export { createCombatLoopServiceTestProviders } from './spies/enemy-combat.spies';

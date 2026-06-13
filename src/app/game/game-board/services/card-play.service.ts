@@ -40,6 +40,7 @@ import { ElevationOp } from './elevation.types';
 import { getCardDefinition, getEffectiveEnergyCost } from '../../../run/constants/card-definitions';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 import { buildDisposeProtect, disposeGroup } from '../utils/three-utils';
+import { assertNever } from '../utils/assert-never';
 import { GeometryRegistryService } from './geometry-registry.service';
 import { MaterialRegistryService } from './material-registry.service';
 import { TargetPreviewService } from './target-preview.service';
@@ -322,12 +323,12 @@ export class CardPlayService {
     if (!this.deckService.playCard(cardInstanceId)) return;
 
     try {
+      // 'tower', 'terraform_target', and 'elevation_target' are handled above
+      // this block with early returns — they never reach this switch.
       switch (effect.type) {
         case 'spell': {
           const spellEffect = effect as SpellCardEffect;
           if (spellEffect.spellId === 'fortify') {
-            // Phase 1 Sprint 5: effect.value is now the upgrade count
-            // (1 base, 2 upgraded). Fewer eligible towers → fewer upgrades.
             this.fortifyRandomTower(spellEffect.value);
           } else if (spellEffect.spellId === 'salvage') {
             this.salvageLastTower();
@@ -349,6 +350,7 @@ export class CardPlayService {
         case 'utility':
           this.executeUtilityCard(effect as UtilityCardEffect);
           break;
+        // 'tower', 'terraform_target', 'elevation_target' return early above.
       }
     } catch (err) {
       console.error('Card effect threw — rolling back play:', err);
@@ -900,7 +902,7 @@ export class CardPlayService {
         this.applyConduitBridge(effect.value);
         break;
       default:
-        break;
+        assertNever(effect.utilityId);
     }
   }
 

@@ -148,7 +148,7 @@ describe('WaveCombatFacadeService', () => {
     runService.getCurrentEncounter.and.returnValue(null);
     runService.getRngState.and.returnValue(null);
 
-    cardEffectService = jasmine.createSpyObj('CardEffectService', ['serializeModifiers']);
+    cardEffectService = jasmine.createSpyObj('CardEffectService', ['serializeModifiers', 'tickWave', 'reset']);
     cardEffectService.serializeModifiers.and.returnValue([]);
 
     itemService = jasmine.createSpyObj('ItemService', ['serialize']);
@@ -470,6 +470,32 @@ describe('WaveCombatFacadeService', () => {
       service.endTurn();
       expect(deckService.discardHand).not.toHaveBeenCalled();
       expect(deckService.drawForWave).not.toHaveBeenCalled();
+    });
+
+    it('calls cardEffectService.tickWave() when a wave completes (INTERMISSION)', () => {
+      gameStateService.getState.and.returnValue({ ...defaultState, phase: GamePhase.COMBAT });
+      gameRenderService.processCombatResult.and.returnValue({
+        waveCompleted: { wave: 2, perfect: false },
+        waveReward: 50,
+        interestEarned: 0,
+      });
+      service.init(makeCallbacks());
+      service.endTurn();
+      expect(cardEffectService.tickWave).toHaveBeenCalled();
+      expect(cardEffectService.reset).not.toHaveBeenCalled();
+    });
+
+    it('calls cardEffectService.tickWave() and reset() when combat ends in VICTORY', () => {
+      let callCount = 0;
+      gameStateService.getState.and.callFake(() => {
+        callCount++;
+        // First call (phase guard) is COMBAT; second (post-turn) is VICTORY
+        return { ...defaultState, phase: callCount === 1 ? GamePhase.COMBAT : GamePhase.VICTORY };
+      });
+      service.init(makeCallbacks());
+      service.endTurn();
+      expect(cardEffectService.tickWave).toHaveBeenCalled();
+      expect(cardEffectService.reset).toHaveBeenCalled();
     });
   });
 

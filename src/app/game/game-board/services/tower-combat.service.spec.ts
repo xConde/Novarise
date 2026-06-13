@@ -13,7 +13,7 @@ import { StatusEffectType } from '../constants/status-effect.constants';
 import { CHAIN_LIGHTNING_CONFIG } from '../constants/combat.constants';
 import { PROJECTILE_VISUAL_CONFIG } from '../constants/effects.constants';
 import * as THREE from 'three';
-import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy, createRelicServiceSpy, createCardEffectServiceSpy } from '../testing';
+import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy, createRelicServiceSpy, createCardEffectServiceSpy, createTowerCombatServiceTestProviders } from '../testing';
 import { TowerAnimationService } from './tower-animation.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
@@ -29,8 +29,6 @@ import { DamagePopupService } from './damage-popup.service';
 describe('TowerCombatService', () => {
   let service: TowerCombatService;
   let combatVFXService: CombatVFXService;
-  let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
-  let gameBoardServiceSpy: jasmine.SpyObj<GameBoardService>;
   let relicServiceSpy: jasmine.SpyObj<RelicService>;
   let statusEffectService: StatusEffectService;
   let mockScene: THREE.Scene;
@@ -53,35 +51,12 @@ describe('TowerCombatService', () => {
 
   beforeEach(() => {
     enemyMap = new Map();
-
-    enemyServiceSpy = createEnemyServiceSpy(enemyMap);
-    gameBoardServiceSpy = createGameBoardServiceSpy(25, 20, 1);
     relicServiceSpy = createRelicServiceSpy();
-
-    // Sprint 18 LABYRINTH_MIND — TowerCombatService now takes an @Optional()
-    // PathfindingService. Stub it with a spy that returns 0 length so existing
-    // non-LABYRINTH tests see multiplier=1. The LABYRINTH_MIND-specific test
-    // rebinds getPathToExitLength via the returned spy.
-    const pathfindingSpy = jasmine.createSpyObj<PathfindingService>(
-      'PathfindingService',
-      ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset'],
-    );
-    pathfindingSpy.getPathToExitLength.and.returnValue(0);
 
     TestBed.configureTestingModule({
       providers: [
-        TowerCombatService,
-        ChainLightningService,
-        CombatVFXService,
-        StatusEffectService,
-        GameStateService,
-        { provide: EnemyService, useValue: enemyServiceSpy },
-        { provide: GameBoardService, useValue: gameBoardServiceSpy },
-        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
-        { provide: RelicService, useValue: relicServiceSpy },
-        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
-        { provide: PathfindingService, useValue: pathfindingSpy },
-      ]
+        ...createTowerCombatServiceTestProviders(enemyMap, 25, 20, 1, relicServiceSpy),
+      ],
     });
     service = TestBed.inject(TowerCombatService);
     combatVFXService = TestBed.inject(CombatVFXService);

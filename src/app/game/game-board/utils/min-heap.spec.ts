@@ -63,9 +63,17 @@ describe('MinHeap', () => {
   });
 
   it('should handle large heaps (100+ nodes)', () => {
+    // Deterministic xorshift32 — seed 0xdeadbeef, reproducible on every run.
+    let rngState = 0xdeadbeef;
+    function nextRng(): number {
+      rngState ^= rngState << 13;
+      rngState ^= rngState >>> 17;
+      rngState ^= rngState << 5;
+      return (rngState >>> 0) / 0x100000000;
+    }
     const fScores: number[] = [];
     for (let i = 0; i < 150; i++) {
-      const f = Math.floor(Math.random() * 1000);
+      const f = Math.floor(nextRng() * 1000);
       fScores.push(f);
       heap.insert(makeNode(i, 0, f));
     }

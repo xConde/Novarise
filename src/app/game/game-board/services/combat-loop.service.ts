@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@angular/core';
+import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 
 import { GameStateService } from './game-state.service';
@@ -84,12 +84,9 @@ export class CombatLoopService {
     private screenShakeService: ScreenShakeService,
     private pathMutationService: PathMutationService,
     private elevationService: ElevationService,
-    // @Optional() — absent in pre-Conduit test beds; tickTurn becomes a no-op.
-    @Optional() private towerGraphService?: TowerGraphService,
-    // @Optional() — absent in pre-aggregation test beds; flush becomes a no-op.
-    @Optional() private damagePopupService?: DamagePopupService,
-    // @Optional() — absent in legacy test beds that don't provide SettingsService explicitly.
-    @Optional() private settingsService?: SettingsService,
+    private towerGraphService: TowerGraphService,
+    private damagePopupService: DamagePopupService,
+    private settingsService: SettingsService,
   ) {}
 
   /** Phase 4: current turn number, exposed for UI bindings. */

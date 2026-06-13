@@ -32,6 +32,9 @@ import { CombatLoopService } from '../../game/game-board/services/combat-loop.se
 import { PathMutationService } from '../../game/game-board/services/path-mutation.service';
 import { ElevationService } from '../../game/game-board/services/elevation.service';
 import { GameEndService } from '../../game/game-board/services/game-end.service';
+import { TowerGraphService } from '../../game/game-board/services/tower-graph.service';
+import { DamagePopupService } from '../../game/game-board/services/damage-popup.service';
+import { SettingsService } from '../../core/services/settings.service';
 import { AudioService } from '../../game/game-board/services/audio.service';
 import { TowerAnimationService } from '../../game/game-board/services/tower-animation.service';
 import { GameNotificationService } from '../../game/game-board/services/game-notification.service';
@@ -140,6 +143,9 @@ describe('combat-flow integration smoke', () => {
         GameEndService,
         { provide: PathMutationService, useValue: (() => { const s = jasmine.createSpyObj<PathMutationService>('PathMutationService', ['tickTurn', 'reset', 'serialize', 'restore', 'setRepathHook', 'swapMesh']); s.serialize.and.returnValue({ mutations: [], nextId: 0 }); return s; })() },
         { provide: ElevationService, useValue: (() => { const s = jasmine.createSpyObj<ElevationService>('ElevationService', ['tickTurn', 'reset', 'serialize', 'getElevation', 'getMaxElevation']); s.serialize.and.returnValue({ elevations: [], changes: [], nextId: 0 }); s.getElevation.and.returnValue(0); s.getMaxElevation.and.returnValue(0); return s; })() },
+        TowerGraphService,
+        DamagePopupService,
+        SettingsService,
         // Run-side services
         DeckService,
         CardEffectService,
