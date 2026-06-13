@@ -22,14 +22,11 @@ import {
   RewardScreenConfig,
   ShopItem,
   RunEvent,
-  ItemReward,
 } from '../models/encounter.model';
-import { ItemType } from '../models/item.model';
 import { ChallengeDefinition, computeChallengeGoldBonus } from '../data/challenges';
 import { RelicId, RelicRarity, RelicDefinition } from '../models/relic.model';
 import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
 import {
-  ARCHETYPE_CARD_BIAS_CHANCE,
   RELIC_EFFECT_CONFIG,
   REWARD_CONFIG,
   REWARD_RARITY_WEIGHTS,
@@ -38,7 +35,6 @@ import {
   REST_HEAL_MIN,
   RUN_CONFIG,
   SHOP_CONFIG,
-  ITEM_CONFIG,
   UNKNOWN_NODE_REVEAL_THRESHOLDS,
   SeededRng,
   createSeededRng,
@@ -52,6 +48,7 @@ import { ItemService } from './item.service';
 import { RunStateFlagService } from './run-state-flag.service';
 import { RunPersistenceService } from './run-persistence.service';
 import { RunEventBusService, RunEventType } from './run-event-bus.service';
+import { RunShopService } from './run-shop.service';
 import { RUN_EVENTS } from '../constants/run-events';
 import { PlayerProfileService } from '../../core/services/player-profile.service';
 import { SeenCardsService } from '../../core/services/seen-cards.service';
@@ -92,8 +89,7 @@ export class RunService {
   /** Pending encounter result set by GameBoardComponent on return from /play. */
   private pendingResult: EncounterResult | null = null;
 
-  /** Current shop items (generated on entering shop node). */
-  private shopItems: ShopItem[] = [];
+  // shopItems state is now owned by RunShopService.
 
   /**
    * Per-run reward telemetry — in-memory only, reset at startNewRun. Tracks
@@ -135,6 +131,7 @@ export class RunService {
     private playerProfile: PlayerProfileService,
     private encounterCheckpointService: EncounterCheckpointService,
     private seenCards: SeenCardsService,
+    private shopService: RunShopService,
   ) {}
 
   // ── Queries ─────────────────────────────────────────────
@@ -202,7 +199,7 @@ export class RunService {
   }
 
   getShopItems(): ShopItem[] {
-    return this.shopItems;
+    return this.shopService.getShopItems();
   }
 
   getCurrentEvent(): RunEvent | null {
@@ -253,7 +250,7 @@ export class RunService {
     // (guards against re-using stale state if a previous run ended mid-flight)
     this.currentEncounter = null;
     this.pendingResult = null;
-    this.shopItems = [];
+    this.shopService.clearShopItems();
     this.currentEvent = null;
     this.runRng = null;
     this.lastShownDominantArchetype = null;
@@ -608,36 +605,18 @@ export class RunService {
   }
 
   /**
-   * Phase 1 Sprint 8 — pick a single card from `pool` biased toward the
-   * dominant archetype when one is set. Implementation:
-   *   - Dominant === 'neutral' → uniform pick across pool.
-   *   - Otherwise: 60% chance pick from archetype-tagged subset, 40% neutral
-   *     subset. Falls back to uniform when the chosen subset is empty
-   *     (e.g. no rare archetype cards exist yet).
-   *
-   * Re-used from `pickCardRewards` and the card section of `generateShopItems`
-   * so both reward surfaces feel coherent during a run.
+   * Pick a single card from `pool` biased toward the dominant archetype when
+   * one is set. Delegates to RunShopService so both reward and shop surfaces
+   * use the same selection logic. Kept here so pickCardRewards can call it
+   * without reaching across the service boundary, and so existing white-box
+   * specs that call it via TestableRunService continue to work.
    */
   private pickArchetypeAwareCard<T extends { archetype?: CardArchetype }>(
     pool: T[],
     dominant: CardArchetype,
     rng: () => number,
   ): T {
-    if (dominant === 'neutral' || pool.length === 0) {
-      return pool[Math.floor(rng() * pool.length)];
-    }
-
-    const archetypeMatches = pool.filter(c => c.archetype === dominant);
-    const neutralMatches = pool.filter(c => (c.archetype ?? 'neutral') === 'neutral');
-    const wantArchetype = rng() < ARCHETYPE_CARD_BIAS_CHANCE;
-    const preferred = wantArchetype ? archetypeMatches : neutralMatches;
-    if (preferred.length > 0) {
-      return preferred[Math.floor(rng() * preferred.length)];
-    }
-    // Preferred subset empty → fall back to the other subset, or full pool.
-    const fallback = wantArchetype ? neutralMatches : archetypeMatches;
-    if (fallback.length > 0) return fallback[Math.floor(rng() * fallback.length)];
-    return pool[Math.floor(rng() * pool.length)];
+    return this.shopService.pickArchetypeAwareCard(pool, dominant, rng);
   }
 
   /** Collect a reward (relic, gold, card, or item). */
@@ -704,123 +683,28 @@ export class RunService {
 
   /** Shop: generate shop items for the current node. */
   generateShopItems(): void {
-    const rng = this.getRng();
     const state = this.runState;
     if (!state) return;
 
-    const items: ShopItem[] = [];
-
-    // Apply ascension price multiplier and shop slot reduction
-    const ascEffects = getAscensionEffects(state.ascensionLevel);
-    const priceMultiplier = ascEffects.get(AscensionEffectType.SHOP_PRICE_MULTIPLIER) ?? 1;
-    const shopSlotReduction = ascEffects.get(AscensionEffectType.SHOP_SLOT_REDUCTION) ?? 0;
-    const relicsInShop = Math.max(0, SHOP_CONFIG.relicsInShop - shopSlotReduction);
-    const cardsInShop = Math.max(0, SHOP_CONFIG.cardsInShop - shopSlotReduction);
-
-    // Relic items — weighted by rarity
-    const available = this.relicService.getAvailableRelics();
-    const relicByRarity = this.buildRelicPool(available);
-    const relicRarityWeights: Array<{ rarity: RelicRarity; weight: number }> = [
-      { rarity: RelicRarity.COMMON, weight: REWARD_RARITY_WEIGHTS.common },
-      { rarity: RelicRarity.UNCOMMON, weight: REWARD_RARITY_WEIGHTS.uncommon },
-      { rarity: RelicRarity.RARE, weight: REWARD_RARITY_WEIGHTS.rare },
-    ];
-    const pickedRelicIds = new Set<RelicId>();
-    for (let i = 0; i < relicsInShop; i++) {
-      const remaining: Record<RelicRarity, RelicDefinition[]> = {
-        [RelicRarity.COMMON]: relicByRarity[RelicRarity.COMMON].filter(r => !pickedRelicIds.has(r.id)),
-        [RelicRarity.UNCOMMON]: relicByRarity[RelicRarity.UNCOMMON].filter(r => !pickedRelicIds.has(r.id)),
-        [RelicRarity.RARE]: relicByRarity[RelicRarity.RARE].filter(r => !pickedRelicIds.has(r.id)),
-      };
-      const rarity = this.pickWeightedRarity(relicRarityWeights, remaining, rng);
-      if (rarity === null) continue;
-      const pool = remaining[rarity];
-      if (pool.length === 0) continue;
-      const relic = pool[Math.floor(rng() * pool.length)];
-      pickedRelicIds.add(relic.id);
-      const basePrice = SHOP_CONFIG.priceByRarity[relic.rarity];
-      items.push({
-        item: { type: 'relic', relicId: relic.id },
-        cost: Math.round(basePrice * priceMultiplier),
-      });
+    const updatedPityCounter = this.shopService.generateShopItems(state, this.getRng());
+    if (updatedPityCounter !== (state.cardPityCounter ?? 0)) {
+      this.updateState({ ...state, cardPityCounter: updatedPityCounter });
     }
-
-    // Card items — weighted by rarity, with pity-timer protection.
-    // Reuses cardPityCounter from run state — see concerns: a separate
-    // shopCardPityCounter would require a RunState field outside this package.
-    const cardByRarity = this.buildNonStarterCardPool();
-    const cardRarityWeights: Array<{ rarity: CardRarity; weight: number }> = [
-      { rarity: CardRarity.COMMON, weight: REWARD_RARITY_WEIGHTS.common },
-      { rarity: CardRarity.UNCOMMON, weight: REWARD_RARITY_WEIGHTS.uncommon },
-      { rarity: CardRarity.RARE, weight: REWARD_RARITY_WEIGHTS.rare },
-    ];
-    const pickedCardIds = new Set<CardId>();
-    // Same archetype-aware selection used by combat rewards.
-    const dominant = this.deckService.getDominantArchetype();
-    let shopPityCounter = state.cardPityCounter ?? 0;
-    let shopPityUpdated = false;
-    for (let i = 0; i < cardsInShop; i++) {
-      const remaining: Record<CardRarity, CardDefinition[]> = {
-        [CardRarity.STARTER]: [],
-        [CardRarity.COMMON]: cardByRarity[CardRarity.COMMON].filter(c => !pickedCardIds.has(c.id)),
-        [CardRarity.UNCOMMON]: cardByRarity[CardRarity.UNCOMMON].filter(c => !pickedCardIds.has(c.id)),
-        [CardRarity.RARE]: cardByRarity[CardRarity.RARE].filter(c => !pickedCardIds.has(c.id)),
-      };
-      const pityForceRare = shopPityCounter >= CARD_PITY_THRESHOLD && remaining[CardRarity.RARE].length > 0;
-      const rarity = pityForceRare
-        ? CardRarity.RARE
-        : this.pickWeightedRarity(cardRarityWeights, remaining, rng);
-      if (rarity === null) continue;
-      const pool = remaining[rarity];
-      if (pool.length === 0) continue;
-      const card = this.pickArchetypeAwareCard(pool, dominant, rng);
-      pickedCardIds.add(card.id);
-      this.seenCards.markSeen(card.id);
-      const rarityKey = card.rarity as keyof typeof SHOP_CONFIG.priceByRarity;
-      const basePrice = SHOP_CONFIG.priceByRarity[rarityKey] ?? SHOP_CONFIG.priceByRarity.common;
-      items.push({
-        item: { type: 'card', cardId: card.id },
-        cost: Math.round(basePrice * priceMultiplier),
-      });
-      if (rarity === CardRarity.RARE) {
-        shopPityCounter = 0;
-      } else {
-        shopPityCounter++;
-      }
-      shopPityUpdated = true;
-    }
-    // Persist the updated pity counter so it carries across the next shop visit.
-    if (shopPityUpdated && shopPityCounter !== (state.cardPityCounter ?? 0)) {
-      this.updateState({ ...state, cardPityCounter: shopPityCounter });
-    }
-
-    // Item (consumable) slots
-    const allItemTypes = Object.values(ItemType);
-    for (let i = 0; i < ITEM_CONFIG.shopSlotCount; i++) {
-      if (allItemTypes.length === 0) break;
-      const itemType = allItemTypes[Math.floor(rng() * allItemTypes.length)];
-      const itemReward: ItemReward = { type: 'item', itemType };
-      items.push({
-        item: itemReward,
-        cost: Math.round(ITEM_CONFIG.shopCost * priceMultiplier),
-      });
-    }
-
-    this.shopItems = items;
   }
 
   /** Buy item from shop by index. */
   buyShopItem(index: number): void {
     const state = this.runState;
     if (!state) return;
-    if (index < 0 || index >= this.shopItems.length) return;
+    const currentItems = this.shopService.getShopItems();
+    if (index < 0 || index >= currentItems.length) return;
 
-    const item = this.shopItems[index];
+    const item = currentItems[index];
     if (state.gold < item.cost) return;
 
     this.updateState({ ...state, gold: state.gold - item.cost });
     this.collectReward(item.item);
-    this.shopItems = this.shopItems.filter((_, i) => i !== index);
+    this.shopService.setShopItems(currentItems.filter((_, i) => i !== index));
     this.persist();
   }
 
@@ -892,29 +776,19 @@ export class RunService {
 
   /**
    * Live-scaled cost of the shop card-removal service. Applies the same
-   * SHOP_PRICE_MULTIPLIER ascension scaling that other shop items use, so
-   * removal becomes proportionally pricier at higher ascensions rather than
-   * staying fixed at the base 75g.
+   * SHOP_PRICE_MULTIPLIER ascension scaling that other shop items use.
+   * Delegates to RunShopService for the computation.
    */
   getCardRemoveCost(): number {
-    const state = this.runState;
-    if (!state) return SHOP_CONFIG.cardRemoveCost;
-    const ascEffects = getAscensionEffects(state.ascensionLevel);
-    const priceMultiplier = ascEffects.get(AscensionEffectType.SHOP_PRICE_MULTIPLIER) ?? 1;
-    return Math.round(SHOP_CONFIG.cardRemoveCost * priceMultiplier);
+    return this.shopService.getCardRemoveCost(this.runState);
   }
 
   /**
    * Live-scaled cost of the shop card-upgrade service. Mirrors getCardRemoveCost
-   * using SHOP_CONFIG.cardUpgradeCost (base 100g) and SHOP_PRICE_MULTIPLIER
-   * ascension scaling. Returns base cost when no run is active.
+   * using SHOP_CONFIG.cardUpgradeCost as the base. Delegates to RunShopService.
    */
   getCardUpgradeCost(): number {
-    const state = this.runState;
-    if (!state) return SHOP_CONFIG.cardUpgradeCost;
-    const ascEffects = getAscensionEffects(state.ascensionLevel);
-    const priceMultiplier = ascEffects.get(AscensionEffectType.SHOP_PRICE_MULTIPLIER) ?? 1;
-    return Math.round(SHOP_CONFIG.cardUpgradeCost * priceMultiplier);
+    return this.shopService.getCardUpgradeCost(this.runState);
   }
 
   /**
@@ -1275,45 +1149,28 @@ export class RunService {
   }
 
   /**
-   * Select a rarity tier using weighted random selection.
-   * Returns null when every tier in the pool is empty (all slots exhausted).
-   * Callers must handle null — skip the slot rather than leaving it blank.
+   * Select a rarity tier using weighted random selection. Delegates to
+   * RunShopService. Kept here so pickCardRewards and pickRelicRewards can
+   * call it without cross-service reach, and so white-box specs work.
    */
   private pickWeightedRarity<R extends string>(
     weights: Array<{ rarity: R; weight: number }>,
     pool: Record<R, unknown[]>,
     rng: () => number,
   ): R | null {
-    const available = weights.filter(w => pool[w.rarity].length > 0);
-    if (available.length === 0) return null;
-    const total = available.reduce((sum, w) => sum + w.weight, 0);
-    let roll = rng() * total;
-    for (const entry of available) {
-      roll -= entry.weight;
-      if (roll < 0) return entry.rarity;
-    }
-    return available[available.length - 1].rarity;
+    return this.shopService.pickWeightedRarity(weights, pool, rng);
   }
 
   /**
-   * Build a pool of all non-starter cards grouped by rarity.
-   * STARTER bucket is always empty — it exists only to satisfy the
-   * Record<CardRarity, …> shape so callers can index by any rarity key.
+   * Build a pool of all non-starter cards grouped by rarity. Delegates to
+   * RunShopService so both reward and shop surfaces share one implementation.
    */
   private buildNonStarterCardPool(): Record<CardRarity, CardDefinition[]> {
-    const pool = Object.values(CARD_DEFINITIONS).filter(c => c.rarity !== CardRarity.STARTER);
-    return {
-      [CardRarity.STARTER]: [],
-      [CardRarity.COMMON]: pool.filter(c => c.rarity === CardRarity.COMMON),
-      [CardRarity.UNCOMMON]: pool.filter(c => c.rarity === CardRarity.UNCOMMON),
-      [CardRarity.RARE]: pool.filter(c => c.rarity === CardRarity.RARE),
-    };
+    return this.shopService.buildNonStarterCardPool();
   }
 
   /**
    * Build a pool of relics grouped by rarity from the provided source array.
-   * Accepts a pre-filtered list (e.g. from RelicService.getAvailableRelics())
-   * so callers control the source of truth.
    */
   private buildRelicPool(source: RelicDefinition[]): Record<RelicRarity, RelicDefinition[]> {
     return {
@@ -1327,7 +1184,7 @@ export class RunService {
     this.persistence.clearSavedRun();
     this.currentEncounter = null;
     this.pendingResult = null;
-    this.shopItems = [];
+    this.shopService.clearShopItems();
     this.currentEvent = null;
     this.runRng = null;
     this.lastShownDominantArchetype = null;

@@ -1,3 +1,5 @@
+import { Provider } from '@angular/core';
+
 import { GameBoardService } from '../../game-board.service';
 import { TowerCombatService } from '../../services/tower-combat.service';
 import { TowerPlacementService } from '../../services/tower-placement.service';
@@ -5,6 +7,17 @@ import { TowerSelectionService } from '../../services/tower-selection.service';
 import { TowerAnimationService } from '../../services/tower-animation.service';
 import { TowerUpgradeVisualService } from '../../services/tower-upgrade-visual.service';
 import { GameBoardTile } from '../../models/game-board-tile';
+import { ChainLightningService } from '../../services/chain-lightning.service';
+import { CombatVFXService } from '../../services/combat-vfx.service';
+import { StatusEffectService } from '../../services/status-effect.service';
+import { GameStateService } from '../../services/game-state.service';
+import { EnemyService } from '../../services/enemy.service';
+import { PathfindingService } from '../../services/pathfinding.service';
+import { Enemy } from '../../models/enemy.model';
+import { RelicService } from '../../../../run/services/relic.service';
+import { CardEffectService } from '../../../../run/services/card-effect.service';
+import { createEnemyServiceSpy } from './enemy-combat.spies';
+import { createRelicServiceSpy, createCardEffectServiceSpy } from './run-card.spies';
 
 /**
  * Create a pre-configured GameBoardService spy with standard return values.
@@ -176,4 +189,56 @@ export function createTowerUpgradeVisualServiceSpy(): jasmine.SpyObj<TowerUpgrad
     { flashCount: 0, ringCount: 0 }
   );
   return spy;
+}
+
+/**
+ * Returns a Provider[] wiring the full real DI graph required by
+ * TowerCombatService (and its mandatory deps ChainLightningService /
+ * CombatVFXService / StatusEffectService / GameStateService).
+ *
+ * This mirrors what GameBoardComponent.providers supplies in production so
+ * specs that exercise the real service get the same graph, not a partial one.
+ *
+ * Usage:
+ *   TestBed.configureTestingModule({
+ *     providers: [
+ *       ...createTowerCombatServiceTestProviders(enemyMap),
+ *       // spread additional overrides, e.g. { provide: LineOfSightService, useValue: losSpy }
+ *     ]
+ *   });
+ *
+ * @param enemyMap   Enemy map used by the EnemyService spy (mutate in-test to add enemies).
+ * @param boardW     Board width forwarded to GameBoardService spy (default 25).
+ * @param boardH     Board height forwarded to GameBoardService spy (default 20).
+ * @param tileSize   Tile size forwarded to GameBoardService spy (default 1).
+ * @param relicSpy   Optional pre-configured RelicService spy; a fresh one is created when omitted.
+ * @param cardSpy    Optional pre-configured CardEffectService spy; a fresh one is created when omitted.
+ */
+export function createTowerCombatServiceTestProviders(
+  enemyMap: Map<string, Enemy> = new Map(),
+  boardW = 25,
+  boardH = 20,
+  tileSize = 1,
+  relicSpy?: jasmine.SpyObj<RelicService>,
+  cardSpy?: jasmine.SpyObj<CardEffectService>,
+): Provider[] {
+  const pathfindingSpy = jasmine.createSpyObj<PathfindingService>(
+    'PathfindingService',
+    ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset'],
+  );
+  pathfindingSpy.getPathToExitLength.and.returnValue(0);
+
+  return [
+    TowerCombatService,
+    ChainLightningService,
+    CombatVFXService,
+    StatusEffectService,
+    GameStateService,
+    { provide: EnemyService, useValue: createEnemyServiceSpy(enemyMap) },
+    { provide: GameBoardService, useValue: createGameBoardServiceSpy(boardW, boardH, tileSize) },
+    { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+    { provide: RelicService, useValue: relicSpy ?? createRelicServiceSpy() },
+    { provide: CardEffectService, useValue: cardSpy ?? createCardEffectServiceSpy() },
+    { provide: PathfindingService, useValue: pathfindingSpy },
+  ];
 }
