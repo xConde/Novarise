@@ -1,6 +1,7 @@
 # Novarise
 
-A tower defense game built with Angular 15 and Three.js. Design custom maps in a 3D editor, then defend them with upgradeable towers against waves of enemies.
+A card-driven turn-based tower defense roguelite built with Angular 15 and Three.js.
+Play a run across 3 acts and a final boss, building your deck and collecting relics as you go.
 
 ## Routes
 
@@ -8,43 +9,47 @@ A tower defense game built with Angular 15 and Three.js. Design custom maps in a
 |-------|-------------|
 | `/` | Landing page |
 | `/edit` | 3D map editor — paint terrain, set spawn/exit, save/load maps |
-| `/maps` | Map select — pick a map or quick play |
-| `/play` | Tower defense game (requires map or quick play) |
+| `/run` | Run hub — node map, deck inspection, relic overview, act progression |
+| `/play` | Combat encounter (card play → end turn → combat resolution loop) |
+| `/profile` | Player profile and run history |
+| `/library` | Card and relic codex |
 
 ## Stack
 
 - **Framework:** Angular 15
 - **3D Engine:** Three.js (post-processing: bloom, vignette)
-- **Tests:** Karma + Jasmine (1771 specs)
+- **Tests:** Karma + Jasmine (see CI for current count)
 - **Deploy:** Cloudflare Pages
+
+## Run Loop
+
+1. Start a run on the node map (`/run`)
+2. Choose a path through branching nodes — Battles, Elite Battles, Shops, Rest Sites, and Events
+3. In each combat encounter (`/play`): play cards from your hand to place towers or cast spells, then end your turn to let enemies advance and towers fire
+4. Collect gold, draft new cards, and pick up relics between encounters
+5. Clear 3 acts then defeat the Final Boss to complete your ascent
+
+## Card Archetypes
+
+| Archetype | Identity |
+|-----------|----------|
+| Cartographer | Terrain manipulation and path control |
+| Highground | Elevation-based line-of-sight and range bonuses |
+| Conduit | Tower graph linking for chain damage and buffs |
+| Siegeworks | Deferred — planned for a future phase |
 
 ## Development
 
 ```bash
 npm install
-ng serve          # http://localhost:4200
+npm run dev       # http://localhost:3999
 npm test          # Run test suite (headless Chrome)
 ng build          # Production build → dist/
 ```
 
-## Game Features
-
-- 6 tower types with L3 specialization branching (Basic, Sniper, Splash, Slow, Chain, Mortar)
-- 8 enemy types including flying enemies immune to slow
-- 10 waves + endless mode, 4 difficulty levels
-- 8 pre-game modifiers with score multipliers
-- Tower targeting modes (nearest/first/strongest)
-- Status effects: SLOW (Slow tower), BURN (Mortar, Chain Tesla L3), POISON (Splash Bombardier L3)
-- Per-map best scores with star ratings on map select
-- Interest system with visible wave income feedback
-- Score breakdown, star rating, keyboard tower management (U/T/Del)
-- WebGL context loss detection and auto-recovery
-- Deterministic fixed-timestep physics (60Hz)
-
-## Editor Features
+## Editor
 
 - 4 terrain types, 3 brush tools (brush/fill/rectangle)
-- Multi-spawn and multi-exit support (up to 4 each)
+- Multi-spawn and multi-exit support
 - Undo/redo, save/load, export/import
-- Map templates (Classic, Maze, Spiral, Open Field)
 - Real-time path validation

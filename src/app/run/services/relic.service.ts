@@ -309,10 +309,14 @@ export class RelicService {
   /**
    * LUCKY_COIN: Roll for bonus gold on kill.
    * Returns the gold multiplier for this specific kill (1.0 or RELIC_EFFECT_CONFIG.luckyCoinGoldMultiplier).
+   *
+   * Callers MUST supply a seeded random value from RunService.nextRandom() so the
+   * outcome is deterministic across checkpoint restores. The default (Math.random())
+   * is a fallback for callers that have not yet been updated.
    */
-  rollLuckyCoin(): number {
+  rollLuckyCoin(random: number = Math.random()): number {
     if (!this.hasRelic(RelicId.LUCKY_COIN)) return 1;
-    return Math.random() < RELIC_EFFECT_CONFIG.luckyCoinTriggerChance
+    return random < RELIC_EFFECT_CONFIG.luckyCoinTriggerChance
       ? RELIC_EFFECT_CONFIG.luckyCoinGoldMultiplier
       : 1;
   }

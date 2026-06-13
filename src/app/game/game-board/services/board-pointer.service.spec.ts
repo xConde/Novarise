@@ -253,4 +253,34 @@ describe('BoardPointerService', () => {
       expect(service.cleanup).toHaveBeenCalled();
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // resolveTileAtClientPoint — scratch reuse
+  // ---------------------------------------------------------------------------
+
+  describe('resolveTileAtClientPoint()', () => {
+    it('returns null when canvas is not initialised', () => {
+      // Service is clean (no init called in this branch) — canvas is null.
+      expect(service.resolveTileAtClientPoint(50, 50)).toBeNull();
+    });
+
+    it('reuses internal scratch raycaster — calling twice does not throw', () => {
+      const canvas = makeCanvas();
+      // Give the canvas a non-zero bounding rect so coordinate math is valid.
+      spyOn(canvas, 'getBoundingClientRect').and.returnValue(
+        { left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600 } as DOMRect,
+      );
+      const cb = makeCallbacks();
+      cb.getPlacementState.and.returnValue({ isPlaceMode: false, towerType: null, gold: 100, selectedTowerInfo: null });
+      service.init(canvas, cb);
+
+      // Both calls should complete without allocating new objects (no observable
+      // side-effect — just confirm no exception and the method returns null for
+      // an empty tile pickable set).
+      expect(() => {
+        service.resolveTileAtClientPoint(100, 100);
+        service.resolveTileAtClientPoint(200, 200);
+      }).not.toThrow();
+    });
+  });
 });

@@ -1,8 +1,9 @@
-import { Component, ElementRef, EventEmitter, HostListener, Input, OnInit, Output } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { CardDefinition, CardType, EffectGlyphName } from '../../../../run/models/card.model';
 import { HandCard } from '../card-hand/card-hand.component';
 import { ARCHETYPE_DISPLAY } from '../../../../run/constants/archetype.constants';
 import { IconName } from '../../../../shared/components/icon/icon-registry';
+import { FocusTrap } from '@shared/utils/focus-trap.util';
 
 /**
  * CardDetailComponent — modal overlay showing the full information for a
@@ -19,7 +20,7 @@ import { IconName } from '../../../../shared/components/icon/icon-registry';
   templateUrl: './card-detail.component.html',
   styleUrls: ['./card-detail.component.scss'],
 })
-export class CardDetailComponent implements OnInit {
+export class CardDetailComponent implements OnInit, OnDestroy {
   constructor(private readonly elementRef: ElementRef<HTMLElement>) {}
 
   /** The hand-card view model being inspected (instance + definition + gold cost). */
@@ -28,15 +29,22 @@ export class CardDetailComponent implements OnInit {
   @Output() closed = new EventEmitter<void>();
 
   private previousFocus: HTMLElement | null = null;
+  private readonly focusTrap = new FocusTrap();
 
   ngOnInit(): void {
     // Save trigger element so we can restore focus on close (WCAG 2.1 §3.2.5).
     this.previousFocus = document.activeElement as HTMLElement | null;
-    // Focus the close button once the modal is in the DOM.
+    // Focus the close button once the modal is in the DOM, then activate the
+    // focus trap so Tab cycles within the dialog.
     setTimeout(() => {
       const closeBtn = this.elementRef.nativeElement.querySelector<HTMLElement>('.card-detail__close');
       closeBtn?.focus();
+      this.focusTrap.activate(this.elementRef.nativeElement);
     }, 0);
+  }
+
+  ngOnDestroy(): void {
+    this.focusTrap.deactivate();
   }
 
   /** Resolved definition for the current card instance. */
@@ -156,6 +164,7 @@ export class CardDetailComponent implements OnInit {
   readonly CardType = CardType;
 
   close(): void {
+    this.focusTrap.deactivate();
     this.closed.emit();
     this.previousFocus?.focus();
   }

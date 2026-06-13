@@ -1,8 +1,9 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { PileInspectorComponent } from './pile-inspector.component';
 import { CardId, CardInstance } from '../../../../run/models/card.model';
 import { ARCHETYPE_DISPLAY } from '../../../../run/constants/archetype.constants';
+import { FocusTrap } from '@shared/utils/focus-trap.util';
 
 function makeInstance(cardId: CardId, upgraded = false, suffix = ''): CardInstance {
   return { instanceId: `inst_${cardId}${suffix}`, cardId, upgraded };
@@ -79,6 +80,27 @@ describe('PileInspectorComponent', () => {
       component.closed.subscribe(() => { emitCount++; });
       component.close();
       expect(emitCount).toBe(1);
+    });
+
+    it('calls focusTrap.deactivate() when close() is called', () => {
+      const deactivateSpy = spyOn(FocusTrap.prototype, 'deactivate');
+      component.close();
+      expect(deactivateSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('focus trap lifecycle', () => {
+    it('activates the focus trap after ngOnInit tick', fakeAsync(() => {
+      const activateSpy = spyOn(FocusTrap.prototype, 'activate');
+      component.ngOnInit();
+      tick(0);
+      expect(activateSpy).toHaveBeenCalled();
+    }));
+
+    it('deactivates the focus trap on ngOnDestroy', () => {
+      const deactivateSpy = spyOn(FocusTrap.prototype, 'deactivate');
+      component.ngOnDestroy();
+      expect(deactivateSpy).toHaveBeenCalled();
     });
   });
 

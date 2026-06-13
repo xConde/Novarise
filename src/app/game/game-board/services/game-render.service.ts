@@ -26,6 +26,7 @@ import { GameBoardService } from '../game-board.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { GamePhase } from '../models/game-state.model';
 import { PHYSICS_CONFIG } from '../constants/physics.constants';
+import { DEATH_ANIM_CONFIG } from '../constants/effects.constants';
 import { CombatFrameResult } from '../models/combat-frame.model';
 import { AimLineService } from './aim-line.service';
 import { TowerFireZonePreviewService } from './tower-fire-zone-preview.service';
@@ -54,6 +55,16 @@ export class GameRenderService {
   private lastTime = 0;
   private defeatSoundPlayed = false;
   private victorySoundPlayed = false;
+  /**
+   * Cached MediaQueryList for the OS-level prefers-reduced-motion setting.
+   * Initialized once at construction; null in environments without window.matchMedia
+   * (SSR, unit tests). Combined with the body.reduce-motion CSS class so the app-
+   * level toggle and the OS toggle both suppress animations.
+   */
+  private readonly _reducedMotionMQ: MediaQueryList | null =
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)')
+      : null;
   /** Cached minimap terrain data — static after board setup, rebuilt on board import. */
   private cachedMinimapTerrain: MinimapTerrainData | null = null;
   /** Reusable tower position list for updateMinimap() — avoids per-frame array allocation. */
@@ -179,8 +190,11 @@ export class GameRenderService {
     // Single reduce-motion read per frame shared by tickAim and aimLineService.
     // Reading body.classList once and passing it down avoids the duplicate DOM
     // access that was previously split across the two call sites (Finding D-3).
+    // Also checks the OS prefers-reduced-motion media query so both the
+    // app-level toggle (body.reduce-motion) and the system setting suppress animations.
     const reduceMotion =
-      typeof document !== 'undefined' && document.body.classList.contains('reduce-motion');
+      (typeof document !== 'undefined' && document.body.classList.contains('reduce-motion'))
+      || (this._reducedMotionMQ?.matches ?? false);
     // Aim pre-pass: resolve primary targets and write currentAimTarget onto each
     // group BEFORE updateTowerAnimations so the aimTick callbacks see current data.
     this.towerAnimationService.tickAim(
@@ -306,7 +320,10 @@ export class GameRenderService {
     for (const kill of result.kills) {
       this.audioService.playGoldEarned();
       this.audioService.playEnemyDeath();
-      this.particleService.spawnDeathBurst(kill.position, kill.color);
+      const burstCount = kill.isBoss
+        ? DEATH_ANIM_CONFIG.burstCountBoss
+        : DEATH_ANIM_CONFIG.burstCount;
+      this.particleService.spawnDeathBurst(kill.position, kill.color, burstCount);
       this.goldPopupService.spawn(kill.value, kill.position, this.sceneService.getScene());
       this.damagePopupService.spawn(kill.damage, kill.position, this.sceneService.getScene());
     }

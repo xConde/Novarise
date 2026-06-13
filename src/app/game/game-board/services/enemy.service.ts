@@ -298,8 +298,17 @@ export class EnemyService {
     }
 
     if (stats.maxShield !== undefined) {
-      enemy.shield = stats.maxShield;
-      enemy.maxShield = stats.maxShield;
+      // Scale shield by the same multiplier chain applied to maxHealth so
+      // NOVA_SOVEREIGN's Aegis scales consistently with the encounter difficulty.
+      let scaledMaxShield = stats.maxShield;
+      if (modifierEffects.enemyHealthMultiplier !== undefined) {
+        scaledMaxShield = Math.round(scaledMaxShield * modifierEffects.enemyHealthMultiplier);
+      }
+      if (waveHealthMultiplier !== 1) {
+        scaledMaxShield = Math.round(scaledMaxShield * waveHealthMultiplier);
+      }
+      enemy.shield = scaledMaxShield;
+      enemy.maxShield = scaledMaxShield;
     }
 
     // Create mesh
@@ -323,10 +332,14 @@ export class EnemyService {
    * @param slowReductionFor  Callback returning the SLOW tile reduction to apply
    *                          to a given enemy id. Caller typically passes
    *                          `(id) => statusEffectService.getSlowTileReduction(id)`.
+   * @param currentTurn       Current turn number for VEINSEEKER speed-boost check.
+   * @param scene             Active Three.js scene. When provided, mini-swarm
+   *                          meshes spawned by GRAVITY_WELL bleed kills are
+   *                          immediately added to the scene. Absent in test beds.
    * @returns IDs of enemies that reached the exit this turn (callers apply
    *          leak damage and call {@link removeEnemy}).
    */
-  stepEnemiesOneTurn(slowReductionFor: (enemyId: string) => number, currentTurn = 0): string[] {
+  stepEnemiesOneTurn(slowReductionFor: (enemyId: string) => number, currentTurn = 0, scene?: THREE.Scene): string[] {
     const reachedExit: string[] = [];
     // enemySpeed modifier: floored integer reduction. Weak (<50%) modifiers won't affect FAST/SWIFT,
     // won't affect 1-tile movers at all. Balance in M4 S5.
@@ -359,7 +372,14 @@ export class EnemyService {
         if (tileElev < 0) {
           if (gravityWellValue >= ELEVATION_CONFIG.GRAVITY_WELL_UPGRADED_VALUE) {
             const bleedDamage = Math.max(1, Math.round(enemy.maxHealth * ELEVATION_CONFIG.GRAVITY_WELL_BLEED_FRACTION));
-            this.damageEnemy(enemy.id, bleedDamage);
+            const bleedResult = this.damageEnemy(enemy.id, bleedDamage);
+            // SWARM enemies that die to bleed spawn mini-swarms. Add their
+            // meshes to the scene so they are visible and combat-active.
+            if (scene) {
+              bleedResult.spawnedEnemies.forEach(mini => {
+                if (mini.mesh) scene.add(mini.mesh);
+              });
+            }
           }
           return; // skip movement for this enemy this turn
         }
@@ -748,8 +768,10 @@ export class EnemyService {
     for (const enemy of this.enemies.values()) {
       if (enemy.type !== EnemyType.NOVA_SOVEREIGN || enemy.health <= 0 || enemy.dying) continue;
 
-      // Aegis shield regeneration — replenish up to maxShield
-      const maxShield = ENEMY_STATS[EnemyType.NOVA_SOVEREIGN].maxShield;
+      // Aegis shield regeneration — replenish up to the instance maxShield
+      // (not the static ENEMY_STATS value) so difficulty-scaled shields regen
+      // to their actual cap rather than the unscaled base.
+      const maxShield = enemy.maxShield;
       if (maxShield !== undefined && enemy.shield !== undefined && enemy.shield < maxShield) {
         enemy.shield = Math.min(maxShield, enemy.shield + NOVA_SOVEREIGN_SHIELD_REGEN_PER_TURN);
       }

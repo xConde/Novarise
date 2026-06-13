@@ -3,6 +3,7 @@ import { SettingsComponent } from './settings.component';
 import { FontScale, SettingsService, GameSettings } from '../core/services/settings.service';
 import { MusicService } from '../core/services/music.service';
 import { DifficultyLevel } from '../game/game-board/models/game-state.model';
+import { DEFAULT_MUSIC_VOLUME } from '../core/constants/music.constants';
 
 describe('SettingsComponent', () => {
   let component: SettingsComponent;
@@ -12,7 +13,7 @@ describe('SettingsComponent', () => {
   const mockSettings: GameSettings = {
     audioMuted: false,
     musicEnabled: true,
-    musicVolume: 0.4,
+    musicVolume: DEFAULT_MUSIC_VOLUME,
     difficulty: DifficultyLevel.NORMAL,
     showFps: false,
     reduceMotion: false,
@@ -48,6 +49,13 @@ describe('SettingsComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('musicVolume field initializer should equal DEFAULT_MUSIC_VOLUME', () => {
+    // Verify the class-level default matches the system default so the slider
+    // does not flicker on first render before ngOnInit fires.
+    const fresh = new SettingsComponent(settingsService, TestBed.inject(MusicService));
+    expect(fresh.musicVolume).toBeCloseTo(DEFAULT_MUSIC_VOLUME);
   });
 
   it('should render the settings page title', () => {
@@ -157,7 +165,7 @@ describe('SettingsComponent', () => {
     settingsService.get.and.returnValue({
       audioMuted: false,
       musicEnabled: true,
-      musicVolume: 0.4,
+      musicVolume: DEFAULT_MUSIC_VOLUME,
       difficulty: DifficultyLevel.NORMAL,
       showFps: false,
       reduceMotion: true,

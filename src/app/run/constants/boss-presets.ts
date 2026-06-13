@@ -204,12 +204,13 @@ export const ACT2_BOSS_PRESETS: BossPreset[] = [
     name: 'Dark Nexus',
     description: 'All enemy types converge in maximum force.',
     waves: [
-      // Wave 1: Reconnaissance — one of every type
+      // Wave 1: Reconnaissance — one of every type; VEINSEEKER scouts disrupt tile paths
       {
         entries: [
           { type: EnemyType.BASIC, count: 6, spawnInterval: 0.8 },
           { type: EnemyType.FAST, count: 5, spawnInterval: 0.7 },
           { type: EnemyType.HEAVY, count: 3, spawnInterval: 1.0 },
+          { type: EnemyType.VEINSEEKER, count: 3, spawnInterval: 1.2 },
         ],
         reward: 40,
       },
@@ -510,9 +511,10 @@ export const ACT3_BOSS_PRESETS: BossPreset[] = [
         ],
         reward: 62,
       },
-      // Wave 3: GLIDER wing joins — elevation immune air threat
+      // Wave 3: GLIDER wing joins — elevation-immune air threat forces towers off high ground
       {
         entries: [
+          { type: EnemyType.GLIDER, count: 8, spawnInterval: 0.5 },
           { type: EnemyType.FLYING, count: 14, spawnInterval: 0.4 },
           { type: EnemyType.SWARM, count: 14, spawnInterval: 0.4 },
           { type: EnemyType.SWIFT, count: 8, spawnInterval: 0.5 },

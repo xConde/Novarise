@@ -7,9 +7,9 @@ export enum TutorialStep {
   SELECT_TOWER = 'select_tower',
   PLACE_TOWER = 'place_tower',
   START_WAVE = 'start_wave',
-  UPGRADE_TOWER = 'upgrade_tower',
+  END_TURN = 'end_turn',
   COMPLETE = 'complete',
-  // Strategy tips — shown on second game, after controls tutorial
+  // Strategy tips — shown from the second encounter onward, after controls tutorial
   TIP_PLACEMENT = 'tip_placement',
   TIP_WAVE_PREVIEW = 'tip_wave_preview',
   TIP_UPGRADE = 'tip_upgrade',
@@ -35,11 +35,11 @@ const TUTORIAL_STEPS_ORDERED: TutorialStep[] = [
   TutorialStep.SELECT_TOWER,
   TutorialStep.PLACE_TOWER,
   TutorialStep.START_WAVE,
-  TutorialStep.UPGRADE_TOWER,
+  TutorialStep.END_TURN,
   TutorialStep.COMPLETE,
 ];
 
-/** Strategy tip steps shown after tutorial completes (on second game). */
+/** Strategy tip steps shown after tutorial completes (starting from the second encounter). */
 const TIPS_STEPS_ORDERED: TutorialStep[] = [
   TutorialStep.TIP_PLACEMENT,
   TutorialStep.TIP_WAVE_PREVIEW,
@@ -60,7 +60,7 @@ const TUTORIAL_TIPS: Record<TutorialStep, TutorialTip> = {
     step: TutorialStep.SELECT_TOWER,
     type: 'tutorial',
     title: 'Your Hand & Energy',
-    message: 'Your cards appear at the bottom of the screen. Each card costs energy (shown top-left of the hand). You refill energy at the start of every turn.',
+    message: 'Your cards appear at the bottom of the screen. Tower cards have a dual cost — energy (shown top-left of the hand) AND gold. Check your gold bar before committing a tower; you refill energy each turn but gold must be earned.',
     targetSelector: '.card-hand__energy',
     position: 'bottom',
   },
@@ -81,9 +81,9 @@ const TUTORIAL_TIPS: Record<TutorialStep, TutorialTip> = {
     targetSelector: '.spawn-preview',
     position: 'top',
   },
-  [TutorialStep.UPGRADE_TOWER]: {
-    id: TutorialStep.UPGRADE_TOWER,
-    step: TutorialStep.UPGRADE_TOWER,
+  [TutorialStep.END_TURN]: {
+    id: TutorialStep.END_TURN,
+    step: TutorialStep.END_TURN,
     type: 'tutorial',
     title: 'End Your Turn',
     message: 'When you\'re done playing cards, click End Turn (or press Space). Enemies advance, towers fire, and effects resolve — then a new turn begins and your hand refills.',
@@ -173,18 +173,18 @@ export class TutorialService {
    * Start strategy tips. Only shows if:
    * - Controls tutorial is complete
    * - Tips not yet complete
-   * - Player has played at least 2 games (not first game)
+   * - Player has started at least a second encounter (gamesPlayed >= 1)
    */
   startTips(): void {
     if (!this.tutorialComplete) return;
     if (this.tipsComplete) return;
-    if (this.gamesPlayed < 2) return;
+    if (this.gamesPlayed < 1) return;
     this.currentStep$.next(TutorialStep.TIP_PLACEMENT);
   }
 
   /**
-   * Record that a new game session has started. Used to gate strategy tips
-   * so they appear on the second game, not the first.
+   * Record that a new encounter has started. Used to gate strategy tips
+   * so they do not appear during the first encounter.
    */
   incrementGamesPlayed(): void {
     this.gamesPlayed += 1;

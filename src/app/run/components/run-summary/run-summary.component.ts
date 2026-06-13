@@ -2,6 +2,18 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { RunState, RunStatus, EncounterResult } from '../../models/run-state.model';
 import { RelicDefinition, RELIC_DEFINITIONS, RelicId } from '../../models/relic.model';
 import { ASCENSION_LEVELS, AscensionLevel } from '../../models/ascension.model';
+import { NodeType } from '../../models/node-map.model';
+
+/** Human-readable display names for each node type shown in the Journey list. */
+const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
+  [NodeType.COMBAT]: 'Battle',
+  [NodeType.ELITE]: 'Elite Battle',
+  [NodeType.REST]: 'Rest Site',
+  [NodeType.SHOP]: 'Shop',
+  [NodeType.EVENT]: 'Event',
+  [NodeType.BOSS]: 'Boss',
+  [NodeType.UNKNOWN]: 'Unknown',
+};
 
 /** Duration of a run in minutes and seconds, computed from startedAt to now. */
 const MS_PER_MINUTE = 60_000;
@@ -76,6 +88,10 @@ export class RunSummaryComponent {
 
   get actsReached(): number {
     return this.runState.actIndex + 1;
+  }
+
+  nodeTypeDisplayName(nodeType: string): string {
+    return NODE_TYPE_DISPLAY_NAMES[nodeType] ?? nodeType;
   }
 
   onReturnToMenu(): void {

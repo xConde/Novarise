@@ -50,6 +50,8 @@ export function lerpYaw(
 
 @Injectable()
 export class TowerAnimationService {
+  /** Persistent scratch Vector3 for tickAim — avoids per-tower-per-frame allocation. */
+  private readonly _scratchTowerWorld = new THREE.Vector3();
 
   /**
    * Animate tower idle and charge effects. For each group, the call order is:
@@ -208,11 +210,10 @@ export class TowerAnimationService {
           // World position of the tower: read from the group's world matrix.
           // Using group.position is incorrect for towers elevated on a tile —
           // the world position is what matters for the angle calculation.
-          const towerWorld = new THREE.Vector3();
-          group.getWorldPosition(towerWorld);
+          group.getWorldPosition(this._scratchTowerWorld);
 
-          const dx = target.position.x - towerWorld.x;
-          const dz = target.position.z - towerWorld.z;
+          const dx = target.position.x - this._scratchTowerWorld.x;
+          const dz = target.position.z - this._scratchTowerWorld.z;
           let targetYaw = Math.atan2(dx, dz);
 
           // Amplitude clamp for omnidirectional towers (SLOW, CHAIN): restrict
@@ -670,17 +671,30 @@ export class TowerAnimationService {
    * period SELECTION_PULSE_CONFIG.periodSec. Rings without the flag stay at
    * their static opacity.
    *
+   * When `reduceMotion` is true the sine oscillation is suppressed and the
+   * ring is held at `SELECTION_PULSE_CONFIG.opacityMax` so the selection is
+   * still visible without animated motion.
+   *
    * Call once per animation frame with current wall-clock time in seconds.
    */
-  tickSelectionPulse(glowRings: Map<string, THREE.Mesh>, nowSeconds: number): void {
+  tickSelectionPulse(
+    glowRings: Map<string, THREE.Mesh>,
+    nowSeconds: number,
+    reduceMotion = false,
+  ): void {
     const omega = (Math.PI * 2) / SELECTION_PULSE_CONFIG.periodSec;
     const range = SELECTION_PULSE_CONFIG.opacityMax - SELECTION_PULSE_CONFIG.opacityMin;
 
     for (const ring of glowRings.values()) {
       if (!ring.userData['selected']) continue;
       const mat = ring.material as THREE.MeshBasicMaterial;
-      mat.opacity =
-        SELECTION_PULSE_CONFIG.opacityMin + range * (0.5 + 0.5 * Math.sin(nowSeconds * omega));
+      if (reduceMotion) {
+        // Hold at maximum opacity — visible but static.
+        mat.opacity = SELECTION_PULSE_CONFIG.opacityMax;
+      } else {
+        mat.opacity =
+          SELECTION_PULSE_CONFIG.opacityMin + range * (0.5 + 0.5 * Math.sin(nowSeconds * omega));
+      }
     }
   }
 

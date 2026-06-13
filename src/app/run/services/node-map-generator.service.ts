@@ -181,20 +181,23 @@ export class NodeMapGeneratorService {
     const eventBudgetExceeded = eventNodeReduction > 0 && eventNodesPlaced >= (totalRows - eventNodeReduction);
     const eventWeight = eventBudgetExceeded ? 0 : w.event;
 
+    // On the last content row (immediately before the boss), REST and SHOP are
+    // suppressed — the player has had guaranteed access at rows 5 and 8, and
+    // placing them on the pre-boss row dilutes the tension. Redistribute their
+    // weight to combat.
+    const isPreBossRow = row === totalRows - 1;
+    const restWeight = isPreBossRow ? 0 : w.rest;
+    const shopWeight = isPreBossRow ? 0 : w.shop;
+    const preBossRedistribution = isPreBossRow ? (w.rest + w.shop) : 0;
+
     const weights: [NodeType, number][] = [
-      [NodeType.COMBAT, combatWeight],
+      [NodeType.COMBAT, combatWeight + preBossRedistribution],
       [NodeType.ELITE, eliteWeight],
-      [NodeType.REST, w.rest],
-      [NodeType.SHOP, w.shop],
+      [NodeType.REST, restWeight],
+      [NodeType.SHOP, shopWeight],
       [NodeType.EVENT, eventWeight],
       [NodeType.UNKNOWN, w.unknown],
     ];
-
-    // Suppress REST/SHOP on last content row (row = totalRows - 1) to avoid
-    // doubling up with guaranteed positions
-    if (row === totalRows - 1) {
-      // Just pick combat/elite/event/unknown in the late stretch
-    }
 
     const roll = rng.next();
     let cumulative = 0;

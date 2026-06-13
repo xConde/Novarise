@@ -19,7 +19,7 @@ import { ProjectileVisualService } from './services/projectile-visual.service';
 import { SettingsService } from '../../core/services/settings.service';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase } from './models/game-state.model';
 import { TowerType, TowerSpecialization, PlacedTower, TargetingMode } from './models/tower.model';
-import { EnemyType } from './models/enemy.model';
+import { EnemyType, SWIFT_LEAK_DAMAGE } from './models/enemy.model';
 import { TowerCombatService } from './services/tower-combat.service';
 import { ACHIEVEMENTS } from '../../core/services/player-profile.service';
 import { WaveService } from './services/wave.service';
@@ -55,6 +55,7 @@ import { EnemyHealthService } from './services/enemy-health.service';
 import { ChainLightningService } from './services/chain-lightning.service';
 import { TowerUpgradeVisualService } from './services/tower-upgrade-visual.service';
 import { getAscensionEffects, AscensionEffectType } from '../../run/models/ascension.model';
+import { ENCOUNTER_CONFIG } from '../../run/constants/run.constants';
 import { GameRenderService } from './services/game-render.service';
 import { BoardMeshRegistryService } from './services/board-mesh-registry.service';
 import { GameInputService } from './services/game-input.service';
@@ -1585,8 +1586,8 @@ describe('GameBoardComponent', () => {
       tutorialStep$.next(TutorialStep.START_WAVE);
       expect(component.tutorialFacade.currentTutorialStep).toBe(TutorialStep.START_WAVE);
 
-      tutorialStep$.next(TutorialStep.UPGRADE_TOWER);
-      expect(component.tutorialFacade.currentTutorialStep).toBe(TutorialStep.UPGRADE_TOWER);
+      tutorialStep$.next(TutorialStep.END_TURN);
+      expect(component.tutorialFacade.currentTutorialStep).toBe(TutorialStep.END_TURN);
     });
 
     it('currentTutorialStep becomes null when observable emits null', () => {
@@ -1674,9 +1675,11 @@ describe('GameBoardComponent', () => {
       expect(badges).toEqual([]);
     });
 
-    it('returns an empty array for Swift enemies (leak=1, no specials)', () => {
+    it('returns Leak:2 badge for Swift enemies (leak=2 produces a badge)', () => {
       const badges = component.getEnemyBadges(EnemyType.SWIFT);
-      expect(badges).toEqual([]);
+      const leak = badges.find(b => b.text.startsWith('Leak:'));
+      expect(leak?.text).toBe(`Leak: ${SWIFT_LEAK_DAMAGE}`);
+      expect(leak?.severity).toBe('danger');
     });
 
     it('returns the same array reference on repeated calls (memoised)', () => {
@@ -2803,14 +2806,13 @@ describe('GameBoardComponent', () => {
       expect(effects.enemyHealthMultiplier).toBeCloseTo(expected, 5);
     });
 
-    it('ascension 5 (ELITE_HEALTH = 1.25), isElite=true: enemyHealthMultiplier ≈ 1.25', () => {
-      // Level 5 has only ELITE_HEALTH_MULTIPLIER; no base ENEMY_HEALTH_MULTIPLIER yet
-      // (level 1 has 1.1, but level 5 cumulative base is also 1.1)
+    it('ascension 5 (ELITE_HEALTH = 1.25), isElite=true: base encounter mult composes with ascension elite mult', () => {
       callApply(5, true, false);
       const ascEffects = getAscensionEffects(5);
       const base = ascEffects.get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER) ?? 1;
       const elite = ascEffects.get(AscensionEffectType.ELITE_HEALTH_MULTIPLIER) ?? 1;
-      const expected = base * elite;
+      // ENCOUNTER_CONFIG.eliteHealthMultiplier is the base multiplier active at all levels
+      const expected = base * ENCOUNTER_CONFIG.eliteHealthMultiplier * elite;
       const effects = gameStateSvc.getModifierEffects();
       expect(effects.enemyHealthMultiplier).toBeCloseTo(expected, 5);
     });
@@ -2826,12 +2828,13 @@ describe('GameBoardComponent', () => {
       expect(effects.enemyHealthMultiplier).not.toBeCloseTo(base * eliteMult, 5);
     });
 
-    it('ascension 10 (BOSS_HEALTH = 1.3), isBoss=true: boss mult applied', () => {
+    it('ascension 10 (BOSS_HEALTH = 1.3), isBoss=true: base encounter boss mult composes with ascension boss mult', () => {
       callApply(10, false, true);
       const ascEffects = getAscensionEffects(10);
       const base = ascEffects.get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER) ?? 1;
       const boss = ascEffects.get(AscensionEffectType.BOSS_HEALTH_MULTIPLIER) ?? 1;
-      const expected = base * boss;
+      // ENCOUNTER_CONFIG.bossHealthMultiplier is the base multiplier active at all levels
+      const expected = base * ENCOUNTER_CONFIG.bossHealthMultiplier * boss;
       const effects = gameStateSvc.getModifierEffects();
       expect(effects.enemyHealthMultiplier).toBeCloseTo(expected, 5);
     });
@@ -2846,17 +2849,25 @@ describe('GameBoardComponent', () => {
       expect(effects.enemyHealthMultiplier).not.toBeCloseTo(base * bossMult, 5);
     });
 
-    it('ascension 18 (ENEMY_HEALTH stacked + ELITE_HEALTH = 1.5), isElite=true: multiplicative stacking', () => {
+    it('ascension 18 (ENEMY_HEALTH stacked + ELITE_HEALTH = 1.5), isElite=true: base encounter mult included in multiplicative stack', () => {
       callApply(18, true, false);
       const ascEffects = getAscensionEffects(18);
       const base = ascEffects.get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER) ?? 1;
       const elite = ascEffects.get(AscensionEffectType.ELITE_HEALTH_MULTIPLIER) ?? 1;
-      const expected = base * elite;
+      // ENCOUNTER_CONFIG.eliteHealthMultiplier is the base multiplier active at all levels
+      const expected = base * ENCOUNTER_CONFIG.eliteHealthMultiplier * elite;
       const effects = gameStateSvc.getModifierEffects();
       expect(effects.enemyHealthMultiplier).toBeCloseTo(expected, 5);
-      // Sanity: both base and elite are above 1, so product must exceed each individually
+      // Sanity: all three factors exceed 1, so their product must exceed each individually
       expect(effects.enemyHealthMultiplier!).toBeGreaterThan(base);
       expect(effects.enemyHealthMultiplier!).toBeGreaterThan(elite);
+      expect(effects.enemyHealthMultiplier!).toBeGreaterThan(ENCOUNTER_CONFIG.eliteHealthMultiplier);
+    });
+
+    it('ascension 0, isBoss=true: boss base multiplier applied even without ascension level', () => {
+      callApply(0, false, true);
+      const effects = gameStateSvc.getModifierEffects();
+      expect(effects.enemyHealthMultiplier).toBeCloseTo(ENCOUNTER_CONFIG.bossHealthMultiplier, 5);
     });
   });
 

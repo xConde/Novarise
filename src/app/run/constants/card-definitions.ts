@@ -231,6 +231,7 @@ const CARD_VALUES = {
   // Towers on raised tiles gain range (handled by TowerCombatService sprint 29).
   raisePlatformCost: 1,
   raisePlatformAmount: 1,       // +1 elevation unit per play
+  raisePlatformUpgradedAmount: 2, // upgraded: +2 elevation units per play
   // DEPRESS_TILE (sprint 28): 1E common, lower a tile by 1 elevation unit.
   // Enemies on lowered (negative-elevation) tiles take +25% incoming damage.
   depressTileCost: 1,
@@ -636,8 +637,8 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     id: CardId.FROST_WAVE,
     name: 'Frost Wave',
     effectGlyph: 'fx-slow',
-    description: 'Slow all enemies by 50% for 5 seconds.',
-    upgradedDescription: 'Slow all enemies by 50% for 8 seconds.',
+    description: 'Slow all enemies by 50% for 5 turns.',
+    upgradedDescription: 'Slow all enemies by 50% for 8 turns.',
     flavorText: "The cold doesn't care who's winning.",
     type: CardType.SPELL,
     rarity: CardRarity.UNCOMMON,
@@ -932,13 +933,13 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
       type: 'modifier',
       stat: MODIFIER_STAT.LEAK_BLOCK,
       value: CARD_VALUES.shieldWallBlocks,
-      duration: 0,
+      duration: null,
     },
     upgradedEffect: {
       type: 'modifier',
       stat: MODIFIER_STAT.LEAK_BLOCK,
       value: CARD_VALUES.shieldWallUpgradedBlocks,
-      duration: 0,
+      duration: null,
     },
   },
 
@@ -1037,7 +1038,8 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     flavorText: 'When the wave breaks, the surge breaks first.',
     type: CardType.UTILITY,
     rarity: CardRarity.RARE,
-    energyCost: 0,
+    energyCost: 1,
+    upgradedEnergyCost: 0,
     upgraded: false,
     archetype: 'neutral',
     effect: { type: 'utility', utilityId: 'energy', value: CARD_VALUES.energySurgeAmount },
@@ -1660,7 +1662,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     name: 'Raise Platform',
     effectGlyph: 'kw-terraform',
     description: 'Raise a tile by 1 unit. Towers on raised tiles gain range.',
-    upgradedDescription: 'Raise a tile by 1 unit permanently. Towers on raised tiles gain range.',
+    upgradedDescription: 'Raise a tile by 2 units. Towers on raised tiles gain range.',
     flavorText: 'One level up. The towers see farther already.',
     type: CardType.SPELL,
     rarity: CardRarity.COMMON,
@@ -1675,7 +1677,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     upgradedEffect: {
       type: 'elevation_target',
       op: 'raise',
-      amount: CARD_VALUES.raisePlatformAmount,
+      amount: CARD_VALUES.raisePlatformUpgradedAmount,
       duration: null,
     } satisfies ElevationTargetCardEffect,
     archetype: 'highground',
@@ -2012,8 +2014,8 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     id: CardId.LINKWORK,
     name: 'Linkwork',
     effectGlyph: 'fx-link',
-    description: 'For 2 turns, linked towers share the highest fire rate in their cluster.',
-    upgradedDescription: 'For 3 turns, linked towers share the highest fire rate in their cluster.',
+    description: 'For 2 turns, linked towers in a cluster of 2+ gain +1 extra shot per turn.',
+    upgradedDescription: 'For 3 turns, linked towers in a cluster of 2+ gain +1 extra shot per turn.',
     flavorText: 'The fastest link sets the tempo. Everyone else follows.',
     type: CardType.MODIFIER,
     rarity: CardRarity.COMMON,
@@ -2229,15 +2231,16 @@ export function getCardsByRarity(rarity: CardRarity): CardDefinition[] {
  * on tower variety because tower placement is the primary action verb.
  *
  * Composition (20 cards):
- *   8x TOWER_BASIC   — innate, the always-available opener (red-team fix)
+ *   5x TOWER_BASIC   — innate, the always-available opener (red-team fix)
  *   3x TOWER_SNIPER  — long-range single-target
- *   2x TOWER_SPLASH  — early AoE
+ *   3x TOWER_SPLASH  — early AoE
  *   2x TOWER_SLOW    — crowd control
  *   1x TOWER_CHAIN   — multi-target
  *   1x GOLD_RUSH     — economy spike
- *   1x DAMAGE_BOOST  — modifier
+ *   2x DAMAGE_BOOST  — modifier
  *   1x DRAW_TWO      — utility
  *   1x ENERGY_SURGE  — utility
+ *   1x RECYCLE       — utility
  */
 /**
  * Resolve the active (upgraded or base) effect from a card instance.
@@ -2268,10 +2271,7 @@ export function getEffectiveEnergyCost(card: CardInstance): number {
 
 export function getStarterDeck(): CardId[] {
   return [
-    // Tower cards (16) — heavy basic mix
-    CardId.TOWER_BASIC,
-    CardId.TOWER_BASIC,
-    CardId.TOWER_BASIC,
+    // Tower cards (14)
     CardId.TOWER_BASIC,
     CardId.TOWER_BASIC,
     CardId.TOWER_BASIC,
@@ -2280,15 +2280,18 @@ export function getStarterDeck(): CardId[] {
     CardId.TOWER_SNIPER,
     CardId.TOWER_SNIPER,
     CardId.TOWER_SNIPER,
+    CardId.TOWER_SPLASH,
     CardId.TOWER_SPLASH,
     CardId.TOWER_SPLASH,
     CardId.TOWER_SLOW,
     CardId.TOWER_SLOW,
     CardId.TOWER_CHAIN,
-    // Spell + modifier + utility (4)
+    // Spell + modifier + utility (6)
     CardId.GOLD_RUSH,
+    CardId.DAMAGE_BOOST,
     CardId.DAMAGE_BOOST,
     CardId.DRAW_TWO,
     CardId.ENERGY_SURGE,
+    CardId.RECYCLE,
   ];
 }

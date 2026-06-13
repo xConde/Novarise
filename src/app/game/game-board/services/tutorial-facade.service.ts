@@ -21,7 +21,7 @@ export class TutorialFacadeService implements OnDestroy {
     TutorialStep.SELECT_TOWER,
     TutorialStep.PLACE_TOWER,
     TutorialStep.START_WAVE,
-    TutorialStep.UPGRADE_TOWER,
+    TutorialStep.END_TURN,
     TutorialStep.COMPLETE,
   ];
 

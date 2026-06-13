@@ -223,6 +223,13 @@ export const TITAN_STATS = {
   leakDamage: 3,
 } as const;
 
+/**
+ * Lives lost when a SWIFT enemy leaks through to the exit.
+ * Higher than FAST (1) to create counterplay pressure: SWIFT breakthroughs
+ * cost more, incentivising targeted removal rather than relying on attrition.
+ */
+export const SWIFT_LEAK_DAMAGE = 2;
+
 // Enemy type statistics
 export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
   [EnemyType.BASIC]: {
@@ -259,7 +266,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     value: 10,
     color: 0x4cd0d0, // UX-40: muted cyan (was 0x00ffff neon)
     size: 0.3,
-    leakDamage: 1
+    leakDamage: SWIFT_LEAK_DAMAGE,
   },
   [EnemyType.BOSS]: {
     health: 1000,
@@ -295,9 +302,10 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     speed: 2.5,
     tilesPerTurn: 1,
     value: 10,
-    color: 0x88ccff, // Light blue
+    color: 0xaaccff, // Pale sky blue — colorblind-palette value; distinct from SLOW particle emitter (0x88ccff)
     size: 0.3,
-    leakDamage: 1
+    leakDamage: 1,
+    ignoresElevation: true,
   },
   [EnemyType.MINER]: {
     health: MINER_STATS.health,

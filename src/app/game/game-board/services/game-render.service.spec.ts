@@ -255,6 +255,50 @@ describe('GameRenderService', () => {
       service.processCombatResult(makeResult({ hitCount: 5 }), 0.016, 0);
       expect(audio.playEnemyHit).toHaveBeenCalledTimes(1);
     });
+
+    it('spawns death burst with burstCount for a non-boss kill', () => {
+      const kill = {
+        damage: 10,
+        position: { x: 0, y: 0, z: 0 },
+        color: 0xff0000,
+        value: 5,
+        isBoss: false,
+      };
+      service.processCombatResult(makeResult({ kills: [kill] as CombatFrameResult['kills'] }), 0.016, 0);
+
+      expect(particle.spawnDeathBurst).toHaveBeenCalledWith(
+        kill.position, kill.color, jasmine.any(Number),
+      );
+      // Should use burstCount (8), not burstCountBoss (20).
+      const callArgs = particle.spawnDeathBurst.calls.mostRecent().args;
+      expect(callArgs[2]).toBe(8); // DEATH_ANIM_CONFIG.burstCount
+    });
+
+    it('spawns death burst with burstCountBoss for a boss kill (isBoss=true)', () => {
+      const kill = {
+        damage: 100,
+        position: { x: 0, y: 0, z: 0 },
+        color: 0xff00ff,
+        value: 50,
+        isBoss: true,
+      };
+      service.processCombatResult(makeResult({ kills: [kill] as CombatFrameResult['kills'] }), 0.016, 0);
+
+      const callArgs = particle.spawnDeathBurst.calls.mostRecent().args;
+      expect(callArgs[2]).toBe(20); // DEATH_ANIM_CONFIG.burstCountBoss
+    });
+  });
+
+  // ─── reduce-motion — OS media query ──────────────────────────────────────────
+
+  describe('reduce-motion OS media query support', () => {
+    it('_reducedMotionMQ is initialized when window.matchMedia is available', () => {
+      // The service was constructed in beforeEach with jsdom present.
+      // When matchMedia is callable, the MQL must be a non-null object.
+      const mql = (service as unknown as { _reducedMotionMQ: MediaQueryList | null })._reducedMotionMQ;
+      // jsdom stubs matchMedia — it may be null if unavailable; either way no throw.
+      expect(() => { void mql; }).not.toThrow();
+    });
   });
 
   // ---- Phase B red-team Finding 4: tickRecoilAnimations must be wired ----

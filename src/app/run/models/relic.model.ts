@@ -90,7 +90,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
   [RelicId.QUICK_DRAW]: {
     id: RelicId.QUICK_DRAW,
     name: 'Quick Draw',
-    description: 'All towers fire 10% faster',
+    description: 'The turn you place a tower, it fires once immediately.',
     flavorText: 'Anticipation makes the trigger light.',
     rarity: RelicRarity.COMMON,
   },

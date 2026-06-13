@@ -136,35 +136,36 @@ export class CombatVFXService {
    * Expires chain arcs whose real-time wall-clock has elapsed.
    * Pool-owned arcs release back to the pool; fallback-allocated arcs
    * dispose their geometry + material individually.
+   *
+   * Iterates in reverse so splice() shifts only the tail, avoiding a
+   * new survivor-array allocation every frame.
    */
   updateVisuals(scene: THREE.Scene): void {
     const now = performance.now();
-    const survivingArcs: ChainArcEntry[] = [];
-    for (const arc of this.chainArcs) {
+    for (let i = this.chainArcs.length - 1; i >= 0; i--) {
+      const arc = this.chainArcs[i];
       if (now >= arc.expiresAt) {
         scene.remove(arc.line);
         this.releaseArc(arc.line);
-      } else {
-        survivingArcs.push(arc);
+        this.chainArcs.splice(i, 1);
       }
     }
-    this.chainArcs = survivingArcs;
   }
 
   /**
    * Expires mortar zone meshes whose turn count has elapsed.
+   * Iterates in reverse so splice() shifts only the tail, avoiding a
+   * new survivor-array allocation per turn resolution.
    */
   tickMortarZoneVisualsForTurn(turnNumber: number, scene: THREE.Scene): void {
-    const survivingZones: MortarZoneMeshEntry[] = [];
-    for (const zone of this.mortarZoneMeshes) {
+    for (let i = this.mortarZoneMeshes.length - 1; i >= 0; i--) {
+      const zone = this.mortarZoneMeshes[i];
       if (turnNumber >= zone.expiresOnTurn) {
         scene.remove(zone.mesh);
         this.releaseZone(zone.mesh);
-      } else {
-        survivingZones.push(zone);
+        this.mortarZoneMeshes.splice(i, 1);
       }
     }
-    this.mortarZoneMeshes = survivingZones;
   }
 
   /**

@@ -102,6 +102,21 @@ describe('NodeMapGeneratorService', () => {
         expect(n.campaignMapId.length).toBeGreaterThan(0, `node ${n.id} has empty campaignMapId`);
       });
     });
+
+    it('last content row should never contain REST or SHOP across many seeds', () => {
+      const lastContentRow = NODE_MAP_CONFIG.rowsPerAct - 1;
+      const seeds = [1, 2, 3, 4, 5, 42, 99, 100, 203, 500, 1000, 2000, 3000, 4000, 5000];
+      for (const seed of seeds) {
+        const map = service.generateActMap(0, seed);
+        const preBossNodes = map.nodes.filter(n => n.row === lastContentRow);
+        preBossNodes.forEach(n => {
+          expect(n.type).not.toBe(NodeType.REST,
+            `seed ${seed}: node ${n.id} on last content row (row ${lastContentRow}) should not be REST`);
+          expect(n.type).not.toBe(NodeType.SHOP,
+            `seed ${seed}: node ${n.id} on last content row (row ${lastContentRow}) should not be SHOP`);
+        });
+      }
+    });
   });
 
   describe('generateActMap() — determinism', () => {

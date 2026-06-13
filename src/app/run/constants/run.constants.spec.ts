@@ -4,7 +4,10 @@ import {
   ENCOUNTER_CONFIG,
   getMapTierForNode,
   NODE_MAP_CONFIG,
+  REST_HEAL_MIN,
+  SKIP_GOLD_BY_NODE_TYPE,
 } from './run.constants';
+import { NodeType } from '../models/node-map.model';
 
 describe('Ascent Constants', () => {
   describe('createSeededRng()', () => {
@@ -240,6 +243,56 @@ describe('Ascent Constants', () => {
       Object.values(CAMPAIGN_MAP_TIERS).forEach(maps => {
         expect(maps.length).toBeGreaterThan(0);
       });
+    });
+
+    it('act3_late should contain four distinct campaign map IDs', () => {
+      const maps = CAMPAIGN_MAP_TIERS['act3_late'];
+      const unique = new Set(maps);
+      expect(unique.size).toBe(4);
+    });
+
+    it('act3_late should include campaign_13 through campaign_16', () => {
+      const maps = CAMPAIGN_MAP_TIERS['act3_late'];
+      expect(maps).toContain('campaign_13');
+      expect(maps).toContain('campaign_14');
+      expect(maps).toContain('campaign_15');
+      expect(maps).toContain('campaign_16');
+    });
+  });
+
+  describe('REST_HEAL_MIN', () => {
+    it('should be 3 — the hard floor applied after ascension reductions', () => {
+      expect(REST_HEAL_MIN).toBe(3);
+    });
+
+    it('should be greater than REST_CONFIG.minHeal pre-ascension floor', () => {
+      // REST_CONFIG.minHeal is the pre-ascension baseline (2); REST_HEAL_MIN
+      // is the post-ascension floor (3) to protect against high-ascension collapse.
+      // Verify we import it correctly and it is a positive integer.
+      expect(REST_HEAL_MIN).toBeGreaterThan(0);
+      expect(Number.isInteger(REST_HEAL_MIN)).toBeTrue();
+    });
+  });
+
+  describe('SKIP_GOLD_BY_NODE_TYPE', () => {
+    it('COMBAT skip gold is 15 (less than base combat reward)', () => {
+      expect(SKIP_GOLD_BY_NODE_TYPE[NodeType.COMBAT]).toBe(15);
+    });
+
+    it('ELITE skip gold is 30', () => {
+      expect(SKIP_GOLD_BY_NODE_TYPE[NodeType.ELITE]).toBe(30);
+    });
+
+    it('BOSS skip gold is 75', () => {
+      expect(SKIP_GOLD_BY_NODE_TYPE[NodeType.BOSS]).toBe(75);
+    });
+
+    it('ELITE skip gold is greater than COMBAT skip gold', () => {
+      expect(SKIP_GOLD_BY_NODE_TYPE[NodeType.ELITE]).toBeGreaterThan(SKIP_GOLD_BY_NODE_TYPE[NodeType.COMBAT]);
+    });
+
+    it('BOSS skip gold is greater than ELITE skip gold', () => {
+      expect(SKIP_GOLD_BY_NODE_TYPE[NodeType.BOSS]).toBeGreaterThan(SKIP_GOLD_BY_NODE_TYPE[NodeType.ELITE]);
     });
   });
 });

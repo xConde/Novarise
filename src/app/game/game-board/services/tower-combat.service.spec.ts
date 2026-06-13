@@ -925,6 +925,20 @@ describe('TowerCombatService', () => {
       expect(result.fired).toContain(TowerType.SLOW);
     });
 
+    it('should push a slowAura SFX event when the SLOW tower fires', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 100);
+      enemyMap.set('e1', enemy);
+
+      service.fireTurn(mockScene, TURN_1);
+
+      const events = service.drainAudioEvents();
+      const sfxEvent = events.find(
+        (e: CombatAudioEvent) => e.type === 'sfx' && (e as { type: 'sfx'; sfxKey: string }).sfxKey === 'slowAura',
+      );
+      expect(sfxEvent).toBeDefined();
+    });
+
     it('should restore all slow effects on cleanup', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 100);
@@ -1075,20 +1089,23 @@ describe('TowerCombatService', () => {
       const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
       enemyMap.set('e1', e1);
 
-      // Turn 1: fire — zone created with expiresOnTurn = 1 + dotDuration (3) = 4
+      // Turn 1: fire — zone created with expiresOnTurn = 1 + dotDuration(3) + 1 = 5.
+      // The +1 prevents double-hit: the initial blast fires on turn 1, so the zone
+      // first ticks on turn 2 (not turn 1). Active on turns 2, 3, 4; expires turn 5.
       service.fireTurn(mockScene, TURN_1);
 
       // Move enemy out of range so new mortar shots from tower don't refuel damage
       e1.position.x = TOWER_WORLD_X + 20;
 
-      // Tick turns 2 and 3 — still within zone lifetime (< 4)
+      // Tick turns 2, 3, and 4 — still within zone lifetime (turnNumber < expiresOnTurn=5)
       service.tickMortarZonesForTurn(mockScene, TURN_2);
       service.tickMortarZonesForTurn(mockScene, TURN_3);
+      service.tickMortarZonesForTurn(mockScene, 4);
       const healthAfterActiveTurns = e1.health;
 
-      // Turn 4 and 5 — zone expired (turnNumber >= expiresOnTurn=4)
-      service.tickMortarZonesForTurn(mockScene, 4);
+      // Turns 5 and 6 — zone expired (turnNumber >= expiresOnTurn=5)
       service.tickMortarZonesForTurn(mockScene, 5);
+      service.tickMortarZonesForTurn(mockScene, 6);
 
       // Health should not decrease after zone expiry
       expect(e1.health).toBe(healthAfterActiveTurns);

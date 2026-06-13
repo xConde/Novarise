@@ -112,5 +112,13 @@ describe('Relic Model', () => {
       // Guard: description must NOT claim a percentage interval change
       expect(relic.description).not.toContain('%');
     });
+
+    it('QUICK_DRAW description matches actual implementation (placement-turn bonus shot, not fire-rate %)', () => {
+      const relic = getRelicDefinition(RelicId.QUICK_DRAW);
+      expect(relic.description).toBe('The turn you place a tower, it fires once immediately.');
+      // Guard: description must NOT claim a fire-rate percentage bonus
+      expect(relic.description).not.toContain('%');
+      expect(relic.description).not.toContain('faster');
+    });
   });
 });

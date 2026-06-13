@@ -77,7 +77,7 @@ export const CAMPAIGN_MAP_TIERS: Record<string, string[]> = {
   act2_late: ['campaign_13', 'campaign_14', 'campaign_15', 'campaign_16'],
   act3_early: ['campaign_11', 'campaign_12', 'campaign_13', 'campaign_14'],
   act3_mid: ['campaign_13', 'campaign_14', 'campaign_15', 'campaign_16'],
-  act3_late: ['campaign_15', 'campaign_16', 'campaign_15', 'campaign_16'],
+  act3_late: ['campaign_13', 'campaign_14', 'campaign_15', 'campaign_16'],
 };
 
 /**
@@ -175,9 +175,16 @@ export const REST_CONFIG = {
   /** Percentage of max lives restored on rest. */
   healPercentage: 0.3,
 
-  /** Minimum lives restored (floor). */
+  /** Minimum lives restored (floor) before ascension scaling. */
   minHeal: 2,
 } as const;
+
+/**
+ * Hard floor applied AFTER ascension rest-heal reductions.
+ * Prevents high-ascension stacking (A8 × A17 = ×0.375) from
+ * collapsing rest visits below a meaningful recovery.
+ */
+export const REST_HEAL_MIN = 3;
 
 // ── Run Progression ───────────────────────────────────────────
 
@@ -217,8 +224,8 @@ import { NodeType } from '../models/node-map.model';
  * so its value is 0 as a safe default.
  */
 export const SKIP_GOLD_BY_NODE_TYPE: Record<NodeType, number> = {
-  [NodeType.COMBAT]: 25,
-  [NodeType.ELITE]: 50,
+  [NodeType.COMBAT]: 15,
+  [NodeType.ELITE]: 30,
   [NodeType.BOSS]: 75,
   [NodeType.SHOP]: 0,
   [NodeType.REST]: 0,

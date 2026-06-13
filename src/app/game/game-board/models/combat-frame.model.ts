@@ -40,6 +40,8 @@ export interface FrameKillEvent {
   position: { x: number; y: number; z: number };
   color: number;
   value: number;
+  /** True for BOSS and NOVA_SOVEREIGN kills — drives the larger death-burst particle count. */
+  isBoss?: boolean;
 }
 
 /** Emitted when the current wave is cleared. */

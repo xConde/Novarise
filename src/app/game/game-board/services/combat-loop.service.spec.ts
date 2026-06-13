@@ -376,8 +376,8 @@ describe('CombatLoopService', () => {
 
       // resolveTurn increments turnNumber to 1 before calling stepEnemiesOneTurn.
       // The second arg (currentTurn) must be 1 so VEINSEEKER's boost window check
-      // uses the correct reference point.
-      expect(enemySpy.stepEnemiesOneTurn).toHaveBeenCalledWith(jasmine.any(Function), 1);
+      // uses the correct reference point. The third arg is the scene (for SWARM meshes).
+      expect(enemySpy.stepEnemiesOneTurn).toHaveBeenCalledWith(jasmine.any(Function), 1, jasmine.any(Object));
     });
 
     it('calls stepEnemiesOneTurn with the correct turn number after multiple turns', () => {
@@ -385,7 +385,7 @@ describe('CombatLoopService', () => {
       service.resolveTurn(scene);
       service.resolveTurn(scene);
 
-      expect(enemySpy.stepEnemiesOneTurn).toHaveBeenCalledWith(jasmine.any(Function), 3);
+      expect(enemySpy.stepEnemiesOneTurn).toHaveBeenCalledWith(jasmine.any(Function), 3, jasmine.any(Object));
     });
   });
 
@@ -1359,7 +1359,7 @@ describe('CombatLoopService', () => {
     });
   });
 
-  // ─── feedback signals — Fix 2: boss-kill screen shake ───────────────────────
+  // ─── feedback signals — boss-kill screen shake ───────────────────────────────
 
   describe('feedback signals — boss-kill screen shake', () => {
     it('triggers screen shake with bossHitIntensity when a BOSS enemy is killed', () => {
@@ -1368,6 +1368,22 @@ describe('CombatLoopService', () => {
       combatSpy.fireTurn.and.returnValue({
         killed: [{ id: 'boss1', damage: 50, towerType: TowerType.BASIC, towerLevel: 1 }],
         fired: [], hitCount: 1, damageDealt: 50,
+      });
+
+      service.resolveTurn(scene);
+
+      expect(screenShakeSpy.trigger).toHaveBeenCalledWith(
+        SCREEN_SHAKE_CONFIG.bossHitIntensity,
+        SCREEN_SHAKE_CONFIG.bossHitDuration,
+      );
+    });
+
+    it('triggers screen shake with bossHitIntensity when a NOVA_SOVEREIGN is killed', () => {
+      const nova = makeEnemy({ id: 'nova1', type: EnemyType.NOVA_SOVEREIGN, value: 100 });
+      enemySpy.getEnemies.and.returnValue(new Map([['nova1', nova]]));
+      combatSpy.fireTurn.and.returnValue({
+        killed: [{ id: 'nova1', damage: 100, towerType: TowerType.BASIC, towerLevel: 1 }],
+        fired: [], hitCount: 1, damageDealt: 100,
       });
 
       service.resolveTurn(scene);
@@ -1392,17 +1408,28 @@ describe('CombatLoopService', () => {
     });
   });
 
-  // ─── feedback signals — Fix 3: life-loss audio ──────────────────────────────
+  // ─── feedback signals — life-loss audio ──────────────────────────────────────
 
   describe('feedback signals — life-loss audio', () => {
-    it('calls audioService.playLifeLoss() when loseLife() is invoked on a leak', () => {
+    it('calls audioService.playLifeLoss() once when a single enemy leaks', () => {
       const enemy = makeEnemy({ id: 'e1', leakDamage: 1 });
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
       enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
 
       service.resolveTurn(scene);
 
-      expect(audioSpy.playLifeLoss).toHaveBeenCalled();
+      expect(audioSpy.playLifeLoss).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls audioService.playLifeLoss() exactly once even when multiple enemies leak in the same turn', () => {
+      const e1 = makeEnemy({ id: 'e1', leakDamage: 1 });
+      const e2 = makeEnemy({ id: 'e2', leakDamage: 1 });
+      enemySpy.getEnemies.and.callFake(() => new Map([['e1', e1], ['e2', e2]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1', 'e2']);
+
+      service.resolveTurn(scene);
+
+      expect(audioSpy.playLifeLoss).toHaveBeenCalledTimes(1);
     });
 
     it('does NOT call audioService.playLifeLoss() when no enemy leaks', () => {
@@ -1411,6 +1438,79 @@ describe('CombatLoopService', () => {
       service.resolveTurn(scene);
 
       expect(audioSpy.playLifeLoss).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── boss isBoss flag on FrameKillEvent ──────────────────────────────────────
+
+  describe('processKill — isBoss flag on FrameKillEvent', () => {
+    it('sets isBoss=true on a BOSS kill', () => {
+      const boss = makeEnemy({ id: 'boss1', type: EnemyType.BOSS, value: 50 });
+      enemySpy.getEnemies.and.returnValue(new Map([['boss1', boss]]));
+      combatSpy.fireTurn.and.returnValue({
+        killed: [{ id: 'boss1', damage: 50, towerType: TowerType.BASIC, towerLevel: 1 }],
+        fired: [], hitCount: 1, damageDealt: 50,
+      });
+
+      const result = service.resolveTurn(scene);
+
+      expect(result.kills.length).toBe(1);
+      expect(result.kills[0].isBoss).toBe(true);
+    });
+
+    it('sets isBoss=true on a NOVA_SOVEREIGN kill', () => {
+      const nova = makeEnemy({ id: 'nova1', type: EnemyType.NOVA_SOVEREIGN, value: 100 });
+      enemySpy.getEnemies.and.returnValue(new Map([['nova1', nova]]));
+      combatSpy.fireTurn.and.returnValue({
+        killed: [{ id: 'nova1', damage: 100, towerType: TowerType.BASIC, towerLevel: 1 }],
+        fired: [], hitCount: 1, damageDealt: 100,
+      });
+
+      const result = service.resolveTurn(scene);
+
+      expect(result.kills.length).toBe(1);
+      expect(result.kills[0].isBoss).toBe(true);
+    });
+
+    it('sets isBoss=false (or undefined) on a non-boss kill', () => {
+      const basic = makeEnemy({ id: 'e1', type: EnemyType.BASIC, value: 10 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', basic]]));
+      combatSpy.fireTurn.and.returnValue({
+        killed: [{ id: 'e1', damage: 10, towerType: TowerType.BASIC, towerLevel: 1 }],
+        fired: [], hitCount: 1, damageDealt: 10,
+      });
+
+      const result = service.resolveTurn(scene);
+
+      expect(result.kills.length).toBe(1);
+      expect(result.kills[0].isBoss).toBeFalsy();
+    });
+  });
+
+  // ─── NOVA_SOVEREIGN regen call order ─────────────────────────────────────────
+
+  describe('NOVA_SOVEREIGN regen call order', () => {
+    it('calls tickNovaSovereignEffects after fireTurn and before tickMortarZonesForTurn', () => {
+      const callOrder: string[] = [];
+      combatSpy.fireTurn.and.callFake(() => {
+        callOrder.push('fireTurn');
+        return { killed: [], fired: [], hitCount: 0, damageDealt: 0 };
+      });
+      enemySpy.tickNovaSovereignEffects.and.callFake(() => {
+        callOrder.push('tickNovaSovereign');
+      });
+      combatSpy.tickMortarZonesForTurn.and.callFake(() => {
+        callOrder.push('tickMortarZones');
+        return { kills: [], damageDealt: 0 };
+      });
+
+      service.resolveTurn(scene);
+
+      const fireIdx = callOrder.indexOf('fireTurn');
+      const regenIdx = callOrder.indexOf('tickNovaSovereign');
+      const mortarIdx = callOrder.indexOf('tickMortarZones');
+      expect(fireIdx).toBeLessThan(regenIdx);
+      expect(regenIdx).toBeLessThan(mortarIdx);
     });
   });
 

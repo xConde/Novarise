@@ -100,7 +100,7 @@
         [attr.aria-label]="'Encounter ' + (i + 1) + ': ' + (result.victory ? 'victory' : 'defeat')"
       >
         <span class="encounter-entry__index">{{ i + 1 }}</span>
-        <span class="encounter-entry__type">{{ result.nodeType | titlecase }}</span>
+        <span class="encounter-entry__type">{{ nodeTypeDisplayName(result.nodeType) }}</span>
         <span class="encounter-entry__outcome">{{ result.victory ? 'Victory' : 'Defeat' }}</span>
         <span class="encounter-entry__kills"><app-icon name="kills" [size]="12"></app-icon> {{ result.enemiesKilled }}</span>
       </li>

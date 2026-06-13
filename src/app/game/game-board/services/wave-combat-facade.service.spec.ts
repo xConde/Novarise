@@ -35,6 +35,7 @@ import { TurnHistoryService } from './turn-history.service';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
 import { TowerGraphService } from './tower-graph.service';
+import { MusicService } from '../../../core/services/music.service';
 
 function makeCallbacks(overrides: Partial<WaveCombatCallbacks> = {}): WaveCombatCallbacks {
   return {
@@ -76,6 +77,7 @@ describe('WaveCombatFacadeService', () => {
   let wavePreviewService: jasmine.SpyObj<WavePreviewService>;
   let turnHistoryService: jasmine.SpyObj<TurnHistoryService>;
   let bossBannerService: jasmine.SpyObj<BossBannerService>;
+  let musicService: jasmine.SpyObj<MusicService>;
 
   const defaultState = {
     phase: GamePhase.INTERMISSION,
@@ -110,6 +112,7 @@ describe('WaveCombatFacadeService', () => {
     screenShakeService = jasmine.createSpyObj('ScreenShakeService', ['trigger']);
     audioService = jasmine.createSpyObj('AudioService', ['playWaveStart', 'playBossRoar']);
     bossBannerService = jasmine.createSpyObj('BossBannerService', ['flash', 'cleanup']);
+    musicService = jasmine.createSpyObj('MusicService', ['playTheme']);
 
     deckService = jasmine.createSpyObj('DeckService', ['discardHand', 'drawForWave', 'serializeState', 'getRngState']);
     (deckService.serializeState as jasmine.Spy).and.returnValue({});
@@ -227,6 +230,7 @@ describe('WaveCombatFacadeService', () => {
         return spy;
       })(),
       bossBannerService,
+      musicService,
     );
   });
 
@@ -287,6 +291,11 @@ describe('WaveCombatFacadeService', () => {
       tick(1);
       expect(service.showWaveClear).toBe(false);
     }));
+
+    it('calls musicService.playTheme("combat") to restore combat music on wave end', () => {
+      service.onWaveComplete(1, false);
+      expect(musicService.playTheme).toHaveBeenCalledWith('combat');
+    });
   });
 
   describe('triggerWaveStartPulse()', () => {
@@ -600,6 +609,30 @@ describe('WaveCombatFacadeService', () => {
       runService.getCurrentEncounter.and.returnValue(null);
       service.startWave();
       expect(bossBannerService.flash).not.toHaveBeenCalled();
+    });
+
+    it('calls musicService.playTheme("boss") when a boss wave starts', () => {
+      runService.getCurrentEncounter.and.returnValue(
+        makeEncounterWithWaves([makeWaveWithEnemies(EnemyType.BOSS)]) as never
+      );
+      gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 1, phase: GamePhase.INTERMISSION }));
+      gameStateService.startWave.and.callFake(() => {
+        gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 1, phase: GamePhase.COMBAT }));
+      });
+      service.startWave();
+      expect(musicService.playTheme).toHaveBeenCalledWith('boss');
+    });
+
+    it('does NOT call musicService.playTheme("boss") on a normal wave', () => {
+      runService.getCurrentEncounter.and.returnValue(
+        makeEncounterWithWaves([makeWaveWithEnemies(EnemyType.BASIC)]) as never
+      );
+      gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 1, phase: GamePhase.INTERMISSION }));
+      gameStateService.startWave.and.callFake(() => {
+        gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 1, phase: GamePhase.COMBAT }));
+      });
+      service.startWave();
+      expect(musicService.playTheme).not.toHaveBeenCalledWith('boss');
     });
   });
 

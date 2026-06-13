@@ -41,8 +41,8 @@ describe('Card System — Balance', () => {
   });
 
   it('starter deck energy cost total should be 26-34 (playable across ~9-11 energy waves)', () => {
-    // 8×BASIC(1) + 3×SNIPER(3) + 2×SPLASH(2) + 2×SLOW(2) + 1×CHAIN(2)
-    // + 1×GOLD_RUSH(1) + 1×DAMAGE_BOOST(1) + 1×DRAW_TWO(1) + 1×ENERGY_SURGE(0) = 30
+    // 5×BASIC(1) + 3×SNIPER(2) + 3×SPLASH(2) + 2×SLOW(2) + 1×CHAIN(2)
+    // + 1×GOLD_RUSH(1) + 2×DAMAGE_BOOST(1) + 1×DRAW_TWO(1) + 1×ENERGY_SURGE(1) + 1×RECYCLE(0) = 28
     const totalCost = STARTER_DEFS.reduce((sum, d) => sum + d.energyCost, 0);
     expect(totalCost).toBeGreaterThanOrEqual(26);
     expect(totalCost).toBeLessThanOrEqual(34);
@@ -149,9 +149,10 @@ describe('Card System — Balance', () => {
     for (const card of modifierCards) {
       const effect = card.effect;
       if (effect.type === 'modifier') {
-        // SHIELD_WALL uses duration 0 (block-based, not wave-based) — exempt
+        // SHIELD_WALL uses duration null (block-based, not wave-based — persists
+        // until all leak-block charges are consumed, not until a wave ticks).
         if (card.id === CardId.SHIELD_WALL) {
-          expect(effect.duration).toBe(0); // intentional exception
+          expect(effect.duration).toBeNull();
         } else if (encounterScopedIds.includes(card.id)) {
           // Flag-style modifiers use null duration (encounter-scoped, see
           // ActiveModifier.remainingWaves widening and CardEffectService.tickWave).
@@ -492,17 +493,15 @@ describe('Card System — Balance', () => {
   it('starter cards should all have STARTER rarity', () => {
     const starterCardDefs = STARTER_IDS.map(id => CARD_DEFINITIONS[id]);
     const nonStarterRarity = starterCardDefs.filter(d => d.rarity !== CardRarity.STARTER);
-    // GOLD_RUSH, DAMAGE_BOOST (COMMON) and DRAW_TWO (COMMON), ENERGY_SURGE (RARE) are in the
-    // starter deck but have non-STARTER rarity — they can also appear as rewards. Count must be <= 4.
-    expect(nonStarterRarity.length).toBeLessThanOrEqual(4);
+    // Non-STARTER instances in the starter deck: GOLD_RUSH (COMMON), 2×DAMAGE_BOOST (COMMON),
+    // DRAW_TWO (COMMON), ENERGY_SURGE (RARE), RECYCLE (UNCOMMON). Count must be <= 6.
+    expect(nonStarterRarity.length).toBeLessThanOrEqual(6);
   });
 
   it('STARTER-rarity cards that appear in the starter deck should all have STARTER rarity', () => {
-    // Cards in the starter deck with STARTER rarity (tower cards) should all be tower types
+    // Cards in the starter deck with STARTER rarity (tower cards) should all be tower types.
+    // Verify at least 4 STARTER-rarity card instances appear in the deck.
     const starterRarityCards = STARTER_DEFS.filter(d => d.rarity === CardRarity.STARTER);
-    // All 6 tower types have STARTER rarity — the starter deck intentionally omits Chain and Mortar
-    // (they would be too strong with 2-3 energy cost in a 3-energy economy)
-    // Verify at least 4 STARTER-rarity cards appear (Basic×4 + Sniper, Splash, Slow = 7 of 10)
     expect(starterRarityCards.length).toBeGreaterThanOrEqual(4);
     for (const def of starterRarityCards) {
       expect(def.rarity).toBe(CardRarity.STARTER);

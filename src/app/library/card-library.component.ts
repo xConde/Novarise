@@ -193,6 +193,8 @@ function makeComparator(sort: SortMode): (a: CardDefinition, b: CardDefinition) 
       case CardRarity.RARE:     return 3;
     }
   };
+  // Siegeworks rank kept for sort stability once Phase 5 cards land.
+  // No Siegeworks cards exist yet so case 4 is currently unreachable.
   const archetypeRank = (d: CardDefinition): number => {
     switch (d.archetype) {
       case 'cartographer': return 1;

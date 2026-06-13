@@ -219,7 +219,7 @@ export const TOWER_SPECIALIZATIONS: Record<TowerType, Record<TowerSpecialization
     },
     [TowerSpecialization.BETA]: {
       label: 'Frostbite',
-      description: 'Frostbite: +30% range, wider chill coverage',
+      description: 'Frostbite: +30% range',
       damage: 1.0, range: 1.3,
     },
   },

@@ -227,3 +227,8 @@
     animation: none;
   }
 }
+
+body.reduce-motion .map-node--selectable,
+body.reduce-motion .map-node--checkpointed {
+  animation: none;
+}

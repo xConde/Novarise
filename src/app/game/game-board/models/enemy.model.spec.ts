@@ -1,4 +1,4 @@
-import { EnemyType, ENEMY_STATS, Enemy, GridNode, MINI_SWARM_STATS } from './enemy.model';
+import { EnemyType, ENEMY_STATS, Enemy, GridNode, MINI_SWARM_STATS, SWIFT_LEAK_DAMAGE } from './enemy.model';
 
 describe('Enemy Model', () => {
   describe('EnemyType Enum', () => {
@@ -83,10 +83,14 @@ describe('Enemy Model', () => {
     it('should have leakDamage=1 for standard enemies', () => {
       expect(ENEMY_STATS[EnemyType.BASIC].leakDamage).toBe(1);
       expect(ENEMY_STATS[EnemyType.FAST].leakDamage).toBe(1);
-      expect(ENEMY_STATS[EnemyType.SWIFT].leakDamage).toBe(1);
       expect(ENEMY_STATS[EnemyType.SWARM].leakDamage).toBe(1);
       expect(ENEMY_STATS[EnemyType.FLYING].leakDamage).toBe(1);
       expect(ENEMY_STATS[EnemyType.MINER].leakDamage).toBe(1);
+    });
+
+    it('should have leakDamage=2 for SWIFT (breakthrough counterplay)', () => {
+      expect(ENEMY_STATS[EnemyType.SWIFT].leakDamage).toBe(SWIFT_LEAK_DAMAGE);
+      expect(ENEMY_STATS[EnemyType.SWIFT].leakDamage).toBe(2);
     });
 
     describe('BASIC enemy stats', () => {
@@ -154,6 +158,15 @@ describe('Enemy Model', () => {
         expect(swift.speed).toBe(3.0);
         expect(swift.value).toBe(10);
         expect(swift.color).toBe(0x4cd0d0); // UX-40 muted cyan
+      });
+
+      it('has higher leakDamage than FAST — punishes breakthroughs harder', () => {
+        expect(ENEMY_STATS[EnemyType.SWIFT].leakDamage)
+          .toBeGreaterThan(ENEMY_STATS[EnemyType.FAST].leakDamage);
+      });
+
+      it('leakDamage equals SWIFT_LEAK_DAMAGE constant', () => {
+        expect(ENEMY_STATS[EnemyType.SWIFT].leakDamage).toBe(SWIFT_LEAK_DAMAGE);
       });
     });
 
@@ -407,7 +420,7 @@ describe('Enemy Model', () => {
       expect(flying.health).toBe(60);
       expect(flying.speed).toBe(2.5);
       expect(flying.value).toBe(10);
-      expect(flying.color).toBe(0x88ccff); // Light blue
+      expect(flying.color).toBe(0xaaccff); // Pale sky blue — colorblind-palette value
       expect(flying.size).toBe(0.3);
     });
 
@@ -428,6 +441,18 @@ describe('Enemy Model', () => {
         .filter(([type]) => type !== EnemyType.FLYING)
         .map(([, stats]) => stats.color);
       expect(otherColors).not.toContain(ENEMY_STATS[EnemyType.FLYING].color);
+    });
+
+    it('ignoresElevation flag is true — immune to GRAVITY_WELL movement suspension', () => {
+      expect(ENEMY_STATS[EnemyType.FLYING].ignoresElevation).toBeTrue();
+    });
+
+    it('color is distinct from SLOW status particle emitter color (0x88ccff)', () => {
+      // SLOW particles use 0x88ccff; FLYING body uses 0xaaccff so an unslowed
+      // FLYING unit is visually distinct from a slowed ground unit.
+      const SLOW_PARTICLE_COLOR = 0x88ccff;
+      expect(ENEMY_STATS[EnemyType.FLYING].color).not.toBe(SLOW_PARTICLE_COLOR);
+      expect(ENEMY_STATS[EnemyType.FLYING].color).toBe(0xaaccff);
     });
   });
 

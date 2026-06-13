@@ -39,6 +39,17 @@ export class AimLineService implements OnDestroy {
   private lastStart: THREE.Vector3 | null = null;
   private lastEnd: THREE.Vector3 | null = null;
 
+  /**
+   * Persistent scratch Vector3s for the hot animation path — prevents
+   * allocating new Vector3 instances on every call to update().
+   */
+  private readonly _scratchTowerWorld = new THREE.Vector3();
+  private readonly _scratchStart = new THREE.Vector3();
+  private readonly _scratchEnd = new THREE.Vector3();
+  private readonly _scratchMid = new THREE.Vector3();
+  private readonly _scratchDir = new THREE.Vector3();
+  private readonly _scratchUp = new THREE.Vector3(0, 1, 0);
+
   constructor(
     // @Optional() so flat test beds that don't provide these still compile.
     @Optional() private meshRegistry?: BoardMeshRegistryService,
@@ -101,22 +112,21 @@ export class AimLineService implements OnDestroy {
       return;
     }
 
-    // Compute world position of the tower.
-    const towerWorld = new THREE.Vector3();
-    towerGroup.getWorldPosition(towerWorld);
+    // Compute world position of the tower into the persistent scratch vector.
+    towerGroup.getWorldPosition(this._scratchTowerWorld);
 
-    const start = new THREE.Vector3(
-      towerWorld.x,
-      towerWorld.y + AIM_LINE_CONFIG.yOffset,
-      towerWorld.z,
+    this._scratchStart.set(
+      this._scratchTowerWorld.x,
+      this._scratchTowerWorld.y + AIM_LINE_CONFIG.yOffset,
+      this._scratchTowerWorld.z,
     );
-    const end = new THREE.Vector3(
+    this._scratchEnd.set(
       target.position.x,
-      towerWorld.y + AIM_LINE_CONFIG.yOffset,
+      this._scratchTowerWorld.y + AIM_LINE_CONFIG.yOffset,
       target.position.z,
     );
 
-    const length = start.distanceTo(end);
+    const length = this._scratchStart.distanceTo(this._scratchEnd);
     // Degenerate case: tower and target at same position — hide to avoid NaN.
     if (length < 0.001) {
       this.hide();
@@ -138,8 +148,8 @@ export class AimLineService implements OnDestroy {
       const needsRebuild =
         !this.lastStart ||
         !this.lastEnd ||
-        start.distanceTo(this.lastStart) > AIM_LINE_CONFIG.rebuildThreshold ||
-        end.distanceTo(this.lastEnd) > AIM_LINE_CONFIG.rebuildThreshold;
+        this._scratchStart.distanceTo(this.lastStart) > AIM_LINE_CONFIG.rebuildThreshold ||
+        this._scratchEnd.distanceTo(this.lastEnd) > AIM_LINE_CONFIG.rebuildThreshold;
 
       if (needsRebuild) {
         this.lineGeo.dispose();
@@ -150,17 +160,19 @@ export class AimLineService implements OnDestroy {
           AIM_LINE_CONFIG.segments,
         );
         this.lineMesh.geometry = this.lineGeo;
-        this.lastStart = start.clone();
-        this.lastEnd = end.clone();
+        if (!this.lastStart) this.lastStart = this._scratchStart.clone();
+        else this.lastStart.copy(this._scratchStart);
+        if (!this.lastEnd) this.lastEnd = this._scratchEnd.clone();
+        else this.lastEnd.copy(this._scratchEnd);
       }
 
       // Always recompute position/quaternion — transform is cheap, geometry is not.
-      const mid = start.clone().lerp(end, 0.5);
-      this.lineMesh.position.copy(mid);
+      this._scratchMid.copy(this._scratchStart).lerp(this._scratchEnd, 0.5);
+      this.lineMesh.position.copy(this._scratchMid);
 
       // CylinderGeometry's axis is +Y; align it to the aim direction.
-      const dir = end.clone().sub(start).normalize();
-      this.lineMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      this._scratchDir.copy(this._scratchEnd).sub(this._scratchStart).normalize();
+      this.lineMesh.quaternion.setFromUnitVectors(this._scratchUp, this._scratchDir);
 
       this.lineMesh.visible = true;
     }

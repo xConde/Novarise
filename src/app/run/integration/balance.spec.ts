@@ -79,7 +79,7 @@ describe('Ascent Mode — Balance', () => {
   });
 
   it('act 2 row 0 combat waves should have 6-9 enemies per entry type', () => {
-    // Act2 multiplier 1.4: floor(5 * 1.4)=7, variance ±1 → [6, 8] per entry type.
+    // ACT_ROW_OFFSET=2: effectiveRow=2, base=floor(5+2×0.5)=6, ×1.4=floor(8.4)=8, ±1 → [7,9] — within [6,9] bound.
     for (let seed = 1; seed <= 5; seed++) {
       const waves = waveGen.generateCombatWaves(0, 1, seed * 10000);
       waves.forEach((w, wi) => {

@@ -79,6 +79,85 @@ describe('WaveGeneratorService', () => {
       expect(JSON.stringify(waves1)).toBe(JSON.stringify(waves2));
     });
 
+    it('act 1 row 8+ should include FLYING enemies (prior Sky Marshal exposure)', () => {
+      let foundFlying = false;
+      for (let seed = 0; seed < 200; seed++) {
+        const waves = service.generateCombatWaves(8, 0, seed * 31 + 7);
+        for (const w of waves) {
+          if (w.entries!.some(e => e.type === EnemyType.FLYING)) {
+            foundFlying = true;
+            break;
+          }
+        }
+        if (foundFlying) break;
+      }
+      expect(foundFlying).withContext('FLYING should appear in act 1 row 8+ within 200 seeds').toBeTrue();
+    });
+
+    it('act 1 row 3 should NOT include FLYING enemies', () => {
+      for (let seed = 0; seed < 50; seed++) {
+        const waves = service.generateCombatWaves(3, 0, seed * 17 + 3);
+        waves.forEach(w => {
+          w.entries!.forEach(e => {
+            expect(e.type).not.toBe(EnemyType.FLYING);
+          });
+        });
+      }
+    });
+
+    it('act 2 row 5+ should include GLIDER enemies in pool', () => {
+      let foundGlider = false;
+      for (let seed = 0; seed < 200; seed++) {
+        const waves = service.generateCombatWaves(5, 1, seed * 37 + 11);
+        for (const w of waves) {
+          if (w.entries!.some(e => e.type === EnemyType.GLIDER)) {
+            foundGlider = true;
+            break;
+          }
+        }
+        if (foundGlider) break;
+      }
+      expect(foundGlider).withContext('GLIDER should appear in act 2 row 5+ within 200 seeds').toBeTrue();
+    });
+
+    it('act 2 row 5+ should occasionally include MINER enemies at low weight', () => {
+      let foundMiner = false;
+      for (let seed = 0; seed < 300; seed++) {
+        const waves = service.generateCombatWaves(5, 1, seed * 41 + 13);
+        for (const w of waves) {
+          if (w.entries!.some(e => e.type === EnemyType.MINER)) {
+            foundMiner = true;
+            break;
+          }
+        }
+        if (foundMiner) break;
+      }
+      expect(foundMiner).withContext('MINER should appear in act 2 row 5+ within 300 seeds').toBeTrue();
+    });
+
+    it('act-2 opener average per-entry count exceeds act-1 opener (no act-boundary opener trough)', () => {
+      // The act multiplier (1.4×) must ensure the act-2 opener density is meaningfully
+      // higher than the act-1 opener, proving no trough at the act boundary.
+      // Sample 20 seeds to average out the ±1 per-entry variance.
+      const SEEDS = 20;
+      let act1OpenerSum = 0;
+      let act2OpenerSum = 0;
+      let act1EntryCount = 0;
+      let act2EntryCount = 0;
+      for (let s = 1; s <= SEEDS; s++) {
+        const seed = s * 1000;
+        service.generateCombatWaves(0, 0, seed).forEach(w => {
+          w.entries!.forEach(e => { act1OpenerSum += e.count; act1EntryCount++; });
+        });
+        service.generateCombatWaves(0, 1, seed).forEach(w => {
+          w.entries!.forEach(e => { act2OpenerSum += e.count; act2EntryCount++; });
+        });
+      }
+      const act1Avg = act1OpenerSum / act1EntryCount;
+      const act2Avg = act2OpenerSum / act2EntryCount;
+      expect(act2Avg).toBeGreaterThan(act1Avg);
+    });
+
     it('enemy count should be higher at deeper rows (act 1, row 8 vs row 1)', () => {
       // Base count: floor(5 + row * 0.5); deep rows have higher base
       // Use enough samples to average out the ±1 variance

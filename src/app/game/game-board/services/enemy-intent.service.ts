@@ -164,9 +164,8 @@ export class EnemyIntentService implements OnDestroy {
   }
 
   /**
-   * Release all sprites and clean up. Called by GameSessionService.cleanupScene()
-   * (indirectly, because TextSpritePoolService.dispose() is called there) and
-   * by Angular's OnDestroy lifecycle when the component is torn down.
+   * Release all sprites and clean up. Called explicitly from
+   * GameSessionService.cleanupScene() and by Angular's OnDestroy lifecycle.
    */
   ngOnDestroy(): void {
     this.destroy$.next();
@@ -175,9 +174,8 @@ export class EnemyIntentService implements OnDestroy {
   }
 
   /**
-   * Imperatively release every tracked sprite. Safe to call multiple times.
-   * TextSpritePoolService.dispose() will also release these — calling both
-   * is idempotent because release() is a no-op for already-released sprites.
+   * Imperatively release every tracked sprite back to the pool.
+   * Safe to call multiple times — idempotent after the first call.
    */
   disposeAll(): void {
     for (const [id, sprite] of this.sprites) {

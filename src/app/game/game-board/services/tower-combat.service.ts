@@ -604,13 +604,16 @@ export class TowerCombatService {
         }
       }
 
-      // Drop the persistent zone — ticks for `dotDuration` more turns.
+      // Drop the persistent zone — ticks for `dotDuration` turns starting NEXT turn.
+      // +1 offset prevents the zone from double-hitting on the placement turn
+      // (fireTurn already dealt initial blast damage; zone should first tick on
+      // the following turn, not the same turn tickMortarZonesForTurn is called).
       this.turnMortarZones.push({
         centerX: target.position.x,
         centerZ: target.position.z,
         blastRadius,
         dotDamage: blastDamage,
-        expiresOnTurn: turnNumber + dotDuration,
+        expiresOnTurn: turnNumber + dotDuration + 1,
         statusEffect: stats.statusEffect,
         placerLevel: tower.level,
       });
@@ -1186,6 +1189,9 @@ export class TowerCombatService {
         scene,
       );
     }
+    // SFX: slowAura fires once per turn that the aura activates (matches the
+    // mortarExplosion push pattern — one event per logical fire, not per hit).
+    this.pendingAudioEvents.push({ type: 'sfx', sfxKey: 'slowAura' });
   }
 
   // M2 S5: applyHitDamage + createMortarZone DELETED. Both were part of the

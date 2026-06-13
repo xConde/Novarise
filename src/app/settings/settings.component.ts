@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { FontScale, SettingsService } from '../core/services/settings.service';
 import { MusicService } from '../core/services/music.service';
 import { DifficultyLevel } from '../game/game-board/models/game-state.model';
+import { DEFAULT_MUSIC_VOLUME } from '../core/constants/music.constants';
 
 @Component({
   selector: 'app-settings',
@@ -11,7 +12,7 @@ import { DifficultyLevel } from '../game/game-board/models/game-state.model';
 export class SettingsComponent implements OnInit {
   audioMuted = false;
   musicEnabled = true;
-  musicVolume = 0.4;
+  musicVolume = DEFAULT_MUSIC_VOLUME;
   currentDifficulty: DifficultyLevel = DifficultyLevel.NORMAL;
   showFps = false;
   reduceMotion = false;

@@ -34,6 +34,7 @@ import { BossBannerService } from './boss-banner.service';
 import { EnemyType } from '../models/enemy.model';
 import { getWaveEnemyTypes } from '../models/wave.model';
 import { BOSS_BANNER_COPY } from '../constants/ui.constants';
+import { MusicService } from '../../../core/services/music.service';
 
 /** Callbacks that WaveCombatFacadeService calls back into the component for concerns
  *  it cannot own (template-bound state, pending card state). */
@@ -110,6 +111,7 @@ export class WaveCombatFacadeService {
     private elevationService: ElevationService,
     private towerGraphService: TowerGraphService,
     public bossBanner: BossBannerService,
+    private musicService: MusicService,
   ) {}
 
   /** Register component callbacks. Call in ngOnInit before any wave interaction. */
@@ -141,6 +143,8 @@ export class WaveCombatFacadeService {
       this.showWaveClear = false;
       this.waveClearTimerId = null;
     }, 2000);
+    // Crossfade back to combat theme on wave end (handles returning from boss theme).
+    this.musicService.playTheme('combat');
   }
 
   /** Briefly pulse the wave counter in the HUD when a new wave begins. */
@@ -215,6 +219,7 @@ export class WaveCombatFacadeService {
     this.bossBanner.flash(copy);
     this.audioService.playBossRoar();
     this.screenShakeService.trigger(0.25, 0.6);
+    this.musicService.playTheme('boss');
   }
 
   /**
