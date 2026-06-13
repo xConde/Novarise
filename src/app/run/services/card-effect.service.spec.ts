@@ -13,13 +13,13 @@ import {
 } from '../../game/game-board/testing';
 import { DeckService } from './deck.service';
 import { WavePreviewService } from '../../game/game-board/services/wave-preview.service';
-import { SpellCardEffect, ModifierCardEffect } from '../models/card.model';
+import { SpellCardEffect, SpellId, ModifierCardEffect } from '../models/card.model';
 import { MODIFIER_STAT, ModifierStat } from '../constants/modifier-stat.constants';
 import { Enemy, EnemyType } from '../../game/game-board/models/enemy.model';
 
 // ── Helper: build spell effects ────────────────────────────────────────────
 
-function spellEffect(spellId: string, value: number): SpellCardEffect {
+function spellEffect(spellId: SpellId, value: number): SpellCardEffect {
   return { type: 'spell', spellId, value };
 }
 

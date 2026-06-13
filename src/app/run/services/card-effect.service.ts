@@ -15,6 +15,7 @@
 
 import { Injectable } from '@angular/core';
 import { ModifierCardEffect, SpellCardEffect } from '../models/card.model';
+import { assertNever } from '../../game/game-board/utils/assert-never';
 import { MODIFIER_STAT, ModifierStat } from '../constants/modifier-stat.constants';
 import { GameStateService } from '../../game/game-board/services/game-state.service';
 import { EnemyService } from '../../game/game-board/services/enemy.service';
@@ -202,9 +203,14 @@ export class CardEffectService {
         this.applyDetour(ctx, effect.value);
         break;
 
-      // 'salvage' and 'fortify': handled in GameBoardComponent (need tower selection UI).
-      default:
+      // 'salvage' and 'fortify' are pre-handled in CardPlayService before this
+      // switch is reached — they require tower-selection UI unavailable here.
+      case 'salvage':
+      case 'fortify':
         break;
+
+      default:
+        assertNever(effect.spellId);
     }
   }
 

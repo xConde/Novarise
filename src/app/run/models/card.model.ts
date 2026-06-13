@@ -13,8 +13,8 @@
 
 import { TowerType } from '../../game/game-board/models/tower.model';
 import { ModifierStat } from '../constants/modifier-stat.constants';
-import { MutationOp, MutationRejectionReason } from '../../game/game-board/services/path-mutation.types';
-import { ElevationRejectionReason } from '../../game/game-board/services/elevation.types';
+import { MutationOp, MutationRejectionReason } from '../../game/game-board/models/path-mutation.model';
+import { ElevationRejectionReason } from '../../game/game-board/models/elevation.model';
 
 // ── Card Identity ─────────────────────────────────────────────
 
@@ -312,9 +312,39 @@ export interface TowerCardEffect {
   readonly statOverrides?: TowerStatOverrides;
 }
 
+/**
+ * All spell identifiers used in card-definitions.ts.
+ * Changing a spellId in card-definitions.ts must be reflected here first.
+ */
+export type SpellId =
+  | 'gold_rush'
+  | 'repair_walls'
+  | 'scout_ahead'
+  | 'lightning_strike'
+  | 'frost_wave'
+  | 'salvage'
+  | 'fortify'
+  | 'overclock'
+  | 'incinerate'
+  | 'toxic_spray'
+  | 'cryo_pulse'
+  | 'detonate'
+  | 'epidemic'
+  | 'detour';
+
+/**
+ * All utility identifiers used in card-definitions.ts.
+ * Changing a utilityId in card-definitions.ts must be reflected here first.
+ */
+export type UtilityId =
+  | 'draw'
+  | 'energy'
+  | 'recycle'
+  | 'bridge_towers';
+
 export interface SpellCardEffect {
   readonly type: 'spell';
-  readonly spellId: string;
+  readonly spellId: SpellId;
   readonly value: number;
 }
 
@@ -348,7 +378,7 @@ export interface ModifierCardEffect {
 
 export interface UtilityCardEffect {
   readonly type: 'utility';
-  readonly utilityId: string;
+  readonly utilityId: UtilityId;
   readonly value: number;
 }
 
