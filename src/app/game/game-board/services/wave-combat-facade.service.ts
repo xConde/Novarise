@@ -287,6 +287,8 @@ export class WaveCombatFacadeService {
     if (renderOutput.waveCompleted) {
       this.towerCombatService.clearMortarZonesForWaveEnd(this.sceneService.getScene());
       this.onWaveComplete(renderOutput.waveCompleted.wave, renderOutput.waveCompleted.perfect);
+      // Tick card modifier wave-countdowns on wave end (INTERMISSION path).
+      this.cardEffectService.tickWave();
     }
 
     this.callbacks?.onCombatResult(renderOutput);
@@ -296,6 +298,10 @@ export class WaveCombatFacadeService {
     if (postPhase === GamePhase.COMBAT) {
       this.deckService.discardHand();
       this.deckService.drawForWave();
+    } else if (postPhase === GamePhase.VICTORY) {
+      // Expire card modifiers from the final wave and reset for clean state.
+      this.cardEffectService.tickWave();
+      this.cardEffectService.reset();
     }
 
     // Auto-save AFTER discard+draw so the checkpoint reflects the hand the player

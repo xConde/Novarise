@@ -432,6 +432,9 @@ export class RunService {
         completedNodeIds: [...state.completedNodeIds, result.nodeId],
         encounterResults: newEncounterResults,
       });
+      for (const _challenge of result.completedChallenges) {
+        this.playerProfile.recordChallengeCompleted();
+      }
     } else {
       // Defeat — run over
       const defeatState = {

@@ -1,11 +1,8 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { SerializedRunStateFlags } from '../models/run-state.model';
 
-export interface SerializedRunStateFlags {
-  readonly entries: ReadonlyArray<readonly [string, number]>;
-  readonly consumedEventIds: readonly string[];
-  readonly seenEventIds?: readonly string[];  // optional for backward compat — absent = empty
-}
+export { SerializedRunStateFlags } from '../models/run-state.model';
 
 /**
  * Tracks named integer flags across a run to enable chained event sequences.

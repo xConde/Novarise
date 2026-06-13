@@ -37,7 +37,7 @@ src/
 │   │   │   │                          #   tower-info-panel, card-hand, card-detail, ...
 │   │   │   ├── constants/             # 20+ config files (see Constants Architecture)
 │   │   │   ├── models/                # tower, enemy, wave, game-state, score, modifier,
-│   │   │   │                          #   encounter-checkpoint (v10), game-board-tile, …
+│   │   │   │                          #   encounter-checkpoint (v11), game-board-tile, …
 │   │   │   ├── services/              # 55+ component-scoped services
 │   │   │   ├── testing/               # Shared factories: test-board, test-enemy, test-spies barrel;
 │   │   │   │                          #   spies/ split — tower, enemy-combat, run-card, session-state,
@@ -121,7 +121,7 @@ or new-run start (see red-team lessons below).
 | `CardEffectService` | Spell / modifier card effect resolution; active modifier list with wave- OR turn-countdown; `tickWave()` / `tickTurn()`; `tryConsumeLeakBlock()`, `tryConsumeTerraformRefund()`, `getMaxModifierEntryValue()` |
 | `RelicService` | Pull-model relic effects; cached `RelicModifiers` rebuilt on relic set change; trigger-based relics (`ARCHITECTS_BLUEPRINT`, `LUCKY_COIN`, `TUNING_FORK`, etc.) |
 | `EncounterService` | Node → `EncounterConfig`; loads map into `MapBridgeService` before `/play` navigation |
-| `EncounterCheckpointService` | Mid-encounter save/resume; localStorage persistence; version migration chain v1 → v10; corrupt-checkpoint detection |
+| `EncounterCheckpointService` | Mid-encounter save/resume; localStorage persistence; version migration chain v1 → v11; corrupt-checkpoint detection |
 | `NodeMapGeneratorService` | Seeded node graph (mulberry32 RNG); 11 content rows + boss row; SHOP row 5, REST row 8 |
 | `WaveGeneratorService` | Procedural wave composition; depth-tiered pools; elite / boss presets |
 | `ItemService` | Consumable item inventory (HEAL, ENERGY_ELIXIR, …); phase-gated use |
@@ -133,7 +133,7 @@ or new-run start (see red-team lessons below).
 
 ## Save / Resume Architecture
 
-**Checkpoint current version:** 10 (declared in `game-board/models/encounter-checkpoint.model.ts`).
+**Checkpoint current version:** 11 (declared in `game-board/models/encounter-checkpoint.model.ts`).
 
 **Auto-save:** Hook in `WaveCombatFacadeService.endTurn()` — saves after every
 `resolveTurn()`, clears on VICTORY / DEFEAT.
@@ -155,7 +155,7 @@ CombatLoopService, RelicService, GameStatsService, ChallengeTrackingService,
 AscensionModifierService, WavePreviewService, ItemService, RunStateFlagService,
 ElevationService, PathMutationService, TowerGraphService.
 
-**Migration chain:** v1 → v2 → … → v10. Each migration adds the missing fields
+**Migration chain:** v1 → v2 → … → v11. Each migration adds the missing fields
 for the next version; stale fields are migrated forward, never deleted
 mid-chain. Structural validation guards against corrupt payloads.
 
@@ -385,13 +385,12 @@ Files over 500 LOC — dense, edit carefully:
 | File | LOC |
 |------|-----|
 | `run/constants/card-definitions.ts` | ~2110 |
-| `game-board/game-board.component.ts` | ~1880 |
+| `game-board/game-board.component.ts` | ~1818 |
 | `game-board/services/tower-combat.service.ts` | ~1170 |
 | `run/services/run.service.ts` | ~1180 |
 | `game-board/services/enemy.service.ts` | ~1120 |
 | `games/novarise/novarise.component.ts` | ~780 |
 
-**Decomposition plan** for `game-board.component.ts` saved at
-`docs/refactors/game-board-decomposition-plan.md` — deferred to a future
-UI-aware session (all 6 proposed clusters touch template bindings or the
-18-step restore coordinator).
+**Decomposition plan** for `game-board.component.ts` documented at
+`docs/refactors/game-board-decomposition-plan.md` — all 6 clusters shipped.
+Current LOC reflects the post-decomposition state.

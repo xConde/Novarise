@@ -81,7 +81,7 @@
 
     <!-- Setup panel — right side on desktop, bottom sheet on mobile -->
     <app-game-setup-panel
-      *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0"
+      *ngIf="!isInRun && gameState.phase === GamePhase.SETUP && gameState.wave === 0"
       [difficulty]="gameState.difficulty"
       [difficultyLevels]="difficultyLevels"
       [difficultyPresets]="difficultyPresets"

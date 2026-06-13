@@ -61,8 +61,6 @@ const ALL_TOWER_TYPES: TowerType[] = [
   TowerType.MORTAR,
 ];
 
-const TOTAL_ACHIEVEMENTS = 20;
-
 const RANK_THRESHOLDS: { min: number; title: string }[] = [
   { min: 25, title: 'Novarise' },
   { min: 19, title: 'Champion' },
@@ -86,7 +84,7 @@ export class ProfileComponent implements OnInit {
   private unlockedSet = new Set<string>();
   private expandedCategories = new Set<AchievementCategory>();
 
-  readonly totalAchievements = TOTAL_ACHIEVEMENTS;
+  readonly totalAchievements = DISPLAY_ACHIEVEMENTS.length;
 
   constructor(
     private profileService: PlayerProfileService,
@@ -152,7 +150,7 @@ export class ProfileComponent implements OnInit {
   }
 
   get unlockedCount(): number {
-    return this.profile.achievements.length;
+    return this.profile.achievements.filter((id) => !DEAD_ACHIEVEMENT_IDS.has(id)).length;
   }
 
   get rankTitle(): string {
@@ -166,7 +164,7 @@ export class ProfileComponent implements OnInit {
   }
 
   get achievementProgressPct(): number {
-    return Math.round((this.unlockedCount / TOTAL_ACHIEVEMENTS) * 100);
+    return Math.round((this.unlockedCount / DISPLAY_ACHIEVEMENTS.length) * 100);
   }
 
   goBack(): void {

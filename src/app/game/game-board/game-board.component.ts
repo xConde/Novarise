@@ -352,6 +352,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   /** True when the colorblind-assist setting is on; drives shape-cue overlays on enemy dots. */
   get colorblindAssist(): boolean { return this.settingsService.get().colorblindAssist; }
 
+  /** True while inside a run — the pre-run-mode setup panel is never shown in this path. */
+  get isInRun(): boolean { return this.runService.isInRun(); }
+
   /** Resolves newly unlocked achievement IDs to their name/description for display. */
   private updateAchievementDetails(): void {
     this.achievementDetails = this.newlyUnlockedAchievements

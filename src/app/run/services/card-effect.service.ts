@@ -21,7 +21,6 @@ import { EnemyService } from '../../game/game-board/services/enemy.service';
 import { Enemy } from '../../game/game-board/models/enemy.model';
 import { StatusEffectService } from '../../game/game-board/services/status-effect.service';
 import { StatusEffectType } from '../../game/game-board/constants/status-effect.constants';
-import { CARTOGRAPHER_CONFIG } from '../../game/game-board/constants/cartographer.constants';
 import { DeckService } from './deck.service';
 import { WavePreviewService } from '../../game/game-board/services/wave-preview.service';
 
@@ -33,6 +32,11 @@ import { WavePreviewService } from '../../game/game-board/services/wave-preview.
  * CARD_VALUES.cartographerSealUpgradedValue.
  */
 const CARTOGRAPHER_SEAL_UPGRADED_VALUE = 2;
+
+/** Tier sentinel for the upgraded DETOUR spell (value ≥ this → reroute + damage). */
+const DETOUR_UPGRADED_VALUE = 2;
+/** Fraction of max HP dealt per extra path tile added by DETOUR (upgraded tier). */
+const DETOUR_DAMAGE_FRACTION_PER_EXTRA_STEP = 0.08;
 
 /** A single active modifier with a wave- or turn-based countdown. */
 export interface ActiveModifier {
@@ -210,8 +214,8 @@ export class CardEffectService {
    * takes proportional burst damage at cast time.
    */
   private applyDetour(ctx: SpellContext, tierValue: number): void {
-    const damageFraction = tierValue >= CARTOGRAPHER_CONFIG.DETOUR_UPGRADED_VALUE
-      ? CARTOGRAPHER_CONFIG.DETOUR_DAMAGE_FRACTION_PER_EXTRA_STEP
+    const damageFraction = tierValue >= DETOUR_UPGRADED_VALUE
+      ? DETOUR_DAMAGE_FRACTION_PER_EXTRA_STEP
       : 0;
     ctx.enemyService.applyDetour(damageFraction);
   }

@@ -10,8 +10,6 @@ import { TutorialSpotlightComponent } from './game-board/components/tutorial-spo
 import { GameHudComponent } from './game-board/components/game-hud/game-hud.component';
 import { GameSetupPanelComponent } from './game-board/components/game-setup-panel/game-setup-panel.component';
 import { TowerInfoPanelComponent } from './game-board/components/tower-info-panel/tower-info-panel.component';
-import { GamePauseService } from './game-board/services/game-pause.service';
-import { ChallengeDisplayService } from './game-board/services/challenge-display.service';
 import { CardHandComponent } from './game-board/components/card-hand/card-hand.component';
 import { PileInspectorComponent } from './game-board/components/pile-inspector/pile-inspector.component';
 import { LastTurnSummaryComponent } from './game-board/components/last-turn-summary/last-turn-summary.component';
@@ -45,6 +43,6 @@ import { WebglFallbackComponent } from '@shared/components/webgl-fallback/webgl-
   // component-scoped peers (BoardMeshRegistryService, PathfindingService, SceneService);
   // hoisting them to module scope breaks DI because module injectors can't see
   // component-level providers. See regression fix 2026-04-18.
-  providers: [GameBoardService, CombatVFXService, GamePauseService, ChallengeDisplayService]
+  providers: [GameBoardService, CombatVFXService]
 })
 export class GameModule {}

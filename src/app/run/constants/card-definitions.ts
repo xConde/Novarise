@@ -170,6 +170,7 @@ const CARD_VALUES = {
   toxicSprayCost: 2,   // UNCOMMON — POISON stacks over more turns, higher long-run value
   cryoPulseCost: 1,    // COMMON — single-target but gains card draw for extra economy
   cryoPulseDrawCount: 1,
+  cryoPulseUpgradedDrawCount: 2,
 
   // ── Status payoff spell values (Sprint 2c) ────────────────
   detonateDamagePerBurning: 25,
@@ -748,7 +749,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     archetype: 'neutral',
     // effect.value = draw count. Upgraded draws 2 cards instead of 1.
     effect: { type: 'spell', spellId: 'cryo_pulse', value: CARD_VALUES.cryoPulseDrawCount },
-    upgradedEffect: { type: 'spell', spellId: 'cryo_pulse', value: 2 },
+    upgradedEffect: { type: 'spell', spellId: 'cryo_pulse', value: CARD_VALUES.cryoPulseUpgradedDrawCount },
   },
 
   // ── Status Payoff Spell Cards (2) — Sprint 2c ────────────────

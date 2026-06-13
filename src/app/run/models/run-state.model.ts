@@ -53,7 +53,12 @@ export interface EncounterResult {
 
 import { CardId } from './card.model';
 import { SerializedItemInventory } from './item.model';
-import { SerializedRunStateFlags } from '../services/run-state-flag.service';
+
+export interface SerializedRunStateFlags {
+  readonly entries: ReadonlyArray<readonly [string, number]>;
+  readonly consumedEventIds: readonly string[];
+  readonly seenEventIds?: readonly string[];  // optional for backward compat — absent = empty
+}
 
 export interface RunState {
   readonly id: string;

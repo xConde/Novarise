@@ -7,11 +7,13 @@ import { PlacedTower, TowerType, TargetingMode, TOWER_CONFIGS } from '../models/
 import { HEALTH_BAR_CONFIG, HEALTH_BAR_PREDICTED_CONFIG, SHIELD_VISUAL_CONFIG } from '../constants/ui.constants';
 import { DEATH_ANIM_CONFIG, HIT_FLASH_CONFIG, SHIELD_BREAK_CONFIG } from '../constants/effects.constants';
 
+let _seq = 0;
+
 /** Build a minimal Enemy fixture for the given type. */
 function makeEnemy(type: EnemyType = EnemyType.BASIC, overrides: Partial<Enemy> = {}): Enemy {
   const stats = ENEMY_STATS[type];
   return {
-    id: `test-${type}-${Math.random().toString(36).slice(2)}`,
+    id: `test-${type}-${_seq++}`,
     type,
     position: { x: 0, y: stats.size, z: 0 },
     gridPosition: { row: 0, col: 0 },

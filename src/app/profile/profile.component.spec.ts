@@ -111,6 +111,24 @@ describe('ProfileComponent', () => {
     expect(countEl.textContent).toContain(`2 / ${DISPLAY_ACHIEVEMENTS.length} Unlocked`);
   });
 
+  it('unlockedCount excludes dead achievement IDs written to old profiles', () => {
+    profileService.getProfile.and.returnValue({
+      ...mockProfile,
+      achievements: ['first_victory', 'survivor', 'endless_30'],
+    });
+    const newFixture = TestBed.createComponent(ProfileComponent);
+    newFixture.detectChanges();
+    // 'survivor' and 'endless_30' are dead IDs — only 'first_victory' counts
+    expect(newFixture.componentInstance.unlockedCount).toBe(1);
+  });
+
+  it('achievementProgressPct uses DISPLAY_ACHIEVEMENTS.length as denominator', () => {
+    // 2 live achievements unlocked out of DISPLAY_ACHIEVEMENTS.length total
+    expect(component.achievementProgressPct).toBe(
+      Math.round((2 / DISPLAY_ACHIEVEMENTS.length) * 100)
+    );
+  });
+
   it('should render all achievement cards when categories are expanded', () => {
     // Expand all categories to make cards visible
     component.categoryGroups.forEach(g => component.toggleCategory(g.category));

@@ -125,7 +125,6 @@ describe('CardHandComponent', () => {
       it('tower card is playable when player has enough gold', () => {
         component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
         component.energy = makeEnergy(3, 3);
-        const basicCost = component.handCards.length > 0 ? component.handCards[0].goldCost : null;
         // Re-resolve with sufficient gold
         component.currentGold = 999;
         component.resolveHand();
