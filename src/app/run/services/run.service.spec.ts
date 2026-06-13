@@ -799,6 +799,43 @@ describe('RunService', () => {
     }));
   });
 
+  // ── field_wager — lives gamble ──────────────────────────────────
+
+  describe('field_wager — lives gamble', () => {
+    function makeLivesGambleEvent(winChance: number) {
+      return {
+        id: 'field_wager',
+        title: 'Field Wager',
+        description: 'Test',
+        choices: [
+          {
+            label: 'Put in the stakes',
+            description: 'Test',
+            outcome: {
+              goldDelta: 0,
+              livesDelta: -2, // staked lives, spent upfront
+              description: 'The patrol outcome is decided.',
+              gamble: { winGoldDelta: 0, loseGoldDelta: 0, winChance, winLivesDelta: 5, loseLivesDelta: 0 },
+            },
+          },
+        ],
+      };
+    }
+
+    it('loss path: the staked lives are spent and nothing is recovered', fakeAsync(() => {
+      service.startNewRun();
+      service.selectNode('node_1_0');
+      const livesBefore = service.runState!.lives;
+      // rng above winChance → loss: only the upfront livesDelta(-2) applies.
+      svc.runRng = { next: () => 0.99, getState: () => 0, setState: () => {} };
+      svc.currentEvent = makeLivesGambleEvent(0.5);
+
+      service.resolveEvent(0);
+
+      expect(service.runState!.lives).toBe(livesBefore - 2);
+    }));
+  });
+
   // ── generateRewards — FEWER_RELIC_CHOICES ascension effect ───────
 
   describe('generateRewards — FEWER_RELIC_CHOICES ascension reduction', () => {
@@ -997,6 +1034,21 @@ describe('RunService', () => {
       const rewards = service.generateRewards();
 
       expect(rewards.goldPickup).toBe(80); // baseGold=40 + challengeGold=40
+    }));
+
+    it('credits challenge gold to the wallet, not just the displayed goldPickup', fakeAsync(() => {
+      const goldBefore = service.runState!.gold;
+      service.recordEncounterResult(makeEncounterResult({
+        victory: true,
+        goldEarned: 0, // isolate the challenge credit from combat income
+        completedChallenges: [makeChallenge('c01_test', 200)],
+      }));
+      service.consumePendingEncounterResult();
+
+      // baseGold (encounter goldReward 40) + challengeGold (round(200/5)=40) both
+      // land in the wallet so it matches the displayed goldPickup (regression: the
+      // challenge bonus was previously shown but never credited).
+      expect(service.runState!.gold).toBe(goldBefore + 40 + 40);
     }));
 
     it('2 challenges scoreBonuses 200 + 350 → goldPickup = 40 + 40 + 70 = 150', fakeAsync(() => {

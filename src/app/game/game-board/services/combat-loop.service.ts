@@ -226,12 +226,6 @@ export class CombatLoopService {
       this.accumulateKillByTower(killInfo.towerType, killInfo.towerLevel, frameKillsByTower);
     }
 
-    // 4.5. NOVA_SOVEREIGN per-turn effects — Aegis shield regen and enrage
-    // trigger. Placed immediately after tower fire so regen does not partially
-    // negate mortar DoT (which ticks in 5a below). Resolution order:
-    //   tower fire → NOVA regen → mortar zone tick → status DoT tick
-    this.enemyService.tickNovaSovereignEffects();
-
     // 5a. Mortar zone tick — turn-ticked DoT from M3 S4 mortar zones
     const mortarResult = this.towerCombatService.tickMortarZonesForTurn(scene, this.turnNumber);
     frameDamageDealt += mortarResult.damageDealt;
@@ -250,6 +244,12 @@ export class CombatLoopService {
       this.processKill(killInfo, cardGoldMult);
       this.accumulateKillByTower(killInfo.towerType, killInfo.towerLevel, frameKillsByTower);
     }
+
+    // 5c. NOVA_SOVEREIGN per-turn effects — Aegis shield regen + enrage. Runs
+    // AFTER all same-turn DoT (mortar zone tick + status effects) so the
+    // regenerated shield cannot absorb damage dealt this turn. Resolution order:
+    //   tower fire → mortar zone tick → status DoT tick → NOVA regen
+    this.enemyService.tickNovaSovereignEffects();
 
     // 6. Process leaks — enemies that reached the exit cost lives
     for (const enemyId of reachedExit) {

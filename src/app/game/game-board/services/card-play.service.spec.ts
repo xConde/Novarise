@@ -29,6 +29,8 @@ import {
   EnergyState,
   TerraformTargetCardEffect,
   isTerraformTargetEffect,
+  UtilityId,
+  UtilityCardEffect,
 } from '../../../run/models/card.model';
 import { MutationOp, MutationResult } from './path-mutation.types';
 import { CARD_DEFINITIONS } from '../../../run/constants/card-definitions';
@@ -1812,6 +1814,19 @@ describe('CardPlayService', () => {
 
         expect(enemySpy.damageEnemy).not.toHaveBeenCalled();
       });
+    });
+  });
+
+  // ── assertNever guard ──────────────────────────────────────────────────────
+
+  describe('executeUtilityCard — assertNever guard', () => {
+    it('throws when given an unrecognised UtilityId (guards against silent no-op regressions)', () => {
+      const badEffect: UtilityCardEffect = {
+        type: 'utility',
+        utilityId: ('not_a_utility' as unknown as UtilityId),
+        value: 0,
+      };
+      expect(() => service['executeUtilityCard'](badEffect)).toThrow();
     });
   });
 });

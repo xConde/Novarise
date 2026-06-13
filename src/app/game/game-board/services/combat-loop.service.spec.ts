@@ -1402,7 +1402,7 @@ describe('CombatLoopService', () => {
   // ─── NOVA_SOVEREIGN regen call order ─────────────────────────────────────────
 
   describe('NOVA_SOVEREIGN regen call order', () => {
-    it('calls tickNovaSovereignEffects after fireTurn and before tickMortarZonesForTurn', () => {
+    it('calls tickNovaSovereignEffects after mortar tick so regen cannot absorb same-turn DoT', () => {
       const callOrder: string[] = [];
       combatSpy.fireTurn.and.callFake(() => {
         callOrder.push('fireTurn');
@@ -1421,8 +1421,10 @@ describe('CombatLoopService', () => {
       const fireIdx = callOrder.indexOf('fireTurn');
       const regenIdx = callOrder.indexOf('tickNovaSovereign');
       const mortarIdx = callOrder.indexOf('tickMortarZones');
-      expect(fireIdx).toBeLessThan(regenIdx);
-      expect(regenIdx).toBeLessThan(mortarIdx);
+      // Resolution order: tower fire → mortar zone tick → (status DoT) → NOVA regen.
+      // Regen must run LAST so the regenerated shield cannot soak DoT dealt this turn.
+      expect(fireIdx).toBeLessThan(mortarIdx);
+      expect(mortarIdx).toBeLessThan(regenIdx);
     });
   });
 

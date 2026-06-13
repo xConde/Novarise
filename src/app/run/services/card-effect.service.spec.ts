@@ -984,4 +984,21 @@ describe('CardEffectService', () => {
       expect(service.tryConsumeTerraformRefund()).toBeTrue();
     });
   });
+
+  // ── assertNever guard ─────────────────────────────────────────
+
+  describe('applySpell — assertNever guard', () => {
+    it('throws when given an unrecognised SpellId (guards against silent no-op regressions)', () => {
+      const ctx: Parameters<typeof service.applySpell>[1] = {
+        gameState: gameStateSpy,
+        enemyService: enemyServiceSpy,
+        statusEffectService: statusEffectSpy,
+        currentTurn: 0,
+        deckService: deckServiceSpy,
+        wavePreviewService: wavePreviewSpy,
+      };
+      const badEffect: SpellCardEffect = { type: 'spell', spellId: ('not_a_spell' as unknown as SpellId), value: 0 };
+      expect(() => service.applySpell(badEffect, ctx)).toThrow();
+    });
+  });
 });

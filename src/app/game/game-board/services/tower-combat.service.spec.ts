@@ -1059,6 +1059,26 @@ describe('TowerCombatService', () => {
       expect(e1.health).toBeLessThan(healthAfterBlast);
     });
 
+    it('does not tick a mortar zone on its placement turn — only the initial blast lands', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      // Turn 1: fire drops the zone (placedOnTurn = 1) and deals the initial blast.
+      service.fireTurn(mockScene, TURN_1);
+      const healthAfterBlast = e1.health;
+
+      // Ticking on the SAME turn as placement must deal no DoT — the blast already hit.
+      const sameTurn = service.tickMortarZonesForTurn(mockScene, TURN_1);
+      expect(sameTurn.damageDealt).toBe(0);
+      expect(e1.health).toBe(healthAfterBlast);
+
+      // The zone survives and begins ticking the following turn.
+      const nextTurn = service.tickMortarZonesForTurn(mockScene, TURN_2);
+      expect(nextTurn.damageDealt).toBeGreaterThan(0);
+      expect(e1.health).toBeLessThan(healthAfterBlast);
+    });
+
     it('should stop dealing DoT after dotDuration turns expire', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
       const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);

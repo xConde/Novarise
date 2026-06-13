@@ -55,10 +55,12 @@ const ACT2_FLYING_MIN_ROW = 3;
 const ACT2_MINER_MIN_ROW = 5;
 
 /**
- * Row offset added per act index when computing enemy count, so the act-opener
- * density smoothly connects to the previous act without a hard reset to the
- * act-1-row-0 baseline. Offset 2 lands the act-2 opener at the same effective
- * depth as act-1 row 2, keeping per-entry count in the [6, 9] integration band.
+ * Row offset added per act index when computing enemy count so that act openers
+ * connect smoothly to the previous act's density instead of resetting to the
+ * act-1-row-0 baseline. Offset 2 means act-2 starts at effectiveRow=2 rather
+ * than 0, preventing a hard density drop at the act boundary. The offset does
+ * NOT guarantee numeric equality with any specific act-1 row — the 1.4x act
+ * multiplier makes act-2 row-0 (effectiveRow=2) denser than act-1 row 2.
  */
 const ACT_ROW_OFFSET = 2;
 
