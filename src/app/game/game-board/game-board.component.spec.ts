@@ -62,6 +62,8 @@ import { TutorialFacadeService } from './services/tutorial-facade.service';
 import { ItemCallbacksWiringService } from './services/item-callbacks-wiring.service';
 import { EncounterBootstrapService } from './services/encounter-bootstrap.service';
 import { UI_CONFIG } from './constants/ui.constants';
+import { CardEffectService, ActiveModifier } from '../../run/services/card-effect.service';
+import { MODIFIER_STAT } from '../../run/constants/modifier-stat.constants';
 
 // ---------------------------------------------------------------------------
 // Test-only interfaces — allow typed access to private fields/methods without
@@ -3122,6 +3124,40 @@ describe('GameBoardComponent', () => {
       discardPeriodicTasks();
       expect(navigateSpy).not.toHaveBeenCalledWith(['/run']);
     }));
+  });
+
+  describe('activeBuffs getter', () => {
+    it('returns an empty array when no modifiers are active', () => {
+      const cardEffect = TestBed.inject(CardEffectService);
+      spyOn(cardEffect, 'getActiveModifiers').and.returnValue([]);
+      expect(component.activeBuffs).toEqual([]);
+    });
+
+    it('maps a damage modifier to a buff chip with percent label', () => {
+      const cardEffect = TestBed.inject(CardEffectService);
+      const modifier: ActiveModifier = {
+        stat: MODIFIER_STAT.DAMAGE,
+        value: 0.25,
+        remainingWaves: 2,
+      };
+      spyOn(cardEffect, 'getActiveModifiers').and.returnValue([modifier]);
+      const chips = component.activeBuffs;
+      expect(chips.length).toBe(1);
+      expect(chips[0].label).toBe('Damage +25%');
+      expect(chips[0].remaining).toBe('2 waves');
+    });
+
+    it('excludes sentinel stats from the chips array', () => {
+      const cardEffect = TestBed.inject(CardEffectService);
+      const modifiers: ActiveModifier[] = [
+        { stat: MODIFIER_STAT.TERRAFORM_ANCHOR, value: 1, remainingWaves: null },
+        { stat: MODIFIER_STAT.RANGE, value: 0.2, remainingWaves: 1 },
+      ];
+      spyOn(cardEffect, 'getActiveModifiers').and.returnValue(modifiers);
+      const chips = component.activeBuffs;
+      expect(chips.length).toBe(1);
+      expect(chips[0].stat).toBe(MODIFIER_STAT.RANGE);
+    });
   });
 
 });

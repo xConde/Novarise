@@ -214,6 +214,23 @@
       [records]="recentTurnRecords">
     </app-last-turn-summary>
 
+    <!-- Active card-modifier buffs — persists through combat until each buff expires. -->
+    <aside
+      class="active-buffs"
+      *ngIf="activeBuffs.length > 0"
+      aria-label="Active buffs"
+      aria-live="polite">
+      <h4 class="active-buffs__title">Active Buffs</h4>
+      <ul class="active-buffs__list">
+        <li
+          *ngFor="let chip of activeBuffs; trackBy: trackBuffByIndex; let i = index"
+          class="active-buffs__chip">
+          <span class="active-buffs__label">{{ chip.label }}</span>
+          <span class="active-buffs__remaining">{{ chip.remaining }}</span>
+        </li>
+      </ul>
+    </aside>
+
     <!-- Phase 4: Spawn preview — shows what's coming in the next few turns. -->
     <aside
       class="spawn-preview"

@@ -77,6 +77,12 @@ export interface CardPlayCallbacks {
    * a push notification to tear down tile-target highlights and cursor changes.
    */
   onExitTileTargetMode?: () => void;
+  /**
+   * Called after a non-tower card (spell / modifier / utility) resolves so the
+   * UI can confirm what the play did. Modifier cards especially are otherwise
+   * invisible — nothing on the board changes when they apply.
+   */
+  onNonTowerCardPlayed?: (cardName: string, effectSummary: string) => void;
 }
 
 /**
@@ -352,6 +358,12 @@ export class CardPlayService {
           break;
         // 'tower', 'terraform_target', 'elevation_target' return early above.
       }
+      // Confirm the play — non-tower cards (modifiers especially) change nothing
+      // on the board, so without this the player gets no feedback at all.
+      const effectSummary = card.upgraded && def.upgradedDescription
+        ? def.upgradedDescription
+        : def.description;
+      this.callbacks?.onNonTowerCardPlayed?.(def.name, effectSummary);
     } catch (err) {
       console.error('Card effect threw — rolling back play:', err);
       this.deckService.undoPlay(cardInstanceId, energyCost);

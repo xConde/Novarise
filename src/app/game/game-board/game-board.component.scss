@@ -57,6 +57,9 @@
   --shell-recap-top: var(--shell-spawn-top);
   --shell-recap-right: var(--spacing-sm);
   --shell-tower-info-bottom: var(--spacing-sm);
+  // Active-buffs panel sits beneath INCOMING on the left. 14rem clears
+  // a fully-populated spawn-preview (title + 4 turn rows + scouted section).
+  --shell-buffs-top: calc(var(--shell-spawn-top) + 14rem);
 
   // When the wave-preview panel is mounted (INTERMISSION / SETUP phases), it
   // owns the top-right corner. The RECAP sits right under it — max-height of
@@ -316,6 +319,65 @@
     .enemy-dot[data-type='shielded'] { background: var(--enemy-color-shield);  box-shadow: 0 0 4px var(--enemy-glow-shielded); }
     .enemy-dot[data-type='swarm']    { background: var(--enemy-color-swarm);   box-shadow: 0 0 4px var(--enemy-glow-swarm); }
     .enemy-dot[data-type='flying']   { background: var(--enemy-color-flying);  box-shadow: 0 0 4px var(--enemy-glow-flying); }
+  }
+
+  // --- Active buffs panel ---
+  // Positioned below the INCOMING spawn-preview on the left side. Shares the
+  // glass-panel treatment and font scale of .spawn-preview so the two panels
+  // read as a visual family. Hidden on mobile (same breakpoint as .spawn-preview).
+  .active-buffs {
+    @include glass-panel(rgba(10, 15, 30, 0.82));
+    position: absolute;
+    top: var(--shell-buffs-top);
+    left: var(--shell-spawn-left);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: var(--border-width-thin) solid var(--panel-blue-border);
+    color: var(--text-color);
+    pointer-events: none;
+    z-index: var(--z-index-overlay);
+
+    @media (max-width: 768px) {
+      display: none;
+    }
+
+    .active-buffs__title {
+      margin: 0 0 var(--spacing-xs) 0;
+      font-size: var(--font-size-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      opacity: 0.7;
+      font-weight: 600;
+    }
+
+    .active-buffs__list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .active-buffs__chip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--spacing-sm);
+      font-size: var(--font-size-xs);
+    }
+
+    .active-buffs__label {
+      font-weight: 700;
+      color: var(--panel-blue-accent);
+    }
+
+    .active-buffs__remaining {
+      font-size: var(--font-size-3xs);
+      font-weight: 500;
+      color: var(--text-muted);
+      opacity: 0.7;
+      letter-spacing: 0.025em;
+    }
   }
 
   // Colorblind-assist mode: enemy dots switch to the deuteranopia/protanopia-safe

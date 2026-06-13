@@ -484,6 +484,25 @@ describe('CardPlayService', () => {
     });
   });
 
+  describe('non-tower card play feedback', () => {
+    it('fires onNonTowerCardPlayed with the card name and effect summary when a modifier resolves', () => {
+      const onNonTowerCardPlayed = jasmine.createSpy('onNonTowerCardPlayed');
+      service.init({
+        onEnterPlacementMode: jasmine.createSpy(),
+        onRefreshUI: jasmine.createSpy(),
+        onSalvageComplete: jasmine.createSpy(),
+        onNonTowerCardPlayed,
+      });
+
+      const def = CARD_DEFINITIONS[CardId.DAMAGE_BOOST];
+      const card: CardInstance = { instanceId: 'dmg-1', cardId: CardId.DAMAGE_BOOST, upgraded: false };
+      service.onCardPlayed(card);
+
+      expect(cardEffectSpy.applyModifier).toHaveBeenCalled();
+      expect(onNonTowerCardPlayed).toHaveBeenCalledWith(def.name, def.description);
+    });
+  });
+
   describe('fortify pre-validation', () => {
     it('should NOT consume card or energy when no towers are upgradeable (empty map)', () => {
       towerCombatSpy.getPlacedTowers.and.returnValue(new Map());

@@ -69,6 +69,8 @@ import { RELIC_DEFINITIONS } from '../../run/models/relic.model';
 import { ItemService } from '../../run/services/item.service';
 import { ItemType, ITEM_DEFINITIONS } from '../../run/models/item.model';
 import { DeckService } from '../../run/services/deck.service';
+import { CardEffectService } from '../../run/services/card-effect.service';
+import { BuffChip, toBuffChips } from './models/buff-display.model';
 import { EncounterResult } from '../../run/models/run-state.model';
 import { CardInstance, DeckState, EnergyState } from '../../run/models/card.model';
 import { getActiveTowerEffect } from '../../run/constants/card-definitions';
@@ -355,6 +357,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   /** True while inside a run — the pre-run-mode setup panel is never shown in this path. */
   get isInRun(): boolean { return this.runService.isInRun(); }
 
+  /** Active card-modifier buff chips for the persistent HUD panel. Cheap: maps a small readonly array. */
+  get activeBuffs(): BuffChip[] {
+    return toBuffChips(this.cardEffectService.getActiveModifiers());
+  }
+
+  /** trackBy for the active-buffs *ngFor — uses index since chips are regenerated each render. */
+  trackBuffByIndex(index: number): number {
+    return index;
+  }
+
   /** Resolves newly unlocked achievement IDs to their name/description for display. */
   private updateAchievementDetails(): void {
     this.achievementDetails = this.newlyUnlockedAchievements
@@ -411,6 +423,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private runService: RunService,
     private relicService: RelicService,
     private deckService: DeckService,
+    private cardEffectService: CardEffectService,
     private gameRenderService: GameRenderService,
     private meshRegistry: BoardMeshRegistryService,
     private touchInteraction: TouchInteractionService,
@@ -810,6 +823,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       },
       onExitTileTargetMode: () => {
         // No tile-target-specific cleanup needed until sprint 23 adds highlights.
+      },
+      onNonTowerCardPlayed: (cardName, effectSummary) => {
+        this.notificationService.show(NotificationType.INFO, cardName, effectSummary);
       },
     });
 
