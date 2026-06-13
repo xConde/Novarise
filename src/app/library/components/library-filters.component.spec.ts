@@ -43,9 +43,14 @@ describe('LibraryFiltersComponent', () => {
     expect(rarityChips.length).toBe(4);
   });
 
-  it('renders all archetype chips (5 incl. neutral)', () => {
+  it('renders 4 archetype chips (neutral + 3 active archetypes; Siegeworks omitted pending Phase 5)', () => {
     const archetypeChips = fixture.nativeElement.querySelectorAll('.chip--archetype');
-    expect(archetypeChips.length).toBe(5);
+    expect(archetypeChips.length).toBe(4);
+  });
+
+  it('Siegeworks archetype chip is not present in archetypeOptions', () => {
+    const hasSiegeworks = component.archetypeOptions.some(o => o.value === 'siegeworks');
+    expect(hasSiegeworks).toBe(false);
   });
 
   it('renders all keyword chips', () => {

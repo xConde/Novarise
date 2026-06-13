@@ -165,5 +165,12 @@ export interface EventOutcome {
     readonly winGoldDelta: number;
     readonly loseGoldDelta: number;
     readonly winChance: number;
+    /**
+     * Optional lives wager. When present, resolveEvent adds winLivesDelta on a
+     * win or loseLivesDelta on a loss (on top of the unconditional livesDelta),
+     * letting an event stake lives rather than only gold.
+     */
+    readonly winLivesDelta?: number;
+    readonly loseLivesDelta?: number;
   };
 }

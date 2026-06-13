@@ -1,6 +1,8 @@
 export const DAMAGE_POPUP_CONFIG = {
-  riseSpeed: 1.5,
-  lifetime: 0.6,
+  riseSpeed: 1.0,
+  lifetime: 1.0,
+  /** Max random age offset (seconds) applied to each popup at spawn to stagger simultaneous flushes. */
+  spawnAgeJitter: 0.05,
   fontSize: 32,
   fontFamily: 'monospace',
   normalColor: '#ffffff',

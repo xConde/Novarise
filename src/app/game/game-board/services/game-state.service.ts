@@ -142,6 +142,19 @@ export class GameStateService {
     this.emit();
   }
 
+  /**
+   * Sets combat starting gold for the unified single-pool economy. Writes the
+   * supplied amount to both gold and initialGold in one atomic call so the
+   * snapshot is consistent with the opening balance. Clamps negative values to
+   * zero, matching the floor applied by spendGold() and setModifiers().
+   */
+  setEncounterStartGold(amount: number): void {
+    const clamped = Math.max(0, amount);
+    this.state.gold = clamped;
+    this.state.initialGold = clamped;
+    this.emit();
+  }
+
   /** Adds gold only. Use for sell refunds (should not count toward score). */
   addGold(amount: number): void {
     this.state.gold += amount;

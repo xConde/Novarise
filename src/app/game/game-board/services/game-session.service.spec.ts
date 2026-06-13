@@ -31,6 +31,7 @@ import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
 import { TowerDecalLibraryService } from './tower-decal-library.service';
+import { EnemyIntentService } from './enemy-intent.service';
 import { GameState, DifficultyLevel, GamePhase } from '../models/game-state.model';
 import { GameStats } from './game-stats.service';
 import { ChallengeSnapshot } from './challenge-tracking.service';
@@ -62,6 +63,7 @@ describe('GameSessionService', () => {
   let gamePauseSpy: jasmine.SpyObj<GamePauseService>;
   let terraformPoolSpy: jasmine.SpyObj<TerraformMaterialPoolService>;
   let decalLibrarySpy: jasmine.SpyObj<TowerDecalLibraryService>;
+  let enemyIntentSpy: jasmine.SpyObj<EnemyIntentService>;
   let scene: THREE.Scene;
 
   beforeEach(() => {
@@ -165,6 +167,11 @@ describe('GameSessionService', () => {
       ['getDecal', 'dispose'],
     );
 
+    enemyIntentSpy = jasmine.createSpyObj<EnemyIntentService>(
+      'EnemyIntentService',
+      ['disposeAll', 'update', 'ngOnDestroy'],
+    );
+
     TestBed.configureTestingModule({
       providers: [
         GameSessionService,
@@ -202,6 +209,7 @@ describe('GameSessionService', () => {
         },
         { provide: TerraformMaterialPoolService, useValue: terraformPoolSpy },
         { provide: TowerDecalLibraryService, useValue: decalLibrarySpy },
+        { provide: EnemyIntentService, useValue: enemyIntentSpy },
       ],
     });
 
@@ -377,6 +385,11 @@ describe('GameSessionService', () => {
     it('should call towerDecalLibrary.dispose() during cleanupScene to release CanvasTexture GPU memory', () => {
       service.cleanupScene();
       expect(decalLibrarySpy.dispose).toHaveBeenCalled();
+    });
+
+    it('should call enemyIntentService.disposeAll() during cleanupScene', () => {
+      service.cleanupScene();
+      expect(enemyIntentSpy.disposeAll).toHaveBeenCalled();
     });
 
     it('should not dispose pool materials via individual mesh disposal', () => {

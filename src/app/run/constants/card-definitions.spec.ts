@@ -358,18 +358,17 @@ describe('CARD_DEFINITIONS', () => {
   });
 
   describe('getStarterDeck', () => {
-    // Starter deck was expanded from 10 → 20 cards in M4 S1.
-    // Composition: 8×BASIC, 3×SNIPER, 2×SPLASH, 2×SLOW, 1×CHAIN,
-    //              1×GOLD_RUSH, 1×DAMAGE_BOOST, 1×DRAW_TWO, 1×ENERGY_SURGE.
+    // Starter deck composition: 5×BASIC, 3×SNIPER, 3×SPLASH, 2×SLOW, 1×CHAIN,
+    //   1×GOLD_RUSH, 2×DAMAGE_BOOST, 1×DRAW_TWO, 1×ENERGY_SURGE, 1×RECYCLE.
 
     it('returns exactly 20 cards', () => {
       expect(getStarterDeck().length).toBe(20);
     });
 
-    it('contains 8 TOWER_BASIC cards', () => {
+    it('contains 5 TOWER_BASIC cards', () => {
       const deck = getStarterDeck();
       const basicCount = deck.filter(id => id === CardId.TOWER_BASIC).length;
-      expect(basicCount).toBe(8);
+      expect(basicCount).toBe(5);
     });
 
     it('contains 3 TOWER_SNIPER cards', () => {
@@ -378,15 +377,16 @@ describe('CARD_DEFINITIONS', () => {
       expect(sniperCount).toBe(3);
     });
 
-    it('contains 2 TOWER_SPLASH, 2 TOWER_SLOW, 1 TOWER_CHAIN, 1 GOLD_RUSH, 1 DAMAGE_BOOST, 1 DRAW_TWO, 1 ENERGY_SURGE', () => {
+    it('contains 3 TOWER_SPLASH, 2 TOWER_SLOW, 1 TOWER_CHAIN, 1 GOLD_RUSH, 2 DAMAGE_BOOST, 1 DRAW_TWO, 1 ENERGY_SURGE, 1 RECYCLE', () => {
       const deck = getStarterDeck();
-      expect(deck.filter(id => id === CardId.TOWER_SPLASH).length).toBe(2);
+      expect(deck.filter(id => id === CardId.TOWER_SPLASH).length).toBe(3);
       expect(deck.filter(id => id === CardId.TOWER_SLOW).length).toBe(2);
       expect(deck.filter(id => id === CardId.TOWER_CHAIN).length).toBe(1);
       expect(deck.filter(id => id === CardId.GOLD_RUSH).length).toBe(1);
-      expect(deck.filter(id => id === CardId.DAMAGE_BOOST).length).toBe(1);
+      expect(deck.filter(id => id === CardId.DAMAGE_BOOST).length).toBe(2);
       expect(deck.filter(id => id === CardId.DRAW_TWO).length).toBe(1);
       expect(deck.filter(id => id === CardId.ENERGY_SURGE).length).toBe(1);
+      expect(deck.filter(id => id === CardId.RECYCLE).length).toBe(1);
     });
 
     it('all starter deck cards have definitions', () => {
@@ -1143,6 +1143,134 @@ describe('CARD_DEFINITIONS', () => {
       it('has upgradedDescription defined and non-empty', () => {
         expect(def.upgradedDescription?.trim().length).toBeGreaterThan(0);
       });
+    });
+  });
+
+  // ── SHIELD_WALL — encounter-scoped duration ──────────────────────────────
+  describe('SHIELD_WALL', () => {
+    const def = CARD_DEFINITIONS[CardId.SHIELD_WALL];
+
+    it('base effect duration is null (encounter-scoped, block-based, not wave-ticked)', () => {
+      if (def.effect.type === 'modifier') {
+        expect(def.effect.duration).toBeNull();
+      } else {
+        fail('effect is not a modifier');
+      }
+    });
+
+    it('upgradedEffect duration is null (same encounter-scoped semantics, 5 blocks)', () => {
+      if (def.upgradedEffect?.type === 'modifier') {
+        expect(def.upgradedEffect.duration).toBeNull();
+      } else {
+        fail('upgradedEffect is not a modifier');
+      }
+    });
+
+    it('base block count is 3', () => {
+      if (def.effect.type === 'modifier') {
+        expect(def.effect.value).toBe(3);
+      }
+    });
+
+    it('upgraded block count is 5', () => {
+      if (def.upgradedEffect?.type === 'modifier') {
+        expect(def.upgradedEffect.value).toBe(5);
+      }
+    });
+  });
+
+  // ── RAISE_PLATFORM upgrade delta ─────────────────────────────────────────
+  describe('RAISE_PLATFORM upgrade', () => {
+    const def = CARD_DEFINITIONS[CardId.RAISE_PLATFORM];
+
+    it('upgraded effect has a larger elevation amount than base effect', () => {
+      if (def.effect.type === 'elevation_target' && def.upgradedEffect?.type === 'elevation_target') {
+        expect(def.upgradedEffect.amount).toBeGreaterThan(def.effect.amount);
+      } else {
+        fail('effect or upgradedEffect is not elevation_target');
+      }
+    });
+
+    it('base effect raises by 1 unit', () => {
+      if (def.effect.type === 'elevation_target') {
+        expect(def.effect.amount).toBe(1);
+      }
+    });
+
+    it('upgraded effect raises by 2 units', () => {
+      if (def.upgradedEffect?.type === 'elevation_target') {
+        expect(def.upgradedEffect.amount).toBe(2);
+      }
+    });
+
+    it('upgradedDescription mentions 2 units', () => {
+      expect(def.upgradedDescription).toMatch(/2 units?/i);
+    });
+  });
+
+  // ── ENERGY_SURGE cost ────────────────────────────────────────────────────
+  describe('ENERGY_SURGE', () => {
+    const def = CARD_DEFINITIONS[CardId.ENERGY_SURGE];
+
+    it('base energyCost is 1 (not free — RARE must have a non-zero base cost)', () => {
+      expect(def.energyCost).toBe(1);
+    });
+
+    it('upgradedEnergyCost is 0 (upgrade makes it free)', () => {
+      expect(def.upgradedEnergyCost).toBe(0);
+    });
+
+    it('base effect grants 2 energy', () => {
+      if (def.effect.type === 'utility') {
+        expect(def.effect.value).toBe(2);
+      }
+    });
+
+    it('upgraded effect grants 3 energy', () => {
+      if (def.upgradedEffect?.type === 'utility') {
+        expect(def.upgradedEffect.value).toBe(3);
+      }
+    });
+  });
+
+  // ── LINKWORK description accuracy ────────────────────────────────────────
+  describe('LINKWORK', () => {
+    const def = CARD_DEFINITIONS[CardId.LINKWORK];
+
+    it('description mentions +1 extra shot (matches flat shot implementation)', () => {
+      expect(def.description).toMatch(/\+1 extra shot/i);
+    });
+
+    it('upgradedDescription mentions the 3-turn duration', () => {
+      expect(def.upgradedDescription).toMatch(/3 turns/i);
+    });
+
+    it('description does not claim fire rate sharing (wrong mechanic)', () => {
+      expect(def.description).not.toMatch(/highest fire rate/i);
+      expect(def.upgradedDescription).not.toMatch(/highest fire rate/i);
+    });
+  });
+
+  // ── FROST_WAVE description units ─────────────────────────────────────────
+  describe('FROST_WAVE', () => {
+    const def = CARD_DEFINITIONS[CardId.FROST_WAVE];
+
+    it('description uses "turns" not "seconds" (post-pivot turn model)', () => {
+      expect(def.description).toMatch(/turns/i);
+      expect(def.description).not.toMatch(/seconds/i);
+    });
+
+    it('upgradedDescription uses "turns" not "seconds"', () => {
+      expect(def.upgradedDescription).toMatch(/turns/i);
+      expect(def.upgradedDescription).not.toMatch(/seconds/i);
+    });
+
+    it('description mentions 5 turns', () => {
+      expect(def.description).toMatch(/5 turns/i);
+    });
+
+    it('upgradedDescription mentions 8 turns', () => {
+      expect(def.upgradedDescription).toMatch(/8 turns/i);
     });
   });
 

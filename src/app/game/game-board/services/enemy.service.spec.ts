@@ -4286,6 +4286,33 @@ describe('EnemyService', () => {
 
       expect(enemy.health).toBeLessThanOrEqual(0);
     });
+
+    it('upgraded tier: SWARM killed by bleed adds mini-swarm meshes to the scene when scene is provided', () => {
+      buildGravityTestBed(new Map(), false);
+      const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+      service.stepEnemiesOneTurn(() => 0);
+      // Reduce SWARM health so the 10% bleed kills it.
+      const bleedDamage = Math.max(1, Math.round(swarm.maxHealth * 0.10));
+      service.damageEnemy(swarm.id, swarm.health - bleedDamage);
+      expect(swarm.health).toBe(bleedDamage);
+
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 2 : 0
+      );
+      const { row, col } = swarm.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      const sceneBefore = mockScene.children.length;
+      // Pass scene so spawned mini-swarm meshes are added to it.
+      service.stepEnemiesOneTurn(() => 0, 0, mockScene);
+
+      // Swarm should be killed by bleed and mini-swarms added to scene.
+      expect(swarm.health).toBeLessThanOrEqual(0);
+      // At least one mini-swarm mesh must have been added.
+      expect(mockScene.children.length).toBeGreaterThan(sceneBefore);
+    });
   });
 
   // ── Sprint 37 GLIDER — exposed damage bypass ─────────────────────────────
@@ -4458,6 +4485,33 @@ describe('EnemyService', () => {
       // Despite the provided slow reduction of 1, NOVA_SOVEREIGN resistance halves
       // it to 0 — so it advances its normal tilesPerTurn=1 tiles.
       expect(sovereign.pathIndex).toBeGreaterThan(initialPathIndex);
+    });
+
+    it('spawnEnemy scales NOVA_SOVEREIGN shield and maxShield by enemyHealthMultiplier', () => {
+      // ARMORED_ENEMIES applies a 2× health multiplier. Shield must follow the same scaling.
+      setModifiers(gameStateService, new Set([GameModifier.ARMORED_ENEMIES]));
+
+      const sovereign = service.spawnEnemy(EnemyType.NOVA_SOVEREIGN, mockScene)!;
+      const baseMaxShield = ENEMY_STATS[EnemyType.NOVA_SOVEREIGN].maxShield!;
+
+      expect(sovereign.maxShield).toBe(Math.round(baseMaxShield * 2));
+      expect(sovereign.shield).toBe(Math.round(baseMaxShield * 2));
+
+      gameStateService.reset();
+    });
+
+    it('tickNovaSovereignEffects() regens up to instance maxShield (not static ENEMY_STATS)', () => {
+      const sovereign = service.spawnEnemy(EnemyType.NOVA_SOVEREIGN, mockScene)!;
+      // Override maxShield to a value larger than the static ENEMY_STATS value.
+      const scaledMax = ENEMY_STATS[EnemyType.NOVA_SOVEREIGN].maxShield! * 2;
+      sovereign.maxShield = scaledMax;
+      // Set shield 10 below scaled max.
+      sovereign.shield = scaledMax - 10;
+
+      service.tickNovaSovereignEffects();
+
+      // Regen should stop at the instance maxShield, not the static one.
+      expect(sovereign.shield).toBe(scaledMax);
     });
   });
 });

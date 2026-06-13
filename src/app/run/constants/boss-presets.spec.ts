@@ -185,6 +185,14 @@ describe('Boss Presets', () => {
       expect(allTypes.has(EnemyType.SWARM)).toBeTrue();
     });
 
+    it('dark_nexus wave 1 should include VEINSEEKER to introduce the board-mutation threat', () => {
+      const preset = ACT2_BOSS_PRESETS.find(p => p.id === 'dark_nexus')!;
+      const wave1 = preset.waves[0];
+      const veinseekerEntry = wave1.entries!.find(e => e.type === EnemyType.VEINSEEKER);
+      expect(veinseekerEntry).withContext('dark_nexus wave 1 must include VEINSEEKER').toBeDefined();
+      expect(veinseekerEntry!.count).toBeGreaterThanOrEqual(1);
+    });
+
     it('dark_nexus final wave spawns exactly 2 BOSSes with a 3-turn gap', () => {
       const preset = ACT2_BOSS_PRESETS.find(p => p.id === 'dark_nexus')!;
       const finalWave = preset.waves[preset.waves.length - 1];
@@ -266,6 +274,15 @@ describe('Boss Presets', () => {
           .withContext(`preset "${preset.id}" entry counts`)
           .toBeTrue();
       }
+    });
+
+    it('celestial_deluge wave 3 must include GLIDER entries (count 6–10)', () => {
+      const preset = ACT3_BOSS_PRESETS.find(p => p.id === 'celestial_deluge')!;
+      const wave3 = preset.waves[2];
+      const gliderEntry = wave3.entries!.find(e => e.type === EnemyType.GLIDER);
+      expect(gliderEntry).withContext('celestial_deluge wave 3 must include GLIDER').toBeDefined();
+      expect(gliderEntry!.count).toBeGreaterThanOrEqual(6);
+      expect(gliderEntry!.count).toBeLessThanOrEqual(10);
     });
 
     it('each preset must have a non-empty name and description', () => {

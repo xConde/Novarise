@@ -990,6 +990,11 @@ body.reduce-motion .card-hand { animation: none; }
   @media (max-width: 480px) {
     font-size: var(--font-size-3xs);
   }
+
+  // Red tint when player cannot afford the gold cost
+  &--unaffordable {
+    color: rgba(255, 100, 100, 0.9);
+  }
 }
 
 // Type icon — small bottom-corner chip signals type at a glance
@@ -1273,6 +1278,11 @@ body.reduce-motion .pile-count--pulse .pile-value { animation: none; }
   &__cost {
     font-weight: 700;
     color: var(--theme-cyan);
+  }
+
+  &__gold-cost {
+    font-weight: 700;
+    color: var(--game-gold);
   }
 
   &__meta {

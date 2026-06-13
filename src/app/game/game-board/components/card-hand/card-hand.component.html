@@ -99,8 +99,11 @@
       <!-- Card name -->
       <span class="card__name">{{ card.definition.name }}</span>
 
-      <!-- Gold cost — shown only on tower cards -->
-      <span class="card__gold-cost" *ngIf="card.goldCost !== null" [attr.aria-label]="card.goldCost + ' gold'">
+      <!-- Gold cost — shown only on tower cards. Red tint signals unaffordable. -->
+      <span class="card__gold-cost"
+            *ngIf="card.goldCost !== null"
+            [class.card__gold-cost--unaffordable]="card.goldCost > currentGold"
+            [attr.aria-label]="card.goldCost + ' gold'">
         {{ card.goldCost }}g
       </span>
 
@@ -179,6 +182,11 @@
     <div class="card-tooltip__header">
       <span class="card-tooltip__name">{{ hoveredCard.definition.name }}</span>
       <span class="card-tooltip__cost">{{ hoveredCard.effectiveEnergyCost }}E</span>
+      <span *ngIf="hoveredCard.goldCost !== null"
+            class="card-tooltip__gold-cost"
+            [attr.aria-label]="hoveredCard.goldCost + ' gold'">
+        {{ hoveredCard.goldCost }}g
+      </span>
     </div>
     <div class="card-tooltip__meta">
       <span class="card-tooltip__type">{{ hoveredCard.definition.type }}</span>

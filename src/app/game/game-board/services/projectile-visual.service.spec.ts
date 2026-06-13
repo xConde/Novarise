@@ -118,24 +118,35 @@ describe('ProjectileVisualService', () => {
       expect(asTestable().entries.length).toBe(0);
     });
 
-    it('skips when matchMedia prefers-reduced-motion is reduce', () => {
-      const originalMatchMedia = window.matchMedia;
-      // Temporarily stub matchMedia without body class.
-      window.matchMedia = (query: string) => ({
-        matches: query === '(prefers-reduced-motion: reduce)',
-        media: query,
-        onchange: null,
-        addListener: () => {},
-        removeListener: () => {},
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        dispatchEvent: () => false,
-      } as MediaQueryList);
+    it('skips when the cached MQL reports prefers-reduced-motion: reduce', () => {
+      // The service caches the MediaQueryList at construction time. To simulate
+      // an OS preference change we mutate .matches on the cached instance directly
+      // rather than stubbing window.matchMedia (which is only read at init).
+      const mql = (service as unknown as { _reduceMotionMql: MediaQueryList | null })._reduceMotionMql;
+      if (!mql) {
+        // jsdom may not support matchMedia — fall back to body class test.
+        document.body.classList.add('reduce-motion');
+        try {
+          service.fireHitscan(FROM, TO, COLOR, scene);
+          expect(asTestable().entries.length).toBe(0);
+        } finally {
+          document.body.classList.remove('reduce-motion');
+        }
+        return;
+      }
+      // Temporarily force matches to true by overriding the accessor on the object.
+      const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(mql), 'matches')
+        ?? Object.getOwnPropertyDescriptor(mql, 'matches');
+      Object.defineProperty(mql, 'matches', { get: () => true, configurable: true });
       try {
         service.fireHitscan(FROM, TO, COLOR, scene);
         expect(asTestable().entries.length).toBe(0);
       } finally {
-        window.matchMedia = originalMatchMedia;
+        if (descriptor) {
+          Object.defineProperty(mql, 'matches', descriptor);
+        } else {
+          // If no original descriptor found, just leave it — test cleanup.
+        }
       }
     });
   });

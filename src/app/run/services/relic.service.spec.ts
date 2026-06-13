@@ -552,6 +552,43 @@ describe('RelicService', () => {
     });
   });
 
+  // ── LUCKY_COIN ────────────────────────────────────────────
+
+  describe('LUCKY_COIN — rollLuckyCoin()', () => {
+    it('returns 1 when LUCKY_COIN is not active, regardless of random value', () => {
+      expect(service.rollLuckyCoin(0)).toBe(1);
+      expect(service.rollLuckyCoin(1)).toBe(1);
+    });
+
+    it('returns luckyCoinGoldMultiplier when random < triggerChance', () => {
+      service.setActiveRelics([RelicId.LUCKY_COIN]);
+      // Pass 0 — guaranteed below any positive trigger chance
+      const result = service.rollLuckyCoin(0);
+      expect(result).toBeGreaterThan(1);
+    });
+
+    it('returns 1 when random >= triggerChance', () => {
+      service.setActiveRelics([RelicId.LUCKY_COIN]);
+      // Pass 1 — guaranteed at or above any trigger chance < 1
+      expect(service.rollLuckyCoin(1)).toBe(1);
+    });
+
+    it('same random value produces the same result (determinism contract)', () => {
+      service.setActiveRelics([RelicId.LUCKY_COIN]);
+      const fixedRandom = 0.05; // below the 0.20 trigger chance
+      const first = service.rollLuckyCoin(fixedRandom);
+      const second = service.rollLuckyCoin(fixedRandom);
+      expect(first).toBe(second);
+    });
+
+    it('above-threshold random produces 1 consistently', () => {
+      service.setActiveRelics([RelicId.LUCKY_COIN]);
+      const aboveThreshold = 0.99;
+      expect(service.rollLuckyCoin(aboveThreshold)).toBe(1);
+      expect(service.rollLuckyCoin(aboveThreshold)).toBe(1);
+    });
+  });
+
   describe('OROGENY serialization — save/restore counter', () => {
     it('serializeEncounterFlags() includes orogenyTurnCounter', () => {
       service.incrementOrogenyCounter();

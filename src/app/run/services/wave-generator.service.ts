@@ -9,25 +9,35 @@ import { BossPreset, ACT1_BOSS_PRESETS, ACT2_BOSS_PRESETS, ACT3_BOSS_PRESETS } f
 /** Enemy types available at each depth tier in act 1. */
 const ACT1_EARLY_POOL: EnemyType[] = [EnemyType.BASIC, EnemyType.FAST];
 const ACT1_MID_POOL: EnemyType[] = [EnemyType.BASIC, EnemyType.FAST, EnemyType.HEAVY, EnemyType.SWIFT];
+/**
+ * Act 1 late pool — rows 8+. Introduces FLYING at low exposure so players
+ * encounter air units before the Sky Marshal boss.
+ */
 const ACT1_LATE_POOL: EnemyType[] = [
-  EnemyType.BASIC, EnemyType.FAST, EnemyType.HEAVY, EnemyType.SWIFT, EnemyType.SHIELDED,
+  EnemyType.BASIC, EnemyType.FAST, EnemyType.HEAVY, EnemyType.SWIFT, EnemyType.SHIELDED, EnemyType.FLYING,
 ];
 const ACT2_BASE_POOL: EnemyType[] = [
   EnemyType.BASIC, EnemyType.FAST, EnemyType.HEAVY, EnemyType.SWIFT,
   EnemyType.SHIELDED, EnemyType.SWARM,
 ];
-const ACT2_FLYING_POOL: EnemyType[] = [...ACT2_BASE_POOL, EnemyType.FLYING];
+/** Act 2 mid pool — FLYING joins once the player has seen them in act 1. */
+const ACT2_FLYING_POOL: EnemyType[] = [...ACT2_BASE_POOL, EnemyType.FLYING, EnemyType.GLIDER];
+/**
+ * Act 2 late pool — MINER included at low weight (1 in 9 types) so the
+ * board-mutation threat appears occasionally without dominating waves.
+ */
+const ACT2_LATE_POOL: EnemyType[] = [...ACT2_FLYING_POOL, EnemyType.MINER];
 
 /**
  * Act 3 base pool — full act-2 roster plus heavier archetype threats.
  * TITAN and WYRM_ASCENDANT are boss-tier counters from Highground archetype
  * and appear here only in the heavy/late tier; VEINSEEKER is a Cartographer
  * boss counter and is intentionally excluded from random pools (too disruptive
- * in procedural contexts).
+ * in procedural contexts — appears in boss presets instead).
  */
 const ACT3_BASE_POOL: EnemyType[] = [
   EnemyType.BASIC, EnemyType.FAST, EnemyType.HEAVY, EnemyType.SWIFT,
-  EnemyType.SHIELDED, EnemyType.SWARM, EnemyType.FLYING,
+  EnemyType.SHIELDED, EnemyType.SWARM, EnemyType.FLYING, EnemyType.GLIDER,
 ];
 const ACT3_HEAVY_POOL: EnemyType[] = [...ACT3_BASE_POOL, EnemyType.TITAN];
 
@@ -36,10 +46,21 @@ const ACT3_HEAVY_MIN_ROW = 5;
 
 /** Row thresholds for act 1 enemy pool tiers. */
 const ACT1_EARLY_MAX_ROW = 3;
+/** Rows above this threshold (>= 8) use ACT1_LATE_POOL which includes FLYING. */
 const ACT1_MID_MAX_ROW = 7;
 
-/** Minimum row in act 2 at which FLYING enemies appear. */
+/** Minimum row in act 2 at which FLYING and GLIDER enemies appear. */
 const ACT2_FLYING_MIN_ROW = 3;
+/** Minimum row in act 2 at which MINER appears (late pool, low weight). */
+const ACT2_MINER_MIN_ROW = 5;
+
+/**
+ * Row offset added per act index when computing enemy count, so the act-opener
+ * density smoothly connects to the previous act without a hard reset to the
+ * act-1-row-0 baseline. Offset 2 lands the act-2 opener at the same effective
+ * depth as act-1 row 2, keeping per-entry count in the [6, 9] integration band.
+ */
+const ACT_ROW_OFFSET = 2;
 
 // ── Wave scaling constants ─────────────────────────────────────
 
@@ -161,20 +182,24 @@ export class WaveGeneratorService {
 
 /**
  * Returns the enemy pool appropriate for the given act and row depth.
- * Acts beyond index 1 default to the full act-2 pool.
+ * Acts beyond index 1 default to the act-3 pools.
  */
 function getEnemyPool(row: number, actIndex: number): EnemyType[] {
   if (actIndex === 0) {
     if (row <= ACT1_EARLY_MAX_ROW) return ACT1_EARLY_POOL;
     if (row <= ACT1_MID_MAX_ROW) return ACT1_MID_POOL;
+    // Late act 1 (row > ACT1_MID_MAX_ROW, i.e. >= ACT1_FLYING_MIN_ROW): FLYING
+    // joins so players see air units before the Sky Marshal boss.
     return ACT1_LATE_POOL;
   }
   if (actIndex === 1) {
-    // Act 2: flying enemies appear mid-act
+    // Act 2 late: MINER joins at low weight alongside FLYING/GLIDER.
+    if (row >= ACT2_MINER_MIN_ROW) return ACT2_LATE_POOL;
+    // Act 2 mid: FLYING and GLIDER join mid-act.
     if (row >= ACT2_FLYING_MIN_ROW) return ACT2_FLYING_POOL;
     return ACT2_BASE_POOL;
   }
-  // Act 3: full roster; heavier elite type (TITAN) appears past mid-act
+  // Act 3: full roster; heavier elite type (TITAN) appears past mid-act.
   if (row >= ACT3_HEAVY_MIN_ROW) return ACT3_HEAVY_POOL;
   return ACT3_BASE_POOL;
 }
@@ -182,17 +207,20 @@ function getEnemyPool(row: number, actIndex: number): EnemyType[] {
 /**
  * Computes the number of enemies for a single WaveEntry.
  * Scales with row depth and act index.
+ *
+ * effectiveRow adds ACT_ROW_OFFSET per act so density at the start of a
+ * new act matches partway through the previous act, avoiding the ~30%
+ * count drop at act-boundary row 0.
  */
 function computeEnemyCount(row: number, actIndex: number, rng: SeededRng): number {
+  const effectiveRow = row + actIndex * ACT_ROW_OFFSET;
   let count = Math.floor(
-    ENCOUNTER_CONFIG.enemyCountBasePerWave + row * ENCOUNTER_CONFIG.enemyCountGrowthPerRow,
+    ENCOUNTER_CONFIG.enemyCountBasePerWave + effectiveRow * ENCOUNTER_CONFIG.enemyCountGrowthPerRow,
   );
   if (actIndex > 0) {
     count = Math.floor(count * ENCOUNTER_CONFIG.enemyCountActMultiplier);
   }
   // Act 3 applies an additional multiplier on top of the act-2 multiplier.
-  // CRITICAL: this branch runs ONLY for actIndex >= 2 — acts 1/2 are not touched,
-  // preserving existing deterministic-RNG output for those acts.
   if (actIndex >= 2) {
     count = Math.floor(count * ENCOUNTER_CONFIG.enemyCountAct3Multiplier);
   }

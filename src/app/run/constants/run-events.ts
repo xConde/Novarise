@@ -15,7 +15,7 @@
  *   C — Injured Scout:      injured_scout_encounter  → scout_returns_grateful
  */
 
-import { RunEvent } from '../models/encounter.model';
+import { RunEvent, EventOutcome } from '../models/encounter.model';
 import { RelicId } from '../models/relic.model';
 import { ItemType } from '../models/item.model';
 import { FLAG_KEYS } from './flag-keys';
@@ -949,12 +949,19 @@ export const RUN_EVENTS: ReadonlyArray<RunEvent> = [
     choices: [
       {
         label: 'Put in the stakes',
-        description: `Lose ${EVENT_REWARD_CONFIG.riskWagerLoseLives} lives now. If the patrol holds — gain ${EVENT_REWARD_CONFIG.riskWagerWinLives} lives plus the original stake back.`,
+        description: `Lose ${EVENT_REWARD_CONFIG.riskWagerLoseLives} lives now. ${Math.round(EVENT_REWARD_CONFIG.riskWagerWinChance * 100)}% chance the patrol holds — gain ${EVENT_REWARD_CONFIG.riskWagerWinLives} lives plus your stake back. Otherwise: the lives are gone.`,
         outcome: {
           goldDelta: 0,
-          livesDelta: EVENT_REWARD_CONFIG.riskWagerWinLives,
-          description: 'The patrol holds. You collect your winnings. The recon team is in good spirits.',
-        },
+          livesDelta: -EVENT_REWARD_CONFIG.riskWagerLoseLives,
+          description: 'The patrol outcome is decided.',
+          gamble: {
+            winGoldDelta: 0,
+            loseGoldDelta: 0,
+            winChance: EVENT_REWARD_CONFIG.riskWagerWinChance,
+            winLivesDelta: EVENT_REWARD_CONFIG.riskWagerWinLives + EVENT_REWARD_CONFIG.riskWagerLoseLives,
+            loseLivesDelta: 0,
+          },
+        } satisfies EventOutcome,
       },
       {
         label: 'Stay out',

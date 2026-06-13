@@ -53,15 +53,15 @@ describe('TutorialService', () => {
     service.advanceStep(); // WELCOME → SELECT_TOWER (Your Hand & Energy)
     service.advanceStep(); // SELECT_TOWER → PLACE_TOWER (Play a Tower Card)
     service.advanceStep(); // PLACE_TOWER → START_WAVE (Know What's Coming)
-    service.advanceStep(); // START_WAVE → UPGRADE_TOWER (End Your Turn)
-    service.advanceStep(); // UPGRADE_TOWER → COMPLETE
+    service.advanceStep(); // START_WAVE → END_TURN (End Your Turn)
+    service.advanceStep(); // END_TURN → COMPLETE
 
     sub.unsubscribe();
 
     expect(emitted).toContain(TutorialStep.SELECT_TOWER);
     expect(emitted).toContain(TutorialStep.PLACE_TOWER);
     expect(emitted).toContain(TutorialStep.START_WAVE);
-    expect(emitted).toContain(TutorialStep.UPGRADE_TOWER);
+    expect(emitted).toContain(TutorialStep.END_TURN);
     expect(emitted).toContain(TutorialStep.COMPLETE);
   });
 
@@ -71,7 +71,7 @@ describe('TutorialService', () => {
 
     service.startTutorial();
     // Advance through all steps:
-    // WELCOME → SELECT_TOWER → PLACE_TOWER → START_WAVE → UPGRADE_TOWER → COMPLETE → null
+    // WELCOME → SELECT_TOWER → PLACE_TOWER → START_WAVE → END_TURN → COMPLETE → null
     service.advanceStep();
     service.advanceStep();
     service.advanceStep();
@@ -90,7 +90,7 @@ describe('TutorialService', () => {
     service.advanceStep(); // → SELECT_TOWER
     service.advanceStep(); // → PLACE_TOWER
     service.advanceStep(); // → START_WAVE
-    service.advanceStep(); // → UPGRADE_TOWER
+    service.advanceStep(); // → END_TURN
     service.advanceStep(); // → COMPLETE
     service.advanceStep(); // advances past COMPLETE → null + marks complete
 
@@ -135,8 +135,7 @@ describe('TutorialService', () => {
   it('startTips() is a no-op after skipping the controls tutorial', () => {
     service.startTutorial();
     service.skipTutorial();
-    // Simulate reaching "second game" gate
-    service.incrementGamesPlayed();
+    // Simulate having played enough encounters to pass the tips gate
     service.incrementGamesPlayed();
 
     service.startTips();
@@ -196,8 +195,13 @@ describe('TutorialService', () => {
   it('getTip() returns correct tip for SELECT_TOWER step', () => {
     const tip: TutorialTip = service.getTip(TutorialStep.SELECT_TOWER);
     expect(tip.step).toBe(TutorialStep.SELECT_TOWER);
-    // Step repurposed for card-loop tutorial: covers hand + energy, not tower selection bar
+    // Step covers hand + energy + gold dual-cost
     expect(tip.title).toContain('Hand');
+  });
+
+  it('SELECT_TOWER step mentions gold cost', () => {
+    const tip: TutorialTip = service.getTip(TutorialStep.SELECT_TOWER);
+    expect(tip.message.toLowerCase()).toContain('gold');
   });
 
   it('getTip() returns correct tip for PLACE_TOWER step', () => {
@@ -210,9 +214,11 @@ describe('TutorialService', () => {
     expect(tip.step).toBe(TutorialStep.START_WAVE);
   });
 
-  it('getTip() returns correct tip for UPGRADE_TOWER step', () => {
-    const tip: TutorialTip = service.getTip(TutorialStep.UPGRADE_TOWER);
-    expect(tip.step).toBe(TutorialStep.UPGRADE_TOWER);
+  it('getTip() returns correct tip for END_TURN step', () => {
+    const tip: TutorialTip = service.getTip(TutorialStep.END_TURN);
+    expect(tip.step).toBe(TutorialStep.END_TURN);
+    expect(tip.title).toContain('End Your Turn');
+    expect(tip.targetSelector).toBe('.end-turn-btn');
   });
 
   it('getTip() returns correct tip for COMPLETE step', () => {
@@ -341,14 +347,14 @@ describe('TutorialService', () => {
   // --- Strategy tips (S25) ---
 
   describe('strategy tips', () => {
-    /** Helper: complete the controls tutorial and record 2 games played. */
+    /** Helper: complete the controls tutorial. */
     function completeControlsTutorial(svc: TutorialService): void {
       svc.startTutorial();
       svc.advanceStep(); // WELCOME → SELECT_TOWER (Your Hand & Energy)
       svc.advanceStep(); // SELECT_TOWER → PLACE_TOWER (Play a Tower Card)
       svc.advanceStep(); // PLACE_TOWER → START_WAVE (Know What's Coming)
-      svc.advanceStep(); // START_WAVE → UPGRADE_TOWER (End Your Turn)
-      svc.advanceStep(); // UPGRADE_TOWER → COMPLETE
+      svc.advanceStep(); // START_WAVE → END_TURN (End Your Turn)
+      svc.advanceStep(); // END_TURN → COMPLETE
       svc.advanceStep(); // COMPLETE → null + tutorialComplete
     }
 
@@ -402,9 +408,9 @@ describe('TutorialService', () => {
 
     // --- startTips() gating ---
 
-    it('startTips() is a no-op on first game (gamesPlayed < 2)', () => {
+    it('startTips() is a no-op on first encounter (gamesPlayed = 0)', () => {
       completeControlsTutorial(service);
-      service.incrementGamesPlayed(); // gamesPlayed = 1 (first game)
+      // gamesPlayed = 0 — first encounter, tips must not appear yet
 
       service.startTips();
 
@@ -425,10 +431,9 @@ describe('TutorialService', () => {
       });
     });
 
-    it('startTips() starts TIP_PLACEMENT on second game', (done) => {
+    it('startTips() starts TIP_PLACEMENT on second encounter (gamesPlayed = 1)', (done) => {
       completeControlsTutorial(service);
-      service.incrementGamesPlayed(); // game 1
-      service.incrementGamesPlayed(); // game 2
+      service.incrementGamesPlayed(); // gamesPlayed = 1 → second encounter
 
       service.startTips();
 
@@ -666,8 +671,8 @@ describe('TutorialService', () => {
       service.advanceStep(); // WELCOME → SELECT_TOWER (Your Hand & Energy)
       service.advanceStep(); // SELECT_TOWER → PLACE_TOWER (Play a Tower Card)
       service.advanceStep(); // PLACE_TOWER → START_WAVE (Know What's Coming)
-      service.advanceStep(); // START_WAVE → UPGRADE_TOWER (End Your Turn)
-      service.advanceStep(); // UPGRADE_TOWER → COMPLETE
+      service.advanceStep(); // START_WAVE → END_TURN (End Your Turn)
+      service.advanceStep(); // END_TURN → COMPLETE
 
       service.dismissOnPlayerAction(); // COMPLETE → null + marks done
 

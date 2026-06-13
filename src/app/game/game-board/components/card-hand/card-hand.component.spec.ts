@@ -79,10 +79,11 @@ describe('CardHandComponent', () => {
       expect(component.handCards[0].definition.type).toBe(CardType.TOWER);
     });
 
-    it('marks card as playable when energy is sufficient', () => {
-      // TOWER_BASIC costs 1 energy
+    it('marks card as playable when energy and gold are sufficient', () => {
+      // TOWER_BASIC costs 1 energy and 50 gold
       component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
       component.energy = makeEnergy(1, 3);
+      component.currentGold = 999;
       component.resolveHand();
 
       expect(component.handCards[0].canPlay).toBeTrue();
@@ -119,6 +120,40 @@ describe('CardHandComponent', () => {
 
       expect(component.handCards[0].instance.upgraded).toBeTrue();
     });
+
+    describe('gold gating (currentGold)', () => {
+      it('tower card is playable when player has enough gold', () => {
+        component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
+        component.energy = makeEnergy(3, 3);
+        const basicCost = component.handCards.length > 0 ? component.handCards[0].goldCost : null;
+        // Re-resolve with sufficient gold
+        component.currentGold = 999;
+        component.resolveHand();
+        expect(component.handCards[0].canPlay).toBeTrue();
+      });
+
+      it('tower card is unplayable when player cannot afford gold cost', () => {
+        component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
+        component.energy = makeEnergy(3, 3);
+        component.currentGold = 0; // no gold
+        component.resolveHand();
+        expect(component.handCards[0].canPlay).toBeFalse();
+      });
+
+      it('non-tower card canPlay is not affected by currentGold', () => {
+        component.deckState = makeDeckState([makeInstance(CardId.GOLD_RUSH)]);
+        component.energy = makeEnergy(3, 3);
+        component.currentGold = 0; // irrelevant for non-tower cards
+        component.resolveHand();
+        // GOLD_RUSH is a spell (goldCost is null) — canPlay should depend only on energy
+        expect(component.handCards[0].goldCost).toBeNull();
+        expect(component.handCards[0].canPlay).toBeTrue();
+      });
+
+      it('currentGold defaults to 0', () => {
+        expect(component.currentGold).toBe(0);
+      });
+    });
   });
 
   describe('playCard', () => {
@@ -126,6 +161,7 @@ describe('CardHandComponent', () => {
       const instance = makeInstance(CardId.TOWER_BASIC);
       component.deckState = makeDeckState([instance]);
       component.energy = makeEnergy(3, 3);
+      component.currentGold = 999; // sufficient gold for TOWER_BASIC (50g cost)
       component.resolveHand();
 
       const emitted: CardInstance[] = [];
@@ -155,6 +191,7 @@ describe('CardHandComponent', () => {
       const instance = makeInstance(CardId.TOWER_BASIC);
       component.deckState = makeDeckState([instance]);
       component.energy = makeEnergy(3, 3);
+      component.currentGold = 999; // sufficient gold for TOWER_BASIC
       component.resolveHand();
       return component.handCards[0];
     }
@@ -1046,6 +1083,7 @@ describe('CardHandComponent', () => {
       it(`${frameClass}: card--playable co-exists with frame class`, () => {
         component.deckState = makeDeckState([makeInstance(cardId)]);
         component.energy = makeEnergy(3, 3);
+        component.currentGold = 999; // fund tower gold cost so the card reads as playable
         component.resolveHand();
         fixture.detectChanges();
 

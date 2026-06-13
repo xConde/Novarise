@@ -35,6 +35,7 @@ import {
   REWARD_RARITY_WEIGHTS,
   CARD_PITY_THRESHOLD,
   REST_CONFIG,
+  REST_HEAL_MIN,
   RUN_CONFIG,
   SHOP_CONFIG,
   ITEM_CONFIG,
@@ -171,7 +172,7 @@ export class RunService {
 
     const ascEffects = getAscensionEffects(state.ascensionLevel);
     const healReduction = ascEffects.get(AscensionEffectType.REST_HEAL_REDUCTION) ?? 1;
-    healAmount = Math.max(1, Math.floor(healAmount * healReduction));
+    healAmount = Math.max(REST_HEAL_MIN, Math.floor(healAmount * healReduction));
 
     return healAmount;
   }
@@ -419,10 +420,14 @@ export class RunService {
 
     if (result.victory) {
       const goldBonus = this.currentEncounter?.goldReward ?? 0;
+      // finalGold carries the combat ending balance back to the run.
+      // Falls back to (state.gold + result.goldEarned) for results that
+      // predate the unified gold pool (old saves / test fixtures).
+      const carryGold = (result.finalGold ?? state.gold + result.goldEarned) + goldBonus;
       this.updateState({
         ...state,
         lives: state.lives - result.livesLost,
-        gold: state.gold + result.goldEarned + goldBonus,
+        gold: carryGold,
         score: state.score + result.goldEarned + result.enemiesKilled * RUN_CONFIG.scorePerKill,
         completedNodeIds: [...state.completedNodeIds, result.nodeId],
         encounterResults: newEncounterResults,
@@ -682,7 +687,7 @@ export class RunService {
     // Apply ascension heal reduction
     const ascEffects = getAscensionEffects(state.ascensionLevel);
     const healReduction = ascEffects.get(AscensionEffectType.REST_HEAL_REDUCTION) ?? 1;
-    healAmount = Math.max(1, Math.floor(healAmount * healReduction));
+    healAmount = Math.max(REST_HEAL_MIN, Math.floor(healAmount * healReduction));
 
     const newLives = Math.min(state.maxLives, state.lives + healAmount);
 
@@ -737,7 +742,9 @@ export class RunService {
       });
     }
 
-    // Card items — weighted by rarity
+    // Card items — weighted by rarity, with pity-timer protection.
+    // Reuses cardPityCounter from run state — see concerns: a separate
+    // shopCardPityCounter would require a RunState field outside this package.
     const cardByRarity = this.buildNonStarterCardPool();
     const cardRarityWeights: Array<{ rarity: CardRarity; weight: number }> = [
       { rarity: CardRarity.COMMON, weight: REWARD_RARITY_WEIGHTS.common },
@@ -745,8 +752,10 @@ export class RunService {
       { rarity: CardRarity.RARE, weight: REWARD_RARITY_WEIGHTS.rare },
     ];
     const pickedCardIds = new Set<CardId>();
-    // Phase 1 Sprint 8 — same archetype-aware selection used by combat rewards.
+    // Same archetype-aware selection used by combat rewards.
     const dominant = this.deckService.getDominantArchetype();
+    let shopPityCounter = state.cardPityCounter ?? 0;
+    let shopPityUpdated = false;
     for (let i = 0; i < cardsInShop; i++) {
       const remaining: Record<CardRarity, CardDefinition[]> = {
         [CardRarity.STARTER]: [],
@@ -754,7 +763,10 @@ export class RunService {
         [CardRarity.UNCOMMON]: cardByRarity[CardRarity.UNCOMMON].filter(c => !pickedCardIds.has(c.id)),
         [CardRarity.RARE]: cardByRarity[CardRarity.RARE].filter(c => !pickedCardIds.has(c.id)),
       };
-      const rarity = this.pickWeightedRarity(cardRarityWeights, remaining, rng);
+      const pityForceRare = shopPityCounter >= CARD_PITY_THRESHOLD && remaining[CardRarity.RARE].length > 0;
+      const rarity = pityForceRare
+        ? CardRarity.RARE
+        : this.pickWeightedRarity(cardRarityWeights, remaining, rng);
       if (rarity === null) continue;
       const pool = remaining[rarity];
       if (pool.length === 0) continue;
@@ -767,6 +779,16 @@ export class RunService {
         item: { type: 'card', cardId: card.id },
         cost: Math.round(basePrice * priceMultiplier),
       });
+      if (rarity === CardRarity.RARE) {
+        shopPityCounter = 0;
+      } else {
+        shopPityCounter++;
+      }
+      shopPityUpdated = true;
+    }
+    // Persist the updated pity counter so it carries across the next shop visit.
+    if (shopPityUpdated && shopPityCounter !== (state.cardPityCounter ?? 0)) {
+      this.updateState({ ...state, cardPityCounter: shopPityCounter });
     }
 
     // Item (consumable) slots
@@ -940,16 +962,21 @@ export class RunService {
     const outcome = event.choices[choiceIndex].outcome;
 
     // Gamble: if the outcome has a gamble field, roll rng to determine gold delta.
+    // Extended gamble fields winLivesDelta / loseLivesDelta allow lives-wager events
+    // (e.g. field_wager) to add or remove lives based on the roll outcome, in addition
+    // to the unconditional livesDelta already applied below.
     let resolvedGoldDelta: number;
+    let gambleLivesDelta = 0;
     if (outcome.gamble) {
       const rng = this.getRng();
       const won = rng() < outcome.gamble.winChance;
       resolvedGoldDelta = won ? outcome.gamble.winGoldDelta : outcome.gamble.loseGoldDelta;
+      gambleLivesDelta = won ? (outcome.gamble.winLivesDelta ?? 0) : (outcome.gamble.loseLivesDelta ?? 0);
     } else {
       resolvedGoldDelta = outcome.goldDelta;
     }
 
-    let newLives = Math.min(state.maxLives, Math.max(0, state.lives + outcome.livesDelta));
+    let newLives = Math.min(state.maxLives, Math.max(0, state.lives + outcome.livesDelta + gambleLivesDelta));
     const newGold = Math.max(0, state.gold + resolvedGoldDelta);
     const newRelicIds = [...state.relicIds];
 
@@ -962,8 +989,12 @@ export class RunService {
     }
 
     // Card removal: remove a random non-starter card from the deck.
+    // Derive updated deckCardIds from the live deck after removal so the
+    // persisted list stays in sync; mirrors the removeCardFromShop pattern.
+    let updatedDeckCardIds: CardId[] | undefined;
     if (outcome.removeCard) {
       this.removeRandomNonStarterCard();
+      updatedDeckCardIds = this.deckService.getAllCards().map(c => c.cardId);
     }
 
     // Item reward: add to consumable inventory.
@@ -999,6 +1030,7 @@ export class RunService {
       status: newStatus,
       endedAt: newStatus === RunStatus.DEFEAT ? Date.now() : state.endedAt,
       completedNodeIds: this.computeNodeCompletedArray(state),
+      ...(updatedDeckCardIds !== undefined ? { deckCardIds: updatedDeckCardIds } : {}),
     });
 
     this.relicService.setActiveRelics(newRelicIds);

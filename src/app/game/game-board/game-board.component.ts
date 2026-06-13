@@ -349,6 +349,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   get showFps(): boolean { return this.settingsService.get().showFps; }
   get currentFps(): number | null { return this.showFps ? this.fpsCounterService.getFps() : null; }
 
+  /** True when the colorblind-assist setting is on; drives shape-cue overlays on enemy dots. */
+  get colorblindAssist(): boolean { return this.settingsService.get().colorblindAssist; }
+
   /** Resolves newly unlocked achievement IDs to their name/description for display. */
   private updateAchievementDetails(): void {
     this.achievementDetails = this.newlyUnlockedAchievements
@@ -493,6 +496,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           // Stashed by processCombatResult when gameEndService.recordEnd fires;
           // always [] on defeat (R3 guarantees challenge eval is skipped on defeat).
           completedChallenges: this.lastCompletedChallenges,
+          // Unified gold pool: carry the ending combat balance back to run gold.
+          finalGold: state.gold,
         };
         this.runService.recordEncounterResult(result);
 
@@ -625,6 +630,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   private initFreshEncounter(): void {
     this.encounterBootstrap.bootstrapFresh();
+    // Open the first turn's tracking window so card plays during the planning
+    // phase of turn 1 are captured. Must run after bootstrapFresh() resets
+    // CombatLoopService (which sets turnNumber to 0, making currentTurnNumber = 1).
+    this.turnHistoryService.beginTurn(this.currentTurnNumber);
   }
 
   /**
@@ -1239,8 +1248,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       const livesBefore = this.gameStateService.getState().lives;
       const goldBefore = this.gameStateService.getState().gold;
 
-      // Begin tracking turn in history service BEFORE resolution
-      this.turnHistoryService.beginTurn(this.currentTurnNumber);
+      // Capture the forward-prediction BEFORE wave resolution, while the current
+      // turn's tracking window is already open (opened at the start of this planning
+      // phase, not here — see initFreshEncounter / restoreFromCheckpoint / prior endTurn).
       this.turnHistoryService.recordPredictedLivesLost(this.projectedLivesLostNextTurn);
 
       this.waveCombat.endTurn();
@@ -1253,6 +1263,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       const goldEarned = Math.max(0, postState.gold - goldBefore);
       if (goldEarned > 0) this.turnHistoryService.recordGoldEarned(goldEarned);
 
+      // Finalize the completed turn record.
       this.turnHistoryService.endTurn();
 
       // The persistent right-side RECAP panel is already bound to
@@ -1260,6 +1271,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // subscription will surface it automatically. No flash call needed.
       if (postState.phase === GamePhase.COMBAT) {
         this.flashTurnBanner();
+        // Open the NEXT turn's tracking window so card plays during the new
+        // planning phase are attributed to the correct record. currentTurnNumber
+        // uses combatLoopService.getTurnNumber() which waveCombat.endTurn() may
+        // have already incremented — so this correctly labels the new turn.
+        this.turnHistoryService.beginTurn(this.currentTurnNumber);
       }
     } finally {
       this.isEndingTurn = false;
@@ -1275,6 +1291,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.checkpointRestoreCoordinator.restore({
       onFallback: () => this.initFreshEncounter(),
     });
+    // Open the resumed turn's tracking window so card plays during this
+    // planning phase are attributed to the correct record. Must run after
+    // restore() (which may fall back to initFreshEncounter — that path opens
+    // its own window). Guard: only open when a turn window is not already open
+    // (initFreshEncounter fallback already called beginTurn).
+    if (!this.turnHistoryService.hasOpenTurn()) {
+      this.turnHistoryService.beginTurn(this.currentTurnNumber);
+    }
   }
 
   /**

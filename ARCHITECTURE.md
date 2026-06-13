@@ -269,10 +269,24 @@ GameBoardComponent.ngOnInit
 
 On VICTORY / DEFEAT
   ↳ GameEndService.recordResult()
-  ↳ RunService.recordEncounterResult()
+  ↳ RunService.recordEncounterResult()  (EncounterResult.finalGold = ending balance)
   ↳ router.navigate(['/run'])
       ↳ show reward screen (victory) or summary (defeat)
 ```
+
+## Gold economy (unified single pool)
+
+Gold is one pool carried across the whole run. On fresh encounter bootstrap,
+`EncounterBootstrapService` injects `runState.gold + relicStartingBonus` via
+`GameStateService.setEncounterStartGold()` (sets both `gold` and `initialGold`).
+Towers spend that gold; kills/interest earn it. On victory the combat's ending
+balance (`EncounterResult.finalGold`) plus the encounter `goldReward` becomes the
+new `runState.gold` — so overspending in combat genuinely drains the run, and a
+surplus carries forward. `finalGold` is optional for backward-compat: pre-unify
+saves and test fixtures fall back to the legacy `state.gold + goldEarned` surplus
+formula. The ascension `STARTING_GOLD_REDUCTION` is applied once at run start
+(`RunService`), never per-encounter. The checkpoint restore path does NOT
+re-inject gold — only fresh bootstrap does.
 
 ## `composeDamageStack()` (Phase 4 refactor)
 

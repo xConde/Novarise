@@ -231,8 +231,8 @@ export const AUDIO_CONFIG: AudioConfig = {
     frequency: 120,
     endFrequency: 60,
     duration: 0.15,
-    oscillatorType: 'square',
-    gain: 0.4,
+    oscillatorType: 'triangle',
+    gain: 0.2,
   },
 
   towerUpgrade: {

@@ -38,6 +38,7 @@ import { VfxPoolService } from './vfx-pool.service';
 import { TowerDecalLibraryService } from './tower-decal-library.service';
 import { AimLineService } from './aim-line.service';
 import { ProjectileVisualService } from './projectile-visual.service';
+import { EnemyIntentService } from './enemy-intent.service';
 import { buildDisposeProtect, disposeGroup } from '../utils/three-utils';
 
 /**
@@ -97,6 +98,10 @@ export class GameSessionService {
     // AURA). cleanup() called from cleanupScene to drop any mid-flight
     // visuals before encounter teardown disposes the scene.
     @Optional() private projectileVisualService?: ProjectileVisualService,
+    // @Optional() — intent-marker sprites floating above enemies. disposeAll()
+    // must run before textSpritePool.dispose() so sprites are released back
+    // into the pool first, then the pool drains its caches.
+    @Optional() private enemyIntentService?: EnemyIntentService,
   ) {}
 
   /**
@@ -255,7 +260,12 @@ export class GameSessionService {
     // Dispose all registry-shared geometries in one batch.
     this.geometryRegistry?.dispose();
 
-    // Dispose pooled sprites + their cached textures (sprint 16).
+    // Release all intent-marker sprites back to the pool before the pool
+    // itself is drained. Order matters: sprites must be released first so
+    // dispose() only clears the now-empty cache (not live sprite textures).
+    this.enemyIntentService?.disposeAll();
+
+    // Dispose pooled sprites + their cached textures.
     // Must run AFTER gold/damage popup cleanup so popups release back into
     // the pool first, then the pool drains its caches.
     this.textSpritePool?.dispose();

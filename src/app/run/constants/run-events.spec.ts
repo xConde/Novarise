@@ -1,6 +1,7 @@
 import { RUN_EVENTS } from './run-events';
 import { FLAG_KEYS } from './flag-keys';
 import { RunEvent } from '../models/encounter.model';
+import { EVENT_REWARD_CONFIG } from './event-reward.constants';
 
 const VALID_ARCHETYPES = new Set(['cartographer', 'highground', 'conduit']);
 const TOTAL_EVENT_COUNT = 44;
@@ -194,5 +195,50 @@ describe('RUN_EVENTS', () => {
   it('should include 3 archetype-gated events', () => {
     const archetypeEvents = RUN_EVENTS.filter(e => e.requiresDominantArchetype !== undefined);
     expect(archetypeEvents.length).toBe(3);
+  });
+
+  // ── field_wager — lives gamble contract ───────────────────────────────────
+
+  describe('field_wager event', () => {
+    let fieldWager: RunEvent | undefined;
+
+    beforeEach(() => {
+      fieldWager = RUN_EVENTS.find(e => e.id === 'field_wager');
+    });
+
+    it('exists in RUN_EVENTS', () => {
+      expect(fieldWager).toBeDefined();
+    });
+
+    it('wager choice has upfront lives cost via livesDelta', () => {
+      const wagerChoice = fieldWager!.choices[0];
+      expect(wagerChoice.outcome.livesDelta).toBe(-EVENT_REWARD_CONFIG.riskWagerLoseLives);
+    });
+
+    it('wager choice has a gamble with riskWagerWinChance', () => {
+      const wagerChoice = fieldWager!.choices[0];
+      expect(wagerChoice.outcome.gamble).toBeDefined();
+      expect(wagerChoice.outcome.gamble!.winChance).toBe(EVENT_REWARD_CONFIG.riskWagerWinChance);
+    });
+
+    it('wager gamble carries winLivesDelta equal to riskWagerWinLives + riskWagerLoseLives', () => {
+      const wagerChoice = fieldWager!.choices[0];
+      const extGamble = wagerChoice.outcome.gamble as { winLivesDelta?: number };
+      expect(extGamble.winLivesDelta)
+        .toBe(EVENT_REWARD_CONFIG.riskWagerWinLives + EVENT_REWARD_CONFIG.riskWagerLoseLives);
+    });
+
+    it('wager gamble carries loseLivesDelta of 0 (upfront cost is the loss)', () => {
+      const wagerChoice = fieldWager!.choices[0];
+      const extGamble = wagerChoice.outcome.gamble as { loseLivesDelta?: number };
+      expect(extGamble.loseLivesDelta ?? 0).toBe(0);
+    });
+
+    it('stay-out choice has no cost and no gamble', () => {
+      const stayOut = fieldWager!.choices[1];
+      expect(stayOut.outcome.livesDelta).toBe(0);
+      expect(stayOut.outcome.goldDelta).toBe(0);
+      expect(stayOut.outcome.gamble).toBeUndefined();
+    });
   });
 });

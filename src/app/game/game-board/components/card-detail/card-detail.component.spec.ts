@@ -1,6 +1,7 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { CardDetailComponent } from './card-detail.component';
+import { FocusTrap } from '@shared/utils/focus-trap.util';
 import { HandCard } from '../card-hand/card-hand.component';
 import { CardId } from '../../../../run/models/card.model';
 import { getCardDefinition } from '../../../../run/constants/card-definitions';
@@ -120,6 +121,30 @@ describe('CardDetailComponent', () => {
       expect(badges.length).toBe(3);
       const ariaLabels = Array.from(badges).map(b => b.getAttribute('aria-label'));
       expect(ariaLabels).toEqual(['Innate', 'Retain', 'Exhaust']);
+    });
+  });
+
+  describe('focus trap lifecycle', () => {
+    it('activates the focus trap after ngOnInit tick', fakeAsync(() => {
+      const activateSpy = spyOn(FocusTrap.prototype, 'activate');
+      component.card = makeHandCard(CardId.GOLD_RUSH);
+      component.ngOnInit();
+      tick(0);
+      expect(activateSpy).toHaveBeenCalled();
+    }));
+
+    it('deactivates the focus trap on ngOnDestroy', () => {
+      const deactivateSpy = spyOn(FocusTrap.prototype, 'deactivate');
+      component.card = makeHandCard(CardId.GOLD_RUSH);
+      component.ngOnDestroy();
+      expect(deactivateSpy).toHaveBeenCalled();
+    });
+
+    it('calls focusTrap.deactivate() when close() is called', () => {
+      const deactivateSpy = spyOn(FocusTrap.prototype, 'deactivate');
+      component.card = makeHandCard(CardId.GOLD_RUSH);
+      component.close();
+      expect(deactivateSpy).toHaveBeenCalled();
     });
   });
 

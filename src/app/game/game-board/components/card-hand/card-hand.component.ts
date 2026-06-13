@@ -64,6 +64,8 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
 
   @Input() deckState!: DeckState;
   @Input() energy!: EnergyState;
+  /** Current run gold; tower cards whose goldCost exceeds this are unplayable. */
+  @Input() currentGold = 0;
   /**
    * instanceId of the tower card currently in placement mode.
    * When set, that card is highlighted and all others are dimmed.
@@ -285,10 +287,11 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
       const costModifier = this.relicService ? this.relicService.getCardEnergyCostModifier(definition) : 0;
       const baseCost = getEffectiveEnergyCost(instance);
       const effectiveEnergyCost = Math.max(0, baseCost + costModifier);
+      const canAffordGold = goldCost === null || this.currentGold >= goldCost;
       return {
         instance,
         definition,
-        canPlay: this.energy.current >= effectiveEnergyCost,
+        canPlay: this.energy.current >= effectiveEnergyCost && canAffordGold,
         effectiveEnergyCost,
         goldCost,
       };

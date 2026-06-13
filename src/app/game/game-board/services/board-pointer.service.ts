@@ -30,6 +30,10 @@ export class BoardPointerService implements OnDestroy {
   readonly raycaster = new THREE.Raycaster();
   readonly mouse = new THREE.Vector2();
 
+  /** Private scratch objects for resolveTileAtClientPoint — avoids per-call allocation. */
+  private readonly _tmpMouse = new THREE.Vector2();
+  private readonly _tmpRaycaster = new THREE.Raycaster();
+
   // Hover / selection state.
   // Phase C sprint 22: hovered tile is identified by (row, col) rather than
   // a Mesh ref because BASE tiles now live in an InstancedMesh — there is
@@ -255,14 +259,12 @@ export class BoardPointerService implements OnDestroy {
   resolveTileAtClientPoint(clientX: number, clientY: number): { row: number; col: number } | null {
     if (!this.canvas) return null;
     const rect = this.canvas.getBoundingClientRect();
-    const mouseX = ((clientX - rect.left) / rect.width) * 2 - 1;
-    const mouseY = -((clientY - rect.top) / rect.height) * 2 + 1;
+    this._tmpMouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    this._tmpMouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
-    const tmpMouse = new THREE.Vector2(mouseX, mouseY);
-    const tmpRaycaster = new THREE.Raycaster();
-    tmpRaycaster.setFromCamera(tmpMouse, this.sceneService.getCamera());
+    this._tmpRaycaster.setFromCamera(this._tmpMouse, this.sceneService.getCamera());
 
-    const intersects = tmpRaycaster.intersectObjects(
+    const intersects = this._tmpRaycaster.intersectObjects(
       this.meshRegistry.getTilePickables() as THREE.Object3D[],
     );
     if (intersects.length === 0) return null;

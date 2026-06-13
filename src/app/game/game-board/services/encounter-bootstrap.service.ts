@@ -68,8 +68,7 @@ export class EncounterBootstrapService {
       runState.lives,
       runState.maxLives + this.relicService.getMaxLivesBonus(),
     );
-    this.gameStateService.addGold(this.relicService.getStartingGoldBonus());
-    this.gameStateService.snapshotInitialGold();
+    this.gameStateService.setEncounterStartGold(runState.gold + this.relicService.getStartingGoldBonus());
     this.waveService.setCustomWaves(encounter.waves);
     this.gameStateService.setMaxWaves(encounter.waves.length);
     this.ascensionModifier.apply(runState.ascensionLevel, encounter.isElite, encounter.isBoss);

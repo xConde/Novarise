@@ -204,6 +204,7 @@ export class CombatLoopService {
     const reachedExit = this.enemyService.stepEnemiesOneTurn(
       (enemyId) => this.statusEffectService.getSlowTileReduction(enemyId),
       this.turnNumber,
+      scene,
     );
 
     // 2.5 — MINER dig phase. MINERs that have been alive N*3 turns destroy
@@ -228,6 +229,12 @@ export class CombatLoopService {
       this.accumulateKillByTower(killInfo.towerType, killInfo.towerLevel, frameKillsByTower);
     }
 
+    // 4.5. NOVA_SOVEREIGN per-turn effects — Aegis shield regen and enrage
+    // trigger. Placed immediately after tower fire so regen does not partially
+    // negate mortar DoT (which ticks in 5a below). Resolution order:
+    //   tower fire → NOVA regen → mortar zone tick → status DoT tick
+    this.enemyService.tickNovaSovereignEffects();
+
     // 5a. Mortar zone tick — turn-ticked DoT from M3 S4 mortar zones
     const mortarResult = this.towerCombatService.tickMortarZonesForTurn(scene, this.turnNumber);
     frameDamageDealt += mortarResult.damageDealt;
@@ -236,11 +243,6 @@ export class CombatLoopService {
       this.processKill(killInfo, cardGoldMult);
       this.accumulateKillByTower(killInfo.towerType, killInfo.towerLevel, frameKillsByTower);
     }
-
-    // 5b-pre. NOVA_SOVEREIGN per-turn effects — Aegis shield regen and enrage
-    // trigger. Called after tower fire so regen doesn't nullify turn damage,
-    // and before status-effect ticks so enrage state is visible to DoT logic.
-    this.enemyService.tickNovaSovereignEffects();
 
     // 5b. Status effect tick — DoT damage, duration expiry. DoT kills are
     // attributed to the 'dot' bucket (no tower owner) and don't count toward
@@ -278,7 +280,6 @@ export class CombatLoopService {
         ? Math.ceil(baseLeakCost / WAVE_CONFIG.twinBossLeakDivisor)
         : baseLeakCost;
       this.gameStateService.loseLife(leakCost);
-      this.audioService.playLifeLoss();
       frameLeaked = true;
       this.leakedThisWave = true;
       this.gameStatsService.recordEnemyLeaked();
@@ -289,6 +290,12 @@ export class CombatLoopService {
         leakCost,
       });
       this.enemyService.removeEnemy(enemyId, scene);
+    }
+
+    // Play life-loss SFX once per turn, not per leaked enemy, to avoid audio stacking
+    // on multi-leak turns (e.g. two enemies exit at the same time).
+    if (frameLivesLost > 0) {
+      this.audioService.playLifeLoss();
     }
 
     // 7. Re-read phase — loseLife() above may have set DEFEAT
@@ -438,7 +445,7 @@ export class CombatLoopService {
     const isElite = enemy.type === EnemyType.BOSS
       || (encounter?.isElite ?? false)
       || (encounter?.isBoss ?? false);
-    const luckyCoinMult = this.relicService.rollLuckyCoin();
+    const luckyCoinMult = this.relicService.rollLuckyCoin(this.runService.nextRandom());
 
     // CONSTELLATION — +25% gold when the killing tower is in a cluster of ≥ 5.
     // DOT / mortar-zone kills omit towerRow/towerCol so they skip the gate.
@@ -466,7 +473,7 @@ export class CombatLoopService {
       this.luckyCoinBonusGoldThisTurn += Math.round(adjustedGold - adjustedGold / luckyCoinMult);
     }
 
-    if (enemy.type === EnemyType.BOSS) {
+    if (enemy.type === EnemyType.BOSS || enemy.type === EnemyType.NOVA_SOVEREIGN) {
       // Boss-kill shake: fires on the kill event since CombatLoopService has no
       // per-hit granularity (damage is applied instantaneously per turn).
       this.screenShakeService.trigger(
@@ -475,6 +482,7 @@ export class CombatLoopService {
       );
     }
 
+    const isBossKill = enemy.type === EnemyType.BOSS || enemy.type === EnemyType.NOVA_SOVEREIGN;
     this.frameKills.push({
       damage: killInfo.damage,
       position: { ...enemy.position },
@@ -484,6 +492,7 @@ export class CombatLoopService {
         this.settingsService?.get().colorblindAssist ?? false,
       ),
       value: enemy.value,
+      isBoss: isBossKill,
     });
 
     this.enemyService.startDyingAnimation(killInfo.id);

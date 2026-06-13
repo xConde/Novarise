@@ -61,6 +61,18 @@ export class TowerFireZonePreviewService implements OnDestroy {
   /** Scratch object reused to avoid per-frame allocation. */
   private readonly scratchWorld = { x: 0, z: 0 };
 
+  /**
+   * Persistent scratch Vector3s and Float32Array reused each frame to avoid
+   * per-frame allocation on the hot animation path.
+   */
+  private readonly _scratchStart = new THREE.Vector3();
+  private readonly _scratchEnd = new THREE.Vector3();
+  /** Last endpoint values written to the geometry; used to skip setAttribute when unchanged. */
+  private readonly _lastStart = new THREE.Vector3(NaN, NaN, NaN);
+  private readonly _lastEnd = new THREE.Vector3(NaN, NaN, NaN);
+  /** Persistent position buffer — 2 vertices × 3 floats. Avoids a new Float32Array per frame. */
+  private readonly _positionBuf = new Float32Array(6);
+
   constructor(
     // @Optional() so flat test beds that don't provide all services still compile.
     @Optional() private sceneService?: SceneService,
@@ -166,8 +178,9 @@ export class TowerFireZonePreviewService implements OnDestroy {
       veinseekerBoosted,
     );
 
-    // Convert tower world position.
-    const towerWorld = new THREE.Vector3();
+    // Convert tower world position. Reuse _scratchStart as a temporary vector
+    // before it is overwritten below (single allocation on the hot path).
+    const towerWorld = this._scratchStart;
     towerGroup.getWorldPosition(towerWorld);
 
     // Convert current enemy grid position to world coords.
@@ -194,10 +207,10 @@ export class TowerFireZonePreviewService implements OnDestroy {
     }
 
     const y = towerWorld.y + TOWER_FIRE_ZONE_PREVIEW_CONFIG.yOffset;
-    const start = new THREE.Vector3(towerWorld.x, y, towerWorld.z);
-    const end = new THREE.Vector3(projectedWorldX, y, projectedWorldZ);
+    this._scratchStart.set(towerWorld.x, y, towerWorld.z);
+    this._scratchEnd.set(projectedWorldX, y, projectedWorldZ);
 
-    const length = start.distanceTo(end);
+    const length = this._scratchStart.distanceTo(this._scratchEnd);
     if (length < 0.001) {
       this.hide();
       return;
@@ -211,16 +224,26 @@ export class TowerFireZonePreviewService implements OnDestroy {
       // Update color in case selection changed tower type.
       this.lineMat.color.setHex(color);
 
-      // Rebuild geometry with the new endpoint pair.
-      const positions = new Float32Array([
-        start.x, start.y, start.z,
-        end.x, end.y, end.z,
-      ]);
-      this.lineGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      // computeLineDistances() populates the 'lineDistance' attribute that
-      // LineDashedMaterial requires. Without it dashes won't appear.
-      this.line.computeLineDistances();
-      this.lineGeo.attributes['position'].needsUpdate = true;
+      // Only overwrite the GPU buffer when an endpoint has actually moved.
+      // This avoids a new Float32Array allocation and a BufferAttribute upload
+      // every frame when both tower and projected target are stationary.
+      const startMoved = !this._scratchStart.equals(this._lastStart);
+      const endMoved   = !this._scratchEnd.equals(this._lastEnd);
+      if (startMoved || endMoved) {
+        this._positionBuf[0] = this._scratchStart.x;
+        this._positionBuf[1] = this._scratchStart.y;
+        this._positionBuf[2] = this._scratchStart.z;
+        this._positionBuf[3] = this._scratchEnd.x;
+        this._positionBuf[4] = this._scratchEnd.y;
+        this._positionBuf[5] = this._scratchEnd.z;
+        this.lineGeo.setAttribute('position', new THREE.BufferAttribute(this._positionBuf, 3));
+        // computeLineDistances() populates the 'lineDistance' attribute that
+        // LineDashedMaterial requires. Without it dashes won't appear.
+        this.line.computeLineDistances();
+        this.lineGeo.attributes['position'].needsUpdate = true;
+        this._lastStart.copy(this._scratchStart);
+        this._lastEnd.copy(this._scratchEnd);
+      }
 
       this.line.visible = true;
     }
@@ -244,6 +267,9 @@ export class TowerFireZonePreviewService implements OnDestroy {
     }
     this.line = null;
     this.attachedScene = null;
+    // Reset cached endpoints so the first update after a new encounter rebuilds the buffer.
+    this._lastStart.set(NaN, NaN, NaN);
+    this._lastEnd.set(NaN, NaN, NaN);
   }
 
   // ── Private ──────────────────────────────────────────────────────────────

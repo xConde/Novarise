@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RunSummaryComponent } from './run-summary.component';
 import { RunState, RunStatus, DEFAULT_RUN_CONFIG } from '../../models/run-state.model';
 import { RelicId } from '../../models/relic.model';
+import { NodeType } from '../../models/node-map.model';
 
 function makeRunState(overrides: Partial<RunState> = {}): RunState {
   return {
@@ -202,6 +203,54 @@ describe('RunSummaryComponent', () => {
     fixture.detectChanges();
     const timelineSection = (fixture.nativeElement as HTMLElement).querySelector('.run-summary__timeline');
     expect(timelineSection).toBeNull();
+  });
+
+  describe('nodeTypeDisplayName', () => {
+    it('returns "Battle" for NodeType.COMBAT', () => {
+      expect(component.nodeTypeDisplayName(NodeType.COMBAT)).toBe('Battle');
+    });
+
+    it('returns "Elite Battle" for NodeType.ELITE', () => {
+      expect(component.nodeTypeDisplayName(NodeType.ELITE)).toBe('Elite Battle');
+    });
+
+    it('returns "Rest Site" for NodeType.REST', () => {
+      expect(component.nodeTypeDisplayName(NodeType.REST)).toBe('Rest Site');
+    });
+
+    it('returns "Shop" for NodeType.SHOP', () => {
+      expect(component.nodeTypeDisplayName(NodeType.SHOP)).toBe('Shop');
+    });
+
+    it('returns "Event" for NodeType.EVENT', () => {
+      expect(component.nodeTypeDisplayName(NodeType.EVENT)).toBe('Event');
+    });
+
+    it('returns "Boss" for NodeType.BOSS', () => {
+      expect(component.nodeTypeDisplayName(NodeType.BOSS)).toBe('Boss');
+    });
+
+    it('returns the raw string for unrecognised node types', () => {
+      expect(component.nodeTypeDisplayName('some_future_type')).toBe('some_future_type');
+    });
+  });
+
+  it('renders friendly display names in the Journey list instead of raw enum strings', () => {
+    component.runState = makeRunState({
+      encounterResults: [
+        { nodeId: 'n1', nodeType: NodeType.COMBAT, victory: true, livesLost: 0, goldEarned: 50, enemiesKilled: 10, wavesCompleted: 3, completedChallenges: [] },
+        { nodeId: 'n2', nodeType: NodeType.ELITE, victory: false, livesLost: 5, goldEarned: 0, enemiesKilled: 5, wavesCompleted: 2, completedChallenges: [] },
+        { nodeId: 'n3', nodeType: NodeType.REST, victory: true, livesLost: 0, goldEarned: 0, enemiesKilled: 0, wavesCompleted: 0, completedChallenges: [] },
+        { nodeId: 'n4', nodeType: NodeType.BOSS, victory: true, livesLost: 1, goldEarned: 100, enemiesKilled: 40, wavesCompleted: 10, completedChallenges: [] },
+      ],
+    });
+    fixture.detectChanges();
+
+    const typeEls = (fixture.nativeElement as HTMLElement).querySelectorAll('.encounter-entry__type');
+    expect(typeEls[0].textContent?.trim()).toBe('Battle');
+    expect(typeEls[1].textContent?.trim()).toBe('Elite Battle');
+    expect(typeEls[2].textContent?.trim()).toBe('Rest Site');
+    expect(typeEls[3].textContent?.trim()).toBe('Boss');
   });
 
   it('ascension badge is shown only when ascensionLevel > 0', () => {

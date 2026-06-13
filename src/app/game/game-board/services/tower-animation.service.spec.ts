@@ -1428,6 +1428,25 @@ describe('TowerAnimationService', () => {
       expect(mat.opacity).toBeCloseTo(0.42, 4);
       disposeRing(ring);
     });
+
+    it('reduce-motion: holds opacity at opacityMax and skips sine', () => {
+      const ring = makeRingMesh(true);
+      const mat = ring.material as THREE.MeshBasicMaterial;
+      mat.opacity = 0.1; // force a value far from opacityMax
+      service.tickSelectionPulse(new Map([['t', ring]]), 0.0, true);
+      expect(mat.opacity).toBeCloseTo(SELECTION_PULSE_CONFIG.opacityMax, 4);
+      disposeRing(ring);
+    });
+
+    it('reduce-motion: does not animate — calling twice gives same result', () => {
+      const ring = makeRingMesh(true);
+      const mat = ring.material as THREE.MeshBasicMaterial;
+      service.tickSelectionPulse(new Map([['t', ring]]), 0.0, true);
+      const first = mat.opacity;
+      service.tickSelectionPulse(new Map([['t', ring]]), 100.0, true);
+      expect(mat.opacity).toBeCloseTo(first, 4);
+      disposeRing(ring);
+    });
   });
 
   // ---- tickHoverLift (Phase I Sprint 62 infra) ----

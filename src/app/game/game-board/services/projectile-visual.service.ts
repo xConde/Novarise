@@ -41,6 +41,17 @@ export class ProjectileVisualService implements OnDestroy {
   /** Managed list of all in-flight projectile entries (hitscan + bolt + arc + splash + aura). */
   private readonly entries: ProjectileEntry[] = [];
 
+  /**
+   * Cached OS-level reduce-motion media query list. Queried once at
+   * construction time to avoid calling window.matchMedia on every fire().
+   * The `matches` property is live — it reflects the current preference
+   * without requiring repeated matchMedia calls.
+   */
+  private readonly _reduceMotionMql: MediaQueryList | null =
+    typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(prefers-reduced-motion: reduce)')
+      : null;
+
   // ── Public API ───────────────────────────────────────────────────────────
 
   /**
@@ -448,15 +459,13 @@ export class ProjectileVisualService implements OnDestroy {
   /**
    * Returns true when any reduce-motion preference is active.
    * Checks both the CSS class applied by the settings toggle and the
-   * OS-level media query so all code paths are covered.
+   * OS-level media query. The MQL is cached at construction time so
+   * this method never calls window.matchMedia on the hot fire path.
    */
   private isReduceMotion(): boolean {
     if (typeof document === 'undefined') return false;
     if (document.body.classList.contains('reduce-motion')) return true;
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    }
-    return false;
+    return this._reduceMotionMql?.matches ?? false;
   }
 
   /** Remove the hitscan line from its scene and free all GPU resources. */

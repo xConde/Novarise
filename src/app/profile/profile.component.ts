@@ -26,11 +26,31 @@ export interface TowerKillRow {
 const CATEGORY_LABELS: Record<AchievementCategory, string> = {
   campaign: 'Campaign',
   combat: 'Combat',
+  // endless is dev/test-only infra — no endless mode exists in run mode; category excluded from display
   endless: 'Endless',
   challenge: 'Challenge',
 };
 
-const CATEGORY_ORDER: AchievementCategory[] = ['campaign', 'combat', 'endless', 'challenge'];
+// Endless mode does not exist in run mode — survivor/endless_30/endless_50/endless_100
+// are dev/test-only and cannot be earned. Three-star scoring (three_star_5/three_star_all)
+// requires a per-map star system that is also unreachable in run mode.
+// These ids are retained in the achievement model for data-migration safety but are
+// excluded from all display surfaces here.
+const DEAD_ACHIEVEMENT_IDS = new Set<string>([
+  'survivor',
+  'endless_30',
+  'endless_50',
+  'endless_100',
+  'three_star_5',
+  'three_star_all',
+]);
+
+/** Achievements reachable in run mode — excludes endless and three-star campaign entries. */
+export const DISPLAY_ACHIEVEMENTS: Achievement[] = ACHIEVEMENTS.filter(
+  (a) => !DEAD_ACHIEVEMENT_IDS.has(a.id)
+);
+
+const CATEGORY_ORDER: AchievementCategory[] = ['campaign', 'combat', 'challenge'];
 
 const ALL_TOWER_TYPES: TowerType[] = [
   TowerType.BASIC,
@@ -41,7 +61,7 @@ const ALL_TOWER_TYPES: TowerType[] = [
   TowerType.MORTAR,
 ];
 
-const TOTAL_ACHIEVEMENTS = 26;
+const TOTAL_ACHIEVEMENTS = 20;
 
 const RANK_THRESHOLDS: { min: number; title: string }[] = [
   { min: 25, title: 'Novarise' },
@@ -59,7 +79,7 @@ const RANK_THRESHOLDS: { min: number; title: string }[] = [
 })
 export class ProfileComponent implements OnInit {
   profile!: PlayerProfile;
-  allAchievements: Achievement[] = ACHIEVEMENTS;
+  allAchievements: Achievement[] = DISPLAY_ACHIEVEMENTS;
   categoryGroups: AchievementCategoryGroup[] = [];
   towerKillRows: TowerKillRow[] = [];
   arsenalExpanded = false;
@@ -82,7 +102,7 @@ export class ProfileComponent implements OnInit {
 
   private buildCategoryGroups(): AchievementCategoryGroup[] {
     return CATEGORY_ORDER.map((category) => {
-      const achievements = ACHIEVEMENTS.filter((a) => a.category === category);
+      const achievements = DISPLAY_ACHIEVEMENTS.filter((a) => a.category === category);
       const unlockedCount = achievements.filter((a) => this.unlockedSet.has(a.id)).length;
       return {
         category,

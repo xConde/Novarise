@@ -1,7 +1,8 @@
-import { Component, ElementRef, EventEmitter, HostListener, Input, OnInit, Output } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { CardInstance } from '../../../../run/models/card.model';
 import { getCardDefinition } from '../../../../run/constants/card-definitions';
 import { ARCHETYPE_DISPLAY } from '../../../../run/constants/archetype.constants';
+import { FocusTrap } from '@shared/utils/focus-trap.util';
 
 interface GroupedCard {
   cardId: string;
@@ -22,22 +23,29 @@ interface GroupedCard {
   templateUrl: './pile-inspector.component.html',
   styleUrls: ['./pile-inspector.component.scss'],
 })
-export class PileInspectorComponent implements OnInit {
+export class PileInspectorComponent implements OnInit, OnDestroy {
   constructor(private readonly elementRef: ElementRef<HTMLElement>) {}
   @Input() pile: CardInstance[] = [];
   @Input() label = 'Pile';
   @Output() closed = new EventEmitter<void>();
 
   private previousFocus: HTMLElement | null = null;
+  private readonly focusTrap = new FocusTrap();
 
   ngOnInit(): void {
     // Save trigger element so we can restore focus on close (a11y: WCAG 2.1 §3.2.5)
     this.previousFocus = document.activeElement as HTMLElement | null;
-    // Focus the close button once the modal is in the DOM
+    // Focus the close button once the modal is in the DOM, then activate the
+    // focus trap so Tab cycles within the dialog.
     setTimeout(() => {
       const closeBtn = this.elementRef.nativeElement.querySelector<HTMLElement>('.pile-inspector__close');
       closeBtn?.focus();
+      this.focusTrap.activate(this.elementRef.nativeElement);
     }, 0);
+  }
+
+  ngOnDestroy(): void {
+    this.focusTrap.deactivate();
   }
 
   /** Groups identical cards (same cardId + upgraded flag) and sorts alphabetically. */
@@ -75,6 +83,7 @@ export class PileInspectorComponent implements OnInit {
   }
 
   close(): void {
+    this.focusTrap.deactivate();
     this.closed.emit();
     this.previousFocus?.focus();
   }

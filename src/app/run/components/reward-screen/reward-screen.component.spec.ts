@@ -7,6 +7,7 @@ import { RelicId, RelicRarity } from '../../models/relic.model';
 import { CardId } from '../../models/card.model';
 import { ChallengeType } from '../../data/challenges';
 import { NodeType } from '../../models/node-map.model';
+import { SKIP_GOLD_BY_NODE_TYPE } from '../../constants/run.constants';
 
 // Stub for CardDraftComponent so we don't pull in its full dependency tree
 @Component({
@@ -488,14 +489,14 @@ describe('RewardScreenComponent', () => {
   // ── S9: card-skip gold ────────────────────────────────────────────────
 
   describe('skipGoldAmount (S9)', () => {
-    it('skipGoldAmount is 25 when nodeType is COMBAT', () => {
+    it('skipGoldAmount is 15 when nodeType is COMBAT', () => {
       component.config = { ...MOCK_CONFIG, nodeType: NodeType.COMBAT };
-      expect(component.skipGoldAmount).toBe(25);
+      expect(component.skipGoldAmount).toBe(SKIP_GOLD_BY_NODE_TYPE[NodeType.COMBAT]);
     });
 
-    it('skipGoldAmount is 50 when nodeType is ELITE', () => {
+    it('skipGoldAmount is 30 when nodeType is ELITE', () => {
       component.config = { ...MOCK_CONFIG, nodeType: NodeType.ELITE };
-      expect(component.skipGoldAmount).toBe(50);
+      expect(component.skipGoldAmount).toBe(SKIP_GOLD_BY_NODE_TYPE[NodeType.ELITE]);
     });
 
     it('skipGoldAmount is 75 when nodeType is BOSS', () => {
@@ -517,7 +518,7 @@ describe('RewardScreenComponent', () => {
 
       expect(component.cardPicked).toBeTrue();
       expect(emitted.length).toBe(1);
-      expect(emitted[0]).toEqual({ type: 'gold', amount: 25 });
+      expect(emitted[0]).toEqual({ type: 'gold', amount: SKIP_GOLD_BY_NODE_TYPE[NodeType.COMBAT] });
     });
 
     it('onCardSkipped() does NOT emit when skipGoldAmount is 0 (REST)', () => {

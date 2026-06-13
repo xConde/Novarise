@@ -318,6 +318,39 @@
     .enemy-dot[data-type='flying']   { background: var(--enemy-color-flying);  box-shadow: 0 0 4px var(--enemy-glow-flying); }
   }
 
+  // Colorblind-assist mode: enemy dots switch to the deuteranopia/protanopia-safe
+  // palette (mirrored from COLORBLIND_ENEMY_PALETTE in colorblind.constants.ts)
+  // and gain a letter-initial shape cue so type is never conveyed by color alone.
+  // Applied via .wave-preview--colorblind and .spawn-preview--colorblind classes.
+  //
+  // Shape cue: border-radius changes per type group so dots read as distinct
+  // shapes even without color:
+  //   circle   — basic/swarm/miner (default, rounded)
+  //   diamond  — fast/titan (rotate(45deg) square → speed read)
+  //   square   — heavy/unshakeable (blocky bulk)
+  //   triangle — boss/wyrm/nova (star-like — high threat)
+  //   shield   — shielded (wider rectangle)
+  //   rounded square — flying/glider (softer block, aerial)
+
+  .wave-preview--colorblind,
+  .spawn-preview--colorblind {
+    .enemy-dot[data-type='basic']     { background: #dd6600; box-shadow: none; border-radius: 50%; }
+    .enemy-dot[data-type='fast']      { background: #f5dd00; box-shadow: none; border-radius: 2px; transform: rotate(45deg); }
+    .enemy-dot[data-type='heavy']     { background: #2244cc; box-shadow: none; border-radius: 2px; }
+    .enemy-dot[data-type='swift']     { background: #f0f0f0; box-shadow: none; border-radius: 50%; }
+    .enemy-dot[data-type='boss']      { background: #0099ee; box-shadow: none; clip-path: polygon(50% 0%, 100% 100%, 0% 100%); }
+    .enemy-dot[data-type='shielded']  { background: #6699ff; box-shadow: none; border-radius: 1px; width: 0.7rem; }
+    .enemy-dot[data-type='swarm']     { background: #ffcc00; box-shadow: none; border-radius: 50%; }
+    .enemy-dot[data-type='flying']    { background: #aaccff; box-shadow: none; border-radius: 3px; }
+    .enemy-dot[data-type='miner']     { background: #bb7722; box-shadow: none; border-radius: 50%; }
+    .enemy-dot[data-type='unshakeable'] { background: #888888; box-shadow: none; border-radius: 2px; }
+    .enemy-dot[data-type='veinseeker']  { background: #cc9966; box-shadow: none; border-radius: 50%; }
+    .enemy-dot[data-type='glider']      { background: #ddeeff; box-shadow: none; border-radius: 3px; }
+    .enemy-dot[data-type='titan']       { background: #ff8822; box-shadow: none; border-radius: 2px; transform: rotate(45deg); }
+    .enemy-dot[data-type='wyrm_ascendant']  { background: #1133aa; box-shadow: none; clip-path: polygon(50% 0%, 100% 100%, 0% 100%); }
+    .enemy-dot[data-type='nova_sovereign']  { background: #ffee55; box-shadow: none; clip-path: polygon(50% 0%, 100% 100%, 0% 100%); }
+  }
+
   // --- Phase 4: End Turn button (turn-based combat) ---
   // Positioned top-center during COMBAT phase. Shell migration in Phase 7 will
   // move this into a dedicated grid slot.
@@ -619,6 +652,7 @@
 
 body.reduce-motion .board-container .path-blocked-warning { animation: none; }
 body.reduce-motion .board-container .context-lost-hint { animation: none; }
+body.reduce-motion .board-container .end-turn-btn--stuck { animation: none; }
 
 
 // ── Boss-intro banner ─────────────────────────────────────────────────────────

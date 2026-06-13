@@ -199,4 +199,39 @@ describe('CombatVFXService', () => {
       expect(() => service.cleanup(mockScene)).not.toThrow();
     });
   });
+
+  // ---- updateVisuals — in-place reverse-splice (no survivor-array alloc) ----
+
+  describe('updateVisuals in-place expiry', () => {
+    it('removes only the expired arc when multiple arcs exist', () => {
+      const t0 = 1000;
+      // Arc 0: expires at t0 + lifetime*1000 (long lifetime)
+      spyOn(performance, 'now').and.returnValue(t0);
+      service.createChainArc(0, 0, 1, 1, 0xffffff, mockScene);
+      service.createChainArc(2, 2, 3, 3, 0xffffff, mockScene);
+      expect(service.getChainArcCount()).toBe(2);
+
+      // Advance so only the first arc's expiresAt is reached but NOT the second's.
+      // Both were created at t0, so both have expiresAt = t0 + lifetime*1000.
+      // Advance past expiry for both but remove only one by creating one *after* the spy advance.
+      //
+      // Simpler approach: create second arc at a later fake time.
+      service.cleanup(mockScene);
+
+      // Create arc 1 at t=1000, arc 2 at t=5000 (fresh registrations).
+      (performance.now as jasmine.Spy).and.returnValue(1000);
+      service.createChainArc(0, 0, 1, 1, 0xffffff, mockScene); // expiresAt = 1000 + lifetime*1000
+      (performance.now as jasmine.Spy).and.returnValue(5000);
+      service.createChainArc(2, 2, 3, 3, 0xffffff, mockScene); // expiresAt = 5000 + lifetime*1000
+      expect(service.getChainArcCount()).toBe(2);
+
+      // Now advance to just after arc1 expires but before arc2 expires.
+      const lifetime = CHAIN_LIGHTNING_CONFIG.arcLifetime * 1000;
+      (performance.now as jasmine.Spy).and.returnValue(1000 + lifetime + 1);
+      service.updateVisuals(mockScene);
+
+      // Only arc 1 removed — arc 2 still alive.
+      expect(service.getChainArcCount()).toBe(1);
+    });
+  });
 });

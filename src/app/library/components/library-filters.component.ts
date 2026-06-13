@@ -89,12 +89,13 @@ export class LibraryFiltersComponent implements OnDestroy {
     { value: CardRarity.RARE,     label: 'Rare' },
   ];
 
+  // Siegeworks is intentionally omitted — Phase 5 archetype with no cards yet.
+  // Add it back when Phase 5 content lands.
   readonly archetypeOptions: readonly { value: ArchetypeFilter; label: string }[] = [
     { value: 'neutral',      label: 'Neutral' },
     { value: 'cartographer', label: 'Cartographer' },
     { value: 'highground',   label: 'Highground' },
     { value: 'conduit',      label: 'Conduit' },
-    { value: 'siegeworks',   label: 'Siegeworks' },
   ];
 
   readonly keywordOptions: readonly { value: KeywordFilter; label: string }[] = [

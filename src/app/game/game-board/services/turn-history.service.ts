@@ -130,6 +130,11 @@ export class TurnHistoryService {
     return completed;
   }
 
+  /** Returns true when a turn tracking window is currently open (beginTurn called, endTurn not yet). */
+  hasOpenTurn(): boolean {
+    return this.current !== null;
+  }
+
   /** Most recent completed turn, or null if none. */
   getLastCompletedTurn(): TurnEventRecord | null {
     const all = this.recordsSubject.value;

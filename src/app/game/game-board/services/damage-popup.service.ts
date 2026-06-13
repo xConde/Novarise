@@ -52,7 +52,9 @@ export class DamagePopupService {
     const jitterX = (Math.random() - 0.5) * DAMAGE_POPUP_CONFIG.jitterRange;
     sprite.position.set(position.x + jitterX, position.y + DAMAGE_POPUP_CONFIG.spawnHeightOffset, position.z);
     scene.add(sprite);
-    this.popups.push({ sprite, age: 0 });
+    // Stagger simultaneous flushes so a multi-hit turn doesn't strobe: each
+    // popup starts at a small random age offset, desynchronising their rise/fade.
+    this.popups.push({ sprite, age: Math.random() * DAMAGE_POPUP_CONFIG.spawnAgeJitter });
   }
 
   /**
