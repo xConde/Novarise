@@ -1123,6 +1123,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Starting a wave counts as the START_WAVE tutorial step by definition.
     this.tutorialService.dismissOnPlayerAction();
     this.waveCombat.startWave();
+    // Ensure a turn-history window is open for the new wave's opening turn.
+    // endTurn() opens one on COMBAT/INTERMISSION, but guard here so a wave that
+    // begins without an open window still tracks cards played on its first turn.
+    if (!this.turnHistoryService.hasOpenTurn()) {
+      this.turnHistoryService.beginTurn(this.currentTurnNumber);
+    }
   }
 
   /** Returns the pre-computed tactical badges for a given enemy type. Always returns an array (never null). */
@@ -1274,10 +1280,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // subscription will surface it automatically. No flash call needed.
       if (postState.phase === GamePhase.COMBAT) {
         this.flashTurnBanner();
-        // Open the NEXT turn's tracking window so card plays during the new
-        // planning phase are attributed to the correct record. currentTurnNumber
-        // uses combatLoopService.getTurnNumber() which waveCombat.endTurn() may
-        // have already incremented — so this correctly labels the new turn.
+      }
+      // Open the NEXT turn's tracking window so card plays during the upcoming
+      // planning phase are attributed to the correct record. This covers both
+      // the next combat turn AND the intermission before the next wave (cards
+      // are playable during INTERMISSION). Skipped on VICTORY/DEFEAT — no next
+      // turn. currentTurnNumber reads combatLoopService.getTurnNumber(), which
+      // waveCombat.endTurn() may have already incremented, so the label is correct.
+      if (postState.phase === GamePhase.COMBAT || postState.phase === GamePhase.INTERMISSION) {
         this.turnHistoryService.beginTurn(this.currentTurnNumber);
       }
     } finally {

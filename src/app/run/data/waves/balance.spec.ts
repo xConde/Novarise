@@ -15,7 +15,7 @@
  */
 
 import { TOWER_CONFIGS, UPGRADE_MULTIPLIERS, TowerType } from '../../../game/game-board/models/tower.model';
-import { ENEMY_STATS, EnemyType, SWIFT_LEAK_DAMAGE } from '../../../game/game-board/models/enemy.model';
+import { ENEMY_STATS, EnemyType } from '../../../game/game-board/models/enemy.model';
 import {
   DIFFICULTY_PRESETS,
   DifficultyLevel,
@@ -281,7 +281,7 @@ describe('Balance — Enemy Stats', () => {
     expect(ENEMY_STATS[EnemyType.SHIELDED].leakDamage).toBe(2);
     expect(ENEMY_STATS[EnemyType.BASIC].leakDamage).toBe(1);
     expect(ENEMY_STATS[EnemyType.FAST].leakDamage).toBe(1);
-    expect(ENEMY_STATS[EnemyType.SWIFT].leakDamage).toBe(SWIFT_LEAK_DAMAGE);
+    expect(ENEMY_STATS[EnemyType.SWIFT].leakDamage).toBe(2);
     expect(ENEMY_STATS[EnemyType.SWARM].leakDamage).toBe(1);
     expect(ENEMY_STATS[EnemyType.FLYING].leakDamage).toBe(1);
   });

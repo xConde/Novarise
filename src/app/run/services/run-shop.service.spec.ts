@@ -207,21 +207,34 @@ describe('RunShopService', () => {
     });
 
     it('returns unchanged counter when no card slots are generated (SHOP_SLOT_REDUCTION empties them)', () => {
-      // At an extremely high ascension reduction we cannot safely zero cards
-      // via config alone, so stub an unreachable ascension level by intercepting
-      // the cards-in-shop count. Instead, verify the round-trip when counter is 0
-      // and no cards land rare — counter is 0 + picks.
-      const state = makeRunState({ cardPityCounter: 0 });
+      // SHOP_CONFIG.cardsInShop (3) minus SHOP_SLOT_REDUCTION requires >= 3 reductions to reach 0,
+      // which is impossible in a single run. Instead verify the else-branch contract directly:
+      // when generateShopItems produces zero card items, the returned counter must equal the input.
+      // We use a known non-zero counter (5) so the assertion is not trivially vacuous.
+      const KNOWN_COUNTER = 5;
+      const state = makeRunState({ cardPityCounter: KNOWN_COUNTER });
       const updatedCounter = service.generateShopItems(state, () => 0.99);
-      // With rng=0.99, weighted selection for rarity will land uncommon or rare.
-      // Either way counter should change from baseline (0) when cards were picked.
       const cardItems = service.getShopItems().filter(i => i.item.type === 'card');
       if (cardItems.length === 0) {
-        expect(updatedCounter).toBe(0);
+        // No card slots generated — counter must be returned unchanged (else-branch of pity update).
+        expect(updatedCounter).toBe(KNOWN_COUNTER);
       } else {
-        // At least one card was picked; counter must differ from the input if
-        // any non-rare was selected, or reset to 0 if rare fired.
-        expect(updatedCounter).toBeGreaterThanOrEqual(0);
+        // Cards were generated; pity counter must have been updated from the input value.
+        // rng=0.99 biases toward rare (highest rarity bucket), so counter likely resets to 0;
+        // non-rare picks increment it. Either way the returned value differs from input, or
+        // if all picks happened to be rare, it resets to exactly 0 — not KNOWN_COUNTER.
+        const allRare = cardItems.every(i => {
+          const def = CARD_DEFINITIONS[(i.item as { cardId: CardId }).cardId];
+          return def?.rarity === CardRarity.RARE;
+        });
+        // After picks: if all rare → counter = 0; if any non-rare → counter = incremented value.
+        // In neither case should the counter remain at the original KNOWN_COUNTER (5).
+        expect(updatedCounter).not.toBe(KNOWN_COUNTER);
+        if (allRare) {
+          expect(updatedCounter).toBe(0);
+        } else {
+          expect(updatedCounter).toBeGreaterThanOrEqual(KNOWN_COUNTER + 1);
+        }
       }
     });
   });

@@ -42,6 +42,13 @@ interface TurnMortarZone {
   dotDamage: number;
   /** Turn number AFTER which the zone expires (zone is active on turns < expiresOnTurn). */
   expiresOnTurn: number;
+  /**
+   * Turn the zone was placed. The zone does NOT tick on its placement turn
+   * (fireTurn already dealt the initial blast), so DoT starts the next turn.
+   * Optional: zones restored from a checkpoint omit it — they are always past
+   * placement, so they tick normally.
+   */
+  placedOnTurn?: number;
   statusEffect?: StatusEffectType;
   /**
    * Level of the mortar tower at the time of placement, frozen for the life
@@ -604,15 +611,16 @@ export class TowerCombatService {
         }
       }
 
-      // Drop the persistent zone — ticks for `dotDuration` turns starting NEXT turn.
-      // +1 offset prevents the zone from double-hitting on the placement turn
-      // (fireTurn already dealt initial blast damage; zone should first tick on
-      // the following turn, not the same turn tickMortarZonesForTurn is called).
+      // Drop the persistent zone — ticks for `dotDuration` turns starting NEXT
+      // turn. placedOnTurn makes tickMortarZonesForTurn skip the placement turn
+      // (fireTurn already dealt the initial blast), and expiresOnTurn extends the
+      // lifetime by 1 so the full dotDuration ticks still land on later turns.
       this.turnMortarZones.push({
         centerX: target.position.x,
         centerZ: target.position.z,
         blastRadius,
         dotDamage: blastDamage,
+        placedOnTurn: turnNumber,
         expiresOnTurn: turnNumber + dotDuration + 1,
         statusEffect: stats.statusEffect,
         placerLevel: tower.level,
@@ -984,6 +992,12 @@ export class TowerCombatService {
     for (const zone of this.turnMortarZones) {
       if (turnNumber >= zone.expiresOnTurn) {
         continue; // Zone expired this turn — visual mesh expiry is RAF-driven in CombatVFX
+      }
+      if (zone.placedOnTurn !== undefined && turnNumber === zone.placedOnTurn) {
+        // Placement turn — fireTurn already dealt the initial blast. DoT starts
+        // next turn, so skip ticking but keep the zone alive.
+        surviving.push(zone);
+        continue;
       }
 
       const candidates = this.spatialGrid.queryRadius(zone.centerX, zone.centerZ, zone.blastRadius);

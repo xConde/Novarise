@@ -219,7 +219,9 @@ import { NodeType } from '../models/node-map.model';
 /**
  * Gold awarded when the player skips the card reward, keyed by node type.
  * StS convention: skipping a reward still pays a consolation amount.
- * Boss nodes surface no card reward so the value is 0 (unreachable path).
+ * Boss nodes currently surface no card-reward UI, so the skip path is
+ * unreachable in the current flow; the value is kept non-zero (75) to
+ * preserve the correct payout if boss card rewards are added in the future.
  * UNKNOWN is resolved to COMBAT or EVENT before rewards are generated,
  * so its value is 0 as a safe default.
  */

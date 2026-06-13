@@ -417,10 +417,13 @@ export class RunService {
 
     if (result.victory) {
       const goldBonus = this.currentEncounter?.goldReward ?? 0;
+      // Challenge bonuses are shown on the reward screen (goldPickup) but must be
+      // credited to the wallet here so the displayed total is actually paid out.
+      const challengeGold = computeChallengeGoldBonus(result.completedChallenges);
       // finalGold carries the combat ending balance back to the run.
       // Falls back to (state.gold + result.goldEarned) for results that
       // predate the unified gold pool (old saves / test fixtures).
-      const carryGold = (result.finalGold ?? state.gold + result.goldEarned) + goldBonus;
+      const carryGold = (result.finalGold ?? state.gold + result.goldEarned) + goldBonus + challengeGold;
       this.updateState({
         ...state,
         lives: state.lives - result.livesLost,
@@ -1169,15 +1172,10 @@ export class RunService {
     return this.shopService.buildNonStarterCardPool();
   }
 
-  /**
-   * Build a pool of relics grouped by rarity from the provided source array.
-   */
+  /** Build a pool of relics grouped by rarity. Delegates to the shared shop-service
+   * helper so the two surfaces (reward picking here, shop generation there) cannot drift. */
   private buildRelicPool(source: RelicDefinition[]): Record<RelicRarity, RelicDefinition[]> {
-    return {
-      [RelicRarity.COMMON]: source.filter(r => r.rarity === RelicRarity.COMMON),
-      [RelicRarity.UNCOMMON]: source.filter(r => r.rarity === RelicRarity.UNCOMMON),
-      [RelicRarity.RARE]: source.filter(r => r.rarity === RelicRarity.RARE),
-    };
+    return this.shopService.buildRelicPool(source);
   }
 
   private cleanup(): void {

@@ -64,11 +64,18 @@ describe('AscensionModifierService', () => {
     });
 
     it('stacks ascension elite bonus multiplicatively on top of base elite multiplier', () => {
-      // A5 adds ELITE_HEALTH_MULTIPLIER 1.25 — result = 1.25 * 1.5 = 1.875 (plus any ENEMY_HEALTH_MULTIPLIER at A5)
+      // A5 accumulates:
+      //   ascBaseHealth       = A1.ENEMY_HEALTH_MULTIPLIER = 1.1
+      //   encounterBaseElite  = ENCOUNTER_CONFIG.eliteHealthMultiplier = 1.5
+      //   ascEliteHealth      = A5.ELITE_HEALTH_MULTIPLIER = 1.25
+      // final = 1.1 * 1.5 * 1.25 = 2.0625 (multiplicative — NOT 1.5+1.25)
+      // An additive regression (1.1*(1.5+1.25)=3.025 or 1.5*1.25+1.1=2.975) would NOT produce 2.0625.
+      const A1_ENEMY_HEALTH = 1.1;   // AscensionEffectType.ENEMY_HEALTH_MULTIPLIER at level 1
+      const A5_ELITE_HEALTH = 1.25;  // AscensionEffectType.ELITE_HEALTH_MULTIPLIER at level 5
+      const expected = A1_ENEMY_HEALTH * ENCOUNTER_CONFIG.eliteHealthMultiplier * A5_ELITE_HEALTH;
       service.apply(5, true, false);
       const arg = gameStateService.setAscensionModifierEffects.calls.mostRecent().args[0];
-      // Should be strictly greater than the base alone (1.5)
-      expect(arg.enemyHealthMultiplier).toBeGreaterThan(ENCOUNTER_CONFIG.eliteHealthMultiplier);
+      expect(arg.enemyHealthMultiplier).toBeCloseTo(expected, 3); // 2.0625
     });
 
     it('combines health multipliers for elite encounters at higher ascension', () => {

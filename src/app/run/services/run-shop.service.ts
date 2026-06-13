@@ -262,7 +262,9 @@ export class RunShopService {
     };
   }
 
-  private buildRelicPool(source: RelicDefinition[]): Record<RelicRarity, RelicDefinition[]> {
+  /** Group relics by rarity. Public so RunService's reward path shares this single
+   * implementation (see RunService.buildRelicPool). */
+  buildRelicPool(source: RelicDefinition[]): Record<RelicRarity, RelicDefinition[]> {
     return {
       [RelicRarity.COMMON]: source.filter(r => r.rarity === RelicRarity.COMMON),
       [RelicRarity.UNCOMMON]: source.filter(r => r.rarity === RelicRarity.UNCOMMON),
