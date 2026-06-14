@@ -7,10 +7,13 @@ import {
   MUSIC_GAIN_EPSILON,
   SCHEDULE_INTERVAL_MS,
   SCHEDULE_HORIZON_SECONDS,
+  MAX_SCHEDULER_CATCHUP_SECONDS,
   PAD_FADE_IN_SECONDS,
   PAD_FADE_OUT_SECONDS,
   PLUCK_NOTE_DURATION_SECONDS,
   PLUCK_ATTACK_SECONDS,
+  BASS_ATTACK_SECONDS,
+  BASS_RELEASE_SECONDS,
   COMPRESSOR_THRESHOLD_DB,
   COMPRESSOR_KNEE_DB,
   COMPRESSOR_RATIO,
@@ -133,14 +136,40 @@ export class MusicService {
       this.masterGain.gain.setValueAtTime(0, now);
     }
 
-    // Stop all active theme schedulers
+    // Stop scheduling new beats immediately, then tear down the oscillator
+    // nodes. On a fade-out the teardown is deferred until the fade completes so
+    // the still-sounding voices fade with the master rather than hard-stopping
+    // (which would click); on an instant stop the master is already at 0 so the
+    // nodes can be stopped right away. Leaving the nodes running (the previous
+    // behaviour) made them re-emerge audibly when the next theme restored the
+    // master gain.
     const themes = Object.keys(this.themeStates) as MusicTheme[];
     for (const theme of themes) {
+      const state = this.themeStates[theme];
+      if (!state) continue;
       this.stopThemeScheduler(theme);
+      if (fadeDuration > MUSIC_GAIN_EPSILON) {
+        this.scheduleDeferredTeardown(theme, state, fadeDuration * 1000);
+      } else {
+        this.stopThemeNodes(theme);
+      }
     }
 
     this.currentTheme = null;
     this.pendingTheme = null;
+  }
+
+  /**
+   * Tear down a theme's nodes after `delayMs`, but only if that exact ThemeState
+   * is still the active one — a rapid round-trip back to the theme may have
+   * already replaced it via startTheme(), and that newer instance must survive.
+   */
+  private scheduleDeferredTeardown(theme: MusicTheme, state: ThemeState, delayMs: number): void {
+    setTimeout(() => {
+      if (this.themeStates[theme] !== state) return;
+      this.stopThemeScheduler(theme);
+      this.stopThemeNodes(theme);
+    }, delayMs);
   }
 
   /** Update master music volume (0–1, clamped). */
@@ -148,6 +177,9 @@ export class MusicService {
     this.musicVolume = Math.min(1, Math.max(0, volume));
     if (this.masterGain && this.audioContext) {
       const now = this.audioContext.currentTime;
+      // Clear any in-flight fade so the new level holds instead of resuming the
+      // old ramp toward its previous destination.
+      this.masterGain.gain.cancelScheduledValues(now);
       this.masterGain.gain.setValueAtTime(this.musicVolume, now);
     }
   }
@@ -253,16 +285,16 @@ export class MusicService {
       if (oldState) {
         oldState.gainNode.gain.setValueAtTime(oldState.gainNode.gain.value, now);
         oldState.gainNode.gain.linearRampToValueAtTime(MUSIC_GAIN_EPSILON, now + fadeDuration);
-        // Stop old scheduler after the fade
-        const stopDelay = fadeDuration * 1000;
-        setTimeout(() => {
-          this.stopThemeScheduler(oldTheme);
-          this.stopThemeNodes(oldTheme);
-        }, stopDelay);
+        // Tear the old theme down after the fade — guarded so a rapid round-trip
+        // back to this same theme (which restarts it) is not torn down by this timer.
+        this.scheduleDeferredTeardown(oldTheme, oldState, fadeDuration * 1000);
       }
     }
 
-    // Ensure master gain is at current volume (may have been ramped to 0 by stopMusic)
+    // Restore master to current volume. cancelScheduledValues first clears any
+    // pending stopMusic() fade-to-zero ramp; otherwise that ramp keeps running
+    // and silences the theme we are about to start.
+    this.masterGain.gain.cancelScheduledValues(now);
     this.masterGain.gain.setValueAtTime(this.musicVolume, now);
 
     // Start new theme
@@ -344,7 +376,16 @@ export class MusicService {
     const state = this.themeStates[theme];
     if (!state) return;
 
-    const horizon = this.audioContext.currentTime + SCHEDULE_HORIZON_SECONDS;
+    const nowTime = this.audioContext.currentTime;
+
+    // If the scheduler slipped far behind real time (backgrounded tab throttles
+    // setInterval), snap forward to now rather than booking every missed beat —
+    // otherwise they all fire at once as a burst when the tab regains focus.
+    if (state.nextBeatTime < nowTime - MAX_SCHEDULER_CATCHUP_SECONDS) {
+      state.nextBeatTime = nowTime;
+    }
+
+    const horizon = nowTime + SCHEDULE_HORIZON_SECONDS;
 
     while (state.nextBeatTime < horizon) {
       this.scheduleBeat(theme, state, state.nextBeatTime);
@@ -477,13 +518,19 @@ export class MusicService {
       try { osc.stop(stopTime); } catch { /* already stopped */ }
     }
     try { pad.lfoOscillator.stop(stopTime); } catch { /* already stopped */ }
+
+    // Disconnect the layer's nodes once the fade completes so a long session
+    // does not accumulate stopped-but-connected nodes on the audio graph.
+    pad.lfoOscillator.onended = (): void => { this.stopPadLayer(pad); };
   }
 
   private stopPadLayer(pad: ActivePadLayer): void {
     for (const osc of pad.oscillators) {
       try { osc.stop(); } catch { /* already stopped */ }
+      try { osc.disconnect(); } catch { /* already disconnected */ }
     }
     try { pad.lfoOscillator.stop(); } catch { /* already stopped */ }
+    try { pad.lfoOscillator.disconnect(); } catch { /* already disconnected */ }
     try { pad.gainNode.disconnect(); } catch { /* already disconnected */ }
     try { pad.lfoGain.disconnect(); } catch { /* already disconnected */ }
     try { pad.filter.disconnect(); } catch { /* already disconnected */ }
@@ -500,9 +547,13 @@ export class MusicService {
     if (this.audioContext === null) return;
     const config = state.config;
 
-    // Stop previous bass
+    // Release the previous bass at the bar boundary with a short fade. A hard
+    // stop here clicks, and because the scheduler books beats up to
+    // SCHEDULE_HORIZON_SECONDS ahead, an immediate stop also cuts the still-
+    // sounding note off early. Fading at `startTime` keeps it click-free and
+    // musically aligned.
     for (const bass of state.bassLayers) {
-      this.stopBassLayer(bass);
+      this.fadeBassOut(bass, startTime);
     }
     state.bassLayers = [];
 
@@ -521,8 +572,10 @@ export class MusicService {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(bassHz, startTime);
 
+    // Attack ramp from silence avoids the onset click of an instant full-gain start.
     const gainNode = ctx.createGain();
-    gainNode.gain.setValueAtTime(config.bassLayer.gain, startTime);
+    gainNode.gain.setValueAtTime(MUSIC_GAIN_EPSILON, startTime);
+    gainNode.gain.linearRampToValueAtTime(config.bassLayer.gain, startTime + BASS_ATTACK_SECONDS);
 
     osc.connect(gainNode);
     gainNode.connect(state.gainNode);
@@ -532,6 +585,27 @@ export class MusicService {
 
     // Suppress unused lint warning
     void theme;
+  }
+
+  /**
+   * Fade a bass note to silence over BASS_RELEASE_SECONDS starting at `atTime`
+   * (the bar boundary), then stop and disconnect its nodes once the fade ends.
+   * Used for the per-bar bass transition; `stopBassLayer` remains the immediate
+   * teardown path used on theme stop / cleanup.
+   */
+  private fadeBassOut(bass: ActiveBassLayer, atTime: number): void {
+    const ctx = this.audioContext;
+    if (!ctx) return;
+
+    bass.gainNode.gain.setValueAtTime(bass.gainNode.gain.value, atTime);
+    bass.gainNode.gain.linearRampToValueAtTime(MUSIC_GAIN_EPSILON, atTime + BASS_RELEASE_SECONDS);
+
+    const stopTime = atTime + BASS_RELEASE_SECONDS + 0.02;
+    try { bass.oscillator.stop(stopTime); } catch { /* already stopped */ }
+    bass.oscillator.onended = (): void => {
+      try { bass.oscillator.disconnect(); } catch { /* already disconnected */ }
+      try { bass.gainNode.disconnect(); } catch { /* already disconnected */ }
+    };
   }
 
   private stopBassLayer(bass: ActiveBassLayer): void {
@@ -572,7 +646,9 @@ export class MusicService {
       config.pluckLayer.gain,
       beatTime + PLUCK_ATTACK_SECONDS,
     );
-    gainNode.gain.linearRampToValueAtTime(
+    // Exponential decay from the (positive) peak reads as a more natural pluck
+    // tail than a linear ramp, which holds too much energy near the end.
+    gainNode.gain.exponentialRampToValueAtTime(
       MUSIC_GAIN_EPSILON,
       beatTime + PLUCK_NOTE_DURATION_SECONDS,
     );
@@ -581,6 +657,10 @@ export class MusicService {
     gainNode.connect(state.gainNode);
     osc.start(beatTime);
     osc.stop(beatTime + PLUCK_NOTE_DURATION_SECONDS + 0.02);
+    osc.onended = (): void => {
+      try { osc.disconnect(); } catch { /* already disconnected */ }
+      try { gainNode.disconnect(); } catch { /* already disconnected */ }
+    };
   }
 
   // ── Private: Utility ─────────────────────────────────────────────────────

@@ -55,6 +55,14 @@ export const SCHEDULE_INTERVAL_MS = 200;
 export const SCHEDULE_HORIZON_SECONDS = 0.5;
 
 /**
+ * If the scheduler falls further behind real time than this (e.g. the tab was
+ * backgrounded and setInterval was throttled), snap the next beat forward to
+ * "now" instead of booking every missed beat at once — otherwise all the
+ * missed beats fire in a single burst when the tab regains focus.
+ */
+export const MAX_SCHEDULER_CATCHUP_SECONDS = 0.5;
+
+/**
  * Default master music volume (0–1).
  *
  * Target: music peaks near ~2× the effective SFX peak (~0.09 absolute),
@@ -102,6 +110,20 @@ export const PLUCK_NOTE_DURATION_SECONDS = 0.2;
 
 /** Volume ramp-up time for a pluck note, in seconds. */
 export const PLUCK_ATTACK_SECONDS = 0.02;
+
+/**
+ * Bass note attack, in seconds. The bass drone starts each bar at silence and
+ * ramps up over this window so the note onset does not click.
+ */
+export const BASS_ATTACK_SECONDS = 0.02;
+
+/**
+ * Bass note release, in seconds. When the next bar replaces the bass drone, the
+ * outgoing note ramps to silence over this window starting at the bar boundary
+ * (rather than being hard-stopped on the scheduler's clock), which removes the
+ * per-bar click and the early cut-off caused by the lookahead scheduler.
+ */
+export const BASS_RELEASE_SECONDS = 0.08;
 
 // ── HUB theme — calm, sparse ─────────────────────────────────────────────────
 

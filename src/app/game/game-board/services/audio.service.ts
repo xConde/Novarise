@@ -1,12 +1,24 @@
 import { Injectable } from '@angular/core';
 import { TowerType } from '../models/tower.model';
-import { AUDIO_CONFIG, SFX_CONFIGS, isSfxSequenceConfig } from '../constants/audio.constants';
+import {
+  AUDIO_CONFIG,
+  SFX_CONFIGS,
+  isSfxSequenceConfig,
+  SFX_LIMITER_THRESHOLD_DB,
+  SFX_LIMITER_KNEE_DB,
+  SFX_LIMITER_RATIO,
+  SFX_LIMITER_ATTACK_SECONDS,
+  SFX_LIMITER_RELEASE_SECONDS,
+  SFX_ATTACK_SECONDS,
+  MASTER_GAIN_RAMP_SECONDS,
+} from '../constants/audio.constants';
 import { SettingsService } from '@core/services/settings.service';
 
 @Injectable()
 export class AudioService {
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  private limiter: DynamicsCompressorNode | null = null;
   private _volume = AUDIO_CONFIG.masterVolume;
   private lastEnemyHitTime = -Infinity;
   private towerFiresThisFrame = 0;
@@ -31,10 +43,22 @@ export class AudioService {
       this.audioContext = new AudioContext();
       this.masterGain = this.audioContext.createGain();
       this.masterGain.gain.value = this.isMuted ? 0 : this._volume;
-      this.masterGain.connect(this.audioContext.destination);
+
+      // Soft limiter on the SFX bus: masterGain → limiter → destination.
+      // Keeps simultaneous combat voices from summing past 0 dBFS and clipping.
+      this.limiter = this.audioContext.createDynamicsCompressor();
+      this.limiter.threshold.value = SFX_LIMITER_THRESHOLD_DB;
+      this.limiter.knee.value = SFX_LIMITER_KNEE_DB;
+      this.limiter.ratio.value = SFX_LIMITER_RATIO;
+      this.limiter.attack.value = SFX_LIMITER_ATTACK_SECONDS;
+      this.limiter.release.value = SFX_LIMITER_RELEASE_SECONDS;
+
+      this.masterGain.connect(this.limiter);
+      this.limiter.connect(this.audioContext.destination);
     } catch {
       this.audioContext = null;
       this.masterGain = null;
+      this.limiter = null;
     }
 
     return this.audioContext;
@@ -67,8 +91,13 @@ export class AudioService {
       osc.frequency.setValueAtTime(frequency, ctx.currentTime + startDelay);
       osc.frequency.exponentialRampToValueAtTime(endFrequency, ctx.currentTime + startDelay + duration);
 
-      envGain.gain.setValueAtTime(gain, ctx.currentTime + startDelay);
-      envGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startDelay + duration);
+      // Click-free envelope: a few-ms linear attack avoids the onset pop of an
+      // instantaneous gain jump, then an exponential decay to near-silence.
+      const startAt = ctx.currentTime + startDelay;
+      const attack = Math.min(SFX_ATTACK_SECONDS, duration * 0.5);
+      envGain.gain.setValueAtTime(0, startAt);
+      envGain.gain.linearRampToValueAtTime(gain, startAt + attack);
+      envGain.gain.exponentialRampToValueAtTime(0.001, startAt + duration);
 
       osc.connect(envGain);
       envGain.connect(this.masterGain);
@@ -102,8 +131,11 @@ export class AudioService {
       source.buffer = buffer;
 
       const envGain = ctx.createGain();
-      envGain.gain.setValueAtTime(gain, ctx.currentTime + startDelay);
-      envGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startDelay + duration);
+      const startAt = ctx.currentTime + startDelay;
+      const attack = Math.min(SFX_ATTACK_SECONDS, duration * 0.5);
+      envGain.gain.setValueAtTime(0, startAt);
+      envGain.gain.linearRampToValueAtTime(gain, startAt + attack);
+      envGain.gain.exponentialRampToValueAtTime(0.001, startAt + duration);
 
       source.connect(envGain);
       envGain.connect(this.masterGain);
@@ -268,26 +300,39 @@ export class AudioService {
 
   setVolume(volume: number): void {
     this._volume = Math.max(0, Math.min(1, volume));
-    if (this.masterGain && !this.isMuted) {
-      this.masterGain.gain.value = this._volume;
+    if (!this.isMuted) {
+      this.rampMasterGain(this._volume);
     }
   }
 
   toggleMute(): void {
     const next = !this.isMuted;
     this.settingsService.update({ audioMuted: next });
-    if (this.masterGain) {
-      this.masterGain.gain.value = next ? 0 : this._volume;
-    }
+    this.rampMasterGain(next ? 0 : this._volume);
+  }
+
+  /**
+   * Ramp the master gain to `target` over a few ms instead of writing
+   * `.gain.value` directly — a direct write steps the level in one sample and
+   * clicks on any SFX voice that is mid-playback.
+   */
+  private rampMasterGain(target: number): void {
+    if (!this.masterGain || !this.audioContext) return;
+    const now = this.audioContext.currentTime;
+    this.masterGain.gain.cancelScheduledValues(now);
+    this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
+    this.masterGain.gain.linearRampToValueAtTime(target, now + MASTER_GAIN_RAMP_SECONDS);
   }
 
   // --- Lifecycle ---
 
   cleanup(): void {
     if (this.audioContext) {
+      try { this.limiter?.disconnect(); } catch { /* already disconnected */ }
       this.audioContext.close().catch(() => {});
       this.audioContext = null;
       this.masterGain = null;
+      this.limiter = null;
     }
   }
 }

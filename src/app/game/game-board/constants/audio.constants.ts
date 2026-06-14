@@ -22,6 +22,33 @@ export function isSfxSequenceConfig(cfg: SfxConfigEntry): cfg is SfxSequenceConf
   return 'notes' in cfg;
 }
 
+/**
+ * Master limiter (DynamicsCompressorNode) sitting between the SFX master gain
+ * and the destination. Without it, simultaneous combat voices (tower fire +
+ * enemy hits + death noise) sum past 0 dBFS and clip, which is heard as
+ * crackle. Values mirror the music master limiter so both buses share a ceiling.
+ */
+export const SFX_LIMITER_THRESHOLD_DB = -10;
+export const SFX_LIMITER_KNEE_DB = 30;
+export const SFX_LIMITER_RATIO = 12;
+export const SFX_LIMITER_ATTACK_SECONDS = 0.003;
+export const SFX_LIMITER_RELEASE_SECONDS = 0.25;
+
+/**
+ * Short linear fade-in applied to the start of every SFX envelope. Jumping from
+ * 0 to full gain in a single sample clicks on onset; ramping over a few
+ * milliseconds removes the click while staying imperceptibly fast. Clamped to
+ * never exceed half the note duration so very short SFX still attack cleanly.
+ */
+export const SFX_ATTACK_SECONDS = 0.005;
+
+/**
+ * Ramp time for master-gain changes (volume slider, mute toggle). Writing
+ * masterGain.gain.value directly steps the level in a single sample and clicks
+ * on any voice that is mid-playback; a short ramp removes the click.
+ */
+export const MASTER_GAIN_RAMP_SECONDS = 0.015;
+
 export const SFX_CONFIGS: Record<string, SfxConfigEntry> = {
   // High-frequency electric zap for chain lightning tower
   chainZap: {
