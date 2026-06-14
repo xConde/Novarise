@@ -234,6 +234,11 @@
   // overflows this box symmetrically (centred text) so it reads full-width.
   width: min(520px, 88vw);
   display: grid;
+  // Pin the single column to the box width. Without an explicit column the
+  // implicit `auto` track grows to the wordmark's intrinsic width and anchors
+  // it at the box's left edge, shoving every row to the right. minmax(0, 1fr)
+  // keeps the column at the box width so justify-items:center truly centres.
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: [title] auto [actions] auto [ascension] auto;
   justify-items: center;
   gap: var(--spacing-lg);
