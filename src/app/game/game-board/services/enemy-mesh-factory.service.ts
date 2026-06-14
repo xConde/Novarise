@@ -325,6 +325,21 @@ export class EnemyMeshFactoryService {
     enemy.shieldBreakTimer = SHIELD_BREAK_CONFIG.duration;
   }
 
+  /**
+   * Attach a fresh shield dome to an enemy whose dome was previously disposed.
+   * Only acts when the enemy has a mesh and no dome is already attached.
+   * The created dome is disposed in the normal cleanup path via disposeGroup
+   * (traverses the parent mesh's children) or explicitly in updateShieldBreakAnimations.
+   */
+  addShieldMesh(enemy: Enemy): void {
+    if (!enemy.mesh) return;
+    if (enemy.mesh.userData['shieldMesh']) return; // dome already present
+    const stats = ENEMY_STATS[enemy.type];
+    const shieldMesh = this.createShieldMesh(stats.size);
+    enemy.mesh.add(shieldMesh);
+    enemy.mesh.userData['shieldMesh'] = shieldMesh;
+  }
+
   createMiniSwarmMesh(mini: Enemy): THREE.Mesh {
     const geometry = this.oct(MINI_SWARM_STATS.size, 0);
     // Mini-swarm body material is per-instance — same mutation surface as

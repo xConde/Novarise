@@ -251,6 +251,9 @@
   .last-turn-summary__row { transition: none; }
 }
 
+body.reduce-motion .last-turn-summary__detail { animation: none; }
+body.reduce-motion .last-turn-summary__row { transition: none; }
+
 @media (max-width: 768px) {
   .last-turn-summary {
     display: none;

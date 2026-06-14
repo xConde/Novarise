@@ -75,6 +75,15 @@ export class EncounterService {
     return this.waveGenerator.getBossPreset(actIndex, seed).name;
   }
 
+  /**
+   * Returns the id of the boss preset selected for the given act and seed.
+   * Used by RunService.getFinalBossPresetId() to supply the epilogue
+   * copy variant for the Act-3 victory screen.
+   */
+  getBossPresetId(actIndex: number, seed: number): string {
+    return this.waveGenerator.getBossPreset(actIndex, seed).id;
+  }
+
   // ── Private helpers ───────────────────────────────────────
 
   /**

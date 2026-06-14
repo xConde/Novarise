@@ -18,6 +18,7 @@ import { CardEffectService } from '../../../run/services/card-effect.service';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { BlockType } from '../models/game-board-tile';
 import { shuffleInPlace } from '../utils/coordinate-utils';
+import { RUN_CONFIG } from '../../../run/constants/run.constants';
 
 /**
  * EncounterBootstrapService — orchestrates the fresh-encounter setup
@@ -68,9 +69,21 @@ export class EncounterBootstrapService {
       runState.lives,
       runState.maxLives + this.relicService.getMaxLivesBonus(),
     );
-    this.gameStateService.setEncounterStartGold(runState.gold + this.relicService.getStartingGoldBonus());
+    // Apply RUN_CONFIG.minEncounterStartGold so a player who has spent down to near-zero
+    // between encounters still has enough capital to place at least one tower before wave 1.
+    // Under the unified gold model this may top-up the run wallet — see RUN_CONFIG comment.
+    const rawStartGold = runState.gold + this.relicService.getStartingGoldBonus();
+    this.gameStateService.setEncounterStartGold(Math.max(rawStartGold, RUN_CONFIG.minEncounterStartGold));
     this.waveService.setCustomWaves(encounter.waves);
     this.gameStateService.setMaxWaves(encounter.waves.length);
+
+    // Endless encounters: enable before the first wave so wave generation
+    // continues past the (empty) scripted wave list. Non-endless encounters
+    // explicitly disable it so no leakage occurs between encounters.
+    const endlessEnabled = encounter.isEndless === true;
+    this.waveService.setEndlessMode(endlessEnabled);
+    this.gameStateService.setEndlessMode(endlessEnabled);
+
     this.ascensionModifier.apply(runState.ascensionLevel, encounter.isElite, encounter.isBoss);
 
     this.challengeDisplayService.updateIndicators(encounter.campaignMapId ?? null);

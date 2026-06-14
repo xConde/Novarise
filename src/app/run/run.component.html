@@ -1,8 +1,8 @@
 <!-- Run Mode Root Template -->
 <div class="run-container">
 
-  <!-- ── Sticky Nav (persistent across views, hidden on start screen) ─────────── -->
-  <div class="run-nav" *ngIf="runState && viewMode !== 'start'">
+  <!-- ── Sticky Nav (persistent across all views when a run is active) ────────── -->
+  <div class="run-nav" *ngIf="runState">
     <button class="run-nav-back" (click)="exitRun()">
       <app-icon name="chevron-left" [size]="16"></app-icon>
       Exit
@@ -10,85 +10,13 @@
     <span class="run-nav-title">Act {{ runState.actIndex + 1 }}</span>
     <div class="run-nav-stats">
       <span class="run-lives">♥ {{ runState.lives }}</span>
-      <span class="run-gold">{{ runState.gold }}</span>
+      <span class="run-gold"><app-icon name="coin" [size]="12"></app-icon>{{ runState.gold }}g</span>
     </div>
   </div>
 
 
   <!-- ── Content slot ────────────────────────────────────────────────────────────── -->
   <div class="run-content">
-
-  <!-- ── Start Screen ────────────────────────────────────── -->
-  <div class="run-start" *ngIf="viewMode === 'start'">
-    <h1 class="run-title">Run</h1>
-    <p class="run-subtitle">A roguelite tower defense run</p>
-
-    <div class="run-start-actions">
-      <button class="run-btn run-btn--primary run-btn--full" (click)="startNewRun(0)">
-        New Run
-      </button>
-      <div class="run-resume-block" *ngIf="canResume">
-        <button
-          class="run-btn run-btn--secondary run-btn--full"
-          (click)="resumeRun()"
-        >
-          Resume Run
-        </button>
-        <div class="run-resume-info" *ngIf="savedRunSummary" aria-label="Saved run details">
-          <span class="run-resume-info__item">Act {{ savedRunSummary.act }}</span>
-          <span class="run-resume-info__sep" aria-hidden="true">&#183;</span>
-          <span class="run-resume-info__item">{{ savedRunSummary.encounters }} encounters</span>
-          <span class="run-resume-info__sep" aria-hidden="true">&#183;</span>
-          <span class="run-resume-info__item"><app-icon name="heart" [size]="12"></app-icon> {{ savedRunSummary.lives }} lives</span>
-          <span class="run-resume-info__sep" aria-hidden="true">&#183;</span>
-          <span class="run-resume-info__item">{{ savedRunSummary.relics }} relics</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="run-ascension-select" *ngIf="maxAscension > 0">
-      <label for="ascension-level" class="ascension-select__label">Ascension Level</label>
-      <select
-        id="ascension-level"
-        class="ascension-select__dropdown"
-        #ascensionSelect
-        [ngModel]="selectedAscension"
-        (ngModelChange)="selectedAscension = $event"
-      >
-        <option [value]="0">None — Standard run</option>
-        <option
-          *ngFor="let lvl of ascensionLevelOptions"
-          [value]="lvl.level"
-        >
-          {{ lvl.level }}: {{ lvl.label }} — {{ lvl.description }}
-        </option>
-      </select>
-
-      <!-- Cumulative effects at selected level -->
-      <div class="ascension-info" *ngIf="selectedAscension > 0" aria-live="polite">
-        <h3 class="ascension-info__title">
-          Ascension {{ selectedAscension }} — Active Modifiers
-        </h3>
-        <ul class="ascension-info__effects">
-          <li
-            *ngFor="let lvl of ascensionLevelsUpTo(selectedAscension)"
-            class="ascension-info__effect"
-            [class]="'ascension-info__effect--' + getAscensionDifficultyClass(lvl.level)"
-          >
-            <span class="ascension-info__effect-level">{{ lvl.level }}</span>
-            <span class="ascension-info__effect-text">{{ lvl.description }}</span>
-          </li>
-        </ul>
-      </div>
-
-      <button
-        class="run-btn run-btn--primary"
-        (click)="startNewRun(selectedAscension)"
-      >
-        Start Ascension Run
-      </button>
-    </div>
-  </div>
 
   <!-- ── Node Map ────────────────────────────────────────── -->
   <div class="run-map-layout" *ngIf="viewMode === 'map' && nodeMap">
@@ -105,7 +33,7 @@
 
     <aside class="run-sidebar" *ngIf="runState">
       <div class="sidebar-stat"><span class="sidebar-label">HP</span><span class="run-lives">{{ runState.lives }}/{{ runState.maxLives }}</span></div>
-      <div class="sidebar-stat"><span class="sidebar-label">Gold</span><span class="run-gold">{{ runState.gold }}</span></div>
+      <div class="sidebar-stat"><span class="sidebar-label">Gold</span><span class="run-gold"><app-icon name="coin" [size]="12"></app-icon>{{ runState.gold }}g</span></div>
       <div class="sidebar-relics" *ngIf="activeRelics.length > 0">
         <app-relic-inventory [relics]="activeRelics"></app-relic-inventory>
       </div>
@@ -154,7 +82,9 @@
     *ngIf="viewMode === 'event' && currentEvent"
     [event]="currentEvent"
     [resolvedGamble]="eventGambleResult"
+    [removedCardName]="eventRemovedCardName"
     (previewGamble)="onPreviewGamble($event)"
+    (previewCardRemoval)="onPreviewCardRemoval($event)"
     (choiceMade)="completeEvent($event)"
   ></app-event-screen>
 
@@ -179,6 +109,7 @@
   <app-run-epilogue
     *ngIf="viewMode === 'epilogue'"
     [unlockedAscensionLevel]="epilogueUnlockedAscension"
+    [bossPresetId]="finalBossPresetId"
     (continued)="onEpilogueContinued()"
   ></app-run-epilogue>
 
@@ -188,6 +119,7 @@
     [runState]="runState"
     (returnToMenu)="returnToMenu()"
     (startNewRun)="startNewRun($event)"
+    (launchEndless)="launchEndless()"
   ></app-run-summary>
 
   </div><!-- /run-content -->

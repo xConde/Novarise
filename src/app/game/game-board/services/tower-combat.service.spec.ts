@@ -2676,6 +2676,48 @@ describe('TowerCombatService checkpoint serialization', () => {
 
       scene.clear();
     });
+
+    it('includes placerLevel in serialized zone so kill attribution is correct on resume', () => {
+      const scene = new THREE.Scene();
+      svc.registerTower(10, 12, TowerType.MORTAR, new THREE.Group());
+
+      const enemy = createTestEnemy('e1', -0.5, 0, 10000);
+      localEnemyMap.set('e1', enemy);
+
+      svc.fireTurn(scene, 1);
+
+      const zones = svc.serializeMortarZones();
+      expect(zones.length).toBeGreaterThan(0);
+      // placerLevel must be present and numeric (defaults to L1 from a freshly registered tower).
+      expect(typeof zones[0].placerLevel).toBe('number');
+      expect(zones[0].placerLevel).toBeGreaterThanOrEqual(1);
+
+      scene.clear();
+    });
+
+    it('round-trips placerLevel through serialize → restore → serialize', () => {
+      // Manually inject a zone with a non-trivial placerLevel (L2).
+      const scene = new THREE.Scene();
+      svc.registerTower(10, 12, TowerType.MORTAR, new THREE.Group());
+
+      const enemy = createTestEnemy('e1', -0.5, 0, 10000);
+      localEnemyMap.set('e1', enemy);
+
+      svc.fireTurn(scene, 1);
+
+      const zones = svc.serializeMortarZones();
+      // Simulate a level-2 tower zone by patching placerLevel on the serialized snapshot.
+      const patchedZones = zones.map(z => ({ ...z, placerLevel: 2 }));
+
+      // Restore the patched snapshot, then re-serialize.
+      svc.restoreMortarZones(patchedZones);
+      const reserialized = svc.serializeMortarZones();
+
+      expect(reserialized.length).toBe(zones.length);
+      expect(reserialized[0].placerLevel).toBe(2);
+
+      scene.clear();
+    });
   });
 
   describe('restoreTowers', () => {

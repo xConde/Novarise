@@ -474,3 +474,11 @@
     transform: none;
   }
 }
+
+body.reduce-motion .run-summary {
+  animation: none;
+}
+
+body.reduce-motion .run-summary__btn--primary:hover {
+  transform: none;
+}

@@ -369,7 +369,11 @@ export class CheckpointRestoreCoordinatorService {
       console.error('Failed to restore checkpoint, falling back to fresh encounter:', error);
       this.runService.isRestoringCheckpoint = false;
       this.encounterCheckpointService.clearCheckpoint();
-      // Clean up any partial restore state before starting fresh
+      // Dispose any Three.js tower/enemy meshes that were added to the scene before
+      // the throw (e.g. Steps 4/6 completed before a later step failed). Without this
+      // call, partial-restore meshes leak into the next encounter's scene.
+      this.gameSessionService.cleanupScene();
+      // Reset all service state after mesh disposal so services start clean.
       this.gameSessionService.resetAllServices(this.sceneService.getScene());
       options.onFallback();
     }

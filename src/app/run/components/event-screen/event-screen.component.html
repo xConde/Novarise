@@ -103,14 +103,15 @@
         Gained: {{ getItemName(currentOutcome.itemReward) }}
       </span>
 
-      <!-- Card removed from deck -->
+      <!-- Card removed from deck — shows specific name when available -->
       <span
         class="event-outcome__delta event-outcome__delta--card negative"
         *ngIf="currentOutcome.removeCard"
-        aria-label="A card was removed from your deck"
+        [attr.aria-label]="removedCardName ? 'Removed: ' + removedCardName : 'A card was removed from your deck'"
       >
         <app-icon name="card" [size]="12"></app-icon>
-        A card was removed from your deck
+        <ng-container *ngIf="removedCardName; else genericRemoval">Removed: {{ removedCardName }}</ng-container>
+        <ng-template #genericRemoval>A card was removed from your deck</ng-template>
       </span>
     </div>
 

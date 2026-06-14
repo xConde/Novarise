@@ -4,3 +4,4 @@ export * from './run-events';
 export * from './card-definitions';
 export * from './modifier-stat.constants';
 export * from './archetype.constants';
+export * from './epilogue-copy.constants';

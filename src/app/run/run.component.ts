@@ -10,7 +10,6 @@ import { RunState, RunStatus } from './models/run-state.model';
 import { MapNode, NodeMap, NodeType, getSelectableNodes } from './models/node-map.model';
 import { RelicDefinition, RELIC_DEFINITIONS, RelicId } from './models/relic.model';
 import { RewardScreenConfig, RewardItem, ShopItem, RunEvent } from './models/encounter.model';
-import { AscensionLevel, ASCENSION_LEVELS } from './models/ascension.model';
 import { CardInstance } from './models/card.model';
 
 /**
@@ -42,7 +41,7 @@ export class RunComponent implements OnInit, OnDestroy {
   activeRelics: RelicDefinition[] = [];
 
   /** Current view mode. */
-  viewMode: 'start' | 'map' | 'reward' | 'shop' | 'rest' | 'event' | 'act-transition' | 'epilogue' | 'summary' = 'start';
+  viewMode: 'map' | 'reward' | 'shop' | 'rest' | 'event' | 'act-transition' | 'epilogue' | 'summary' = 'map';
 
   /**
    * The ascension level that was just unlocked by this run's victory.
@@ -51,19 +50,19 @@ export class RunComponent implements OnInit, OnDestroy {
    */
   epilogueUnlockedAscension = 0;
 
+  /**
+   * The BossPreset id of the final-act boss defeated in this run.
+   * Selects the matching epilogue copy variant. '' produces the neutral fallback.
+   */
+  get finalBossPresetId(): string {
+    return this.runService.getFinalBossPresetId();
+  }
+
   /** Ascension high-water mark captured at init, before any advanceAct(). */
   private priorMaxAscension = 0;
 
   /** Boss preset name for the act-transition screen. */
   actTransitionBossName = '';
-
-  /** Currently selected ascension level in the start screen selector. */
-  selectedAscension = 0;
-
-  /** All ascension levels the player has unlocked (up to maxAscension). */
-  get ascensionLevelOptions(): AscensionLevel[] {
-    return ASCENSION_LEVELS.slice(0, this.maxAscension);
-  }
 
   /** Reward screen config, set after combat victory. */
   rewardConfig: RewardScreenConfig | null = null;
@@ -135,15 +134,6 @@ export class RunComponent implements OnInit, OnDestroy {
     this.viewMode = 'map';
   }
 
-  /** Resume an in-progress run from localStorage. */
-  resumeRun(): void {
-    this.runService.resumeRun();
-    // Only advance to map if the service successfully restored state
-    if (this.runService.hasActiveRun()) {
-      this.viewMode = 'map';
-    }
-  }
-
   /** Select a node on the map to visit next. */
   selectNode(node: MapNode): void {
     if (!this.isNodeSelectable(node)) return;
@@ -166,6 +156,7 @@ export class RunComponent implements OnInit, OnDestroy {
         break;
       case NodeType.EVENT:
         this.runService.generateEvent();
+        this.eventRemovedCardName = null;
         this.viewMode = 'event';
         break;
       case NodeType.UNKNOWN:
@@ -188,10 +179,36 @@ export class RunComponent implements OnInit, OnDestroy {
     this.router.navigate(['/play']);
   }
 
+  /**
+   * Launch an endless post-victory encounter.
+   * Prepares an endless EncounterConfig (reusing the final boss map) and
+   * navigates to /play. The run stays in-progress; the game-board uses its
+   * normal single code path with endless mode enabled at bootstrap.
+   * Defeat in endless returns to /run without corrupting run state because
+   * RunService.recordEncounterResult() only records the result — the run
+   * status is already VICTORY and consumePendingEncounterResult() guards
+   * against double-processing a non-IN_PROGRESS run.
+   */
+  launchEndless(): void {
+    this.runService.prepareEndlessEncounter();
+    this.router.navigate(['/play']);
+  }
+
   /** Handle return from /play after encounter completion. */
   handleEncounterReturn(): void {
     const result = this.runService.consumePendingEncounterResult();
-    if (!result) return;
+    if (!result) {
+      // No processable result — this happens when the run is already in a
+      // terminal state (e.g. returning from an endless encounter after a
+      // post-victory run). Show the summary rather than leaving viewMode
+      // undefined or navigating away unexpectedly.
+      if (this.runState) {
+        this.viewMode = 'summary';
+      } else {
+        this.router.navigate(['/']);
+      }
+      return;
+    }
 
     if (result.victory) {
       this.rewardConfig = this.runService.generateRewards();
@@ -267,12 +284,11 @@ export class RunComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Phase 1 Sprint 4 hardening (red-team Finding 2):
    * Memoized snapshot of the current deck for the shop card-removal picker.
    * Refreshed only when entering the shop or after a successful removal — NOT
-   * via a per-CD-tick method-call binding. The previous `[deckCards]="getDeckCards()"`
-   * binding allocated a new array every change-detection tick, which fired
-   * ngOnChanges on ShopScreenComponent and reset its one-use card-remove slot.
+   * via a per-CD-tick method-call binding. A per-tick getter would allocate a
+   * new array every change-detection cycle, firing ngOnChanges on ShopScreenComponent
+   * and resetting its one-use card-remove slot.
    */
   shopDeckSnapshot: CardInstance[] = [];
 
@@ -290,11 +306,15 @@ export class RunComponent implements OnInit, OnDestroy {
     this.viewMode = 'map';
   }
 
-  /** Complete event choice. */
+  /** Complete event choice. Routes to summary if the event drained the last life. */
   completeEvent(choiceIndex: number): void {
-    this.runService.resolveEvent(choiceIndex);
+    this.eventRemovedCardName = this.runService.resolveEvent(choiceIndex);
     this.eventGambleResult = null;
-    this.viewMode = 'map';
+    if (this.runState?.status === RunStatus.DEFEAT) {
+      this.viewMode = 'summary';
+    } else {
+      this.viewMode = 'map';
+    }
   }
 
   /** Buy item from shop. */
@@ -327,9 +347,17 @@ export class RunComponent implements OnInit, OnDestroy {
   /** Seeded gamble preview result — set synchronously when the player picks a gamble choice. */
   eventGambleResult: { goldDelta: number; livesDelta: number } | null = null;
 
+  /** Name of the card removed by the last event outcome; null when no card was removed. */
+  eventRemovedCardName: string | null = null;
+
   /** Called by EventScreenComponent when the player picks a gamble choice. Rolls once via seeded RNG. */
   onPreviewGamble(index: number): void {
     this.eventGambleResult = this.runService.previewEventGamble(index);
+  }
+
+  /** Called by EventScreenComponent when the player picks a choice with a removeCard outcome. */
+  onPreviewCardRemoval(index: number): void {
+    this.eventRemovedCardName = this.runService.previewEventCardRemoval(index);
   }
 
   /** Leave shop, return to map. */
@@ -339,9 +367,9 @@ export class RunComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Phase 1 Sprint 4 — handle the shop card-remove action. The ShopScreen
-   * component is the source of truth for "one use per visit"; this just
-   * delegates to the service and stays on the shop screen.
+   * Handle the shop card-remove action. ShopScreenComponent is the source of truth
+   * for one-use-per-visit enforcement; this delegates to the service and stays on
+   * the shop screen.
    */
   onShopCardRemoved(instanceId: string): void {
     this.runService.removeCardFromShop(instanceId);
@@ -377,52 +405,6 @@ export class RunComponent implements OnInit, OnDestroy {
 
   isNodeSelectable(node: MapNode): boolean {
     return this.availableNodes.some(n => n.id === node.id);
-  }
-
-  /** Can we resume a saved run? Only true when saved data is complete and valid. */
-  get canResume(): boolean {
-    if (!this.runService.hasSavedRun()) return false;
-    const preview = this.runService.loadSavedRunPreview();
-    if (!preview) return false;
-    // Require a meaningful run: must have a valid actIndex and at least one encounter result
-    return preview.actIndex >= 0 && preview.encounterResults !== undefined;
-  }
-
-  /**
-   * Returns a brief snapshot of the paused run for the start-screen resume button.
-   * Returns null when no saved run exists.
-   */
-  get savedRunSummary(): { act: number; encounters: number; lives: number; relics: number } | null {
-    if (!this.canResume) return null;
-    const state = this.runService.loadSavedRunPreview();
-    if (!state) return null;
-    return {
-      act: state.actIndex + 1,
-      encounters: state.encounterResults.length,
-      lives: state.lives,
-      relics: state.relicIds.length,
-    };
-  }
-
-  /** Highest ascension level unlocked. */
-  get maxAscension(): number {
-    return this.runService.getMaxAscension();
-  }
-
-  /** Returns all ascension levels from 1 up to and including the given level. */
-  ascensionLevelsUpTo(level: number): AscensionLevel[] {
-    return ASCENSION_LEVELS.slice(0, level);
-  }
-
-  /**
-   * Returns a CSS class suffix for color-coding ascension difficulty.
-   * Levels 1-5: easy (green), 6-10: medium (yellow), 11-15: hard (orange), 16-20: extreme (red).
-   */
-  getAscensionDifficultyClass(level: number): string {
-    if (level <= 5) return 'easy';
-    if (level <= 10) return 'medium';
-    if (level <= 15) return 'hard';
-    return 'extreme';
   }
 
   private updateRelicDisplay(relicIds: string[]): void {
@@ -466,6 +448,7 @@ export class RunComponent implements OnInit, OnDestroy {
         break;
       case NodeType.EVENT:
         this.runService.generateEvent();
+        this.eventRemovedCardName = null;
         this.viewMode = 'event';
         break;
       default:

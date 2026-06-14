@@ -177,3 +177,12 @@
     &:hover { box-shadow: var(--shadow-sm) var(--theme-purple-glow); }
   }
 }
+
+body.reduce-motion .act-transition {
+  animation: none;
+}
+
+body.reduce-motion .act-transition__btn {
+  transition: none;
+  &:hover { box-shadow: var(--shadow-sm) var(--theme-purple-glow); }
+}

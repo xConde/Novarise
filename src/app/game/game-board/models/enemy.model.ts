@@ -46,6 +46,14 @@ export interface Enemy {
   isEnraged?: boolean;
   /** Tiles-per-turn override applied when NOVA_SOVEREIGN enrages. */
   enragedTilesPerTurn?: number;
+  /**
+   * Fractional-movement accumulator for SLOW interactions on 1-tile-per-turn enemies.
+   * Each turn, effectiveTilesPerTurn (a fractional value when SLOW is active) is added
+   * here. The enemy moves floor(accumulator) tiles and the remainder carries forward.
+   * Initializes to 0 and persists across turns; not serialized (resets to 0 on resume,
+   * which advances the enemy at most 1 extra tile on the first slowed turn — acceptable).
+   */
+  slowMoveAccumulator?: number;
 }
 
 export interface EnemyStats {
@@ -229,6 +237,15 @@ export const TITAN_STATS = {
  * cost more, incentivising targeted removal rather than relying on attrition.
  */
 export const SWIFT_LEAK_DAMAGE = 2;
+
+/**
+ * Minimum effective tiles-per-turn below which the fractional-movement
+ * accumulator activates for 1-tile-per-turn enemies under SLOW effects.
+ * When effectiveTilesPerTurn equals this boundary (exactly 1.0), the enemy
+ * moves exactly 1 tile each turn and no accumulator is needed.
+ * The accumulator fires only when a SLOW effect reduces the effective rate below 1.0.
+ */
+export const SLOW_ACCUMULATOR_ACTIVATION_THRESHOLD = 1.0;
 
 // Enemy type statistics
 export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {

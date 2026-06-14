@@ -61,16 +61,16 @@ export class GameHudComponent implements OnChanges, OnDestroy {
       const delta = newGold - this.previousGold;
       if (delta !== 0) {
         this.triggerGoldPulse();
-        if (delta > 0) {
-          this.goldChange = delta;
-          if (this.goldChangeTimer !== null) {
-            clearTimeout(this.goldChangeTimer);
-          }
-          this.goldChangeTimer = setTimeout(() => {
-            this.goldChange = 0;
-            this.goldChangeTimer = null;
-          }, PULSE_DURATION_MS);
+        // Show positive and negative deltas so players see both gold earned and
+        // gold spent (e.g. tower purchase cost) reflected in the HUD.
+        this.goldChange = delta;
+        if (this.goldChangeTimer !== null) {
+          clearTimeout(this.goldChangeTimer);
         }
+        this.goldChangeTimer = setTimeout(() => {
+          this.goldChange = 0;
+          this.goldChangeTimer = null;
+        }, PULSE_DURATION_MS);
       }
       this.previousGold = newGold;
     }

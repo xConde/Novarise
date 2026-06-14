@@ -1289,6 +1289,10 @@ export class TowerCombatService {
       dotDamage: z.dotDamage,
       expiresOnTurn: z.expiresOnTurn,
       ...(z.statusEffect !== undefined && { statusEffect: z.statusEffect }),
+      // placerLevel is required at runtime (used for kill-attribution tier labels).
+      // Serialize it so restored zones attribute kills at the correct tower level
+      // instead of falling back to the level-1 default in restoreMortarZones.
+      ...(z.placerLevel !== undefined && { placerLevel: z.placerLevel }),
     }));
   }
 

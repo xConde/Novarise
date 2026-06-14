@@ -71,6 +71,7 @@ describe('EncounterService', () => {
       'generateCombatWaves',
       'generateEliteWaves',
       'generateBossWaves',
+      'getBossPreset',
     ]);
     mapBridge = jasmine.createSpyObj('MapBridgeService', ['setEditorMapState']);
     runMapService = jasmine.createSpyObj('RunMapService', ['loadLevel']);
@@ -78,6 +79,7 @@ describe('EncounterService', () => {
     waveGenerator.generateCombatWaves.and.returnValue(STUB_WAVES);
     waveGenerator.generateEliteWaves.and.returnValue(STUB_WAVES);
     waveGenerator.generateBossWaves.and.returnValue(STUB_WAVES);
+    waveGenerator.getBossPreset.and.returnValue({ id: 'vanguard_convergence', name: 'Vanguard Convergence', description: '', waves: [] });
     runMapService.loadLevel.and.returnValue(MOCK_MAP_STATE);
 
     TestBed.configureTestingModule({
@@ -221,5 +223,23 @@ describe('EncounterService', () => {
     service.prepareEncounter(node, state);
 
     expect(waveGenerator.generateCombatWaves).toHaveBeenCalledWith(3, 1, 77);
+  });
+
+  // ── getBossPresetId ───────────────────────────────────────────
+
+  it('getBossPresetId() returns the preset id from WaveGeneratorService', () => {
+    waveGenerator.getBossPreset.and.returnValue({ id: 'ironclad_march', name: 'Ironclad March', description: '', waves: [] });
+    const id = service.getBossPresetId(2, 12345);
+    expect(waveGenerator.getBossPreset).toHaveBeenCalledWith(2, 12345);
+    expect(id).toBe('ironclad_march');
+  });
+
+  it('getBossPresetId() returns distinct ids for different presets', () => {
+    waveGenerator.getBossPreset.and.returnValues(
+      { id: 'vanguard_convergence', name: 'VC', description: '', waves: [] },
+      { id: 'celestial_deluge', name: 'CD', description: '', waves: [] },
+    );
+    expect(service.getBossPresetId(2, 1)).toBe('vanguard_convergence');
+    expect(service.getBossPresetId(2, 2)).toBe('celestial_deluge');
   });
 });

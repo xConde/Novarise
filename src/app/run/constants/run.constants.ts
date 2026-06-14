@@ -41,6 +41,16 @@ export const NODE_MAP_CONFIG = {
   },
 } as const;
 
+/**
+ * Baseline expected event-node count per act at ascension 0.
+ * The A14 EVENT_NODE_REDUCTION ascension effect lowers the cap to
+ * (EXPECTED_EVENT_NODES_PER_ACT - eventNodeReduction) so the player
+ * encounters fewer events. This value is used as the absolute cap in
+ * NodeMapGeneratorService.pickNodeType(), not a fraction of totalRows,
+ * so it is always reachable in practice.
+ */
+export const EXPECTED_EVENT_NODES_PER_ACT = 4;
+
 // ── Encounter Generation ──────────────────────────────────────
 
 export const ENCOUNTER_CONFIG = {
@@ -205,11 +215,21 @@ export const RUN_CONFIG = {
   /** Score points awarded per enemy killed during an encounter. */
   scorePerKill: 10,
 
-  /** Minimum starting gold after ascension reductions. */
+  /** Minimum starting gold after ascension reductions. Applied once at run creation. */
   minStartingGold: 50,
 
   /** Minimum starting lives after ascension reductions. */
   minStartingLives: 5,
+
+  /**
+   * Minimum gold floor applied at the start of each encounter (after relic bonuses).
+   * A player who spends down to near-zero gold between encounters still enters with
+   * enough capital to place at least one BASIC tower before wave 1. This is an
+   * encounter-entry guarantee, not a run-wallet top-up: under the unified gold model
+   * the amount is added to the run wallet only for this encounter's opening balance.
+   * BASIC tower cost is 50g, so 50g is the smallest meaningful floor.
+   */
+  minEncounterStartGold: 50,
 } as const;
 
 // ── Card-Skip Gold ────────────────────────────────────────────

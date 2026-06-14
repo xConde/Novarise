@@ -8,6 +8,7 @@
       <span class="hud-label">Gold</span>
       <span class="hud-value gold" [class.gold-pulse]="goldPulse">{{ gold }}</span>
       <span class="gold-change" *ngIf="goldChange > 0">+{{ goldChange }}g</span>
+      <span class="gold-change gold-change--loss" *ngIf="goldChange < 0">{{ goldChange }}g</span>
     </div>
     <div class="hud-stat">
       <span class="hud-label">Wave</span>

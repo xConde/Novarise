@@ -36,6 +36,7 @@ import {
   RUN_CONFIG,
   SHOP_CONFIG,
   UNKNOWN_NODE_REVEAL_THRESHOLDS,
+  CAMPAIGN_MAP_TIERS,
   SeededRng,
   createSeededRng,
 } from '../constants/run.constants';
@@ -114,6 +115,13 @@ export class RunService {
    * Cleared after resolveEvent() consumes it (or when the choice is not a gamble).
    */
   private pendingGambleRoll: { choiceIndex: number; goldDelta: number; livesDelta: number } | null = null;
+
+  /**
+   * Stash set by previewEventCardRemoval() so resolveEvent() can both reuse the
+   * same RNG position and display the card name before confirming.
+   * Cleared after resolveEvent() consumes it (or when the choice has no removeCard).
+   */
+  private pendingRemovedCard: { choiceIndex: number; cardName: string | null; instanceId: string | null } | null = null;
 
   /** RNG seeded per-run, advanced by each random action. */
   private runRng: SeededRng | null = null;
@@ -201,6 +209,20 @@ export class RunService {
     return this.encounterService.getBossPresetName(actIndex, seed);
   }
 
+  /**
+   * Returns the BossPreset id for the final act of the current run.
+   * Used by RunComponent to bind [bossPresetId] on the epilogue screen so
+   * the correct debrief variant is shown. Derives the final act index from
+   * the run config so it stays correct if actsCount ever changes.
+   * Returns '' when no run state exists (safe fallback → neutral epilogue copy).
+   */
+  getFinalBossPresetId(): string {
+    const state = this.runState;
+    if (!state) return '';
+    const finalActIndex = state.config.actsCount - 1;
+    return this.encounterService.getBossPresetId(finalActIndex, state.seed);
+  }
+
   getCurrentEncounter(): EncounterConfig | null {
     return this.currentEncounter;
   }
@@ -238,6 +260,44 @@ export class RunService {
     const livesDelta = won ? (outcome.gamble.winLivesDelta ?? 0) : (outcome.gamble.loseLivesDelta ?? 0);
     this.pendingGambleRoll = { choiceIndex, goldDelta, livesDelta };
     return { goldDelta, livesDelta };
+  }
+
+  /**
+   * Preview which card would be removed by a removeCard outcome for the given choice.
+   * Uses the same seeded-RNG selection logic as removeRandomNonStarterCard() and
+   * stashes the result so resolveEvent() can reuse it without a second RNG advance.
+   * Returns the card's display name, or null when the deck is empty or the choice
+   * has no removeCard outcome.
+   */
+  previewEventCardRemoval(choiceIndex: number): string | null {
+    const event = this.currentEvent;
+    if (!event || choiceIndex < 0 || choiceIndex >= event.choices.length) {
+      this.pendingRemovedCard = null;
+      return null;
+    }
+    const outcome = event.choices[choiceIndex].outcome;
+    if (!outcome.removeCard) {
+      this.pendingRemovedCard = null;
+      return null;
+    }
+
+    const allCards = this.deckService.getAllCards();
+    const nonStarters = allCards.filter(c => {
+      const def = CARD_DEFINITIONS[c.cardId as CardId];
+      return def && def.rarity !== CardRarity.STARTER;
+    });
+    const pool = nonStarters.length > 0 ? nonStarters : allCards;
+    if (pool.length === 0) {
+      this.pendingRemovedCard = { choiceIndex, cardName: null, instanceId: null };
+      return null;
+    }
+
+    const rng = this.getRng();
+    const index = Math.floor(rng() * pool.length);
+    const selected = pool[index];
+    const cardName = CARD_DEFINITIONS[selected.cardId as CardId]?.name ?? null;
+    this.pendingRemovedCard = { choiceIndex, cardName, instanceId: selected.instanceId };
+    return cardName;
   }
 
   getRngState(): number | null {
@@ -284,6 +344,8 @@ export class RunService {
     // (guards against re-using stale state if a previous run ended mid-flight)
     this.currentEncounter = null;
     this.pendingResult = null;
+    this.pendingGambleRoll = null;
+    this.pendingRemovedCard = null;
     this.shopService.clearShopItems();
     this.currentEvent = null;
     this.runRng = null;
@@ -385,6 +447,45 @@ export class RunService {
     this.relicService.setActiveRelics(state.relicIds);
     this.relicService.resetEncounterState();
     this.eventBus.emit(RunEventType.ENCOUNTER_START, { nodeId: node.id });
+  }
+
+  /**
+   * Prepare an endless post-victory encounter.
+   *
+   * Reuses the last completed encounter's campaign map so the board layout
+   * is consistent with the final boss fight the player just won. Falls back
+   * to the last map in the final-act tier when lastCompletedEncounter is
+   * unavailable. Sets isEndless on the EncounterConfig so
+   * EncounterBootstrapService enables endless mode before wave 1 starts.
+   *
+   * The run stays IN_PROGRESS (isInRun() remains true) throughout endless so
+   * the game-board's single code path continues to function without branching.
+   * Callers must navigate to /play after this returns.
+   */
+  prepareEndlessEncounter(): void {
+    const state = this.runState;
+    if (!state) return;
+
+    const finalActMaps = CAMPAIGN_MAP_TIERS['act3_late'] ?? CAMPAIGN_MAP_TIERS['act2_late'] ?? [];
+    const fallbackMapId = finalActMaps[finalActMaps.length - 1] ?? 'campaign_16';
+    const mapId = this.lastCompletedEncounter?.campaignMapId ?? fallbackMapId;
+
+    const endlessEncounter = {
+      nodeId: 'endless',
+      nodeType: NodeType.COMBAT,
+      campaignMapId: mapId,
+      waves: [],
+      goldReward: 0,
+      isElite: false,
+      isBoss: false,
+      isEndless: true,
+    };
+
+    this.encounterService.loadEncounterMap(endlessEncounter);
+    this.currentEncounter = endlessEncounter;
+    this.relicService.setActiveRelics(state.relicIds);
+    this.relicService.resetEncounterState();
+    this.eventBus.emit(RunEventType.ENCOUNTER_START, { nodeId: 'endless' });
   }
 
   /**
@@ -866,12 +967,12 @@ export class RunService {
     return true;
   }
 
-  /** Resolve an event choice by index. */
-  resolveEvent(choiceIndex: number): void {
+  /** Resolve an event choice by index. Returns the removed card name when the outcome removes a card; null otherwise. */
+  resolveEvent(choiceIndex: number): string | null {
     const state = this.runState;
     const event = this.currentEvent;
-    if (!state || !event) return;
-    if (choiceIndex < 0 || choiceIndex >= event.choices.length) return;
+    if (!state || !event) return null;
+    if (choiceIndex < 0 || choiceIndex >= event.choices.length) return null;
 
     const outcome = event.choices[choiceIndex].outcome;
 
@@ -911,12 +1012,30 @@ export class RunService {
     }
 
     // Card removal: remove a random non-starter card from the deck.
+    // When previewEventCardRemoval() ran first for this choice, reuse its stash so
+    // the displayed card name and the actual removal target are identical.
     // Derive updated deckCardIds from the live deck after removal so the
     // persisted list stays in sync; mirrors the removeCardFromShop pattern.
     let updatedDeckCardIds: CardId[] | undefined;
+    let removedCardName: string | null = null;
     if (outcome.removeCard) {
-      this.removeRandomNonStarterCard();
+      if (this.pendingRemovedCard && this.pendingRemovedCard.choiceIndex === choiceIndex) {
+        // Reuse stash: the RNG already advanced during preview; remove the same card.
+        const stashedInstanceId = this.pendingRemovedCard.instanceId;
+        removedCardName = this.pendingRemovedCard.cardName;
+        this.pendingRemovedCard = null;
+        if (stashedInstanceId) {
+          this.deckService.removeCard(stashedInstanceId);
+        } else {
+          this.removeRandomNonStarterCard();
+        }
+      } else {
+        this.pendingRemovedCard = null;
+        removedCardName = this.removeRandomNonStarterCard();
+      }
       updatedDeckCardIds = this.deckService.getAllCards().map(c => c.cardId);
+    } else {
+      this.pendingRemovedCard = null;
     }
 
     // Item reward: add to consumable inventory.
@@ -958,13 +1077,15 @@ export class RunService {
     this.relicService.setActiveRelics(newRelicIds);
     this.currentEvent = null;
     this.persist();
+    return removedCardName;
   }
 
   /**
    * Remove a random non-starter card from the deck.
-   * If no non-starter cards exist, removes the last card in the deck as a fallback.
+   * Falls back to the last card when no non-starter cards exist.
+   * Returns the display name of the removed card, or null when the deck was empty.
    */
-  private removeRandomNonStarterCard(): void {
+  private removeRandomNonStarterCard(): string | null {
     const allCards = this.deckService.getAllCards();
     const nonStarters = allCards.filter(c => {
       const def = CARD_DEFINITIONS[c.cardId as CardId];
@@ -972,11 +1093,13 @@ export class RunService {
     });
 
     const pool = nonStarters.length > 0 ? nonStarters : allCards;
-    if (pool.length === 0) return;
+    if (pool.length === 0) return null;
 
     const rng = this.getRng();
     const index = Math.floor(rng() * pool.length);
-    this.deckService.removeCard(pool[index].instanceId);
+    const removed = pool[index];
+    this.deckService.removeCard(removed.instanceId);
+    return CARD_DEFINITIONS[removed.cardId as CardId]?.name ?? null;
   }
 
   /** Generate a random event for the current node. */
@@ -1224,6 +1347,8 @@ export class RunService {
     this.persistence.clearSavedRun();
     this.currentEncounter = null;
     this.pendingResult = null;
+    this.pendingGambleRoll = null;
+    this.pendingRemovedCard = null;
     this.shopService.clearShopItems();
     this.currentEvent = null;
     this.runRng = null;

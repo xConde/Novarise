@@ -204,8 +204,13 @@ export const ENEMY_VISUAL_CONFIG = {
 export const UI_CONFIG = {
   /** Duration in ms before the "path blocked" warning banner auto-dismisses. */
   pathBlockedDismissMs: 2000,
-  /** Duration in ms that the boss-intro banner stays visible before fading. */
+  /** Duration in ms that the standard boss-intro banner stays visible before fading. */
   bossBannerVisibleMs: 2800,
+  /**
+   * Extended dwell time for named bosses whose mechanic subtext needs time to read.
+   * Applied to Nova Sovereign and Wyrm Ascendant banners.
+   */
+  bossBannerExtendedMs: 4000,
   /**
    * Dwell time in ms before the victory/defeat end overlay routes back to /run.
    * The overlay appears immediately on phase transition; navigation fires after
@@ -214,8 +219,24 @@ export const UI_CONFIG = {
   endOverlayDwellMs: 1200,
 } as const;
 
-/** Copy strings for the boss-intro banner. Named constants — no inline literals. */
+/**
+ * Boss-intro banner copy entries.
+ *
+ * Each named boss gets a two-field entry: a short `headline` rendered large and a
+ * `subtext` mechanic hint rendered below it. Generic bosses use only `headline`.
+ * All copy lives here so it is easy to localise or tune without touching service logic.
+ */
 export const BOSS_BANNER_COPY = {
-  novaSovereign: '⚠ THE SOVEREIGN MANIFESTS',
-  generic:       '⚠ BOSS INCOMING',
+  novaSovereign: {
+    headline: '⚠ THE SOVEREIGN MANIFESTS',
+    subtext:  'Aegis shield regenerates · Enrages below 50% · Slow-resistant',
+  },
+  wyrmAscendant: {
+    headline: '⚠ THE WYRM ASCENDS',
+    subtext:  'Immune to elevation bonuses · Accelerates on damage · Phase-shifts at half health',
+  },
+  generic: {
+    headline: '⚠ BOSS INCOMING',
+    subtext:  '',
+  },
 } as const;

@@ -7,19 +7,12 @@
   </div>
 
   <!-- ── Stage B: Epilogue copy ────────────────────────────────────────────── -->
+  <!-- Copy variant is driven by bossPresetId via epilogueCopy (EpilogueCopy). -->
+  <!-- Default (bossPresetId='') renders identical text to the original.      -->
   <div class="run-epilogue__copy" [class.run-epilogue__copy--visible]="copyVisible">
-    <p class="run-epilogue__line">
-      The Sovereign's siege lattice collapsed at 0300 hours.
-      Uplink confirmed: the Spire's core transmitters are intact.
-    </p>
-    <p class="run-epilogue__line">
-      What they sent against us was their best—and it wasn't enough.
-      The line held. Engineers are already pulling signal data from
-      the wreckage. The war is not over, but tonight, the Spire endures.
-    </p>
-    <p class="run-epilogue__line run-epilogue__line--debrief">
-      — Field Debrief, Relay Station Gamma-7
-    </p>
+    <p class="run-epilogue__line">{{ epilogueCopy.line1 }}</p>
+    <p class="run-epilogue__line">{{ epilogueCopy.line2 }}</p>
+    <p class="run-epilogue__line run-epilogue__line--debrief">{{ epilogueCopy.attribution }}</p>
   </div>
 
   <!-- ── Stage C: Ascension unlock (conditional) ───────────────────────────── -->

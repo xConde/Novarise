@@ -212,6 +212,10 @@
          aria-live="assertive"
          aria-atomic="true">
       {{ waveCombat.bossBanner.text }}
+      <div class="boss-banner-subtext"
+           *ngIf="waveCombat.bossBanner.subtext">
+        {{ waveCombat.bossBanner.subtext }}
+      </div>
     </div>
 
     <!-- Turn start banner — fades in/out when a new turn begins -->

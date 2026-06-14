@@ -1290,7 +1290,7 @@ describe('CombatLoopService', () => {
       );
     });
 
-    it('triggers screen shake with bossHitIntensity when a NOVA_SOVEREIGN is killed', () => {
+    it('triggers climactic screen shake with novaSovereignDeathIntensity when NOVA_SOVEREIGN is killed', () => {
       const nova = makeEnemy({ id: 'nova1', type: EnemyType.NOVA_SOVEREIGN, value: 100 });
       enemySpy.getEnemies.and.returnValue(new Map([['nova1', nova]]));
       combatSpy.fireTurn.and.returnValue({
@@ -1301,8 +1301,24 @@ describe('CombatLoopService', () => {
       service.resolveTurn(scene);
 
       expect(screenShakeSpy.trigger).toHaveBeenCalledWith(
-        SCREEN_SHAKE_CONFIG.bossHitIntensity,
-        SCREEN_SHAKE_CONFIG.bossHitDuration,
+        SCREEN_SHAKE_CONFIG.novaSovereignDeathIntensity,
+        SCREEN_SHAKE_CONFIG.novaSovereignDeathDuration,
+      );
+    });
+
+    it('triggers wyrmAscendantDeathIntensity screen shake when WYRM_ASCENDANT is killed', () => {
+      const wyrm = makeEnemy({ id: 'wyrm1', type: EnemyType.WYRM_ASCENDANT, value: 120 });
+      enemySpy.getEnemies.and.returnValue(new Map([['wyrm1', wyrm]]));
+      combatSpy.fireTurn.and.returnValue({
+        killed: [{ id: 'wyrm1', damage: 200, towerType: TowerType.BASIC, towerLevel: 1 }],
+        fired: [], hitCount: 1, damageDealt: 200,
+      });
+
+      service.resolveTurn(scene);
+
+      expect(screenShakeSpy.trigger).toHaveBeenCalledWith(
+        SCREEN_SHAKE_CONFIG.wyrmAscendantDeathIntensity,
+        SCREEN_SHAKE_CONFIG.wyrmAscendantDeathDuration,
       );
     });
 
@@ -1376,6 +1392,20 @@ describe('CombatLoopService', () => {
       combatSpy.fireTurn.and.returnValue({
         killed: [{ id: 'nova1', damage: 100, towerType: TowerType.BASIC, towerLevel: 1 }],
         fired: [], hitCount: 1, damageDealt: 100,
+      });
+
+      const result = service.resolveTurn(scene);
+
+      expect(result.kills.length).toBe(1);
+      expect(result.kills[0].isBoss).toBe(true);
+    });
+
+    it('sets isBoss=true on a WYRM_ASCENDANT kill', () => {
+      const wyrm = makeEnemy({ id: 'wyrm1', type: EnemyType.WYRM_ASCENDANT, value: 120 });
+      enemySpy.getEnemies.and.returnValue(new Map([['wyrm1', wyrm]]));
+      combatSpy.fireTurn.and.returnValue({
+        killed: [{ id: 'wyrm1', damage: 200, towerType: TowerType.BASIC, towerLevel: 1 }],
+        fired: [], hitCount: 1, damageDealt: 200,
       });
 
       const result = service.resolveTurn(scene);

@@ -1488,4 +1488,56 @@ describe('CardHandComponent', () => {
       expect(thumbnail).toBeNull();
     });
   });
+
+  describe('isHandStuck', () => {
+    it('returns false when energy is not set', () => {
+      (component as unknown as { energy: EnergyState | null }).energy = null;
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
+      component.resolveHand();
+      expect(component.isHandStuck).toBeFalse();
+    });
+
+    it('returns false when hand is empty', () => {
+      component.energy = makeEnergy(0, 3);
+      component.deckState = makeDeckState([]);
+      component.resolveHand();
+      expect(component.isHandStuck).toBeFalse();
+    });
+
+    it('returns false when at least one card is playable (energy only)', () => {
+      component.energy = makeEnergy(1, 3);
+      component.currentGold = 999;
+      component.deckState = makeDeckState([makeInstance(CardId.GOLD_RUSH)]);
+      component.resolveHand();
+      expect(component.isHandStuck).toBeFalse();
+    });
+
+    it('returns true when energy is 0 and no card is playable (classic case)', () => {
+      // TOWER_MORTAR costs 3 energy — cannot play with 0 energy
+      component.energy = makeEnergy(0, 3);
+      component.currentGold = 999;
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_MORTAR)]);
+      component.resolveHand();
+      expect(component.isHandStuck).toBeTrue();
+    });
+
+    it('returns true when energy > 0 but all tower cards are blocked by insufficient gold', () => {
+      // TOWER_BASIC costs gold — with 0 gold it cannot be played even though energy is available.
+      // This is the post-gold-unification case the original condition missed.
+      component.energy = makeEnergy(3, 3);
+      component.currentGold = 0;
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
+      component.resolveHand();
+      expect(component.isHandStuck).toBeTrue();
+    });
+
+    it('returns false when energy > 0 and a non-tower card can be played even with 0 gold', () => {
+      // GOLD_RUSH is a spell — goldCost null, always playable if energy suffices
+      component.energy = makeEnergy(1, 3);
+      component.currentGold = 0;
+      component.deckState = makeDeckState([makeInstance(CardId.GOLD_RUSH)]);
+      component.resolveHand();
+      expect(component.isHandStuck).toBeFalse();
+    });
+  });
 });

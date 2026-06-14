@@ -408,12 +408,47 @@ export class EnemyService {
       if (enemy.type === EnemyType.NOVA_SOVEREIGN && effectiveSlowReduction > 0) {
         effectiveSlowReduction = Math.floor(effectiveSlowReduction * NOVA_SOVEREIGN_SLOW_RESISTANCE_FACTOR);
       }
-      const enemySpeedReduction = enemySpeedSlow > 0 ? Math.floor(baseTiles * enemySpeedSlow) : 0;
-      // Floor at 1 tile/turn — SLOW aura re-applies each turn while enemy is in
-      // range, so a 0-floor would permanently freeze any 1-tile mover (BASIC,
-      // HEAVY, BOSS, SHIELDED, FLYING). SLOW tower is still effective against
-      // 2-tile movers (FAST, SWIFT, SWARM) which drop from 2→1.
-      const tilesToMove = Math.max(1, baseTiles - effectiveSlowReduction - enemySpeedReduction);
+      // Fractional-movement accumulator for the card-modifier speed reduction.
+      // Math.floor(baseTiles * enemySpeedSlow) rounds 1*0.15 → 0, giving zero
+      // movement penalty to all 1-tile-per-turn enemies when the ENEMY_SPEED
+      // modifier is active. Instead, we accumulate the fractional rate across turns
+      // and move floor(accumulator) tiles, keeping the remainder for the next turn.
+      // This produces a natural skip pattern (e.g. 15% slow → skip ~1-in-7 turns)
+      // without RNG. For 2-tile movers the floor path still fires (floor(2*0.15)=0
+      // but 2-tile movers have grossRate ≥ 1 before the speed penalty, so integer
+      // path handles them correctly).
+      //
+      // The integer tile reduction from the SLOW status effect (slowReductionFor)
+      // remains floor-based and still floors the total at 1 — that preserves the
+      // existing SLOW-tower behaviour against 1-tile movers (no change there).
+      let effectiveTilesFromSpeedMod: number;
+      if (enemySpeedSlow > 0) {
+        // Fractional speed reduction from card modifier — accumulate across turns
+        const fractionalReduction = baseTiles * enemySpeedSlow;
+        const fractionalRate = baseTiles - fractionalReduction;
+        enemy.slowMoveAccumulator = (enemy.slowMoveAccumulator ?? 0) + fractionalRate;
+        effectiveTilesFromSpeedMod = Math.floor(enemy.slowMoveAccumulator);
+        enemy.slowMoveAccumulator -= effectiveTilesFromSpeedMod;
+      } else {
+        // No card-modifier speed slow — clear any stale accumulator and advance normally.
+        enemy.slowMoveAccumulator = undefined;
+        effectiveTilesFromSpeedMod = baseTiles;
+      }
+      // Apply integer tile reduction from SLOW status effect on top of the
+      // speed-mod result.
+      //
+      // When no card-modifier slow is active: floor at 1 tile/turn so the SLOW
+      // aura re-applying each turn cannot permanently freeze any 1-tile enemy.
+      //
+      // When a card-modifier slow IS active: the accumulator controls movement.
+      // When effectiveTilesFromSpeedMod = 0 this means "skip this turn" — the
+      // floor-at-1 does NOT apply so the skip registers. The SLOW status effect
+      // integer reduction is applied on top (subtracting from the accumulator result),
+      // which cannot make the effective tiles negative since effectiveTilesFromSpeedMod ≥ 0.
+      const rawTiles = effectiveTilesFromSpeedMod - effectiveSlowReduction;
+      const tilesToMove = enemySpeedSlow > 0
+        ? Math.max(0, rawTiles)  // card modifier active: allow 0 (skip turn)
+        : Math.max(1, rawTiles); // no card modifier: floor at 1 (SLOW tower anti-freeze)
 
       let stepsRemaining = tilesToMove;
       while (stepsRemaining > 0 && enemy.pathIndex < enemy.path.length - 1) {
@@ -774,6 +809,14 @@ export class EnemyService {
       const maxShield = enemy.maxShield;
       if (maxShield !== undefined && enemy.shield !== undefined && enemy.shield < maxShield) {
         enemy.shield = Math.min(maxShield, enemy.shield + NOVA_SOVEREIGN_SHIELD_REGEN_PER_TURN);
+      }
+
+      // Recreate the shield dome if the shield is positive but the dome mesh
+      // is absent (fully disposed after the break animation completed).
+      // addShieldMesh() no-ops when the dome already exists, so calling it
+      // every regen tick is safe — it only creates when truly needed.
+      if (enemy.shield !== undefined && enemy.shield > 0 && !enemy.shieldBreaking) {
+        this.enemyMeshFactory.addShieldMesh(enemy);
       }
 
       // Enrage: first time HP drops below 50% of max HP

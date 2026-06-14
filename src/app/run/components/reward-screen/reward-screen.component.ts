@@ -136,11 +136,14 @@ export class RewardScreenComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Read the user's motion-reduction preference at animation start. Pulled
-   * into a method so tests can stub it without touching the global
-   * matchMedia surface.
+   * Returns true when the user has opted into reduced motion via either the
+   * OS-level media query or the in-app toggle (body.reduce-motion class).
+   * Pulled into a method so tests can stub it without touching global state.
    */
   private prefersReducedMotion(): boolean {
+    if (typeof document !== 'undefined' && document.body.classList.contains('reduce-motion')) {
+      return true;
+    }
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
       return false;
     }

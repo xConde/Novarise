@@ -93,6 +93,15 @@ export const INTEREST_CONFIG = {
 /** Gold bonus per consecutive leak-free wave (e.g., 3rd streak = 3 * 25 = 75g). */
 export const STREAK_BONUS_PER_WAVE = 25;
 
+/**
+ * Maximum streak bonus that can be awarded for any single wave.
+ * Without a cap the per-wave payout grows unbounded (streak × 25g), which
+ * compounds permanently under the unified gold model and can trivialise
+ * late-encounter economy. Capped at 150g (6-wave perfect streak equivalent)
+ * so skill is meaningfully rewarded without snowballing into runaway wealth.
+ */
+export const MAX_STREAK_BONUS_PER_WAVE = 150;
+
 export const INITIAL_GAME_STATE: GameState = {
   phase: GamePhase.SETUP,
   wave: 0,

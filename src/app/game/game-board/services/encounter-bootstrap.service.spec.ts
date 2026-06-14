@@ -14,6 +14,7 @@ import { DeckService } from '../../../run/services/deck.service';
 import { RunService } from '../../../run/services/run.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
+import { RUN_CONFIG } from '../../../run/constants/run.constants';
 
 describe('EncounterBootstrapService', () => {
   let gameBoardSpy: jasmine.SpyObj<GameBoardService>;
@@ -37,12 +38,14 @@ describe('EncounterBootstrapService', () => {
     waves: unknown[];
     isElite: boolean;
     isBoss: boolean;
+    isEndless: boolean;
     campaignMapId: string | null;
   }> = {}) {
     return {
       waves: [{}, {}, {}],
       isElite: false,
       isBoss: false,
+      isEndless: false,
       campaignMapId: 'forest',
       ...overrides,
     };
@@ -56,10 +59,10 @@ describe('EncounterBootstrapService', () => {
     gameBoardSpy = jasmine.createSpyObj<GameBoardService>('GameBoardService', ['getGameBoard']);
     gameBoardSpy.getGameBoard.and.returnValue([]);
     gameStateSpy = jasmine.createSpyObj<GameStateService>('GameStateService', [
-      'setInitialLives', 'setEncounterStartGold', 'setMaxWaves', 'getState',
+      'setInitialLives', 'setEncounterStartGold', 'setMaxWaves', 'setEndlessMode', 'getState',
     ]);
     gameStateSpy.getState.and.returnValue({ wave: 0, isEndless: false } as ReturnType<GameStateService['getState']>);
-    waveSpy = jasmine.createSpyObj<WaveService>('WaveService', ['setCustomWaves']);
+    waveSpy = jasmine.createSpyObj<WaveService>('WaveService', ['setCustomWaves', 'setEndlessMode']);
     combatLoopSpy = jasmine.createSpyObj<CombatLoopService>('CombatLoopService', ['reset']);
     challengeDisplaySpy = jasmine.createSpyObj<ChallengeDisplayService>(
       'ChallengeDisplayService', ['updateIndicators'], { indicators: [] },
@@ -134,6 +137,28 @@ describe('EncounterBootstrapService', () => {
       relicSpy.getStartingGoldBonus.and.returnValue(25);
       service.bootstrapFresh();
       expect(gameStateSpy.setEncounterStartGold).toHaveBeenCalledWith(175); // 150 + 25
+    });
+
+    it('enforces minEncounterStartGold floor when run wallet is 0 (zero-gold starvation guard)', () => {
+      Object.defineProperty(runSpy, 'runState', {
+        value: { lives: 20, maxLives: 20, ascensionLevel: 0, gold: 0 },
+        configurable: true,
+      });
+      relicSpy.getStartingGoldBonus.and.returnValue(0);
+      service.bootstrapFresh();
+      // Floor must be at least RUN_CONFIG.minEncounterStartGold (currently 50g).
+      const arg = (gameStateSpy.setEncounterStartGold as jasmine.Spy).calls.mostRecent().args[0] as number;
+      expect(arg).toBeGreaterThanOrEqual(RUN_CONFIG.minEncounterStartGold);
+    });
+
+    it('does not apply the floor when run wallet is already above it', () => {
+      Object.defineProperty(runSpy, 'runState', {
+        value: { lives: 20, maxLives: 20, ascensionLevel: 0, gold: 200 },
+        configurable: true,
+      });
+      relicSpy.getStartingGoldBonus.and.returnValue(0);
+      service.bootstrapFresh();
+      expect(gameStateSpy.setEncounterStartGold).toHaveBeenCalledWith(200);
     });
 
     it('sets custom waves and maxWaves to encounter wave count', () => {
@@ -211,6 +236,26 @@ describe('EncounterBootstrapService', () => {
       runSpy.isInRun.and.returnValue(false);
       service.bootstrapFresh();
       expect(waveCombatSpy.startWave).not.toHaveBeenCalled();
+    });
+
+    it('disables endless mode on both services for a normal encounter', () => {
+      service.bootstrapFresh();
+      expect(waveSpy.setEndlessMode).toHaveBeenCalledWith(false);
+      expect(gameStateSpy.setEndlessMode).toHaveBeenCalledWith(false);
+    });
+
+    it('enables endless mode on both services when encounter.isEndless is true', () => {
+      runSpy.getCurrentEncounter.and.returnValue(
+        makeEncounter({ isEndless: true } as Parameters<typeof makeEncounter>[0]) as ReturnType<RunService['getCurrentEncounter']>,
+      );
+      service.bootstrapFresh();
+      expect(waveSpy.setEndlessMode).toHaveBeenCalledWith(true);
+      expect(gameStateSpy.setEndlessMode).toHaveBeenCalledWith(true);
+    });
+
+    it('defaults endless to false when encounter.isEndless is absent', () => {
+      service.bootstrapFresh();
+      expect(waveSpy.setEndlessMode).toHaveBeenCalledWith(false);
     });
   });
 });

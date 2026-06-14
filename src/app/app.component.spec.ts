@@ -32,15 +32,14 @@ describe('AppComponent', () => {
     expect(app.title).toEqual('Novarise');
   });
 
-  it('renders Home and Editor nav links (non-dev build)', () => {
+  it('renders Home nav link only in a non-dev build (Editor and Library are dev-gated)', () => {
     (environment as { enableDevTools: boolean }).enableDevTools = false;
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     const navLinks = compiled.querySelectorAll('.app-nav a');
-    expect(navLinks.length).toBe(2);
+    expect(navLinks.length).toBe(1);
     expect(navLinks[0].textContent).toContain('Home');
-    expect(navLinks[1].textContent).toContain('Editor');
     const cog = compiled.querySelector('.settings-cog');
     expect(cog).toBeTruthy();
     expect(cog!.getAttribute('aria-label')).toBe('Settings');

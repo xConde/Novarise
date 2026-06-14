@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { Router } from '@angular/router';
 import { ProfileComponent, DISPLAY_ACHIEVEMENTS } from './profile.component';
 import {
@@ -46,7 +47,8 @@ describe('ProfileComponent', () => {
       providers: [
         { provide: Router, useValue: router },
         { provide: PlayerProfileService, useValue: profileService },
-      ]
+      ],
+      schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
 
     fixture = TestBed.createComponent(ProfileComponent);
@@ -120,6 +122,25 @@ describe('ProfileComponent', () => {
     newFixture.detectChanges();
     // 'survivor' and 'endless_30' are dead IDs — only 'first_victory' counts
     expect(newFixture.componentInstance.unlockedCount).toBe(1);
+  });
+
+  it('unlockedCount excludes campaign achievement IDs (no campaign mode in run mode)', () => {
+    profileService.getProfile.and.returnValue({
+      ...mockProfile,
+      achievements: ['first_victory', 'act_1_complete', 'campaign_champion', 'star_collector'],
+    });
+    const newFixture = TestBed.createComponent(ProfileComponent);
+    newFixture.detectChanges();
+    // Campaign ids are dead — only 'first_victory' counts
+    expect(newFixture.componentInstance.unlockedCount).toBe(1);
+  });
+
+  it('DISPLAY_ACHIEVEMENTS does not contain any dead campaign achievement IDs', () => {
+    const deadCampaignIds = ['act_1_complete', 'act_2_complete', 'act_3_complete', 'campaign_champion', 'star_collector'];
+    const displayIds = DISPLAY_ACHIEVEMENTS.map((a) => a.id);
+    for (const id of deadCampaignIds) {
+      expect(displayIds).not.toContain(id);
+    }
   });
 
   it('achievementProgressPct uses DISPLAY_ACHIEVEMENTS.length as denominator', () => {
@@ -241,8 +262,10 @@ describe('ProfileComponent', () => {
     });
 
     it('should compute correct achievementProgressPct', () => {
-      // 2 unlocked out of 20 displayable achievements = 10%
-      expect(component.achievementProgressPct).toBe(10);
+      // 2 unlocked out of DISPLAY_ACHIEVEMENTS.length displayable achievements
+      expect(component.achievementProgressPct).toBe(
+        Math.round((2 / DISPLAY_ACHIEVEMENTS.length) * 100)
+      );
     });
 
     it('should show rank "Defender" for 3 achievements', () => {
@@ -255,11 +278,15 @@ describe('ProfileComponent', () => {
       expect(newFixture.componentInstance.rankTitle).toBe('Defender');
     });
 
-    it('should show rank "Novarise" for 25+ achievements', () => {
-      const twentyFive = Array.from({ length: 25 }, (_, i) => `ach_${i}`);
+    it('should show rank "Novarise" for 100% completion (all earnable achievements)', () => {
+      // Top rank requires unlocking all earnable achievements (DISPLAY_ACHIEVEMENTS.length).
+      const allAchievements = Array.from(
+        { length: DISPLAY_ACHIEVEMENTS.length },
+        (_, i) => `ach_${i}`
+      );
       profileService.getProfile.and.returnValue({
         ...mockProfile,
-        achievements: twentyFive,
+        achievements: allAchievements,
       });
       const newFixture = TestBed.createComponent(ProfileComponent);
       newFixture.detectChanges();
@@ -320,15 +347,15 @@ describe('ProfileComponent', () => {
   // ── Category grouping ──────────────────────────────────────────────────────
 
   describe('category groups', () => {
-    it('should build 3 category groups (endless excluded — no endless mode in run mode)', () => {
-      expect(component.categoryGroups.length).toBe(3);
+    it('should build 2 category groups (campaign and endless excluded — neither mode exists in run mode)', () => {
+      expect(component.categoryGroups.length).toBe(2);
     });
 
-    it('should include campaign, combat, and challenge categories', () => {
+    it('should include combat and challenge categories; campaign and endless must be absent', () => {
       const categories = component.categoryGroups.map((g) => g.category) as AchievementCategory[];
-      expect(categories).toContain('campaign');
       expect(categories).toContain('combat');
       expect(categories).toContain('challenge');
+      expect(categories).not.toContain('campaign');
       expect(categories).not.toContain('endless');
     });
 
@@ -337,7 +364,6 @@ describe('ProfileComponent', () => {
       for (const g of component.categoryGroups) {
         labelMap[g.category] = g.label;
       }
-      expect(labelMap['campaign']).toBe('Campaign');
       expect(labelMap['combat']).toBe('Combat');
       expect(labelMap['challenge']).toBe('Challenge');
     });
@@ -354,34 +380,33 @@ describe('ProfileComponent', () => {
       const combatGroup = component.categoryGroups.find((g) => g.category === 'combat')!;
       expect(combatGroup.unlockedCount).toBe(2);
 
-      const campaignGroup = component.categoryGroups.find((g) => g.category === 'campaign')!;
-      expect(campaignGroup.unlockedCount).toBe(0);
-
       const challengeGroup = component.categoryGroups.find((g) => g.category === 'challenge')!;
       expect(challengeGroup.unlockedCount).toBe(0);
 
-      // endless category is excluded from display (no endless mode in run mode)
+      // campaign and endless categories are excluded from display
+      const campaignGroup = component.categoryGroups.find((g) => g.category === 'campaign');
+      expect(campaignGroup).toBeUndefined();
       const endlessGroup = component.categoryGroups.find((g) => g.category === 'endless');
       expect(endlessGroup).toBeUndefined();
     });
 
     it('should render a category header for each group', () => {
       const headers = fixture.nativeElement.querySelectorAll('.category-header');
-      expect(headers.length).toBe(3);
+      expect(headers.length).toBe(2);
     });
 
     it('should render category name elements', () => {
       const names = fixture.nativeElement.querySelectorAll('.category-name');
       const texts = Array.from(names).map((el) => (el as Element).textContent!.trim());
-      expect(texts).toContain('Campaign');
       expect(texts).toContain('Combat');
       expect(texts).toContain('Challenge');
+      expect(texts).not.toContain('Campaign');
       expect(texts).not.toContain('Endless');
     });
 
     it('should render category count elements', () => {
       const counts = fixture.nativeElement.querySelectorAll('.category-count');
-      expect(counts.length).toBe(3);
+      expect(counts.length).toBe(2);
     });
 
     it('each group should only contain achievements of its category', () => {

@@ -451,7 +451,7 @@ describe('GameHudComponent', () => {
         tick(300);
       }));
 
-      it('should not set goldChange when gold decreases', fakeAsync(() => {
+      it('should set goldChange to negative delta when gold decreases (tower purchase)', fakeAsync(() => {
         // Seed previousGold to 200
         component.ngOnChanges({
           gold: new SimpleChange(0, 200, false),
@@ -460,7 +460,7 @@ describe('GameHudComponent', () => {
         component.ngOnChanges({
           gold: new SimpleChange(200, 100, false),
         });
-        expect(component.goldChange).toBe(0);
+        expect(component.goldChange).toBe(-100);
         tick(300);
       }));
 
@@ -535,6 +535,31 @@ describe('GameHudComponent', () => {
 
         const changeEl = fixture.nativeElement.querySelector('.gold-change');
         expect(changeEl).toBeNull();
+      });
+
+      it('should render negative gold-change span when goldChange is negative', () => {
+        component.goldChange = -75;
+        fixture.detectChanges();
+
+        const changeEl = fixture.nativeElement.querySelector('.gold-change--loss');
+        expect(changeEl).toBeTruthy();
+        expect(changeEl.textContent.trim()).toBe('-75g');
+      });
+
+      it('should not render gold-change--loss span when goldChange is 0', () => {
+        component.goldChange = 0;
+        fixture.detectChanges();
+
+        const lossEl = fixture.nativeElement.querySelector('.gold-change--loss');
+        expect(lossEl).toBeNull();
+      });
+
+      it('should not render gold-change--loss span when goldChange is positive', () => {
+        component.goldChange = 50;
+        fixture.detectChanges();
+
+        const lossEl = fixture.nativeElement.querySelector('.gold-change--loss');
+        expect(lossEl).toBeNull();
       });
     });
 

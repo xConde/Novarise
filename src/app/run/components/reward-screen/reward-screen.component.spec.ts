@@ -714,5 +714,30 @@ describe('RewardScreenComponent', () => {
       // Reaching here without a fakeAsync error is the assertion.
       expect(true).toBeTrue();
     }));
+
+    it('does not schedule the animation when body.reduce-motion class is set', () => {
+      // OS preference is off; in-app toggle is on.
+      (window.matchMedia as jasmine.Spy).and.returnValue({
+        matches: false,
+        media: '(prefers-reduced-motion: reduce)',
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      } as unknown as MediaQueryList);
+
+      document.body.classList.add('reduce-motion');
+      try {
+        component.config = { ...MOCK_CONFIG, dominantArchetype: 'conduit', previousDominantArchetype: 'neutral' };
+        component.ngOnInit();
+        fixture.detectChanges();
+
+        expect(component.isArchetypeFlipping).toBeFalse();
+      } finally {
+        document.body.classList.remove('reduce-motion');
+      }
+    });
   });
 });

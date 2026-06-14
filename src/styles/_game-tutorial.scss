@@ -139,11 +139,14 @@ body .tutorial-target-highlight {
   animation: tutorial-pulse 1.5s ease-in-out infinite;
 }
 
-/* Fix 7: Respect prefers-reduced-motion */
+/* Respect both OS-level and in-app reduced-motion preferences. */
 @media (prefers-reduced-motion: reduce) {
   body .tutorial-target-highlight { animation: none; }
   .tutorial-card { animation: none; }
 }
+
+body.reduce-motion .tutorial-target-highlight { animation: none; }
+body.reduce-motion .tutorial-card { animation: none; }
 
 .tutorial-card__step-indicator {
   position: absolute;

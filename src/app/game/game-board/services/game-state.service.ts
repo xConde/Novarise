@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
-import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE } from '../models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, MAX_STREAK_BONUS_PER_WAVE, STREAK_BONUS_PER_WAVE } from '../models/game-state.model';
 import { GameModifier, ModifierEffects, mergeModifierEffects, calculateModifierScoreMultiplier } from '../models/game-modifier.model';
 import { SerializableGameState } from '../models/encounter-checkpoint.model';
 import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
@@ -111,13 +111,15 @@ export class GameStateService {
   /**
    * Increments the no-leak streak counter and awards a streak bonus.
    * Call this when a wave completes with zero leaks.
-   * Bonus gold = STREAK_BONUS_PER_WAVE * consecutiveWavesWithoutLeak (after increment).
+   * Bonus gold = STREAK_BONUS_PER_WAVE × streak, capped at MAX_STREAK_BONUS_PER_WAVE
+   * so long perfect clears reward skill without compounding into runaway wealth.
    * Returns the gold bonus awarded (0 if not in COMBAT phase).
    */
   addStreakBonus(): number {
     if (this.state.phase !== GamePhase.COMBAT) return 0;
     this.state.consecutiveWavesWithoutLeak++;
-    const bonus = STREAK_BONUS_PER_WAVE * this.state.consecutiveWavesWithoutLeak;
+    const rawBonus = STREAK_BONUS_PER_WAVE * this.state.consecutiveWavesWithoutLeak;
+    const bonus = Math.min(rawBonus, MAX_STREAK_BONUS_PER_WAVE);
     this.addGoldAndScore(bonus);
     return bonus;
   }

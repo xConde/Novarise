@@ -33,6 +33,7 @@ export class SettingsService {
   constructor(private storageService: StorageService) {
     this.settings = this.load();
     this.applyFontScale(this.settings.fontScale);
+    this.applyReduceMotion(this.settings.reduceMotion);
   }
 
   /**
@@ -49,12 +50,32 @@ export class SettingsService {
     if (cls) html.classList.add(cls);
   }
 
+  /**
+   * Toggle the `reduce-motion` class on <body> so CSS animation-suppression
+   * rules take effect immediately — regardless of whether the OS-level
+   * `prefers-reduced-motion` media query is set.
+   * Called on boot and whenever the user changes the setting.
+   */
+  applyReduceMotion(enabled: boolean): void {
+    if (enabled) {
+      document.body.classList.add('reduce-motion');
+    } else {
+      document.body.classList.remove('reduce-motion');
+    }
+  }
+
   get(): GameSettings {
     return { ...this.settings };
   }
 
   update(partial: Partial<GameSettings>): void {
     this.settings = { ...this.settings, ...partial };
+    if (partial.fontScale !== undefined) {
+      this.applyFontScale(this.settings.fontScale);
+    }
+    if (partial.reduceMotion !== undefined) {
+      this.applyReduceMotion(this.settings.reduceMotion);
+    }
     this.save();
   }
 

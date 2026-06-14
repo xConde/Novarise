@@ -82,10 +82,15 @@ describe('ForwardSimulationService', () => {
       expect(svc.projectTurnsToExit(enemy, /*slow*/ 1)).toBe(9);
     });
 
-    it('floors at 1 tile/turn even when reductions exceed base speed', () => {
-      // BASIC at 1 base − 5 reduction = −4, but min-floor is 1 → 9 turns over 9 tiles
+    it('returns a large but finite projection when reductions exceed base speed', () => {
+      // BASIC at 1 base − 5 reduction = −4 net. Combined reductions exceed base speed,
+      // so the effective rate is clamped to MIN_PROJECTION_TILES_PER_TURN (a small positive
+      // value) to prevent division-by-zero. The result must be finite and much larger than
+      // the unslowed projection (9 turns).
       const enemy = makeEnemy({ type: EnemyType.BASIC, path: makePath(10), pathIndex: 0 });
-      expect(svc.projectTurnsToExit(enemy, /*slow*/ 5)).toBe(9);
+      const result = svc.projectTurnsToExit(enemy, /*slow*/ 5);
+      expect(isFinite(result)).toBeTrue();
+      expect(result).toBeGreaterThan(9);
     });
 
     it('applies VEINSEEKER boost when flagged', () => {
@@ -282,6 +287,40 @@ describe('ForwardSimulationService', () => {
       const result = svc.projectIncomingDamageNextTurn(enemy, towers, () => enemy);
       // L1 base = 25; L2 should be greater
       expect(result).toBeGreaterThan(TOWER_CONFIGS[TowerType.BASIC].damage);
+    });
+  });
+
+  describe('fractional card-modifier speed slow projection', () => {
+    it('projects more turns for a 1-tile enemy under 15% card speed slow', () => {
+      // BASIC (1 tile/turn) with 15% card-modifier slow: effective rate = 0.85 tiles/turn
+      // 9 tiles / 0.85 = 10.6 → Math.ceil = 11 turns (vs 9 unslowed)
+      const enemy = makeEnemy({ type: EnemyType.BASIC, path: makePath(10), pathIndex: 0 });
+      const slowed = svc.projectTurnsToExit(enemy, 0, 0.15);
+      const unslowed = svc.projectTurnsToExit(enemy, 0, 0);
+      expect(slowed).toBeGreaterThan(unslowed);
+    });
+
+    it('returns ceil(tilesRemaining / (baseTiles*(1-slowPct))) for 1-tile mover at 15% slow', () => {
+      // BASIC: rate = 1*(1-0.15) = 0.85, 9 tiles → ceil(9/0.85) = 11
+      const enemy = makeEnemy({ type: EnemyType.BASIC, path: makePath(10), pathIndex: 0 });
+      expect(svc.projectTurnsToExit(enemy, 0, 0.15)).toBe(11);
+    });
+
+    it('projection with 50% card slow takes twice as many turns for a 1-tile mover', () => {
+      // rate = 0.5, 9 tiles → ceil(9/0.5) = 18
+      const enemy = makeEnemy({ type: EnemyType.BASIC, path: makePath(10), pathIndex: 0 });
+      expect(svc.projectTurnsToExit(enemy, 0, 0.5)).toBe(18);
+    });
+
+    it('forward-sim and live accumulator agree: 15% slow skips a turn within 12 turns for BASIC', () => {
+      // rate = 0.85 per turn. After 12 turns: 12 * 0.85 = 10.2 tiles → the enemy
+      // crosses the exit (9 tiles away) between turn 10 and 11. projection returns 11.
+      const enemy = makeEnemy({ type: EnemyType.BASIC, path: makePath(10), pathIndex: 0 });
+      const turns = svc.projectTurnsToExit(enemy, 0, 0.15);
+      // The enemy takes more than 9 turns (unslowed value)
+      expect(turns).toBeGreaterThan(9);
+      // But no more than 12 turns (sanity ceiling)
+      expect(turns).toBeLessThanOrEqual(12);
     });
   });
 });

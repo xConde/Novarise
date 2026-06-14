@@ -1,6 +1,6 @@
 <nav class="app-nav">
   <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">Home</a>
-  <a routerLink="/edit" routerLinkActive="active">Editor</a>
+  <a *ngIf="enableDevTools" routerLink="/edit" routerLinkActive="active">Editor</a>
   <a *ngIf="enableDevTools" routerLink="/library" routerLinkActive="active">Library</a>
 </nav>
 <a class="settings-cog" aria-label="Settings" (click)="toggleSettings()">

@@ -307,6 +307,41 @@ describe('EnemyMeshFactoryService', () => {
     });
   });
 
+  // --- addShieldMesh ---
+
+  describe('addShieldMesh', () => {
+    it('should be a no-op when enemy has no mesh', () => {
+      // makeEnemy() does not set mesh; addShieldMesh must guard gracefully.
+      const enemy = makeEnemy(EnemyType.NOVA_SOVEREIGN);
+      expect(() => service.addShieldMesh(enemy)).not.toThrow();
+    });
+
+    it('should attach a dome to userData[shieldMesh] when no dome exists', () => {
+      // Spawn with shield=0 so createEnemyMesh skips the dome, then re-attach via addShieldMesh.
+      const enemy = makeEnemy(EnemyType.NOVA_SOVEREIGN, { shield: 0, maxShield: 400 });
+      enemy.mesh = service.createEnemyMesh(enemy);
+      createdMeshes.push(enemy.mesh);
+      // Confirm no dome was created (shield=0).
+      expect(enemy.mesh.userData['shieldMesh']).toBeUndefined();
+
+      service.addShieldMesh(enemy);
+
+      expect(enemy.mesh.userData['shieldMesh']).toBeTruthy();
+      expect(enemy.mesh.userData['shieldMesh'] instanceof THREE.Mesh).toBeTrue();
+    });
+
+    it('should not replace an existing dome (idempotent)', () => {
+      const enemy = makeEnemy(EnemyType.NOVA_SOVEREIGN, { shield: 80, maxShield: 400 });
+      enemy.mesh = service.createEnemyMesh(enemy);
+      createdMeshes.push(enemy.mesh);
+      const originalDome = enemy.mesh.userData['shieldMesh'];
+
+      service.addShieldMesh(enemy);
+
+      expect(enemy.mesh.userData['shieldMesh']).toBe(originalDome);
+    });
+  });
+
   // --- createMiniSwarmMesh ---
 
   describe('createMiniSwarmMesh', () => {

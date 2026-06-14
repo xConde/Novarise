@@ -4,7 +4,11 @@ import { EnemyVisualService } from './enemy-visual.service';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { ENEMY_STATS, EnemyType, Enemy } from '../models/enemy.model';
-import { STATUS_EFFECT_VISUAL_CONFIG } from '../constants/effects.constants';
+import {
+  STATUS_EFFECT_VISUAL_CONFIG,
+  NOVA_SOVEREIGN_ORB_SPIN_SPEEDS,
+  NOVA_SOVEREIGN_ENRAGE_VISUAL,
+} from '../constants/effects.constants';
 
 /** Create a minimal Enemy object suitable for visual tests. */
 function makeEnemy(id: string, type: EnemyType = EnemyType.BASIC): Enemy {
@@ -361,6 +365,244 @@ describe('EnemyVisualService', () => {
       service.updateStatusEffectParticles(enemies, 0.016, mockScene, new Map());
       expect(enemy.statusParticles!.length).toBe(0);
       expect(enemy.statusParticleEffectType).toBeUndefined();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // NOVA_SOVEREIGN orb-ring animation (Fix 1)
+  // ---------------------------------------------------------------------------
+
+  describe('updateEnemyAnimations — NOVA_SOVEREIGN orb rings', () => {
+    function makeNovaSovereign(): Enemy {
+      const enemy = makeEnemy('nova', EnemyType.NOVA_SOVEREIGN);
+      // Attach three fake shard rings matching the userData keys set by EnemyMeshFactoryService.
+      for (let i = 0; i < 3; i++) {
+        const geo = new THREE.TorusGeometry(0.5, 0.05);
+        const mat = new THREE.MeshStandardMaterial();
+        const ring = new THREE.Mesh(geo, mat);
+        ring.rotation.y = 0;
+        enemy.mesh!.userData[`novaSovereignOrb${i}`] = ring;
+      }
+      return enemy;
+    }
+
+    afterEach(() => {
+      // Dispose ring geometries/materials created in each test.
+    });
+
+    it('rotates all three shard rings on Y each frame', () => {
+      const enemy = makeNovaSovereign();
+      const enemies = new Map([['nova', enemy]]);
+
+      service.updateEnemyAnimations(enemies, 0.5);
+
+      for (let i = 0; i < 3; i++) {
+        const ring = enemy.mesh!.userData[`novaSovereignOrb${i}`] as THREE.Mesh;
+        const expectedY = NOVA_SOVEREIGN_ORB_SPIN_SPEEDS[i] * 0.5;
+        expect(ring.rotation.y).toBeCloseTo(expectedY, 5);
+
+        ring.geometry.dispose();
+        (ring.material as THREE.Material).dispose();
+      }
+    });
+
+    it('gives each ring a distinct rotation angle after multiple frames', () => {
+      const enemy = makeNovaSovereign();
+      const enemies = new Map([['nova', enemy]]);
+
+      service.updateEnemyAnimations(enemies, 1.0);
+      service.updateEnemyAnimations(enemies, 1.0);
+
+      const angles = [0, 1, 2].map(
+        i => (enemy.mesh!.userData[`novaSovereignOrb${i}`] as THREE.Mesh).rotation.y,
+      );
+      // Verify that ring angles differ (parallax — they should not all be equal)
+      expect(angles[0]).not.toBeCloseTo(angles[1], 3);
+      expect(angles[1]).not.toBeCloseTo(angles[2], 3);
+
+      for (let i = 0; i < 3; i++) {
+        const ring = enemy.mesh!.userData[`novaSovereignOrb${i}`] as THREE.Mesh;
+        ring.geometry.dispose();
+        (ring.material as THREE.Material).dispose();
+      }
+    });
+
+    it('does not rotate rings when deltaTime is zero', () => {
+      const enemy = makeNovaSovereign();
+      const enemies = new Map([['nova', enemy]]);
+
+      service.updateEnemyAnimations(enemies, 0);
+
+      for (let i = 0; i < 3; i++) {
+        const ring = enemy.mesh!.userData[`novaSovereignOrb${i}`] as THREE.Mesh;
+        expect(ring.rotation.y).toBe(0);
+        ring.geometry.dispose();
+        (ring.material as THREE.Material).dispose();
+      }
+    });
+
+    it('does not throw when a ring userData entry is missing', () => {
+      const enemy = makeNovaSovereign();
+      // Remove one ring to simulate a partially-built mesh.
+      delete enemy.mesh!.userData['novaSovereignOrb1'];
+      const enemies = new Map([['nova', enemy]]);
+
+      expect(() => service.updateEnemyAnimations(enemies, 0.016)).not.toThrow();
+
+      for (const i of [0, 2]) {
+        const ring = enemy.mesh!.userData[`novaSovereignOrb${i}`] as THREE.Mesh;
+        ring.geometry.dispose();
+        (ring.material as THREE.Material).dispose();
+      }
+    });
+
+    it('skips orb animation for dying NOVA_SOVEREIGN', () => {
+      const enemy = makeNovaSovereign();
+      enemy.dying = true;
+      const enemies = new Map([['nova', enemy]]);
+
+      service.updateEnemyAnimations(enemies, 0.5);
+
+      for (let i = 0; i < 3; i++) {
+        const ring = enemy.mesh!.userData[`novaSovereignOrb${i}`] as THREE.Mesh;
+        expect(ring.rotation.y).toBe(0);
+        ring.geometry.dispose();
+        (ring.material as THREE.Material).dispose();
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // NOVA_SOVEREIGN enrage visual (Fix 2)
+  // ---------------------------------------------------------------------------
+
+  describe('updateStatusVisuals — NOVA_SOVEREIGN enrage', () => {
+    it('applies enrage emissive when isEnraged and no status effects', () => {
+      const enemy = makeEnemy('nova', EnemyType.NOVA_SOVEREIGN);
+      enemy.isEnraged = true;
+      const enemies = new Map([['nova', enemy]]);
+
+      service.updateStatusVisuals(enemies, new Map());
+
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(NOVA_SOVEREIGN_ENRAGE_VISUAL.emissiveColor);
+      expect(mat.emissiveIntensity).toBe(NOVA_SOVEREIGN_ENRAGE_VISUAL.emissiveIntensity);
+    });
+
+    it('does not apply enrage emissive when isEnraged is false', () => {
+      const enemy = makeEnemy('nova', EnemyType.NOVA_SOVEREIGN);
+      enemy.isEnraged = false;
+      const enemies = new Map([['nova', enemy]]);
+
+      service.updateStatusVisuals(enemies, new Map());
+
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      // Should be base color, not the enrage color
+      expect(mat.emissive.getHex()).not.toBe(NOVA_SOVEREIGN_ENRAGE_VISUAL.emissiveColor);
+    });
+
+    it('status tint takes priority over enrage emissive', () => {
+      const enemy = makeEnemy('nova', EnemyType.NOVA_SOVEREIGN);
+      enemy.isEnraged = true;
+      const enemies = new Map([['nova', enemy]]);
+      const effects = new Map([['nova', [StatusEffectType.BURN]]]);
+
+      service.updateStatusVisuals(enemies, effects);
+
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      // BURN emissive should win — the enrage path only fires when effects.length === 0
+      expect(mat.emissive.getHex()).toBe(0xff6622);
+      expect(mat.emissive.getHex()).not.toBe(NOVA_SOVEREIGN_ENRAGE_VISUAL.emissiveColor);
+    });
+
+    it('enrage also tints child meshes (boss crown if present)', () => {
+      const enemy = makeEnemy('nova', EnemyType.NOVA_SOVEREIGN);
+      enemy.isEnraged = true;
+      // Attach a fake crown to verify tintChildMeshes is called with enrage values
+      const crownGeo = new THREE.TorusGeometry(0.4, 0.05);
+      const crownMat = new THREE.MeshStandardMaterial();
+      const crown = new THREE.Mesh(crownGeo, crownMat);
+      enemy.mesh!.userData['bossCrown'] = crown;
+      const enemies = new Map([['nova', enemy]]);
+
+      service.updateStatusVisuals(enemies, new Map());
+
+      expect(crownMat.emissive.getHex()).toBe(NOVA_SOVEREIGN_ENRAGE_VISUAL.emissiveColor);
+      expect(crownMat.emissiveIntensity).toBe(NOVA_SOVEREIGN_ENRAGE_VISUAL.emissiveIntensity);
+
+      crownGeo.dispose();
+      crownMat.dispose();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // WYRM_ASCENDANT wyrmEyeGlow tinting (Fix 3)
+  // ---------------------------------------------------------------------------
+
+  describe('tintChildMeshes — wyrmEyeGlow', () => {
+    function makeWyrm(): Enemy {
+      const enemy = makeEnemy('wyrm', EnemyType.WYRM_ASCENDANT);
+      const eyeGeo = new THREE.TorusGeometry(0.3, 0.05);
+      const eyeMat = new THREE.MeshStandardMaterial({ emissive: new THREE.Color(0xff2200) });
+      const eyeGlow = new THREE.Mesh(eyeGeo, eyeMat);
+      enemy.mesh!.userData['wyrmEyeGlow'] = eyeGlow;
+      return enemy;
+    }
+
+    it('tints wyrmEyeGlow when BURN status is active', () => {
+      const enemy = makeWyrm();
+      const enemies = new Map([['wyrm', enemy]]);
+      const effects = new Map([['wyrm', [StatusEffectType.BURN]]]);
+
+      service.updateStatusVisuals(enemies, effects);
+
+      const eyeGlow = enemy.mesh!.userData['wyrmEyeGlow'] as THREE.Mesh;
+      const eyeMat = eyeGlow.material as THREE.MeshStandardMaterial;
+      expect(eyeMat.emissive.getHex()).toBe(0xff6622);
+
+      eyeGlow.geometry.dispose();
+      eyeMat.dispose();
+    });
+
+    it('tints wyrmEyeGlow when SLOW status is active', () => {
+      const enemy = makeWyrm();
+      const enemies = new Map([['wyrm', enemy]]);
+      const effects = new Map([['wyrm', [StatusEffectType.SLOW]]]);
+
+      service.updateStatusVisuals(enemies, effects);
+
+      const eyeGlow = enemy.mesh!.userData['wyrmEyeGlow'] as THREE.Mesh;
+      const eyeMat = eyeGlow.material as THREE.MeshStandardMaterial;
+      expect(eyeMat.emissive.getHex()).toBe(0x4488ff);
+
+      eyeGlow.geometry.dispose();
+      eyeMat.dispose();
+    });
+
+    it('restores wyrmEyeGlow emissive when effects clear', () => {
+      const enemy = makeWyrm();
+      const enemies = new Map([['wyrm', enemy]]);
+
+      // Apply BURN
+      service.updateStatusVisuals(enemies, new Map([['wyrm', [StatusEffectType.BURN]]]));
+      // Clear effects
+      service.updateStatusVisuals(enemies, new Map());
+
+      const eyeGlow = enemy.mesh!.userData['wyrmEyeGlow'] as THREE.Mesh;
+      const eyeMat = eyeGlow.material as THREE.MeshStandardMaterial;
+      // Should be base color, not BURN
+      expect(eyeMat.emissive.getHex()).not.toBe(0xff6622);
+
+      eyeGlow.geometry.dispose();
+      eyeMat.dispose();
+    });
+
+    it('does not throw when wyrmEyeGlow userData is absent', () => {
+      const enemy = makeEnemy('basic', EnemyType.BASIC);
+      const enemies = new Map([['basic', enemy]]);
+      const effects = new Map([['basic', [StatusEffectType.POISON]]]);
+
+      expect(() => service.updateStatusVisuals(enemies, effects)).not.toThrow();
     });
   });
 

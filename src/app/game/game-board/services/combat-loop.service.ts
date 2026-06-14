@@ -489,16 +489,30 @@ export class CombatLoopService {
       this.luckyCoinBonusGoldThisTurn += Math.round(adjustedGold - adjustedGold / luckyCoinMult);
     }
 
-    if (enemy.type === EnemyType.BOSS || enemy.type === EnemyType.NOVA_SOVEREIGN) {
-      // Boss-kill shake: fires on the kill event since CombatLoopService has no
-      // per-hit granularity (damage is applied instantaneously per turn).
+    if (enemy.type === EnemyType.NOVA_SOVEREIGN) {
+      // Climactic final-boss death: larger shake and extended duration to mark
+      // the end of the Act 3 encounter distinctly from generic boss kills.
+      this.screenShakeService.trigger(
+        SCREEN_SHAKE_CONFIG.novaSovereignDeathIntensity,
+        SCREEN_SHAKE_CONFIG.novaSovereignDeathDuration,
+      );
+    } else if (enemy.type === EnemyType.WYRM_ASCENDANT) {
+      // Wyrm boss death: stronger than generic boss, distinct from NOVA_SOVEREIGN.
+      this.screenShakeService.trigger(
+        SCREEN_SHAKE_CONFIG.wyrmAscendantDeathIntensity,
+        SCREEN_SHAKE_CONFIG.wyrmAscendantDeathDuration,
+      );
+    } else if (enemy.type === EnemyType.BOSS) {
+      // Generic boss kill shake.
       this.screenShakeService.trigger(
         SCREEN_SHAKE_CONFIG.bossHitIntensity,
         SCREEN_SHAKE_CONFIG.bossHitDuration,
       );
     }
 
-    const isBossKill = enemy.type === EnemyType.BOSS || enemy.type === EnemyType.NOVA_SOVEREIGN;
+    const isBossKill = enemy.type === EnemyType.BOSS
+      || enemy.type === EnemyType.NOVA_SOVEREIGN
+      || enemy.type === EnemyType.WYRM_ASCENDANT;
     this.frameKills.push({
       damage: killInfo.damage,
       position: { ...enemy.position },

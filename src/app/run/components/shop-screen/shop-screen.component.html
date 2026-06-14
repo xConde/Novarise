@@ -77,7 +77,7 @@
           {{ resolved.card.type }} &bull; {{ resolved.card.energyCost }} energy
         </span>
         <span class="shop-card__description">
-          {{ resolved.card?.description }}
+          <app-description-text *ngIf="resolved.card" [description]="resolved.card.description"></app-description-text>
         </span>
         <button
           class="shop-card__buy-btn"
@@ -186,7 +186,10 @@
             (selected)="selectCardToUpgrade(card)"
           ></app-game-card>
           <p class="shop-card-upgrade__preview" aria-hidden="true">
-            &#8594; {{ getCardDefinitionForInstance(card).upgradedDescription ?? '+ ' + getCardDefinitionForInstance(card).description }}
+            &#8594;
+            <app-description-text
+              [description]="getCardDefinitionForInstance(card).upgradedDescription ?? '+ ' + getCardDefinitionForInstance(card).description"
+            ></app-description-text>
           </p>
         </li>
       </ul>

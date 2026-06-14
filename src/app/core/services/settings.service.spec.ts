@@ -119,4 +119,59 @@ describe('SettingsService', () => {
     const fresh = service.get();
     expect(fresh.audioMuted).toBe(false); // original unaffected
   });
+
+  // ── applyReduceMotion ─────────────────────────────────────────────────
+
+  describe('applyReduceMotion', () => {
+    afterEach(() => {
+      document.body.classList.remove('reduce-motion');
+    });
+
+    it('adds reduce-motion class to body when enabled', () => {
+      service.applyReduceMotion(true);
+      expect(document.body.classList.contains('reduce-motion')).toBeTrue();
+    });
+
+    it('removes reduce-motion class from body when disabled', () => {
+      document.body.classList.add('reduce-motion');
+      service.applyReduceMotion(false);
+      expect(document.body.classList.contains('reduce-motion')).toBeFalse();
+    });
+
+    it('applies reduce-motion class on construction when saved setting is true', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        audioMuted: false, musicEnabled: true, musicVolume: 0.5,
+        difficulty: 'normal', showFps: false, reduceMotion: true,
+        colorblindAssist: false, fontScale: 1,
+      }));
+      const fresh = new SettingsService(new StorageService());
+      expect(fresh.get().reduceMotion).toBeTrue();
+      expect(document.body.classList.contains('reduce-motion')).toBeTrue();
+    });
+
+    it('does not add reduce-motion class on construction when saved setting is false', () => {
+      document.body.classList.remove('reduce-motion');
+      const fresh = new SettingsService(new StorageService());
+      expect(fresh.get().reduceMotion).toBeFalse();
+      expect(document.body.classList.contains('reduce-motion')).toBeFalse();
+    });
+
+    it('toggles body class when update changes reduceMotion to true', () => {
+      expect(document.body.classList.contains('reduce-motion')).toBeFalse();
+      service.update({ reduceMotion: true });
+      expect(document.body.classList.contains('reduce-motion')).toBeTrue();
+    });
+
+    it('removes body class when update changes reduceMotion to false', () => {
+      service.update({ reduceMotion: true });
+      service.update({ reduceMotion: false });
+      expect(document.body.classList.contains('reduce-motion')).toBeFalse();
+    });
+
+    it('does not alter reduce-motion class when update does not touch reduceMotion', () => {
+      document.body.classList.remove('reduce-motion');
+      service.update({ audioMuted: true });
+      expect(document.body.classList.contains('reduce-motion')).toBeFalse();
+    });
+  });
 });
