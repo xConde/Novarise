@@ -66,14 +66,13 @@
 // ── Layout ───────────────────────────────────────────────────────────────────
 
 .landing-container {
-  display: grid;
-  grid-template-rows: 1fr [content] auto 1fr [version] auto;
-  grid-template-columns: 1fr [content] minmax(280px, min(520px, 88vw)) 1fr;
-  grid-template-areas:
-    ".       .       ."
-    ".       content ."
-    ".       .       ."
-    "version version version";
+  // Flex-center the content on both axes so the title + menu sit dead-centre.
+  // The version string is an absolutely-positioned footer (below) so it does
+  // not pull the content block upward.
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   min-height: 100vh;
   background-color: var(--bg-color);
   color: var(--text-color);
@@ -222,7 +221,9 @@
 // ── Foreground content ────────────────────────────────────────────────────────
 
 .landing-content {
-  grid-area: content;
+  // Constrain the menu column to the prior content width; the wide wordmark
+  // overflows this box symmetrically (centred text) so it reads full-width.
+  width: min(520px, 88vw);
   display: grid;
   grid-template-rows: [title] auto [actions] auto [ascension] auto;
   justify-items: center;
@@ -542,15 +543,12 @@
 // ── Version badge ─────────────────────────────────────────────────────────────
 
 .landing-version {
-  grid-area: version;
-  justify-self: end;
-  align-self: end;
-  padding-right: var(--spacing-md);
-  padding-bottom: var(--spacing-md);
+  position: absolute;
+  bottom: var(--spacing-md);
+  right: var(--spacing-md);
   font-size: var(--font-size-xs);
   color: var(--theme-purple-mid);
   opacity: 0.5;
-  position: relative;
   z-index: 1;
 }
 
