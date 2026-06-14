@@ -1,33 +1,34 @@
 <div class="rest-screen"
      [class.rest-screen--upgrading]="activeAction === 'upgrade'"
+     [class.rest-screen--confirmed]="activeAction === 'confirmed'"
      role="main"
      aria-label="Rest site">
 
   <!-- Bonfire ambiance: ambient glow, swaying flame tongue, rising embers -->
-  <!-- Hidden in upgrade mode — the hearth glow bleeds through the card grid -->
-  <div class="rest-hearth" aria-hidden="true" *ngIf="activeAction !== 'upgrade'">
+  <!-- Hidden in upgrade/confirmation mode — the hearth glow bleeds through the card grid -->
+  <div class="rest-hearth" aria-hidden="true" *ngIf="activeAction === 'none'">
     <span class="rest-hearth__glow"></span>
     <span class="rest-hearth__flame"><span class="rest-hearth__flame-inner"></span></span>
     <span class="rest-hearth__embers"></span>
   </div>
 
-  <!-- Rest icon — hidden in upgrade mode to free vertical space for the picker -->
-  <div class="rest-icon" aria-hidden="true" *ngIf="activeAction !== 'upgrade'"><app-icon name="moon" [size]="32"></app-icon></div>
+  <!-- Rest icon — hidden in upgrade/confirmation mode to free vertical space -->
+  <div class="rest-icon" aria-hidden="true" *ngIf="activeAction === 'none'"><app-icon name="moon" [size]="32"></app-icon></div>
 
-  <!-- Title — hidden in upgrade mode -->
-  <h2 class="rest-title" *ngIf="activeAction !== 'upgrade'">Rest Site</h2>
-  <p class="rest-subtitle" *ngIf="activeAction !== 'upgrade'">Take a moment to recover or upgrade a card.</p>
+  <!-- Title — hidden in upgrade/confirmation mode -->
+  <h2 class="rest-title" *ngIf="activeAction === 'none'">Rest Site</h2>
+  <p class="rest-subtitle" *ngIf="activeAction === 'none'">Take a moment to recover or upgrade a card.</p>
 
-  <!-- Lives display — hidden in upgrade mode (irrelevant to the upgrade decision) -->
+  <!-- Lives display — hidden in upgrade/confirmation mode (irrelevant to the upgrade decision) -->
   <div class="rest-lives"
-       *ngIf="activeAction !== 'upgrade'"
+       *ngIf="activeAction === 'none'"
        [attr.aria-label]="'Current lives: ' + currentLives + ' of ' + maxLives">
     <span class="rest-lives__heart" aria-hidden="true"><app-icon name="heart" [size]="16"></app-icon></span>
     <span class="rest-lives__value">{{ currentLives }} / {{ maxLives }}</span>
   </div>
 
   <!-- Heal preview -->
-  <div class="rest-heal-preview" *ngIf="!atFullHealth && activeAction !== 'upgrade'">
+  <div class="rest-heal-preview" *ngIf="!atFullHealth && activeAction === 'none'">
     <span class="rest-heal-preview__amount" [attr.aria-label]="'Healing ' + actualHeal + ' lives'">
       +{{ actualHeal }} lives
     </span>
@@ -35,7 +36,7 @@
     <span class="rest-heal-preview__result">{{ livesAfterHeal }} / {{ maxLives }}</span>
   </div>
 
-  <p class="rest-full-notice" *ngIf="atFullHealth && activeAction !== 'upgrade'" aria-live="polite">
+  <p class="rest-full-notice" *ngIf="atFullHealth && activeAction === 'none'" aria-live="polite">
     You are already at full health.
   </p>
 
@@ -71,8 +72,24 @@
     </button>
   </div>
 
-  <!-- Main actions (hidden while selecting upgrade) -->
-  <div class="rest-actions" *ngIf="activeAction !== 'upgrade'">
+  <!-- Upgrade confirmation — shown after a card is upgraded, before returning to the map -->
+  <div class="rest-upgrade-confirmation" *ngIf="activeAction === 'confirmed'" role="region" aria-live="polite" aria-label="Card upgrade confirmation">
+    <span class="rest-upgrade-confirmation__icon" aria-hidden="true">✓</span>
+    <p class="rest-upgrade-confirmation__message">
+      Upgraded <strong>{{ lastUpgradedCardName }}</strong>.
+    </p>
+    <button
+      class="run-btn run-btn--primary rest-btn"
+      type="button"
+      (click)="continueAfterUpgrade()"
+      aria-label="Continue to the node map"
+    >
+      Continue
+    </button>
+  </div>
+
+  <!-- Main actions (hidden while selecting upgrade or showing confirmation) -->
+  <div class="rest-actions" *ngIf="activeAction === 'none'">
     <button
       class="run-btn run-btn--primary rest-btn"
       type="button"

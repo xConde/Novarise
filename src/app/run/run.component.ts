@@ -280,15 +280,20 @@ export class RunComponent implements OnInit, OnDestroy {
     this.shopDeckSnapshot = this.runService.getDeckCards();
   }
 
-  /** Handle card upgrade selection from rest screen. */
+  /** Handle card upgrade selection from rest screen — applies the upgrade but stays on rest screen to show confirmation. */
   onCardUpgraded(instanceId: string): void {
     this.runService.upgradeCard(instanceId);
+  }
+
+  /** Handle the player dismissing the upgrade confirmation — now transition to the map. */
+  onUpgradeConfirmed(): void {
     this.viewMode = 'map';
   }
 
   /** Complete event choice. */
   completeEvent(choiceIndex: number): void {
     this.runService.resolveEvent(choiceIndex);
+    this.eventGambleResult = null;
     this.viewMode = 'map';
   }
 
@@ -317,6 +322,14 @@ export class RunComponent implements OnInit, OnDestroy {
   /** Current event exposed for EventScreenComponent binding. */
   get currentEvent(): RunEvent | null {
     return this.runService.getCurrentEvent();
+  }
+
+  /** Seeded gamble preview result — set synchronously when the player picks a gamble choice. */
+  eventGambleResult: { goldDelta: number; livesDelta: number } | null = null;
+
+  /** Called by EventScreenComponent when the player picks a gamble choice. Rolls once via seeded RNG. */
+  onPreviewGamble(index: number): void {
+    this.eventGambleResult = this.runService.previewEventGamble(index);
   }
 
   /** Leave shop, return to map. */

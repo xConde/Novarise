@@ -1558,4 +1558,226 @@ describe('CombatLoopService', () => {
       expect(popupSpy.flushOne).toHaveBeenCalledWith('e-kill', scene);
     });
   });
+
+  // ─── feedback toasts — card LeakBlock ────────────────────────────────────────
+
+  describe('feedback toasts — card LeakBlock', () => {
+    let cardEffectSpy: jasmine.SpyObj<CardEffectService>;
+
+    beforeEach(() => {
+      cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+    });
+
+    it('shows INFO "Leak Blocked" toast when tryConsumeLeakBlock() absorbs a leak', () => {
+      cardEffectSpy.tryConsumeLeakBlock.and.returnValue(true);
+      const enemy = makeEnemy({ id: 'e1' });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
+
+      service.resolveTurn(scene);
+
+      expect(notificationSpy.show).toHaveBeenCalledWith(
+        NotificationType.INFO,
+        'Leak Blocked',
+        'A card effect blocked a leak.',
+      );
+    });
+
+    it('does NOT show "Leak Blocked" toast when tryConsumeLeakBlock() returns false', () => {
+      cardEffectSpy.tryConsumeLeakBlock.and.returnValue(false);
+      const enemy = makeEnemy({ id: 'e1' });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
+
+      service.resolveTurn(scene);
+
+      const leakBlockCalls = notificationSpy.show.calls.allArgs()
+        .filter(args => args[1] === 'Leak Blocked');
+      expect(leakBlockCalls.length).toBe(0);
+    });
+
+    it('shows one "Leak Blocked" toast per absorbed leak when multiple enemies exit', () => {
+      let charges = 2;
+      cardEffectSpy.tryConsumeLeakBlock.and.callFake(() => {
+        if (charges > 0) { charges--; return true; }
+        return false;
+      });
+      const e1 = makeEnemy({ id: 'e1' });
+      const e2 = makeEnemy({ id: 'e2' });
+      const e3 = makeEnemy({ id: 'e3', leakDamage: 1 });
+      enemySpy.getEnemies.and.callFake(() => new Map([['e1', e1], ['e2', e2], ['e3', e3]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1', 'e2', 'e3']);
+
+      service.resolveTurn(scene);
+
+      const leakBlockCalls = notificationSpy.show.calls.allArgs()
+        .filter(args => args[1] === 'Leak Blocked');
+      expect(leakBlockCalls.length).toBe(2);
+    });
+  });
+
+  // ─── feedback toasts — OROGENY relic auto-raise ──────────────────────────────
+
+  describe('feedback toasts — OROGENY relic auto-raise', () => {
+    let relicSpy: jasmine.SpyObj<RelicService>;
+
+    beforeEach(() => {
+      relicSpy = TestBed.inject(RelicService) as jasmine.SpyObj<RelicService>;
+    });
+
+    it('shows INFO "Orogeny" toast when the relic triggers and a tower tile is raised', () => {
+      relicSpy.incrementOrogenyCounter.and.returnValue(1);
+      relicSpy.isOrogenyTrigger.and.returnValue(true);
+
+      // The factory's TowerCombatService spy omits getPlacedTowers and
+      // ElevationService spy omits getElevation/raise. Inject both at the
+      // service-instance level so this test is self-contained.
+      const localCombat = jasmine.createSpyObj<TowerCombatService>('TowerCombatService', [
+        'fireTurn', 'tickMortarZonesForTurn', 'drainAudioEvents', 'getPlacedTowers',
+      ]);
+      localCombat.fireTurn.and.returnValue({ killed: [], fired: [], hitCount: 0, damageDealt: 0 });
+      localCombat.tickMortarZonesForTurn.and.returnValue({ kills: [], damageDealt: 0 });
+      localCombat.drainAudioEvents.and.returnValue([]);
+      localCombat.getPlacedTowers.and.returnValue(
+        new Map([['t1', { row: 2, col: 3 }]]) as ReturnType<TowerCombatService['getPlacedTowers']>,
+      );
+
+      const localElev = jasmine.createSpyObj<ElevationService>('ElevationService', [
+        'tickTurn', 'getElevation', 'raise',
+      ]);
+      localElev.getElevation.and.returnValue(0);
+
+      // Replace the injected services directly on the service instance.
+      (service as unknown as Record<string, unknown>)['towerCombatService'] = localCombat;
+      (service as unknown as Record<string, unknown>)['elevationService'] = localElev;
+
+      service.resolveTurn(scene);
+
+      expect(notificationSpy.show).toHaveBeenCalledWith(
+        NotificationType.INFO,
+        'Orogeny',
+        'A tower tile was raised.',
+      );
+    });
+
+    it('does NOT show "Orogeny" toast when isOrogenyTrigger returns false', () => {
+      relicSpy.incrementOrogenyCounter.and.returnValue(1);
+      relicSpy.isOrogenyTrigger.and.returnValue(false);
+
+      service.resolveTurn(scene);
+
+      const ogenyCalls = notificationSpy.show.calls.allArgs()
+        .filter(args => args[1] === 'Orogeny');
+      expect(ogenyCalls.length).toBe(0);
+    });
+
+    it('does NOT show "Orogeny" toast when trigger fires but no towers are placed', () => {
+      relicSpy.incrementOrogenyCounter.and.returnValue(1);
+      relicSpy.isOrogenyTrigger.and.returnValue(true);
+
+      const localCombat = jasmine.createSpyObj<TowerCombatService>('TowerCombatService', [
+        'fireTurn', 'tickMortarZonesForTurn', 'drainAudioEvents', 'getPlacedTowers',
+      ]);
+      localCombat.fireTurn.and.returnValue({ killed: [], fired: [], hitCount: 0, damageDealt: 0 });
+      localCombat.tickMortarZonesForTurn.and.returnValue({ kills: [], damageDealt: 0 });
+      localCombat.drainAudioEvents.and.returnValue([]);
+      localCombat.getPlacedTowers.and.returnValue(
+        new Map() as ReturnType<TowerCombatService['getPlacedTowers']>,
+      );
+      (service as unknown as Record<string, unknown>)['towerCombatService'] = localCombat;
+
+      service.resolveTurn(scene);
+
+      const ogenyCalls = notificationSpy.show.calls.allArgs()
+        .filter(args => args[1] === 'Orogeny');
+      expect(ogenyCalls.length).toBe(0);
+    });
+  });
+
+  // ─── feedback toasts — NOVA_SOVEREIGN enrage ─────────────────────────────────
+
+  describe('feedback toasts — NOVA_SOVEREIGN enrage', () => {
+    function makeNovaSovereign(isEnraged: boolean): Enemy {
+      return {
+        id: 'nova1',
+        type: EnemyType.NOVA_SOVEREIGN,
+        dying: false,
+        isEnraged,
+        health: 50,
+        maxHealth: 100,
+        position: { x: 0, y: 0, z: 0 },
+      } as unknown as Enemy;
+    }
+
+    it('shows INFO "NOVA SOVEREIGN ENRAGED" toast on the turn isEnraged flips to true', () => {
+      const nova = makeNovaSovereign(false);
+      enemySpy.getEnemies.and.returnValue(new Map([['nova1', nova]]));
+      enemySpy.tickNovaSovereignEffects.and.callFake(() => {
+        nova.isEnraged = true;
+      });
+
+      service.resolveTurn(scene);
+
+      expect(notificationSpy.show).toHaveBeenCalledWith(
+        NotificationType.INFO,
+        'NOVA SOVEREIGN ENRAGED',
+        'The boss is moving faster.',
+      );
+    });
+
+    it('triggers screen shake on the turn NOVA_SOVEREIGN enrages', () => {
+      const nova = makeNovaSovereign(false);
+      enemySpy.getEnemies.and.returnValue(new Map([['nova1', nova]]));
+      enemySpy.tickNovaSovereignEffects.and.callFake(() => {
+        nova.isEnraged = true;
+      });
+
+      service.resolveTurn(scene);
+
+      expect(screenShakeSpy.trigger).toHaveBeenCalledWith(
+        SCREEN_SHAKE_CONFIG.bossHitIntensity,
+        SCREEN_SHAKE_CONFIG.bossHitDuration,
+      );
+    });
+
+    it('does NOT show enrage toast when NOVA_SOVEREIGN was already enraged before the tick', () => {
+      const nova = makeNovaSovereign(true);
+      enemySpy.getEnemies.and.returnValue(new Map([['nova1', nova]]));
+
+      service.resolveTurn(scene);
+
+      const engageCalls = notificationSpy.show.calls.allArgs()
+        .filter(args => args[1] === 'NOVA SOVEREIGN ENRAGED');
+      expect(engageCalls.length).toBe(0);
+    });
+
+    it('does NOT show enrage toast when no NOVA_SOVEREIGN is present', () => {
+      enemySpy.getEnemies.and.returnValue(new Map());
+
+      service.resolveTurn(scene);
+
+      const engageCalls = notificationSpy.show.calls.allArgs()
+        .filter(args => args[1] === 'NOVA SOVEREIGN ENRAGED');
+      expect(engageCalls.length).toBe(0);
+    });
+
+    it('does NOT fire enrage toast on subsequent turns after enrage is already set', () => {
+      const nova = makeNovaSovereign(false);
+      enemySpy.getEnemies.and.returnValue(new Map([['nova1', nova]]));
+      enemySpy.tickNovaSovereignEffects.and.callFake(() => {
+        nova.isEnraged = true;
+      });
+
+      // Turn 1 — enrage fires
+      service.resolveTurn(scene);
+      notificationSpy.show.calls.reset();
+
+      // Turn 2 — already enraged, no toast
+      service.resolveTurn(scene);
+
+      const engageCalls = notificationSpy.show.calls.allArgs()
+        .filter(args => args[1] === 'NOVA SOVEREIGN ENRAGED');
+      expect(engageCalls.length).toBe(0);
+    });
+  });
 });

@@ -111,6 +111,7 @@ interface TestableGameBoardComponent {
   detectWebgl(): boolean;
   renderGameBoard(): void;
   addGridLines(): void;
+  onTilePlace(row: number, col: number): void;
 }
 
 /** Exposes the internal challengeTrackingService field of TowerInteractionService. */
@@ -3147,16 +3148,40 @@ describe('GameBoardComponent', () => {
       expect(chips[0].remaining).toBe('2 waves');
     });
 
-    it('excludes sentinel stats from the chips array', () => {
+    it('excludes internal sentinel stats from the chips array', () => {
       const cardEffect = TestBed.inject(CardEffectService);
       const modifiers: ActiveModifier[] = [
-        { stat: MODIFIER_STAT.TERRAFORM_ANCHOR, value: 1, remainingWaves: null },
+        // Internal per-turn flag — never surfaced to the player (not in BUFF_META).
+        { stat: MODIFIER_STAT.TERRAFORM_REFUND_USED_THIS_TURN, value: 1, remainingWaves: null, remainingTurns: 1 },
         { stat: MODIFIER_STAT.RANGE, value: 0.2, remainingWaves: 1 },
       ];
       spyOn(cardEffect, 'getActiveModifiers').and.returnValue(modifiers);
       const chips = component.activeBuffs;
       expect(chips.length).toBe(1);
       expect(chips[0].stat).toBe(MODIFIER_STAT.RANGE);
+    });
+  });
+
+  describe('PX-01: onTilePlace routes elevation-target card to resolveTileTarget', () => {
+    it('calls cardPlayService.resolveTileTarget when an elevation-target card is pending and selectedTowerType is null', () => {
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
+      // Place an elevation-target card in pending state directly
+      cardPlaySvc['pendingElevationTargetCard'] = {
+        instanceId: 'elev_inst',
+        cardId: CardId.RAISE_PLATFORM,
+        upgraded: false,
+      } as CardInstance;
+      // selectedTowerType must be null for the tile-target branch to fire
+      component.selectedTowerType = null;
+
+      const resolveSpy = spyOn(cardPlaySvc, 'resolveTileTarget').and.returnValue({ ok: true });
+
+      (component as unknown as TestableGameBoardComponent).onTilePlace(2, 3);
+
+      expect(resolveSpy).toHaveBeenCalled();
+      const [row, col] = resolveSpy.calls.mostRecent().args;
+      expect(row).toBe(2);
+      expect(col).toBe(3);
     });
   });
 

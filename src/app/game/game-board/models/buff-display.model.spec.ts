@@ -107,44 +107,72 @@ describe('toBuffChips', () => {
     });
   });
 
-  describe('unmapped stats are excluded', () => {
-    it('drops TERRAFORM_ANCHOR (archetype sentinel)', () => {
+  describe('flag format — encounter-scoped archetype chips', () => {
+    it('renders TERRAFORM_ANCHOR as "Cartographer Seal" with remaining "active"', () => {
       const chips = toBuffChips([makeModifier(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null)]);
-      expect(chips.length).toBe(0);
+      expect(chips.length).toBe(1);
+      expect(chips[0].label).toBe('Cartographer Seal');
+      expect(chips[0].remaining).toBe('active');
     });
 
-    it('drops LABYRINTH_MIND (archetype sentinel)', () => {
+    it('renders LABYRINTH_MIND as "Labyrinth Mind" with remaining "active"', () => {
       const chips = toBuffChips([makeModifier(MODIFIER_STAT.LABYRINTH_MIND, 1, null)]);
-      expect(chips.length).toBe(0);
+      expect(chips.length).toBe(1);
+      expect(chips[0].label).toBe('Labyrinth Mind');
+      expect(chips[0].remaining).toBe('active');
     });
 
-    it('drops HANDSHAKE_DAMAGE_BONUS (Conduit sentinel)', () => {
+    it('renders ARCHITECT_CLUSTER_PROPAGATION as "Architect" with remaining "active"', () => {
+      const chips = toBuffChips([makeModifier(MODIFIER_STAT.ARCHITECT_CLUSTER_PROPAGATION, 1, null)]);
+      expect(chips.length).toBe(1);
+      expect(chips[0].label).toBe('Architect');
+      expect(chips[0].remaining).toBe('active');
+    });
+
+    it('renders HIVE_MIND_CLUSTER_MAX as "Hive Mind" with remaining "active"', () => {
+      const chips = toBuffChips([makeModifier(MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX, 1, null)]);
+      expect(chips.length).toBe(1);
+      expect(chips[0].label).toBe('Hive Mind');
+      expect(chips[0].remaining).toBe('active');
+    });
+
+    it('flag chips show "active" regardless of the numeric value', () => {
+      const chips = toBuffChips([makeModifier(MODIFIER_STAT.TERRAFORM_ANCHOR, 2, null)]);
+      expect(chips[0].label).toBe('Cartographer Seal');
+      expect(chips[0].remaining).toBe('active');
+    });
+
+    it('flag chips ignore wave/turn countdown fields and still show "active"', () => {
+      const chips = toBuffChips([makeModifier(MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX, 1, 3)]);
+      expect(chips[0].remaining).toBe('active');
+    });
+  });
+
+  describe('unmapped stats are excluded', () => {
+    it('drops HANDSHAKE_DAMAGE_BONUS (wave-scoped Conduit stat)', () => {
       const chips = toBuffChips([makeModifier(MODIFIER_STAT.HANDSHAKE_DAMAGE_BONUS, 0.2, 2)]);
       expect(chips.length).toBe(0);
     });
 
-    it('drops HIVE_MIND_CLUSTER_MAX (Conduit sentinel)', () => {
-      const chips = toBuffChips([makeModifier(MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX, 1, null)]);
-      expect(chips.length).toBe(0);
-    });
-
-    it('drops GRAVITY_WELL (archetype sentinel)', () => {
+    it('drops GRAVITY_WELL (mechanic sentinel, not a player buff)', () => {
       const chips = toBuffChips([makeModifier(MODIFIER_STAT.GRAVITY_WELL, 1, null)]);
       expect(chips.length).toBe(0);
     });
   });
 
   describe('mixed input', () => {
-    it('returns only mapped modifiers when mixed with sentinel stats', () => {
+    it('returns numeric and flag chips together, drops unmapped stats', () => {
       const modifiers: ActiveModifier[] = [
         makeModifier(MODIFIER_STAT.DAMAGE, 0.25, 3),
+        makeModifier(MODIFIER_STAT.HANDSHAKE_DAMAGE_BONUS, 0.2, 2),
         makeModifier(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null),
         makeModifier(MODIFIER_STAT.RANGE, 0.2, 2),
       ];
       const chips = toBuffChips(modifiers);
-      expect(chips.length).toBe(2);
+      expect(chips.length).toBe(3);
       expect(chips.map((c: BuffChip) => c.stat)).toEqual([
         MODIFIER_STAT.DAMAGE,
+        MODIFIER_STAT.TERRAFORM_ANCHOR,
         MODIFIER_STAT.RANGE,
       ]);
     });

@@ -14,7 +14,7 @@ import { RunService } from '../../../run/services/run.service';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 
 import { GamePhase } from '../models/game-state.model';
-import { ENEMY_STATS, EnemyType } from '../models/enemy.model';
+import { Enemy, ENEMY_STATS, EnemyType } from '../models/enemy.model';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { resolveEnemyColor } from '../constants/colorblind.constants';
 import { SettingsService } from '../../../core/services/settings.service';
@@ -249,7 +249,21 @@ export class CombatLoopService {
     // AFTER all same-turn DoT (mortar zone tick + status effects) so the
     // regenerated shield cannot absorb damage dealt this turn. Resolution order:
     //   tower fire → mortar zone tick → status DoT tick → NOVA regen
+    const novaBefore = this.findNovaSovereign();
+    const wasEnragedBefore = novaBefore?.isEnraged ?? false;
     this.enemyService.tickNovaSovereignEffects();
+    const novaAfter = this.findNovaSovereign();
+    if (!wasEnragedBefore && (novaAfter?.isEnraged ?? false)) {
+      this.notificationService.show(
+        NotificationType.INFO,
+        'NOVA SOVEREIGN ENRAGED',
+        'The boss is moving faster.',
+      );
+      this.screenShakeService.trigger(
+        SCREEN_SHAKE_CONFIG.bossHitIntensity,
+        SCREEN_SHAKE_CONFIG.bossHitDuration,
+      );
+    }
 
     // 6. Process leaks — enemies that reached the exit cost lives
     for (const enemyId of reachedExit) {
@@ -263,6 +277,11 @@ export class CombatLoopService {
         continue;
       }
       if (this.cardEffectService.tryConsumeLeakBlock()) {
+        this.notificationService.show(
+          NotificationType.INFO,
+          'Leak Blocked',
+          'A card effect blocked a leak.',
+        );
         this.enemyService.removeEnemy(enemyId, scene);
         continue;
       }
@@ -497,6 +516,19 @@ export class CombatLoopService {
   }
 
   /**
+   * Return the first living NOVA_SOVEREIGN enemy, or undefined if none is present.
+   * Used to detect the enrage flip: called before and after tickNovaSovereignEffects().
+   */
+  private findNovaSovereign(): Enemy | undefined {
+    for (const enemy of this.enemyService.getEnemies().values()) {
+      if (enemy.type === EnemyType.NOVA_SOVEREIGN && !enemy.dying) {
+        return enemy;
+      }
+    }
+    return undefined;
+  }
+
+  /**
    * Sprint 36 OROGENY — pick a random tower and permanently raise its tile by +1.
    * No-op when: no towers exist, all tower tiles are at MAX_ELEVATION, or
    * the elevation service rejects the raise (spawner/exit guard). Uses
@@ -524,6 +556,11 @@ export class CombatLoopService {
       'orogeny',
       this.turnNumber,
       'relic',
+    );
+    this.notificationService.show(
+      NotificationType.INFO,
+      'Orogeny',
+      'A tower tile was raised.',
     );
   }
 }

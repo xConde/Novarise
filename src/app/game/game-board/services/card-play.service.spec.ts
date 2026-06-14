@@ -22,6 +22,7 @@ import { CombatLoopService } from './combat-loop.service';
 import { WavePreviewService } from './wave-preview.service';
 import { TowerType } from '../models/tower.model';
 import { GamePhase, INITIAL_GAME_STATE } from '../models/game-state.model';
+import { StatusEffectType } from '@core/models/status-effect-type.model';
 import {
   CardId,
   CardInstance,
@@ -169,7 +170,9 @@ describe('CardPlayService', () => {
 
     sceneSpy = createSceneServiceSpy();
 
-    statusEffectSpy = jasmine.createSpyObj<StatusEffectService>('StatusEffectService', ['apply']);
+    statusEffectSpy = jasmine.createSpyObj<StatusEffectService>('StatusEffectService', ['apply', 'hasEffect']);
+    // Default: no status effects active. Tests that need specific effects override hasEffect per-test.
+    statusEffectSpy.hasEffect.and.returnValue(false);
     combatLoopSpy = jasmine.createSpyObj<CombatLoopService>('CombatLoopService', ['getTurnNumber']);
     combatLoopSpy.getTurnNumber.and.returnValue(1);
     wavePreviewSpy = jasmine.createSpyObj<WavePreviewService>('WavePreviewService', [
@@ -364,11 +367,16 @@ describe('CardPlayService', () => {
     });
 
     describe('CONDUIT_BRIDGE ("bridge_towers" utility)', () => {
-      it('is a no-op when TowerGraphService is absent (pre-Conduit test beds)', () => {
+      it('is a no-op (no edge) when TowerGraphService is absent (pre-Conduit test beds)', () => {
         // Default TestBed does not provide TowerGraphService, so the @Optional
-        // graphService is undefined. Card still consumes energy (playCard fires),
-        // but no virtual edge is registered.
-        towerCombatSpy.getPlacedTowers.and.returnValue(new Map());
+        // graphService is undefined. Card still consumes energy when ≥2 towers
+        // exist (pre-validation passes), but no virtual edge is registered.
+        const t1 = { row: 0, col: 0, level: 1, type: TowerType.BASIC, totalInvested: 50 };
+        const t2 = { row: 5, col: 5, level: 1, type: TowerType.BASIC, totalInvested: 50 };
+        const placedMap = new Map<string, typeof t1>();
+        placedMap.set('0-0', t1 as never);
+        placedMap.set('5-5', t2 as never);
+        towerCombatSpy.getPlacedTowers.and.returnValue(placedMap as never);
         const card: CardInstance = { instanceId: 'cb-1', cardId: CardId.CONDUIT_BRIDGE, upgraded: false };
         service.onCardPlayed(card);
         // Card consumed (utility cards are instant-resolve via playCard).
@@ -1846,6 +1854,243 @@ describe('CardPlayService', () => {
         value: 0,
       };
       expect(() => service['executeUtilityCard'](badEffect)).toThrow();
+    });
+  });
+
+  // ── onCardPlayBlocked feedback ─────────────────────────────────────────────
+
+  describe('onCardPlayBlocked callback', () => {
+    let blockedSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      blockedSpy = jasmine.createSpy('onCardPlayBlocked');
+      service.init({
+        onEnterPlacementMode: jasmine.createSpy(),
+        onRefreshUI: jasmine.createSpy(),
+        onSalvageComplete: jasmine.createSpy(),
+        onCardPlayBlocked: blockedSpy,
+      });
+    });
+
+    it('fires with intermission message when phase is not COMBAT', () => {
+      gameStateSpy.getState.and.returnValue({ ...INITIAL_GAME_STATE, phase: GamePhase.SETUP });
+      const card: CardInstance = { instanceId: 'c1', cardId: CardId.DRAW_TWO, upgraded: false };
+      service.onCardPlayed(card);
+      expect(blockedSpy).toHaveBeenCalledOnceWith('Cards can only be played during combat.');
+    });
+
+    it('does NOT fire when phase is COMBAT and play proceeds normally', () => {
+      gameStateSpy.getState.and.returnValue({ ...INITIAL_GAME_STATE, phase: GamePhase.COMBAT });
+      const card: CardInstance = { instanceId: 'c2', cardId: CardId.DRAW_TWO, upgraded: false };
+      service.onCardPlayed(card);
+      expect(blockedSpy).not.toHaveBeenCalled();
+    });
+
+    it('fires with no-towers message when SALVAGE is played with no towers placed', () => {
+      towerCombatSpy.getPlacedTowers.and.returnValue(new Map());
+      const card: CardInstance = { instanceId: 'sal-blk', cardId: CardId.SALVAGE, upgraded: false };
+      service.onCardPlayed(card);
+      expect(blockedSpy).toHaveBeenCalledOnceWith('No towers to salvage.');
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+
+    it('fires with max-level message when FORTIFY is played and all towers are at max-1', () => {
+      // MAX_TOWER_LEVEL = 3 — level 2 is not auto-upgradeable (requires spec choice)
+      const tower = { row: 0, col: 0, level: 2, type: TowerType.BASIC, totalInvested: 100 };
+      const placedMap = new Map<string, typeof tower>();
+      placedMap.set('0-0', tower as never);
+      towerCombatSpy.getPlacedTowers.and.returnValue(placedMap as never);
+      const card: CardInstance = { instanceId: 'fort-blk', cardId: CardId.FORTIFY, upgraded: false };
+      service.onCardPlayed(card);
+      expect(blockedSpy).toHaveBeenCalledOnceWith('All towers are already at max level.');
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+
+    it('does NOT fire for SALVAGE when towers exist', () => {
+      const tower = { row: 0, col: 0, level: 1, type: TowerType.BASIC, totalInvested: 50 };
+      const placedMap = new Map<string, typeof tower>();
+      placedMap.set('0-0', tower as never);
+      towerCombatSpy.getPlacedTowers.and.returnValue(placedMap as never);
+      towerCombatSpy.unregisterTower.and.returnValue(tower as never);
+      const mockScene = { remove: jasmine.createSpy('remove') };
+      (sceneSpy.getScene as jasmine.Spy).and.returnValue(mockScene);
+      const card: CardInstance = { instanceId: 'sal-ok', cardId: CardId.SALVAGE, upgraded: false };
+      service.onCardPlayed(card);
+      expect(blockedSpy).not.toHaveBeenCalled();
+    });
+
+    it('does NOT fire for FORTIFY when an upgradeable tower exists', () => {
+      const tower = { row: 0, col: 0, level: 1, type: TowerType.BASIC, totalInvested: 50 };
+      const placedMap = new Map<string, typeof tower>();
+      placedMap.set('0-0', tower as never);
+      towerCombatSpy.getPlacedTowers.and.returnValue(placedMap as never);
+      towerCombatSpy.upgradeTower.and.returnValue(tower as never);
+      const card: CardInstance = { instanceId: 'fort-ok', cardId: CardId.FORTIFY, upgraded: false };
+      service.onCardPlayed(card);
+      expect(blockedSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── DETONATE / EPIDEMIC / CONDUIT_BRIDGE pre-validation ───────────────────
+
+  describe('DETONATE pre-validation', () => {
+    let blockedSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      blockedSpy = jasmine.createSpy('onCardPlayBlocked');
+      service.init({
+        onEnterPlacementMode: jasmine.createSpy(),
+        onRefreshUI: jasmine.createSpy(),
+        onSalvageComplete: jasmine.createSpy(),
+        onCardPlayBlocked: blockedSpy,
+      });
+    });
+
+    it('fires onCardPlayBlocked and does NOT consume energy when no burning enemies exist', () => {
+      // Empty enemy map — no burning enemies.
+      enemySpy.getEnemies.and.returnValue(new Map() as never);
+      const card: CardInstance = { instanceId: 'det-blk', cardId: CardId.DETONATE, upgraded: false };
+      service.onCardPlayed(card);
+      expect(blockedSpy).toHaveBeenCalledOnceWith('No burning enemies.');
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+
+    it('fires onCardPlayBlocked when all enemies with BURN are dying', () => {
+      const statusSpy = TestBed.inject(StatusEffectService) as jasmine.SpyObj<StatusEffectService>;
+      statusSpy.hasEffect.and.callFake((_id: string, type: StatusEffectType) =>
+        type === StatusEffectType.BURN,
+      );
+      const dyingEnemy = { id: 'e-dying', dying: true };
+      enemySpy.getEnemies.and.returnValue(new Map([['e-dying', dyingEnemy]]) as never);
+      const card: CardInstance = { instanceId: 'det-dying', cardId: CardId.DETONATE, upgraded: false };
+      service.onCardPlayed(card);
+      expect(blockedSpy).toHaveBeenCalledOnceWith('No burning enemies.');
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+
+    it('allows play and consumes energy when a non-dying burning enemy exists', () => {
+      const statusSpy = TestBed.inject(StatusEffectService) as jasmine.SpyObj<StatusEffectService>;
+      statusSpy.hasEffect.and.callFake((_id: string, type: StatusEffectType) =>
+        type === StatusEffectType.BURN,
+      );
+      const liveEnemy = { id: 'e-burn', dying: false };
+      enemySpy.getEnemies.and.returnValue(new Map([['e-burn', liveEnemy]]) as never);
+      const card: CardInstance = { instanceId: 'det-ok', cardId: CardId.DETONATE, upgraded: false };
+      service.onCardPlayed(card);
+      expect(blockedSpy).not.toHaveBeenCalled();
+      expect(deckSpy.playCard).toHaveBeenCalledWith('det-ok');
+    });
+  });
+
+  describe('EPIDEMIC pre-validation', () => {
+    let blockedSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      blockedSpy = jasmine.createSpy('onCardPlayBlocked');
+      service.init({
+        onEnterPlacementMode: jasmine.createSpy(),
+        onRefreshUI: jasmine.createSpy(),
+        onSalvageComplete: jasmine.createSpy(),
+        onCardPlayBlocked: blockedSpy,
+      });
+    });
+
+    it('fires onCardPlayBlocked and does NOT consume energy when no poisoned enemies exist', () => {
+      enemySpy.getEnemies.and.returnValue(new Map() as never);
+      const card: CardInstance = { instanceId: 'ep-blk', cardId: CardId.EPIDEMIC, upgraded: false };
+      service.onCardPlayed(card);
+      expect(blockedSpy).toHaveBeenCalledOnceWith('No poisoned enemies.');
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+
+    it('allows play when a non-dying poisoned enemy exists', () => {
+      const statusSpy = TestBed.inject(StatusEffectService) as jasmine.SpyObj<StatusEffectService>;
+      statusSpy.hasEffect.and.callFake((_id: string, type: StatusEffectType) =>
+        type === StatusEffectType.POISON,
+      );
+      const liveEnemy = { id: 'e-poison', dying: false };
+      enemySpy.getEnemies.and.returnValue(new Map([['e-poison', liveEnemy]]) as never);
+      const card: CardInstance = { instanceId: 'ep-ok', cardId: CardId.EPIDEMIC, upgraded: false };
+      service.onCardPlayed(card);
+      expect(blockedSpy).not.toHaveBeenCalled();
+      expect(deckSpy.playCard).toHaveBeenCalledWith('ep-ok');
+    });
+  });
+
+  describe('CONDUIT_BRIDGE pre-validation (bridge_towers utility)', () => {
+    let blockedSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      blockedSpy = jasmine.createSpy('onCardPlayBlocked');
+      service.init({
+        onEnterPlacementMode: jasmine.createSpy(),
+        onRefreshUI: jasmine.createSpy(),
+        onSalvageComplete: jasmine.createSpy(),
+        onCardPlayBlocked: blockedSpy,
+      });
+    });
+
+    it('fires onCardPlayBlocked and does NOT consume energy when fewer than 2 towers exist', () => {
+      towerCombatSpy.getPlacedTowers.and.returnValue(new Map());
+      const card: CardInstance = { instanceId: 'cb-blk', cardId: CardId.CONDUIT_BRIDGE, upgraded: false };
+      service.onCardPlayed(card);
+      expect(blockedSpy).toHaveBeenCalledOnceWith('Need at least 2 towers to bridge.');
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+
+    it('fires onCardPlayBlocked when exactly 1 tower exists', () => {
+      const tower = { row: 0, col: 0, level: 1, type: TowerType.BASIC, totalInvested: 50 };
+      const placedMap = new Map<string, typeof tower>();
+      placedMap.set('0-0', tower as never);
+      towerCombatSpy.getPlacedTowers.and.returnValue(placedMap as never);
+      const card: CardInstance = { instanceId: 'cb-one', cardId: CardId.CONDUIT_BRIDGE, upgraded: false };
+      service.onCardPlayed(card);
+      expect(blockedSpy).toHaveBeenCalledOnceWith('Need at least 2 towers to bridge.');
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+
+    it('allows play and consumes energy when 2 or more towers exist', () => {
+      const t1 = { row: 0, col: 0, level: 1, type: TowerType.BASIC, totalInvested: 50 };
+      const t2 = { row: 5, col: 5, level: 1, type: TowerType.BASIC, totalInvested: 50 };
+      const placedMap = new Map<string, typeof t1>();
+      placedMap.set('0-0', t1 as never);
+      placedMap.set('5-5', t2 as never);
+      towerCombatSpy.getPlacedTowers.and.returnValue(placedMap as never);
+      const card: CardInstance = { instanceId: 'cb-ok', cardId: CardId.CONDUIT_BRIDGE, upgraded: false };
+      service.onCardPlayed(card);
+      expect(blockedSpy).not.toHaveBeenCalled();
+      expect(deckSpy.playCard).toHaveBeenCalledWith('cb-ok');
+    });
+  });
+
+  // ── getPendingTileTargetCardId ─────────────────────────────────────────────
+
+  describe('getPendingTileTargetCardId', () => {
+    it('returns null when no tile-target card is pending', () => {
+      expect(service.getPendingTileTargetCardId()).toBeNull();
+    });
+
+    it('returns the instanceId of the pending terraform card', () => {
+      service['pendingTileTargetCard'] = { instanceId: 'tf-pending', cardId: CardId.LAY_TILE, upgraded: false };
+      expect(service.getPendingTileTargetCardId()).toBe('tf-pending');
+    });
+
+    it('returns the instanceId of the pending elevation card', () => {
+      service['pendingElevationTargetCard'] = { instanceId: 'elev-pending', cardId: CardId.LAY_TILE, upgraded: false };
+      expect(service.getPendingTileTargetCardId()).toBe('elev-pending');
+    });
+
+    it('returns the terraform card id when both are somehow set (terraform takes precedence via ?? chain)', () => {
+      service['pendingTileTargetCard'] = { instanceId: 'tf-first', cardId: CardId.LAY_TILE, upgraded: false };
+      service['pendingElevationTargetCard'] = { instanceId: 'elev-second', cardId: CardId.LAY_TILE, upgraded: false };
+      // The getter uses (pendingTileTargetCard ?? pendingElevationTargetCard) — terraform wins
+      expect(service.getPendingTileTargetCardId()).toBe('tf-first');
+    });
+
+    it('returns null after reset clears both pending states', () => {
+      service['pendingTileTargetCard'] = { instanceId: 'tf-reset', cardId: CardId.LAY_TILE, upgraded: false };
+      service.reset();
+      expect(service.getPendingTileTargetCardId()).toBeNull();
     });
   });
 });

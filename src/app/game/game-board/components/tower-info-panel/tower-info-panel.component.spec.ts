@@ -142,6 +142,24 @@ describe('TowerInfoPanelComponent', () => {
       expect(btn.classList.contains('unaffordable')).toBeTrue();
     });
 
+    it('should disable the upgrade button when gold is less than upgrade cost', () => {
+      component.towerInfo = makeTower({ level: 1 });
+      component.upgradeCost = 200;
+      component.gold = 50;
+      fixture.detectChanges();
+      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('.upgrade-btn');
+      expect(btn.disabled).toBeTrue();
+    });
+
+    it('should not disable the upgrade button when gold meets the upgrade cost', () => {
+      component.towerInfo = makeTower({ level: 1 });
+      component.upgradeCost = 75;
+      component.gold = 75;
+      fixture.detectChanges();
+      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('.upgrade-btn');
+      expect(btn.disabled).toBeFalse();
+    });
+
     it('should emit upgrade event when upgrade button clicked', () => {
       component.towerInfo = makeTower({ level: 1 });
       fixture.detectChanges();

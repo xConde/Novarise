@@ -492,6 +492,16 @@
       text-transform: uppercase;
       margin-top: 0.125rem;
     }
+
+    .end-turn-stuck-hint {
+      display: block;
+      font-size: var(--font-size-2xs);
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      color: var(--text-color-muted, rgba(255, 255, 255, 0.55));
+      text-transform: none;
+      margin-top: 0.1rem;
+    }
   }
 
   @keyframes end-turn-stuck-pulse {
@@ -898,16 +908,37 @@ body.reduce-motion .board-container .end-combat-overlay__label { animation: none
   }
 }
 
+// Tile-target mode variant (terraform / elevation cards): cyan instead of gold
+// to distinguish "pick a tile" from "pick a tile to place tower".
+.board-container .placement-indicator--tile-target {
+  background: rgba(0, 220, 220, 0.1);
+  border-color: rgba(0, 220, 220, 0.5);
+  color: var(--theme-cyan, #00dcdc);
+  box-shadow: 0 0 1rem rgba(0, 220, 220, 0.2);
+  animation: tile-target-indicator-pulse 1.6s ease-in-out infinite;
+
+  .placement-indicator__text {
+    color: var(--theme-cyan, #00dcdc);
+  }
+}
+
 @keyframes placement-indicator-pulse {
   0%, 100% { box-shadow: 0 0 1rem rgba(255, 215, 0, 0.2); border-color: rgba(255, 215, 0, 0.5); }
   50%       { box-shadow: 0 0 1.5rem rgba(255, 215, 0, 0.45); border-color: rgba(255, 215, 0, 0.8); }
 }
 
+@keyframes tile-target-indicator-pulse {
+  0%, 100% { box-shadow: 0 0 1rem rgba(0, 220, 220, 0.2); border-color: rgba(0, 220, 220, 0.5); }
+  50%       { box-shadow: 0 0 1.5rem rgba(0, 220, 220, 0.45); border-color: rgba(0, 220, 220, 0.8); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .board-container .placement-indicator { animation: none; }
+  .board-container .placement-indicator--tile-target { animation: none; }
 }
 
 body.reduce-motion .board-container .placement-indicator { animation: none; }
+body.reduce-motion .board-container .placement-indicator--tile-target { animation: none; }
 
 @media (max-width: 480px) {
   .board-container .placement-indicator {

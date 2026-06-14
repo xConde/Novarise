@@ -17,9 +17,17 @@ export class RestScreenComponent {
   @Output() skipChosen = new EventEmitter<void>();
   /** Emits the instanceId of the card chosen for upgrade. */
   @Output() cardUpgraded = new EventEmitter<string>();
+  /** Emits when the player dismisses the upgrade confirmation and is ready to return to the map. */
+  @Output() upgradeConfirmed = new EventEmitter<void>();
 
   /** Tracks which sub-action the player is performing at the rest site. */
-  activeAction: 'none' | 'upgrade' = 'none';
+  activeAction: 'none' | 'upgrade' | 'confirmed' = 'none';
+
+  /**
+   * Name of the card that was just upgraded, captured for the confirmation banner.
+   * Set in selectCardToUpgrade(); cleared when the player leaves the rest site.
+   */
+  lastUpgradedCardName: string | null = null;
 
   get livesAfterHeal(): number {
     return Math.min(this.maxLives, this.currentLives + this.healAmount);
@@ -66,8 +74,16 @@ export class RestScreenComponent {
   }
 
   selectCardToUpgrade(card: CardInstance): void {
-    this.activeAction = 'none';
+    this.lastUpgradedCardName = getCardDefinition(card.cardId).name;
+    this.activeAction = 'confirmed';
     this.cardUpgraded.emit(card.instanceId);
+  }
+
+  /** Player dismisses the upgrade confirmation and continues to the map. */
+  continueAfterUpgrade(): void {
+    this.lastUpgradedCardName = null;
+    this.activeAction = 'none';
+    this.upgradeConfirmed.emit();
   }
 
   /** Returns unique upgrade candidates: at most one entry per CardId. */

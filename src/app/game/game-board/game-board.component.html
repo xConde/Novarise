@@ -29,7 +29,8 @@
               type="button"
               class="hud-relic-peek__item"
               [attr.title]="relic.name + ' — ' + relic.description"
-              [attr.aria-label]="relic.name + ': ' + relic.description">
+              [attr.aria-label]="relic.name + ': ' + relic.description"
+              (click)="togglePause()">
         {{ relic.name.charAt(0) }}
       </button>
     </div>
@@ -43,7 +44,8 @@
               type="button"
               class="hud-ascension-peek__item"
               [attr.title]="mod.label + ' — ' + mod.description"
-              [attr.aria-label]="mod.label + ': ' + mod.description">
+              [attr.aria-label]="mod.label + ': ' + mod.description"
+              (click)="togglePause()">
         {{ mod.label.charAt(0) }}
       </button>
     </div>
@@ -166,16 +168,26 @@
       </ng-template>
     </div>
 
+    <!-- Tile-target mode indicator — shown while a terraform or elevation card awaits a tile click -->
+    <div class="placement-indicator placement-indicator--tile-target"
+         *ngIf="pendingTileTargetCardId !== null"
+         role="status"
+         aria-live="polite">
+      <app-icon name="crosshair" [size]="16" aria-hidden="true"></app-icon>
+      <span class="placement-indicator__text">Click a tile to target</span>
+      <span class="placement-indicator__hint">Right-click to cancel</span>
+    </div>
+
     <!-- Phase 4: End Turn button — only during combat (turn-based). -->
     <button
       class="end-turn-btn"
       *ngIf="gameState.phase === GamePhase.COMBAT"
-      [class.end-turn-btn--stuck]="handStuck && !pendingTowerCardId"
+      [class.end-turn-btn--stuck]="handStuck && !hasPendingCard"
       [class.end-turn-btn--leak-warning]="projectedLeaksNextTurn > 0"
       (click)="endTurn()"
-      [disabled]="!!pendingTowerCardId"
-      [attr.aria-label]="pendingTowerCardId
-        ? 'Place or cancel pending tower card first'
+      [disabled]="hasPendingCard"
+      [attr.aria-label]="hasPendingCard
+        ? 'Place or cancel pending card first'
         : (projectedLeaksNextTurn > 0
             ? 'End turn and resolve combat. Warning: ' + projectedLeakerSummary + ' projected to leak next turn.'
             : 'End turn and resolve combat')"
@@ -185,6 +197,9 @@
       <span class="end-turn-leak-warning"
             *ngIf="projectedLeaksNextTurn > 0"
             aria-hidden="true">⚠ {{ projectedLeaksNextTurn }} leak<ng-container *ngIf="projectedLeaksNextTurn !== 1">s</ng-container></span>
+      <span class="end-turn-stuck-hint"
+            *ngIf="handStuck && !hasPendingCard"
+            aria-hidden="true">No playable cards — end your turn</span>
     </button>
 
     <!-- Boss-intro banner — fires once when a wave containing a boss-tier enemy begins.
@@ -389,7 +404,7 @@
     [deckState]="deckState"
     [energy]="energyState"
     [currentGold]="gameState.gold"
-    [pendingCardId]="pendingTowerCardId"
+    [pendingCardId]="pendingTowerCardId ?? pendingTileTargetCardId"
     (pileInspected)="inspectedPile = $event"
     (cardPlayed)="onCardPlayed($event)"
     (cardInspected)="inspectedCard = $event"

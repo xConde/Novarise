@@ -836,6 +836,115 @@ describe('RunService', () => {
     }));
   });
 
+  // ── previewEventGamble ──────────────────────────────────────────
+
+  describe('previewEventGamble()', () => {
+    function makeGambleEvent(winChance: number) {
+      return {
+        id: 'gambling_den',
+        title: 'Gambling Den',
+        description: 'Test',
+        choices: [
+          {
+            label: 'Gamble',
+            description: 'Roll the dice.',
+            outcome: {
+              goldDelta: 0,
+              livesDelta: 0,
+              description: 'The cards are dealt.',
+              gamble: { winGoldDelta: 80, loseGoldDelta: -30, winChance },
+            },
+          },
+          {
+            label: 'Leave',
+            description: 'Walk away.',
+            outcome: { goldDelta: 0, livesDelta: 0, description: 'You leave.' },
+          },
+        ],
+      };
+    }
+
+    it('returns null for a non-gamble choice', fakeAsync(() => {
+      service.startNewRun();
+      service.selectNode('node_1_0');
+      svc.currentEvent = makeGambleEvent(0.5);
+
+      const result = service.previewEventGamble(1); // choice 1 has no gamble
+      expect(result).toBeNull();
+    }));
+
+    it('returns null when index is out of range', fakeAsync(() => {
+      service.startNewRun();
+      service.selectNode('node_1_0');
+      svc.currentEvent = makeGambleEvent(0.5);
+
+      expect(service.previewEventGamble(99)).toBeNull();
+    }));
+
+    it('returns null when there is no current event', fakeAsync(() => {
+      service.startNewRun();
+      service.selectNode('node_1_0');
+      svc.currentEvent = null;
+
+      expect(service.previewEventGamble(0)).toBeNull();
+    }));
+
+    it('preview win matches what resolveEvent applies (stash reused, RNG advances only once)', fakeAsync(() => {
+      service.startNewRun();
+      service.selectNode('node_1_0');
+
+      // Sequence: first call → 0.1 (below 0.5 → win), second call would be 0.9.
+      const sequence = [0.1, 0.9];
+      let callCount = 0;
+      svc.runRng = { next: () => sequence[callCount++] ?? 0.5, getState: () => 0, setState: () => {} };
+      svc.currentEvent = makeGambleEvent(0.5);
+
+      const preview = service.previewEventGamble(0);
+      expect(preview).toEqual({ goldDelta: 80, livesDelta: 0 });
+
+      const goldBefore = service.runState!.gold;
+      service.resolveEvent(0); // must reuse the stash, not roll again
+
+      // Only one RNG call should have fired (the preview's), so callCount = 1.
+      expect(callCount).toBe(1);
+      expect(service.runState!.gold).toBe(goldBefore + 80);
+    }));
+
+    it('preview loss matches what resolveEvent applies', fakeAsync(() => {
+      service.startNewRun();
+      service.selectNode('node_1_0');
+
+      svc.runRng = { next: () => 0.9, getState: () => 0, setState: () => {} }; // above winChance → loss
+      svc.currentEvent = makeGambleEvent(0.5);
+
+      const preview = service.previewEventGamble(0);
+      expect(preview).toEqual({ goldDelta: -30, livesDelta: 0 });
+
+      const goldBefore = service.runState!.gold;
+      service.resolveEvent(0);
+      expect(service.runState!.gold).toBe(Math.max(0, goldBefore - 30));
+    }));
+
+    it('stash is cleared after resolveEvent consumes it — second resolveEvent rolls fresh', fakeAsync(() => {
+      service.startNewRun();
+      service.selectNode('node_1_0');
+
+      let callCount = 0;
+      svc.runRng = { next: () => { callCount++; return 0.1; }, getState: () => 0, setState: () => {} };
+
+      // First cycle: preview + resolve (stash consumed)
+      svc.currentEvent = makeGambleEvent(0.5);
+      service.previewEventGamble(0); // roll 1 — stash set
+      service.resolveEvent(0);       // stash reused, stash cleared → callCount = 1
+
+      // Second cycle: resolve without preview — must roll fresh
+      svc.currentEvent = makeGambleEvent(0.5);
+      service.resolveEvent(0); // no stash → fresh roll → callCount = 2
+
+      expect(callCount).toBe(2);
+    }));
+  });
+
   // ── generateRewards — FEWER_RELIC_CHOICES ascension effect ───────
 
   describe('generateRewards — FEWER_RELIC_CHOICES ascension reduction', () => {

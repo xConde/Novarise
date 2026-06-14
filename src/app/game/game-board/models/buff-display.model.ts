@@ -8,7 +8,11 @@ export interface BuffChip {
   readonly remaining: string;
 }
 
-type FormatKind = 'percent' | 'flat' | 'slow' | 'charges';
+/**
+ * 'flag' format: an encounter-scoped on/off stat. The label is just the name;
+ * remaining is always 'active'. No numeric value is displayed.
+ */
+type FormatKind = 'percent' | 'flat' | 'slow' | 'charges' | 'flag';
 
 interface StatMeta {
   name: string;
@@ -17,19 +21,25 @@ interface StatMeta {
 
 /**
  * Maps the subset of ModifierStat values that are player-facing card buffs to
- * their display name and value format. Archetype/keyword sentinel stats
- * (TERRAFORM_ANCHOR, HANDSHAKE_DAMAGE_BONUS, etc.) are intentionally omitted
- * so they never appear in the HUD panel.
+ * their display name and value format. Includes both numeric stats and
+ * encounter-scoped archetype flag stats that the player should see persistently.
  */
 const BUFF_META: Partial<Record<ModifierStat, StatMeta>> = {
-  [MODIFIER_STAT.DAMAGE]:          { name: 'Damage',        format: 'percent'  },
-  [MODIFIER_STAT.RANGE]:           { name: 'Range',         format: 'percent'  },
-  [MODIFIER_STAT.SNIPER_DAMAGE]:   { name: 'Sniper Dmg',   format: 'percent'  },
-  [MODIFIER_STAT.FIRE_RATE]:       { name: 'Fire Rate',     format: 'percent'  },
-  [MODIFIER_STAT.CHAIN_BOUNCES]:   { name: 'Chain',         format: 'flat'     },
-  [MODIFIER_STAT.ENEMY_SPEED]:     { name: 'Enemy Slow',    format: 'slow'     },
-  [MODIFIER_STAT.GOLD_MULTIPLIER]: { name: 'Gold Interest', format: 'percent'  },
-  [MODIFIER_STAT.LEAK_BLOCK]:      { name: 'Leak Shield',   format: 'charges'  },
+  [MODIFIER_STAT.DAMAGE]:          { name: 'Damage',          format: 'percent'  },
+  [MODIFIER_STAT.RANGE]:           { name: 'Range',           format: 'percent'  },
+  [MODIFIER_STAT.SNIPER_DAMAGE]:   { name: 'Sniper Dmg',     format: 'percent'  },
+  [MODIFIER_STAT.FIRE_RATE]:       { name: 'Fire Rate',       format: 'percent'  },
+  [MODIFIER_STAT.CHAIN_BOUNCES]:   { name: 'Chain',           format: 'flat'     },
+  [MODIFIER_STAT.ENEMY_SPEED]:     { name: 'Enemy Slow',      format: 'slow'     },
+  [MODIFIER_STAT.GOLD_MULTIPLIER]: { name: 'Gold Interest',   format: 'percent'  },
+  [MODIFIER_STAT.LEAK_BLOCK]:      { name: 'Leak Shield',     format: 'charges'  },
+
+  // Encounter-scoped archetype flags — rendered as persistent 'active' chips so
+  // the player can see which anchor cards are in effect for the whole encounter.
+  [MODIFIER_STAT.TERRAFORM_ANCHOR]:           { name: 'Cartographer Seal', format: 'flag' },
+  [MODIFIER_STAT.LABYRINTH_MIND]:             { name: 'Labyrinth Mind',    format: 'flag' },
+  [MODIFIER_STAT.ARCHITECT_CLUSTER_PROPAGATION]: { name: 'Architect',      format: 'flag' },
+  [MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX]:      { name: 'Hive Mind',         format: 'flag' },
 };
 
 function formatLabel(meta: StatMeta, value: number): string {
@@ -38,6 +48,7 @@ function formatLabel(meta: StatMeta, value: number): string {
     case 'flat':     return `${meta.name} +${value}`;
     case 'slow':     return `${meta.name} ${Math.round(Math.abs(value) * 100)}%`;
     case 'charges':  return meta.name;
+    case 'flag':     return meta.name;
   }
 }
 
@@ -47,6 +58,10 @@ function formatRemaining(meta: StatMeta, m: ActiveModifier): string | null {
       return null;
     }
     return `${m.value} ${m.value === 1 ? 'block' : 'blocks'}`;
+  }
+
+  if (meta.format === 'flag') {
+    return 'active';
   }
 
   if (m.remainingTurns !== undefined) {
