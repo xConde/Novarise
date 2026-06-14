@@ -108,6 +108,13 @@ export class RunService {
   /** Current event (generated on entering event node). */
   private currentEvent: RunEvent | null = null;
 
+  /**
+   * Stash set by previewEventGamble() so resolveEvent() can reuse the same
+   * roll rather than advancing the RNG a second time.
+   * Cleared after resolveEvent() consumes it (or when the choice is not a gamble).
+   */
+  private pendingGambleRoll: { choiceIndex: number; goldDelta: number; livesDelta: number } | null = null;
+
   /** RNG seeded per-run, advanced by each random action. */
   private runRng: SeededRng | null = null;
 
@@ -204,6 +211,33 @@ export class RunService {
 
   getCurrentEvent(): RunEvent | null {
     return this.currentEvent;
+  }
+
+  /**
+   * Roll the seeded RNG once for a gamble outcome and stash the result so
+   * resolveEvent() can reuse it without rolling again.
+   *
+   * Returns the computed deltas when the choice has a gamble field, or null
+   * when the choice is non-gamble or the index is out of range. The stash is
+   * consumed (and cleared) the next time resolveEvent() runs.
+   */
+  previewEventGamble(choiceIndex: number): { goldDelta: number; livesDelta: number } | null {
+    const event = this.currentEvent;
+    if (!event || choiceIndex < 0 || choiceIndex >= event.choices.length) {
+      this.pendingGambleRoll = null;
+      return null;
+    }
+    const outcome = event.choices[choiceIndex].outcome;
+    if (!outcome.gamble) {
+      this.pendingGambleRoll = null;
+      return null;
+    }
+    const rng = this.getRng();
+    const won = rng() < outcome.gamble.winChance;
+    const goldDelta = won ? outcome.gamble.winGoldDelta : outcome.gamble.loseGoldDelta;
+    const livesDelta = won ? (outcome.gamble.winLivesDelta ?? 0) : (outcome.gamble.loseLivesDelta ?? 0);
+    this.pendingGambleRoll = { choiceIndex, goldDelta, livesDelta };
+    return { goldDelta, livesDelta };
   }
 
   getRngState(): number | null {
@@ -841,17 +875,25 @@ export class RunService {
 
     const outcome = event.choices[choiceIndex].outcome;
 
-    // Gamble: if the outcome has a gamble field, roll rng to determine gold delta.
+    // Gamble: resolve gold and lives deltas from the seeded RNG.
     // Extended gamble fields winLivesDelta / loseLivesDelta allow lives-wager events
     // (e.g. field_wager) to add or remove lives based on the roll outcome, in addition
     // to the unconditional livesDelta already applied below.
+    // When previewEventGamble() was called first for this choice, reuse its stash
+    // so the display and the actual state change reflect the same roll.
     let resolvedGoldDelta: number;
     let gambleLivesDelta = 0;
     if (outcome.gamble) {
-      const rng = this.getRng();
-      const won = rng() < outcome.gamble.winChance;
-      resolvedGoldDelta = won ? outcome.gamble.winGoldDelta : outcome.gamble.loseGoldDelta;
-      gambleLivesDelta = won ? (outcome.gamble.winLivesDelta ?? 0) : (outcome.gamble.loseLivesDelta ?? 0);
+      if (this.pendingGambleRoll && this.pendingGambleRoll.choiceIndex === choiceIndex) {
+        resolvedGoldDelta = this.pendingGambleRoll.goldDelta;
+        gambleLivesDelta = this.pendingGambleRoll.livesDelta;
+      } else {
+        const rng = this.getRng();
+        const won = rng() < outcome.gamble.winChance;
+        resolvedGoldDelta = won ? outcome.gamble.winGoldDelta : outcome.gamble.loseGoldDelta;
+        gambleLivesDelta = won ? (outcome.gamble.winLivesDelta ?? 0) : (outcome.gamble.loseLivesDelta ?? 0);
+      }
+      this.pendingGambleRoll = null;
     } else {
       resolvedGoldDelta = outcome.goldDelta;
     }

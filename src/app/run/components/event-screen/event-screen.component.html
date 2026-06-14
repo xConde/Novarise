@@ -49,48 +49,68 @@
     <p class="event-outcome__description">{{ currentOutcome.description }}</p>
 
     <div class="event-outcome__deltas">
-      <!-- Gold delta -->
+      <!-- Gold delta (uses resolved gamble value when applicable) -->
       <span
         class="event-outcome__delta event-outcome__delta--gold"
-        *ngIf="currentOutcome.goldDelta !== 0"
-        [class.positive]="currentOutcome.goldDelta > 0"
-        [class.negative]="currentOutcome.goldDelta < 0"
-        [attr.aria-label]="(currentOutcome.goldDelta > 0 ? 'Gained' : 'Lost') + ' ' + (currentOutcome.goldDelta | number) + ' gold'"
+        *ngIf="displayedGoldDelta !== 0"
+        [class.positive]="displayedGoldDelta > 0"
+        [class.negative]="displayedGoldDelta < 0"
+        [attr.aria-label]="(displayedGoldDelta > 0 ? 'Gained' : 'Lost') + ' ' + (displayedGoldDelta | number) + ' gold'"
       >
         <app-icon name="coin" [size]="12"></app-icon>
-        {{ formatDelta(currentOutcome.goldDelta) }}g
+        {{ formatDelta(displayedGoldDelta) }}g
       </span>
 
-      <!-- Lives delta -->
+      <!-- Lives delta (uses resolved gamble value when applicable) -->
       <span
         class="event-outcome__delta event-outcome__delta--lives"
-        *ngIf="currentOutcome.livesDelta !== 0"
-        [class.positive]="currentOutcome.livesDelta > 0"
-        [class.negative]="currentOutcome.livesDelta < 0"
-        [attr.aria-label]="(currentOutcome.livesDelta > 0 ? 'Gained' : 'Lost') + ' ' + (currentOutcome.livesDelta | number) + ' ' + (currentOutcome.livesDelta === 1 || currentOutcome.livesDelta === -1 ? 'life' : 'lives')"
+        *ngIf="displayedLivesDelta !== 0"
+        [class.positive]="displayedLivesDelta > 0"
+        [class.negative]="displayedLivesDelta < 0"
+        [attr.aria-label]="(displayedLivesDelta > 0 ? 'Gained' : 'Lost') + ' ' + (displayedLivesDelta | number) + ' ' + (displayedLivesDelta === 1 || displayedLivesDelta === -1 ? 'life' : 'lives')"
       >
         <app-icon name="heart" [size]="12"></app-icon>
-        {{ formatDelta(currentOutcome.livesDelta) }}
+        {{ formatDelta(displayedLivesDelta) }}
       </span>
 
       <!-- Relic gained -->
       <span
         class="event-outcome__delta event-outcome__delta--relic positive"
         *ngIf="currentOutcome.relicId"
-        [attr.aria-label]="'Gained relic: ' + currentOutcome.relicId"
+        [attr.aria-label]="'Gained relic: ' + getRelicName(currentOutcome.relicId)"
       >
         <app-icon name="diamond" [size]="12"></app-icon>
-        Gained: {{ currentOutcome.relicId }}
+        Gained: {{ getRelicName(currentOutcome.relicId) }}
       </span>
 
       <!-- Relic removed -->
       <span
         class="event-outcome__delta event-outcome__delta--relic negative"
         *ngIf="currentOutcome.removeRelicId"
-        [attr.aria-label]="'Lost relic: ' + currentOutcome.removeRelicId"
+        [attr.aria-label]="'Lost relic: ' + getRelicName(currentOutcome.removeRelicId)"
       >
         <app-icon name="diamond" [size]="12"></app-icon>
-        Lost: {{ currentOutcome.removeRelicId }}
+        Lost: {{ getRelicName(currentOutcome.removeRelicId) }}
+      </span>
+
+      <!-- Item reward -->
+      <span
+        class="event-outcome__delta event-outcome__delta--item positive"
+        *ngIf="currentOutcome.itemReward"
+        [attr.aria-label]="'Gained item: ' + getItemName(currentOutcome.itemReward)"
+      >
+        <app-icon name="diamond" [size]="12"></app-icon>
+        Gained: {{ getItemName(currentOutcome.itemReward) }}
+      </span>
+
+      <!-- Card removed from deck -->
+      <span
+        class="event-outcome__delta event-outcome__delta--card negative"
+        *ngIf="currentOutcome.removeCard"
+        aria-label="A card was removed from your deck"
+      >
+        <app-icon name="card" [size]="12"></app-icon>
+        A card was removed from your deck
       </span>
     </div>
 

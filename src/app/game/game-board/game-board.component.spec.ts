@@ -62,6 +62,8 @@ import { TutorialFacadeService } from './services/tutorial-facade.service';
 import { ItemCallbacksWiringService } from './services/item-callbacks-wiring.service';
 import { EncounterBootstrapService } from './services/encounter-bootstrap.service';
 import { UI_CONFIG } from './constants/ui.constants';
+import { CardEffectService, ActiveModifier } from '../../run/services/card-effect.service';
+import { MODIFIER_STAT } from '../../run/constants/modifier-stat.constants';
 
 // ---------------------------------------------------------------------------
 // Test-only interfaces — allow typed access to private fields/methods without
@@ -109,6 +111,7 @@ interface TestableGameBoardComponent {
   detectWebgl(): boolean;
   renderGameBoard(): void;
   addGridLines(): void;
+  onTilePlace(row: number, col: number): void;
 }
 
 /** Exposes the internal challengeTrackingService field of TowerInteractionService. */
@@ -3122,6 +3125,64 @@ describe('GameBoardComponent', () => {
       discardPeriodicTasks();
       expect(navigateSpy).not.toHaveBeenCalledWith(['/run']);
     }));
+  });
+
+  describe('activeBuffs getter', () => {
+    it('returns an empty array when no modifiers are active', () => {
+      const cardEffect = TestBed.inject(CardEffectService);
+      spyOn(cardEffect, 'getActiveModifiers').and.returnValue([]);
+      expect(component.activeBuffs).toEqual([]);
+    });
+
+    it('maps a damage modifier to a buff chip with percent label', () => {
+      const cardEffect = TestBed.inject(CardEffectService);
+      const modifier: ActiveModifier = {
+        stat: MODIFIER_STAT.DAMAGE,
+        value: 0.25,
+        remainingWaves: 2,
+      };
+      spyOn(cardEffect, 'getActiveModifiers').and.returnValue([modifier]);
+      const chips = component.activeBuffs;
+      expect(chips.length).toBe(1);
+      expect(chips[0].label).toBe('Damage +25%');
+      expect(chips[0].remaining).toBe('2 waves');
+    });
+
+    it('excludes internal sentinel stats from the chips array', () => {
+      const cardEffect = TestBed.inject(CardEffectService);
+      const modifiers: ActiveModifier[] = [
+        // Internal per-turn flag — never surfaced to the player (not in BUFF_META).
+        { stat: MODIFIER_STAT.TERRAFORM_REFUND_USED_THIS_TURN, value: 1, remainingWaves: null, remainingTurns: 1 },
+        { stat: MODIFIER_STAT.RANGE, value: 0.2, remainingWaves: 1 },
+      ];
+      spyOn(cardEffect, 'getActiveModifiers').and.returnValue(modifiers);
+      const chips = component.activeBuffs;
+      expect(chips.length).toBe(1);
+      expect(chips[0].stat).toBe(MODIFIER_STAT.RANGE);
+    });
+  });
+
+  describe('PX-01: onTilePlace routes elevation-target card to resolveTileTarget', () => {
+    it('calls cardPlayService.resolveTileTarget when an elevation-target card is pending and selectedTowerType is null', () => {
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
+      // Place an elevation-target card in pending state directly
+      cardPlaySvc['pendingElevationTargetCard'] = {
+        instanceId: 'elev_inst',
+        cardId: CardId.RAISE_PLATFORM,
+        upgraded: false,
+      } as CardInstance;
+      // selectedTowerType must be null for the tile-target branch to fire
+      component.selectedTowerType = null;
+
+      const resolveSpy = spyOn(cardPlaySvc, 'resolveTileTarget').and.returnValue({ ok: true });
+
+      (component as unknown as TestableGameBoardComponent).onTilePlace(2, 3);
+
+      expect(resolveSpy).toHaveBeenCalled();
+      const [row, col] = resolveSpy.calls.mostRecent().args;
+      expect(row).toBe(2);
+      expect(col).toBe(3);
+    });
   });
 
 });

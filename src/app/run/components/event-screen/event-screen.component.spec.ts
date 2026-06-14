@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { EventScreenComponent } from './event-screen.component';
 import { RunEvent, EventOutcome } from '../../models/encounter.model';
 import { RelicId } from '../../models/relic.model';
+import { ItemType } from '../../models/item.model';
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
 
@@ -83,6 +84,33 @@ describe('EventScreenComponent', () => {
       component.makeChoice(1); // second call should be ignored
       expect(component.selectedChoice).toBe(0);
     });
+
+    it('does not emit previewGamble for non-gamble outcomes', () => {
+      const spy = jasmine.createSpy('previewGamble');
+      component.previewGamble.subscribe(spy);
+      component.makeChoice(0);
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('emits previewGamble with the choice index for gamble outcomes', () => {
+      component.event = makeEvent({
+        choices: [
+          {
+            label: 'Gamble',
+            description: 'Roll the dice.',
+            outcome: makeOutcome({
+              gamble: { winGoldDelta: 100, loseGoldDelta: -50, winChance: 0.5 },
+            }),
+          },
+          { label: 'Skip', description: 'Nothing.', outcome: makeOutcome() },
+        ],
+      });
+
+      const spy = jasmine.createSpy('previewGamble');
+      component.previewGamble.subscribe(spy);
+      component.makeChoice(0);
+      expect(spy).toHaveBeenCalledWith(0);
+    });
   });
 
   describe('confirmChoice()', () => {
@@ -122,6 +150,11 @@ describe('EventScreenComponent', () => {
       expect(component.getOutcomeClass(outcome)).toBe('positive');
     });
 
+    it('returns "positive" when itemReward is set', () => {
+      const outcome = makeOutcome({ itemReward: ItemType.BOMB });
+      expect(component.getOutcomeClass(outcome)).toBe('positive');
+    });
+
     it('returns "negative" when goldDelta < 0', () => {
       const outcome = makeOutcome({ goldDelta: -30 });
       expect(component.getOutcomeClass(outcome)).toBe('negative');
@@ -134,6 +167,11 @@ describe('EventScreenComponent', () => {
 
     it('returns "negative" when removeRelicId is set', () => {
       const outcome = makeOutcome({ removeRelicId: RelicId.IRON_HEART });
+      expect(component.getOutcomeClass(outcome)).toBe('negative');
+    });
+
+    it('returns "negative" when removeCard is true', () => {
+      const outcome = makeOutcome({ removeCard: true });
       expect(component.getOutcomeClass(outcome)).toBe('negative');
     });
 
@@ -178,6 +216,171 @@ describe('EventScreenComponent', () => {
 
       component.makeChoice(0);
       expect(component.currentOutcome!.relicId).toBe(RelicId.GOLD_MAGNET);
+    });
+  });
+
+  describe('getRelicName()', () => {
+    it('returns the human-readable name for a known relic id', () => {
+      expect(component.getRelicName(RelicId.QUICK_DRAW)).toBe('Quick Draw');
+    });
+
+    it('returns the human-readable name for IRON_HEART', () => {
+      expect(component.getRelicName(RelicId.IRON_HEART)).toBe('Iron Heart');
+    });
+
+    it('falls back to the raw id for an unknown relic id', () => {
+      expect(component.getRelicName('UNKNOWN_RELIC')).toBe('UNKNOWN_RELIC');
+    });
+  });
+
+  describe('getItemName()', () => {
+    it('returns the human-readable name for a known item type', () => {
+      expect(component.getItemName(ItemType.HEAL_POTION)).toBe('Heal Potion');
+    });
+
+    it('returns the human-readable name for BOMB', () => {
+      expect(component.getItemName(ItemType.BOMB)).toBe('Bomb');
+    });
+
+    it('falls back to the raw id for an unknown item type', () => {
+      expect(component.getItemName('UNKNOWN_ITEM')).toBe('UNKNOWN_ITEM');
+    });
+  });
+
+  describe('gamble outcome resolution', () => {
+    function makeGambleEvent(winChance: number): RunEvent {
+      return makeEvent({
+        choices: [
+          {
+            label: 'Gamble',
+            description: 'Roll the dice.',
+            outcome: makeOutcome({
+              goldDelta: 0,
+              gamble: {
+                winGoldDelta: 100,
+                loseGoldDelta: -50,
+                winChance,
+              },
+            }),
+          },
+          { label: 'Skip', description: 'Nothing.', outcome: makeOutcome() },
+        ],
+      });
+    }
+
+    it('displayedGoldDelta uses resolvedGamble.goldDelta when set (win)', () => {
+      component.event = makeGambleEvent(1);
+      component.resolvedGamble = { goldDelta: 100, livesDelta: 0 };
+      component.makeChoice(0);
+      expect(component.displayedGoldDelta).toBe(100);
+    });
+
+    it('displayedGoldDelta uses resolvedGamble.goldDelta when set (loss)', () => {
+      component.event = makeGambleEvent(0);
+      component.resolvedGamble = { goldDelta: -50, livesDelta: 0 };
+      component.makeChoice(0);
+      expect(component.displayedGoldDelta).toBe(-50);
+    });
+
+    it('displayedGoldDelta defaults to 0 when resolvedGamble is null (gamble outcome)', () => {
+      component.event = makeGambleEvent(0.5);
+      component.resolvedGamble = null;
+      component.makeChoice(0);
+      expect(component.displayedGoldDelta).toBe(0);
+    });
+
+    it('displayedGoldDelta uses static goldDelta when no gamble is present', () => {
+      component.makeChoice(0); // goldDelta: 40 from makeEvent defaults
+      expect(component.displayedGoldDelta).toBe(40);
+    });
+
+    it('displayedLivesDelta includes resolvedGamble.livesDelta for gamble outcomes', () => {
+      component.event = makeEvent({
+        choices: [
+          {
+            label: 'Wager lives',
+            description: 'Risk it.',
+            outcome: makeOutcome({
+              livesDelta: 0,
+              gamble: {
+                winGoldDelta: 0,
+                loseGoldDelta: 0,
+                winChance: 0.5,
+                winLivesDelta: 5,
+                loseLivesDelta: -3,
+              },
+            }),
+          },
+          { label: 'Skip', description: 'Nothing.', outcome: makeOutcome() },
+        ],
+      });
+      component.resolvedGamble = { goldDelta: 0, livesDelta: 5 };
+      component.makeChoice(0);
+      expect(component.displayedLivesDelta).toBe(5);
+    });
+
+    it('displayedLivesDelta uses loss lives delta from resolvedGamble', () => {
+      component.event = makeEvent({
+        choices: [
+          {
+            label: 'Wager lives',
+            description: 'Risk it.',
+            outcome: makeOutcome({
+              livesDelta: 0,
+              gamble: {
+                winGoldDelta: 0,
+                loseGoldDelta: 0,
+                winChance: 0.5,
+                winLivesDelta: 5,
+                loseLivesDelta: -3,
+              },
+            }),
+          },
+          { label: 'Skip', description: 'Nothing.', outcome: makeOutcome() },
+        ],
+      });
+      component.resolvedGamble = { goldDelta: 0, livesDelta: -3 };
+      component.makeChoice(0);
+      expect(component.displayedLivesDelta).toBe(-3);
+    });
+
+    it('displayedLivesDelta sums base livesDelta with resolvedGamble.livesDelta', () => {
+      component.event = makeEvent({
+        choices: [
+          {
+            label: 'Wager',
+            description: 'Risk it.',
+            outcome: makeOutcome({
+              livesDelta: -1,
+              gamble: {
+                winGoldDelta: 0,
+                loseGoldDelta: 0,
+                winChance: 0.5,
+                winLivesDelta: 3,
+              },
+            }),
+          },
+          { label: 'Skip', description: 'Nothing.', outcome: makeOutcome() },
+        ],
+      });
+      component.resolvedGamble = { goldDelta: 0, livesDelta: 3 };
+      component.makeChoice(0);
+      // base -1 + win delta +3 = +2
+      expect(component.displayedLivesDelta).toBe(2);
+    });
+
+    it('getOutcomeClass returns "positive" when resolvedGamble shows a win', () => {
+      component.event = makeGambleEvent(1);
+      component.resolvedGamble = { goldDelta: 100, livesDelta: 0 };
+      component.makeChoice(0);
+      expect(component.getOutcomeClass(component.currentOutcome!)).toBe('positive');
+    });
+
+    it('getOutcomeClass returns "negative" when resolvedGamble shows a loss', () => {
+      component.event = makeGambleEvent(0);
+      component.resolvedGamble = { goldDelta: -50, livesDelta: 0 };
+      component.makeChoice(0);
+      expect(component.getOutcomeClass(component.currentOutcome!)).toBe('negative');
     });
   });
 });

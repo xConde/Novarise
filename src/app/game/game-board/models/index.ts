@@ -1,4 +1,5 @@
 export * from './achievement.model';
+export * from './buff-display.model';
 export * from './combat-frame.model';
 export * from './endless-wave.model';
 export * from './enemy-info.model';

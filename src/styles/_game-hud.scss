@@ -378,60 +378,90 @@ body.reduce-motion .board-container .game-hud .hud-stat .speed-run-timer.critica
 
 /* ===== Toast notification system ===== */
 .toast-stack {
+  // Rise from just above the card hand — feedback emanates from where the card
+  // was played, then floats up and fades. Off the corners, off the controls.
   position: fixed;
-  bottom: calc(var(--shell-hand-height, 9rem) + var(--spacing-sm));
-  right: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--shell-hand-height) + var(--spacing-sm));
   display: flex;
-  flex-direction: column-reverse;
-  gap: 0.5rem;
+  flex-direction: column-reverse;   // newest nearest the hand, older risen above
+  align-items: center;
+  gap: 0.45rem;
   z-index: calc(var(--z-index-modal) + 50);
   pointer-events: none;
 }
 
+// Card-style frame: a neon accent edge (the type colour) over a dark card
+// interior, with notched top-right / bottom-left corners echoing the game's
+// cards. clip-path forbids box-shadow, so the soft neon edge is a drop-shadow.
 .toast {
-  padding: 0.75rem 1rem;
-  border-radius: var(--border-radius-lg);
-  min-width: 200px;
-  max-width: 320px;
+  --toast-accent: #b46cff;
+  --toast-clip: polygon(
+    0 0, calc(100% - 0.7rem) 0, 100% 0.7rem,
+    100% 100%, 0.7rem 100%, 0 calc(100% - 0.7rem)
+  );
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 11rem;
+  max-width: 19rem;
+  padding: 0.5rem 0.95rem;
+  background: var(--toast-accent);              // the neon edge
+  clip-path: var(--toast-clip);
+  filter: drop-shadow(0 0 2px var(--toast-accent));
   pointer-events: auto;
   cursor: pointer;
-  animation: toast-slide-in 0.3s ease-out;
   font-family: 'Orbitron', sans-serif;
   color: var(--text-color);
+  // Rises + fades across its full lifetime; duration is bound per-notification
+  // in the template so the fade lands exactly as the toast is dismissed.
+  animation-name: toast-rise;
+  animation-duration: 3.5s;
+  animation-timing-function: ease-out;
+  animation-fill-mode: forwards;
 }
 
-.toast--achievement {
-  background: var(--game-gold-a15);
-  border: var(--border-width-thin) solid var(--game-gold-a50);
+.toast::before {
+  content: '';
+  position: absolute;
+  inset: 1.5px;
+  background: rgba(10, 5, 20, 0.94);            // dark card interior
+  clip-path: var(--toast-clip);
+  z-index: 0;
 }
 
-.toast--streak {
-  background: rgba(0, 255, 255, 0.1);
-  border: var(--border-width-thin) solid rgba(0, 255, 255, 0.4);
-}
-
-.toast--challenge {
-  background: rgba(180, 100, 255, 0.15);
-  border: var(--border-width-thin) solid rgba(180, 100, 255, 0.4);
-}
-
-.toast--info {
-  background: rgba(200, 200, 255, 0.1);
-  border: var(--border-width-thin) solid rgba(200, 200, 255, 0.3);
-}
+.toast--info { --toast-accent: #b46cff; }
+.toast--achievement { --toast-accent: var(--game-gold); }
+.toast--challenge { --toast-accent: #b46cff; }
+.toast--streak { --toast-accent: var(--theme-cyan); }
 
 .toast__title {
+  position: relative;
+  z-index: 1;
   display: block;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  color: inherit;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--toast-accent);
 }
 
 .toast__message {
+  position: relative;
+  z-index: 1;
   display: block;
-  font-size: 0.6rem;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: 2px;
+  font-size: 0.64rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.82);
+  margin-top: 0.15rem;
+}
+
+@media (max-width: 768px) {
+  .toast {
+    min-width: 0;
+    max-width: min(19rem, calc(100vw - 1.5rem));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

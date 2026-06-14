@@ -41,6 +41,7 @@
       class="upgrade-btn"
       *ngIf="towerInfo!.level < MAX_TOWER_LEVEL"
       [class.unaffordable]="gold < upgradeCost"
+      [disabled]="gold < upgradeCost"
       (click)="upgrade.emit()"
       aria-label="Upgrade tower">
       Upgrade ({{ upgradeCost }}g)<span class="upgrade-tile-percent" *ngIf="upgradePercent > 0"> +{{ upgradePercent }}%</span>

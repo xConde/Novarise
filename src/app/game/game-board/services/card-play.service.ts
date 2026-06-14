@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { TowerType, MAX_TOWER_LEVEL } from '../models/tower.model';
 import { DamagePopupService } from './damage-popup.service';
 import { GamePhase } from '../models/game-state.model';
+import { StatusEffectType } from '@core/models/status-effect-type.model';
 import { GameStateService } from './game-state.service';
 import { GameStatsService } from './game-stats.service';
 import { GameBoardService } from '../game-board.service';
@@ -77,6 +78,17 @@ export interface CardPlayCallbacks {
    * a push notification to tear down tile-target highlights and cursor changes.
    */
   onExitTileTargetMode?: () => void;
+  /**
+   * Called after a non-tower card (spell / modifier / utility) resolves so the
+   * UI can confirm what the play did. Modifier cards especially are otherwise
+   * invisible — nothing on the board changes when they apply.
+   */
+  onNonTowerCardPlayed?: (cardName: string, effectSummary: string) => void;
+  /**
+   * Called when a card play is blocked by a pending mode (tower placement or
+   * tile-target) so the UI can surface a toast explaining why the click was ignored.
+   */
+  onCardPlayBlocked?: (message: string) => void;
 }
 
 /**
@@ -203,6 +215,19 @@ export class CardPlayService {
   }
 
   /**
+   * Returns the instanceId of whichever tile-target card is pending
+   * (terraform or elevation), or null when no tile-target mode is active.
+   *
+   * WHY THIS EXISTS: GameBoardComponent needs to pass the pending tile-target
+   * card id to CardHandComponent ([pendingCardId]) so the active card dims
+   * while the player is choosing a tile — mirroring the existing tower-placement
+   * dimming behaviour.
+   */
+  getPendingTileTargetCardId(): string | null {
+    return (this.pendingTileTargetCard ?? this.pendingElevationTargetCard)?.instanceId ?? null;
+  }
+
+  /**
    * Returns the card currently awaiting a tile-target click, or null.
    *
    * WHY THIS EXISTS: GameBoardComponent.onTilePlace needs to distinguish
@@ -212,6 +237,19 @@ export class CardPlayService {
    */
   getPendingTileTargetCard(): CardInstance | null {
     return this.pendingTileTargetCard;
+  }
+
+  /**
+   * Returns whichever tile-target card is pending — terraform or elevation —
+   * or null when neither mode is active.
+   *
+   * WHY THIS EXISTS: GameBoardComponent.onTilePlace needs to capture the card
+   * definition BEFORE resolveTileTarget clears the pending state on success,
+   * so it can show a "card played" toast with the correct name and description.
+   * Returning either card from one getter avoids duplicating the access logic.
+   */
+  getAnyPendingTileTargetCard(): CardInstance | null {
+    return this.pendingTileTargetCard ?? this.pendingElevationTargetCard;
   }
 
   /**
@@ -226,6 +264,7 @@ export class CardPlayService {
     // Card play locked to COMBAT phase.
     const phase = this.gameStateService.getState().phase;
     if (phase !== GamePhase.COMBAT) {
+      this.callbacks?.onCardPlayBlocked?.('Cards can only be played during combat.');
       return;
     }
     // Clicking the pending tower card again cancels placement
@@ -284,11 +323,20 @@ export class CardPlayService {
     }
 
     // Block other card plays while a tower card is awaiting placement
-    if (this.pendingTowerCard) return;
+    if (this.pendingTowerCard) {
+      this.callbacks?.onCardPlayBlocked?.('Place or cancel the pending tower card first.');
+      return;
+    }
     // Block other card plays while a tile-target card is awaiting a tile click
-    if (this.pendingTileTargetCard) return;
+    if (this.pendingTileTargetCard) {
+      this.callbacks?.onCardPlayBlocked?.('Click a tile to apply the pending card first.');
+      return;
+    }
     // Block other card plays while an elevation-target card is awaiting a tile click
-    if (this.pendingElevationTargetCard) return;
+    if (this.pendingElevationTargetCard) {
+      this.callbacks?.onCardPlayBlocked?.('Click a tile to apply the pending card first.');
+      return;
+    }
 
     if (effect.type === 'tower') {
       // Cancel any existing pending tower card first (defensive)
@@ -308,13 +356,46 @@ export class CardPlayService {
     if (effect.type === 'spell') {
       const spellEffect = effect as SpellCardEffect;
       if (spellEffect.spellId === 'salvage') {
-        if (this.towerCombatService.getPlacedTowers().size === 0) return;
+        if (this.towerCombatService.getPlacedTowers().size === 0) {
+          this.callbacks?.onCardPlayBlocked?.('No towers to salvage.');
+          return;
+        }
       } else if (spellEffect.spellId === 'fortify') {
         const towers = Array.from(this.towerCombatService.getPlacedTowers().values());
         // At least one tower must be eligible for an L1→L2 upgrade. We don't gate
         // on the upgraded count (effect.value) — partial fulfilment is allowed
-        // (Sprint 5: upgraded variant upgrades up to 2 but tolerates fewer eligible).
-        if (!towers.some(t => t.level < MAX_TOWER_LEVEL - 1)) return;
+        // (upgraded variant upgrades up to 2 but tolerates fewer eligible).
+        if (!towers.some(t => t.level < MAX_TOWER_LEVEL - 1)) {
+          this.callbacks?.onCardPlayBlocked?.('All towers are already at max level.');
+          return;
+        }
+      } else if (spellEffect.spellId === 'detonate') {
+        // Pre-validate: at least one non-dying burning enemy must exist.
+        const hasBurning = Array.from(this.enemyService.getEnemies().values())
+          .some(e => !e.dying && this.statusEffectService.hasEffect(e.id, StatusEffectType.BURN));
+        if (!hasBurning) {
+          this.callbacks?.onCardPlayBlocked?.('No burning enemies.');
+          return;
+        }
+      } else if (spellEffect.spellId === 'epidemic') {
+        // Pre-validate: at least one non-dying poisoned enemy must exist.
+        const hasPoisoned = Array.from(this.enemyService.getEnemies().values())
+          .some(e => !e.dying && this.statusEffectService.hasEffect(e.id, StatusEffectType.POISON));
+        if (!hasPoisoned) {
+          this.callbacks?.onCardPlayBlocked?.('No poisoned enemies.');
+          return;
+        }
+      }
+    }
+
+    // Pre-validate utility cards that require a minimum tower count.
+    if (effect.type === 'utility') {
+      const utilityEffect = effect as UtilityCardEffect;
+      if (utilityEffect.utilityId === 'bridge_towers') {
+        if (this.towerCombatService.getPlacedTowers().size < 2) {
+          this.callbacks?.onCardPlayBlocked?.('Need at least 2 towers to bridge.');
+          return;
+        }
       }
     }
 
@@ -352,6 +433,12 @@ export class CardPlayService {
           break;
         // 'tower', 'terraform_target', 'elevation_target' return early above.
       }
+      // Confirm the play — non-tower cards (modifiers especially) change nothing
+      // on the board, so without this the player gets no feedback at all.
+      const effectSummary = card.upgraded && def.upgradedDescription
+        ? def.upgradedDescription
+        : def.description;
+      this.callbacks?.onNonTowerCardPlayed?.(def.name, effectSummary);
     } catch (err) {
       console.error('Card effect threw — rolling back play:', err);
       this.deckService.undoPlay(cardInstanceId, energyCost);

@@ -61,9 +61,12 @@
 }
 
 /* Toast slide in */
-@keyframes toast-slide-in {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+// Card-play / combat toast: rises from above the hand and fades over its life.
+@keyframes toast-rise {
+  0%   { transform: translateY(0.6rem);  opacity: 0; }
+  8%   { transform: translateY(0);       opacity: 1; }
+  82%  { transform: translateY(-0.5rem); opacity: 1; }
+  100% { transform: translateY(-1.6rem); opacity: 0; }
 }
 
 /* Pulse critical — HUD lives / speed-run warning */

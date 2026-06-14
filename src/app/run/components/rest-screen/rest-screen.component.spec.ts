@@ -150,10 +150,27 @@ describe('RestScreenComponent', () => {
       expect(emitted).toEqual(['c42']);
     });
 
-    it('selectCardToUpgrade() resets activeAction to "none"', () => {
+    it('selectCardToUpgrade() switches activeAction to "confirmed"', () => {
       component.showUpgradePanel();
       component.selectCardToUpgrade(makeCard('c0', CardId.GOLD_RUSH, false));
+      expect(component.activeAction).toBe('confirmed');
+    });
+
+    it('selectCardToUpgrade() captures the upgraded card name for the confirmation banner', () => {
+      component.selectCardToUpgrade(makeCard('c0', CardId.GOLD_RUSH, false));
+      expect(component.lastUpgradedCardName).toBe('Gold Rush');
+    });
+
+    it('continueAfterUpgrade() emits upgradeConfirmed and resets to "none"', () => {
+      let emitted = false;
+      component.upgradeConfirmed.subscribe(() => (emitted = true));
+
+      component.selectCardToUpgrade(makeCard('c0', CardId.GOLD_RUSH, false));
+      component.continueAfterUpgrade();
+
+      expect(emitted).toBeTrue();
       expect(component.activeAction).toBe('none');
+      expect(component.lastUpgradedCardName).toBeNull();
     });
 
     it('getUniqueUpgradableCards() deduplicates by CardId', () => {

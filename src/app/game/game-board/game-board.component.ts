@@ -69,9 +69,11 @@ import { RELIC_DEFINITIONS } from '../../run/models/relic.model';
 import { ItemService } from '../../run/services/item.service';
 import { ItemType, ITEM_DEFINITIONS } from '../../run/models/item.model';
 import { DeckService } from '../../run/services/deck.service';
+import { CardEffectService } from '../../run/services/card-effect.service';
+import { BuffChip, toBuffChips } from './models/buff-display.model';
 import { EncounterResult } from '../../run/models/run-state.model';
 import { CardInstance, DeckState, EnergyState } from '../../run/models/card.model';
-import { getActiveTowerEffect } from '../../run/constants/card-definitions';
+import { getActiveTowerEffect, getCardDefinition } from '../../run/constants/card-definitions';
 import { WaveCombatFacadeService } from './services/wave-combat-facade.service';
 import { TutorialFacadeService } from './services/tutorial-facade.service';
 import { AscensionModifierService } from './services/ascension-modifier.service';
@@ -355,6 +357,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   /** True while inside a run — the pre-run-mode setup panel is never shown in this path. */
   get isInRun(): boolean { return this.runService.isInRun(); }
 
+  /** Active card-modifier buff chips for the persistent HUD panel. Cheap: maps a small readonly array. */
+  get activeBuffs(): BuffChip[] {
+    return toBuffChips(this.cardEffectService.getActiveModifiers());
+  }
+
+  /** trackBy for the active-buffs *ngFor — uses index since chips are regenerated each render. */
+  trackBuffByIndex(index: number): number {
+    return index;
+  }
+
   /** Resolves newly unlocked achievement IDs to their name/description for display. */
   private updateAchievementDetails(): void {
     this.achievementDetails = this.newlyUnlockedAchievements
@@ -411,6 +423,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private runService: RunService,
     private relicService: RelicService,
     private deckService: DeckService,
+    private cardEffectService: CardEffectService,
     private gameRenderService: GameRenderService,
     private meshRegistry: BoardMeshRegistryService,
     private touchInteraction: TouchInteractionService,
@@ -508,6 +521,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         // checkpoint clear + reward flow already happened inside waveCombat.endTurn();
         // recordEncounterResult above stashes the result for RunService to consume
         // at /run — navigation order does not affect those operations.
+        // Stop combat music immediately so it doesn't play under the victory/defeat overlay.
+        this.musicService.stopMusic(0.8);
         this.showEndOverlay = true;
         this.endOverlayIsVictory = isVictory;
         if (this.endOverlayDwellTimer !== null) {
@@ -811,6 +826,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       onExitTileTargetMode: () => {
         // No tile-target-specific cleanup needed until sprint 23 adds highlights.
       },
+      onNonTowerCardPlayed: (cardName, effectSummary) => {
+        this.notificationService.show(NotificationType.INFO, cardName, effectSummary);
+      },
+      onCardPlayBlocked: (message) => {
+        this.notificationService.show(NotificationType.INFO, 'Cannot play', message);
+      },
     });
 
     this.minimapService.init(this.canvasContainer.nativeElement);
@@ -940,6 +961,24 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
+   * Expose pending tile-target card instanceId to template.
+   * Non-null while a terraform or elevation card awaits a tile click — used by the
+   * tile-target banner and by CardHandComponent [pendingCardId] to dim the active card.
+   */
+  get pendingTileTargetCardId(): string | null {
+    return this.cardPlayService.getPendingTileTargetCardId();
+  }
+
+  /**
+   * True while ANY card is in limbo (tower placement or tile-target mode).
+   * Used to disable End Turn so the first Space press doesn't silently cancel
+   * the pending card and end the turn in a single keypress.
+   */
+  get hasPendingCard(): boolean {
+    return this.cardPlayService.hasPendingCard();
+  }
+
+  /**
    * Handle a card played from CardHandComponent.
    * Delegates to CardPlayService which manages placement limbo and spell effects.
    */
@@ -994,7 +1033,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
 
-    if (!result.success) return;
+    if (!result.success) {
+      this.notificationService.show(NotificationType.INFO, 'Cannot upgrade', 'Not enough gold.');
+      return;
+    }
 
     // Successful upgrade is the canonical UPGRADE_TOWER / TIP_UPGRADE dismissal signal.
     this.tutorialService.dismissOnPlayerAction();
@@ -1120,9 +1162,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   startWave(): void {
     if (this.isPaused) return;
-    // Starting a wave counts as the START_WAVE tutorial step by definition.
-    this.tutorialService.dismissOnPlayerAction();
     this.waveCombat.startWave();
+    // Dismiss the START_WAVE tutorial step AFTER the wave has started so the
+    // same Space press that triggers the wave does not dismiss the step before
+    // waveCombat.startWave() has a chance to advance it.
+    this.tutorialService.dismissOnPlayerAction();
     // Ensure a turn-history window is open for the new wave's opening turn.
     // endTurn() opens one on COMBAT/INTERMISSION, but guard here so a wave that
     // begins without an open window still tracks cards played on its first turn.
@@ -1232,7 +1276,21 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Use a consumable item from the pause menu. */
   useItem(type: ItemType): void {
-    this.itemService.useItem(type);
+    const def = ITEM_DEFINITIONS[type];
+    const result = this.itemService.useItem(type);
+    if (result.success) {
+      this.notificationService.show(NotificationType.INFO, def.name, def.description);
+      return;
+    }
+    const reasonMessages: Record<string, string> = {
+      no_enemies: 'No enemies on board.',
+      at_max: 'Already at max lives.',
+      wrong_phase: 'Can only use during combat.',
+      wrong_node: 'Can only use at a shop node.',
+      not_owned: 'Item not in inventory.',
+    };
+    const message = (result.reason && reasonMessages[result.reason]) ?? 'Cannot use that item now.';
+    this.notificationService.show(NotificationType.INFO, def.name, message);
   }
 
   /**
@@ -1432,7 +1490,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    * Priority: terraform-target > tower placement (spec §4).
    */
   private onTilePlace(row: number, col: number): void {
-    if (this.cardPlayService.getPendingTileTargetCard()) {
+    // Route BOTH terraform- and elevation-target cards to resolveTileTarget
+    // (it dispatches on whichever pending field is set). A pending TOWER card
+    // sets selectedTowerType, so it skips this branch and falls through to
+    // tryPlaceTower below.
+    if (this.cardPlayService.hasPendingCard() && !this.selectedTowerType) {
+      // Capture the card definition BEFORE resolveTileTarget consumes the pending state.
+      const pendingCard = this.cardPlayService.getAnyPendingTileTargetCard();
+      const pendingDef = pendingCard ? getCardDefinition(pendingCard.cardId) : null;
+
       const scene = this.sceneService.getScene();
       const currentTurn = this.combatLoopService.getTurnNumber();
       const result = this.cardPlayService.resolveTileTarget(row, col, scene, currentTurn);
@@ -1455,6 +1521,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       } else {
         // Log card-play to turn history — mirrors the path in onCardPlayed.
         this.turnHistoryService.recordCardPlayed();
+        // Confirm the successful tile mutation with the card name and effect summary.
+        if (pendingDef) {
+          const effectSummary = (pendingCard?.upgraded && pendingDef.upgradedDescription)
+            ? pendingDef.upgradedDescription
+            : pendingDef.description;
+          this.notificationService.show(NotificationType.INFO, pendingDef.name, effectSummary);
+        }
       }
       return;
     }

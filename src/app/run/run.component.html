@@ -130,6 +130,7 @@
     (restChosen)="restHeal()"
     (skipChosen)="viewMode = 'map'"
     (cardUpgraded)="onCardUpgraded($event)"
+    (upgradeConfirmed)="onUpgradeConfirmed()"
   ></app-rest-screen>
 
   <!-- ── Shop Screen ─────────────────────────────────────── -->
@@ -152,6 +153,8 @@
   <app-event-screen
     *ngIf="viewMode === 'event' && currentEvent"
     [event]="currentEvent"
+    [resolvedGamble]="eventGambleResult"
+    (previewGamble)="onPreviewGamble($event)"
     (choiceMade)="completeEvent($event)"
   ></app-event-screen>
 

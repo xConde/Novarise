@@ -57,6 +57,9 @@
   --shell-recap-top: var(--shell-spawn-top);
   --shell-recap-right: var(--spacing-sm);
   --shell-tower-info-bottom: var(--spacing-sm);
+  // Active-buffs panel sits beneath INCOMING on the left. 14rem clears
+  // a fully-populated spawn-preview (title + 4 turn rows + scouted section).
+  --shell-buffs-top: calc(var(--shell-spawn-top) + 14rem);
 
   // When the wave-preview panel is mounted (INTERMISSION / SETUP phases), it
   // owns the top-right corner. The RECAP sits right under it — max-height of
@@ -318,6 +321,65 @@
     .enemy-dot[data-type='flying']   { background: var(--enemy-color-flying);  box-shadow: 0 0 4px var(--enemy-glow-flying); }
   }
 
+  // --- Active buffs panel ---
+  // Positioned below the INCOMING spawn-preview on the left side. Shares the
+  // glass-panel treatment and font scale of .spawn-preview so the two panels
+  // read as a visual family. Hidden on mobile (same breakpoint as .spawn-preview).
+  .active-buffs {
+    @include glass-panel(rgba(10, 15, 30, 0.82));
+    position: absolute;
+    top: var(--shell-buffs-top);
+    left: var(--shell-spawn-left);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: var(--border-width-thin) solid var(--panel-blue-border);
+    color: var(--text-color);
+    pointer-events: none;
+    z-index: var(--z-index-overlay);
+
+    @media (max-width: 768px) {
+      display: none;
+    }
+
+    .active-buffs__title {
+      margin: 0 0 var(--spacing-xs) 0;
+      font-size: var(--font-size-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      opacity: 0.7;
+      font-weight: 600;
+    }
+
+    .active-buffs__list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .active-buffs__chip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--spacing-sm);
+      font-size: var(--font-size-xs);
+    }
+
+    .active-buffs__label {
+      font-weight: 700;
+      color: var(--panel-blue-accent);
+    }
+
+    .active-buffs__remaining {
+      font-size: var(--font-size-3xs);
+      font-weight: 500;
+      color: var(--text-muted);
+      opacity: 0.7;
+      letter-spacing: 0.025em;
+    }
+  }
+
   // Colorblind-assist mode: enemy dots switch to the deuteranopia/protanopia-safe
   // palette (mirrored from COLORBLIND_ENEMY_PALETTE in colorblind.constants.ts)
   // and gain a letter-initial shape cue so type is never conveyed by color alone.
@@ -429,6 +491,16 @@
       color: var(--game-health, #e85d75);
       text-transform: uppercase;
       margin-top: 0.125rem;
+    }
+
+    .end-turn-stuck-hint {
+      display: block;
+      font-size: var(--font-size-2xs);
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      color: var(--text-color-muted, rgba(255, 255, 255, 0.55));
+      text-transform: none;
+      margin-top: 0.1rem;
     }
   }
 
@@ -836,16 +908,37 @@ body.reduce-motion .board-container .end-combat-overlay__label { animation: none
   }
 }
 
+// Tile-target mode variant (terraform / elevation cards): cyan instead of gold
+// to distinguish "pick a tile" from "pick a tile to place tower".
+.board-container .placement-indicator--tile-target {
+  background: rgba(0, 220, 220, 0.1);
+  border-color: rgba(0, 220, 220, 0.5);
+  color: var(--theme-cyan, #00dcdc);
+  box-shadow: 0 0 1rem rgba(0, 220, 220, 0.2);
+  animation: tile-target-indicator-pulse 1.6s ease-in-out infinite;
+
+  .placement-indicator__text {
+    color: var(--theme-cyan, #00dcdc);
+  }
+}
+
 @keyframes placement-indicator-pulse {
   0%, 100% { box-shadow: 0 0 1rem rgba(255, 215, 0, 0.2); border-color: rgba(255, 215, 0, 0.5); }
   50%       { box-shadow: 0 0 1.5rem rgba(255, 215, 0, 0.45); border-color: rgba(255, 215, 0, 0.8); }
 }
 
+@keyframes tile-target-indicator-pulse {
+  0%, 100% { box-shadow: 0 0 1rem rgba(0, 220, 220, 0.2); border-color: rgba(0, 220, 220, 0.5); }
+  50%       { box-shadow: 0 0 1.5rem rgba(0, 220, 220, 0.45); border-color: rgba(0, 220, 220, 0.8); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .board-container .placement-indicator { animation: none; }
+  .board-container .placement-indicator--tile-target { animation: none; }
 }
 
 body.reduce-motion .board-container .placement-indicator { animation: none; }
+body.reduce-motion .board-container .placement-indicator--tile-target { animation: none; }
 
 @media (max-width: 480px) {
   .board-container .placement-indicator {
