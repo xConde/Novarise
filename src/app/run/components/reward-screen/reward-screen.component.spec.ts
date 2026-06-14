@@ -196,6 +196,17 @@ describe('RewardScreenComponent', () => {
     expect(component.relicCards[2].id).toBe(RelicId.COMMANDERS_BANNER);
   });
 
+  it('relicCards returns a stable reference across accesses (no per-CD re-create)', () => {
+    // Stable references stop the relic *ngFor from rebuilding its DOM (and
+    // replaying the entrance animation) on every change-detection pass.
+    expect(component.relicCards).toBe(component.relicCards);
+  });
+
+  it('trackByRelicId returns the relic id', () => {
+    const relic = component.relicCards[0];
+    expect(component.trackByRelicId(0, relic)).toBe(relic.id);
+  });
+
   // ── Card draft integration ─────────────────────────────────────────────
 
   it('canContinue is false when relic and card sections are both unresolved', () => {

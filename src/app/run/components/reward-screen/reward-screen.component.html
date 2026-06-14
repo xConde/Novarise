@@ -60,7 +60,7 @@
         class="reward-card"
         [class]="'reward-card reward-card--' + getRarityClass(relic.rarity)"
         [class.reward-card--selected]="selectedRelic === relic.id"
-        *ngFor="let relic of relicCards; let i = index"
+        *ngFor="let relic of relicCards; let i = index; trackBy: trackByRelicId"
         (click)="pickRelic(relic)"
         [attr.aria-label]="'Option ' + (i + 1) + '. ' + relic.name + ': ' + relic.description + '. Rarity: ' + relic.rarity + '. Press ' + (i + 1) + ' to pick.'"
         [attr.aria-pressed]="selectedRelic === relic.id"

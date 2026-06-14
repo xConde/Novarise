@@ -50,11 +50,29 @@ export class RewardScreenComponent implements OnInit, OnDestroy {
     return SKIP_GOLD_BY_NODE_TYPE[this.config?.nodeType] ?? 0;
   }
 
-  /** Resolve relic definitions from reward IDs for display. */
+  private relicCardsCache: RelicDefinition[] = [];
+  private relicCardsSource: RewardScreenConfig['relicChoices'] | null = null;
+
+  /**
+   * Relic definitions resolved from the reward IDs, memoized on the
+   * config.relicChoices reference. A plain getter allocated a new array per
+   * call, so the relic *ngFor re-created its DOM on every change-detection pass
+   * — flickering the card entrance animation whenever a key was held on the
+   * reward screen.
+   */
   get relicCards(): RelicDefinition[] {
-    return this.config.relicChoices
-      .map(r => RELIC_DEFINITIONS[r.relicId])
-      .filter((r): r is RelicDefinition => r !== undefined);
+    if (this.relicCardsSource !== this.config.relicChoices) {
+      this.relicCardsSource = this.config.relicChoices;
+      this.relicCardsCache = this.config.relicChoices
+        .map(r => RELIC_DEFINITIONS[r.relicId])
+        .filter((r): r is RelicDefinition => r !== undefined);
+    }
+    return this.relicCardsCache;
+  }
+
+  /** Stable *ngFor identity so change detection never re-creates relic DOM. */
+  trackByRelicId(_index: number, relic: RelicDefinition): RelicId {
+    return relic.id;
   }
 
   getRarityClass(rarity: RelicRarity): string {

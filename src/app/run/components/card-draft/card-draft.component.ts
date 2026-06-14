@@ -80,11 +80,32 @@ export class CardDraftComponent implements OnDestroy, OnChanges {
     return rect.width > 0 && rect.height > 0;
   }
 
+  private resolvedCardsCache: DraftCard[] = [];
+  private resolvedCardsSource: CardReward[] | null = null;
+
+  /**
+   * Resolved cards, memoized on the `cardChoices` array reference so they are
+   * recomputed only when the input actually changes — NOT on every change-
+   * detection pass. A plain getter returned a fresh array of fresh objects each
+   * call, so the card *ngFor re-created every card's DOM each CD cycle and
+   * replayed the entrance animation; any held key (auto-repeat keydown fires a
+   * CD per repeat) surfaced that as a flicker on the reward screen. Stable
+   * references plus a trackBy keep the DOM in place.
+   */
   get resolvedCards(): DraftCard[] {
-    return this.cardChoices.map(reward => ({
-      reward,
-      definition: getCardDefinition(reward.cardId),
-    }));
+    if (this.resolvedCardsSource !== this.cardChoices) {
+      this.resolvedCardsSource = this.cardChoices;
+      this.resolvedCardsCache = this.cardChoices.map(reward => ({
+        reward,
+        definition: getCardDefinition(reward.cardId),
+      }));
+    }
+    return this.resolvedCardsCache;
+  }
+
+  /** Stable *ngFor identity so change detection never re-creates card DOM. */
+  trackByCardId(_index: number, item: DraftCard): CardId {
+    return item.reward.cardId;
   }
 
   pickCard(reward: CardReward): void {
