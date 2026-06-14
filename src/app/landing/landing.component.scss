@@ -2,6 +2,14 @@
 // All durations/sizes are named here — no magic numbers per project conventions.
 // CSS :root custom properties for values needed in keyframes (non-SCSS context).
 
+// The component host must be a full-width block: Angular host elements default
+// to display:inline, which lets the container be sized/positioned by content
+// rather than filling the viewport — that offsets the centred content.
+:host {
+  display: block;
+  width: 100%;
+}
+
 :root {
   // Backdrop layers
   --ls-sky-top: #000308;
@@ -73,6 +81,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  width: 100%;
   min-height: 100vh;
   background-color: var(--bg-color);
   color: var(--text-color);
