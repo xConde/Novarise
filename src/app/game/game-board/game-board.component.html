@@ -388,6 +388,7 @@
         [class.toast--challenge]="notification.type === 'challenge'"
         [class.toast--streak]="notification.type === 'streak'"
         [class.toast--info]="notification.type === 'info'"
+        [style.animation-duration.ms]="notification.duration"
         (click)="dismissNotification(notification.id)"
         role="alert"
       >
