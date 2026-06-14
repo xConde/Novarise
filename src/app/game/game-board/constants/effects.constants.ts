@@ -53,6 +53,12 @@ export const SCREEN_SHAKE_CONFIG = {
   /** Per-life additional duration so big leaks linger longer. */
   lifeLossPerLifeDuration: 0.05,
   lifeLossMaxDuration: 0.8,
+  /** Climactic shake when NOVA_SOVEREIGN dies — larger than a standard boss kill. */
+  novaSovereignDeathIntensity: 0.55,
+  novaSovereignDeathDuration: 0.9,
+  /** Wyrm boss death shake — stronger than generic boss, distinguished from NOVA_SOVEREIGN. */
+  wyrmAscendantDeathIntensity: 0.35,
+  wyrmAscendantDeathDuration: 0.6,
 } as const;
 
 export const GOLD_POPUP_CONFIG = {
@@ -241,6 +247,26 @@ export const NOVA_SOVEREIGN_VISUAL_CONFIG = {
   orbMetalness: 0.9,
   /** Y offset from mesh midpoint — rings orbit at mid-height. */
   orbYOffsetMultiplier: 0.5,
+} as const;
+
+/**
+ * Per-ring Y-axis rotation speeds for NOVA_SOVEREIGN's three orbiting shard rings.
+ * The three values are intentionally distinct so the rings drift apart over time,
+ * creating a parallax effect that reads as dynamic motion rather than rigid rotation.
+ * Units: radians per second.
+ */
+export const NOVA_SOVEREIGN_ORB_SPIN_SPEEDS = [1.2, 0.75, -0.95] as const;
+
+/**
+ * Enrage visual override for NOVA_SOVEREIGN when health drops below 50%.
+ * Overrides the body emissive to a bright orange-red so the phase shift reads
+ * immediately without relying on text/UI feedback.
+ */
+export const NOVA_SOVEREIGN_ENRAGE_VISUAL = {
+  /** Emissive hex color applied to the body mesh while enraged. */
+  emissiveColor: 0xff4400,
+  /** emissiveIntensity while enraged — noticeably brighter than the idle value. */
+  emissiveIntensity: 2.2,
 } as const;
 
 /** Per-tower-type projectile appearance — color, emissive, scale, and emissive intensity.

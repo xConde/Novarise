@@ -123,6 +123,9 @@
 }
 
 .run-gold {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   color: var(--game-gold);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -147,170 +150,6 @@
     &:hover { background: rgba(255, 255, 255, 0.15); }
   }
 }
-
-// ── Start screen ──────────────────────────────────────────────────────────────
-
-.run-start {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding-top: 15vh;
-  flex: 1;
-  gap: var(--spacing-lg);
-  text-align: center;
-}
-
-.run-title {
-  font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-hero);
-  font-weight: 800;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--theme-purple-lighter);
-}
-
-.run-subtitle {
-  color: var(--text-muted);
-  font-size: var(--font-size-base);
-}
-
-.run-start-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-md);
-  width: 100%;
-  max-width: 24rem;
-}
-
-// ── Resume run block ──────────────────────────────────────────────────────────
-
-.run-resume-block {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-sm);
-  width: 100%;
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--glass-bg);
-  border: var(--border-width-thin) solid var(--border-color);
-  border-radius: var(--border-radius-lg);
-}
-
-.run-resume-info {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  font-size: var(--font-size-small);
-  color: var(--text-muted);
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.run-resume-info__item {
-  white-space: nowrap;
-}
-
-.run-resume-info__sep {
-  color: var(--text-faint);
-}
-
-// ── Ascension select ──────────────────────────────────────────────────────────
-
-.run-ascension-select {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-md);
-  flex-wrap: wrap;
-  justify-content: center;
-  width: 100%;
-  max-width: 36rem;
-}
-
-.ascension-select__label {
-  font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-small);
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.ascension-select__dropdown {
-  background: var(--theme-purple-a10);
-  color: var(--text-color);
-  border: var(--border-width-thin) solid var(--theme-purple-a50);
-  border-radius: var(--border-radius-md);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  min-width: 20rem;
-  max-width: 100%;
-  font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-small);
-
-  option {
-    background: var(--nav-bg);
-    color: var(--text-color);
-  }
-}
-
-// ── Ascension info panel ──────────────────────────────────────────────────────
-
-.ascension-info {
-  width: 100%;
-  max-width: 32rem;
-  background: var(--theme-purple-a10);
-  border: var(--border-width-thin) solid var(--theme-purple-a50);
-  border-radius: var(--border-radius-lg);
-  padding: var(--spacing-md) var(--spacing-lg);
-  text-align: left;
-}
-
-.ascension-info__title {
-  font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-small);
-  font-weight: 700;
-  color: var(--text-dim);
-  margin: 0 0 var(--spacing-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.ascension-info__effects {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.ascension-info__effect {
-  display: flex;
-  align-items: baseline;
-  gap: var(--spacing-xs);
-  font-size: var(--font-size-small);
-}
-
-.ascension-info__effect-level {
-  font-family: "Orbitron", sans-serif;
-  font-weight: 700;
-  font-size: var(--font-size-2xs);
-  min-width: 1.4rem;
-  text-align: right;
-  opacity: 0.7;
-}
-
-.ascension-info__effect-text {
-  flex: 1;
-}
-
-// Difficulty color-coding via design system
-.ascension-info__effect--easy   { color: var(--action-success); }
-.ascension-info__effect--medium { color: var(--action-warning); }
-.ascension-info__effect--hard   { color: var(--game-accent-orange); }
-.ascension-info__effect--extreme { color: var(--game-health); }
 
 // ── Map wrapper ───────────────────────────────────────────────────────────────
 
@@ -348,10 +187,6 @@
 // ── Responsive ────────────────────────────────────────────────────────────
 
 @media (max-width: 768px) {
-  .run-title {
-    font-size: var(--font-size-large);
-  }
-
   .run-sidebar {
     display: none;
   }
@@ -387,30 +222,6 @@
 
   .run-nav-stats {
     gap: var(--spacing-sm);
-  }
-
-  .run-start {
-    padding-top: 8vh;
-  }
-
-  .run-start-actions {
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-  }
-
-  .run-btn--full {
-    width: 100%;
-  }
-
-  .run-ascension-select {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  .run-ascension-select .ascension-select__dropdown {
-    min-width: unset;
-    width: 100%;
   }
 
   .run-map-title {

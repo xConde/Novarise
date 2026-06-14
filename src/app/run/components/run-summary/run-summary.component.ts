@@ -28,6 +28,12 @@ export class RunSummaryComponent {
   @Input() runState!: RunState;
   @Output() returnToMenu = new EventEmitter<void>();
   @Output() startNewRun = new EventEmitter<number>();
+  /**
+   * Emitted when the player clicks "Endless Mode" after a VICTORY.
+   * The parent (run.component) should call RunService.prepareEndlessEncounter()
+   * and navigate to /play to start an endless post-victory encounter.
+   */
+  @Output() launchEndless = new EventEmitter<void>();
 
   get isVictory(): boolean {
     return this.runState.status === RunStatus.VICTORY;
@@ -100,5 +106,9 @@ export class RunSummaryComponent {
 
   onStartNewRun(): void {
     this.startNewRun.emit(this.runState.ascensionLevel);
+  }
+
+  onLaunchEndless(): void {
+    this.launchEndless.emit();
   }
 }

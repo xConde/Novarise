@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { MapNode, NodeMap, NodeType } from '../models/node-map.model';
 import {
   CAMPAIGN_MAP_TIERS,
+  EXPECTED_EVENT_NODES_PER_ACT,
   NODE_MAP_CONFIG,
   SeededRng,
   createSeededRng,
@@ -177,8 +178,14 @@ export class NodeMapGeneratorService {
     // Redistribute elite weight to combat when suppressed
     const combatWeight = w.combat + (eliteAllowed ? 0 : (w.elite + eliteSpawnBonus));
 
-    // Suppress event nodes once the reduction budget is exhausted
-    const eventBudgetExceeded = eventNodeReduction > 0 && eventNodesPlaced >= (totalRows - eventNodeReduction);
+    // Suppress event nodes once the A14 reduction budget is exhausted.
+    // Without reduction the expected count is EXPECTED_EVENT_NODES_PER_ACT; with
+    // eventNodeReduction active the cap is lowered by that amount so the player
+    // encounters fewer events. The cap is absolute (not relative to totalRows)
+    // so it is reachable in practice.
+    const eventBudgetExceeded =
+      eventNodeReduction > 0 &&
+      eventNodesPlaced >= (EXPECTED_EVENT_NODES_PER_ACT - eventNodeReduction);
     const eventWeight = eventBudgetExceeded ? 0 : w.event;
 
     // On the last content row (immediately before the boss), REST and SHOP are

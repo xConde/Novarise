@@ -135,7 +135,7 @@ describe('CheckpointRestoreCoordinatorService', () => {
     challengeTrackingSpy = jasmine.createSpyObj<ChallengeTrackingService>(
       'ChallengeTrackingService', ['restoreFromCheckpoint'],
     );
-    gameSessionSpy = jasmine.createSpyObj<GameSessionService>('GameSessionService', ['resetAllServices']);
+    gameSessionSpy = jasmine.createSpyObj<GameSessionService>('GameSessionService', ['resetAllServices', 'cleanupScene']);
     meshRegistrySpy = jasmine.createSpyObj<BoardMeshRegistryService>(
       'BoardMeshRegistryService',
       ['translateTileMesh', 'rebuildTowerChildrenArray'],
@@ -230,16 +230,28 @@ describe('CheckpointRestoreCoordinatorService', () => {
     expect(spawnPreviewSpy.refreshFor).not.toHaveBeenCalled();
   });
 
-  it('falls back via gameSession reset + onFallback when restore throws', () => {
+  it('falls back via cleanupScene + gameSession reset + onFallback when restore throws', () => {
     encounterCheckpointSpy.loadCheckpoint.and.returnValue(makeCheckpoint());
     pathMutationSpy.restore.and.throwError('boom');
     spyOn(console, 'error');
     const onFallback = jasmine.createSpy('onFallback');
     service.restore({ onFallback });
+    expect(gameSessionSpy.cleanupScene).toHaveBeenCalled();
     expect(gameSessionSpy.resetAllServices).toHaveBeenCalled();
     expect(onFallback).toHaveBeenCalledTimes(1);
     expect(runSpy.isRestoringCheckpoint).toBe(false);
     expect(encounterCheckpointSpy.clearCheckpoint).toHaveBeenCalled();
+  });
+
+  it('calls cleanupScene before resetAllServices in the error path (ordering guard)', () => {
+    encounterCheckpointSpy.loadCheckpoint.and.returnValue(makeCheckpoint());
+    pathMutationSpy.restore.and.throwError('boom');
+    spyOn(console, 'error');
+    const order: string[] = [];
+    gameSessionSpy.cleanupScene.and.callFake(() => { order.push('cleanupScene'); });
+    gameSessionSpy.resetAllServices.and.callFake(() => { order.push('resetAllServices'); });
+    service.restore({ onFallback: () => {} });
+    expect(order).toEqual(['cleanupScene', 'resetAllServices']);
   });
 
   it('rebuilds tower graph and restores graph overlay (Step 4.5 + 4.6)', () => {

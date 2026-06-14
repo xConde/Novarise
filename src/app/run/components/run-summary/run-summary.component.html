@@ -11,7 +11,7 @@
   <!-- Hero block: title + dominant final-score figure -->
   <header class="run-summary__hero">
     <h1 class="run-summary__title">
-      {{ isVictory ? 'Ascent Complete' : 'Run Failed' }}
+      {{ isVictory ? 'Run Complete' : 'Run Failed' }}
     </h1>
     <span
       *ngIf="ascensionLabel"
@@ -115,6 +115,15 @@
       (click)="onStartNewRun()"
     >
       New Run
+    </button>
+    <button
+      *ngIf="isVictory"
+      class="run-summary__btn run-summary__btn--endless"
+      type="button"
+      (click)="onLaunchEndless()"
+      title="Keep going — enemies scale indefinitely from where you left off"
+    >
+      Endless Mode
     </button>
     <button
       class="run-summary__btn run-summary__btn--ghost"

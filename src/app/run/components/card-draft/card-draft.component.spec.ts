@@ -45,6 +45,25 @@ describe('CardDraftComponent', () => {
     expect(component.resolvedCards[0].definition).toBeTruthy();
   });
 
+  it('resolvedCards returns a stable reference while cardChoices is unchanged (no per-CD re-create)', () => {
+    // Memoization is what stops the reward-screen flicker: repeated access must
+    // not allocate a new array, or the *ngFor would rebuild every card's DOM
+    // (replaying the entrance animation) on every change-detection pass.
+    expect(component.resolvedCards).toBe(component.resolvedCards);
+  });
+
+  it('resolvedCards recomputes when cardChoices changes to a new array', () => {
+    const first = component.resolvedCards;
+    component.cardChoices = [{ type: 'card', cardId: CardId.DESPERATE_MEASURES }];
+    expect(component.resolvedCards).not.toBe(first);
+    expect(component.resolvedCards.length).toBe(1);
+  });
+
+  it('trackByCardId returns the card id', () => {
+    const item = component.resolvedCards[0];
+    expect(component.trackByCardId(0, item)).toBe(item.reward.cardId);
+  });
+
   it('displays card names in the DOM', () => {
     const el = fixture.nativeElement as HTMLElement;
     // GOLD_RUSH card should show its name

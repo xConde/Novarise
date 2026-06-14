@@ -5,7 +5,7 @@
 
   <div class="card-draft__list" role="list">
     <button
-      *ngFor="let item of resolvedCards; let i = index"
+      *ngFor="let item of resolvedCards; let i = index; trackBy: trackByCardId"
       class="card-draft__card"
       [class]="'card-draft__card ' + getTypeClass(item.definition.type) + ' ' + getRarityClass(item.definition.rarity) + ' ' + getFrameClass(item.definition.type)"
       [class.card-draft__card--selected]="selectedCard === item.reward.cardId"

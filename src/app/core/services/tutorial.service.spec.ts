@@ -699,4 +699,18 @@ describe('TutorialService', () => {
       });
     });
   });
+
+  describe('SELECT_TOWER tip content', () => {
+    it('SELECT_TOWER message mentions that gold does not reset between encounters', () => {
+      const tip = service.getTip(TutorialStep.SELECT_TOWER);
+      // The message should explain run-persistent gold so new players understand
+      // the unified gold model (gold carries forward into shops, rest sites, next fight).
+      expect(tip.message).toContain('does NOT reset between encounters');
+    });
+
+    it('SELECT_TOWER tip targets the energy UI element', () => {
+      const tip = service.getTip(TutorialStep.SELECT_TOWER);
+      expect(tip.targetSelector).toBe('.card-hand__energy');
+    });
+  });
 });

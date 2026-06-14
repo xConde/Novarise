@@ -18,8 +18,18 @@ export class EventScreenComponent {
    */
   @Input() resolvedGamble: { goldDelta: number; livesDelta: number } | null = null;
 
+  /**
+   * Display name of the card that will be removed when the outcome has removeCard.
+   * Supplied by the parent (RunComponent) after it calls
+   * RunService.previewEventCardRemoval(). Null when no card removal is pending.
+   */
+  @Input() removedCardName: string | null = null;
+
   /** Emitted when the player picks a choice that has a gamble field, before confirming. */
   @Output() previewGamble = new EventEmitter<number>();
+
+  /** Emitted when the player picks a choice that has a removeCard outcome, before confirming. */
+  @Output() previewCardRemoval = new EventEmitter<number>();
 
   @Output() choiceMade = new EventEmitter<number>();
 
@@ -56,6 +66,9 @@ export class EventScreenComponent {
     const outcome = this.event.choices[index]?.outcome;
     if (outcome?.gamble) {
       this.previewGamble.emit(index);
+    }
+    if (outcome?.removeCard) {
+      this.previewCardRemoval.emit(index);
     }
   }
 

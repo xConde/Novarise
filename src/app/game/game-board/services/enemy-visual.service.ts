@@ -1,12 +1,14 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { Enemy, ENEMY_STATS } from '../models/enemy.model';
+import { Enemy, ENEMY_STATS, EnemyType } from '../models/enemy.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import {
   STATUS_EFFECT_VISUALS,
   STATUS_EFFECT_VISUAL_CONFIG,
   STATUS_EFFECT_PRIORITY,
   ENEMY_ANIM_CONFIG,
+  NOVA_SOVEREIGN_ORB_SPIN_SPEEDS,
+  NOVA_SOVEREIGN_ENRAGE_VISUAL,
 } from '../constants/effects.constants';
 import { resolveEnemyColor, resolveStatusEmissive } from '../constants/colorblind.constants';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
@@ -73,7 +75,8 @@ export class EnemyVisualService {
         }
       }
 
-      // No effects — restore base emissive
+      // No active status effects — restore base emissive, then apply any boss
+      // phase overrides (e.g. NOVA_SOVEREIGN enrage) on top.
       const stats = ENEMY_STATS[enemy.type];
       const baseIntensity = enemy.isMiniSwarm
         ? ENEMY_VISUAL_CONFIG.miniSwarmEmissive
@@ -82,6 +85,20 @@ export class EnemyVisualService {
       mat.emissive.setHex(baseColor);
       mat.emissiveIntensity = baseIntensity;
       this.tintChildMeshes(enemy.mesh, baseColor, baseIntensity);
+
+      // Enrage phase-shift: NOVA_SOVEREIGN body glows orange-red once health
+      // crosses the enrage threshold.  Applied after base restore so the
+      // orange-red persists at idle but is suppressed when a status tint is
+      // active (those paths return early above).
+      if (enemy.type === EnemyType.NOVA_SOVEREIGN && enemy.isEnraged) {
+        mat.emissive.setHex(NOVA_SOVEREIGN_ENRAGE_VISUAL.emissiveColor);
+        mat.emissiveIntensity = NOVA_SOVEREIGN_ENRAGE_VISUAL.emissiveIntensity;
+        this.tintChildMeshes(
+          enemy.mesh,
+          NOVA_SOVEREIGN_ENRAGE_VISUAL.emissiveColor,
+          NOVA_SOVEREIGN_ENRAGE_VISUAL.emissiveIntensity,
+        );
+      }
     });
   }
 
@@ -182,15 +199,32 @@ export class EnemyVisualService {
   }
 
   /**
-   * Spin boss crowns for visual flair. Called once per frame.
+   * Animate boss idle elements each frame.
+   *
+   * - All bosses with a crown torus: spin it on Z.
+   * - NOVA_SOVEREIGN: rotate each of the three orbiting shard rings on Y at
+   *   its own speed so they drift apart over time (parallax effect).
    */
   updateEnemyAnimations(enemies: Map<string, Enemy>, deltaTime: number): void {
     enemies.forEach(enemy => {
       if (!enemy.mesh || enemy.health <= 0) return;
       if (enemy.dying) return;
+
+      // Boss crown spin (BOSS, WYRM_ASCENDANT share this userData key)
       const crown = enemy.mesh.userData['bossCrown'] as THREE.Mesh | undefined;
       if (crown) {
         crown.rotation.z += ENEMY_ANIM_CONFIG.bossCrownSpinSpeed * deltaTime;
+      }
+
+      // NOVA_SOVEREIGN orbiting shard rings — each ring spins at a distinct
+      // speed so they visually separate over time rather than moving as one.
+      if (enemy.type === EnemyType.NOVA_SOVEREIGN) {
+        for (let i = 0; i < NOVA_SOVEREIGN_ORB_SPIN_SPEEDS.length; i++) {
+          const ring = enemy.mesh.userData[`novaSovereignOrb${i}`] as THREE.Mesh | undefined;
+          if (ring) {
+            ring.rotation.y += NOVA_SOVEREIGN_ORB_SPIN_SPEEDS[i] * deltaTime;
+          }
+        }
       }
     });
   }
@@ -316,8 +350,10 @@ export class EnemyVisualService {
   }
 
   /**
-   * Apply emissive tint to child meshes that have MeshStandardMaterial (e.g., boss crown).
-   * Skips health bar children (MeshBasicMaterial) and shield mesh.
+   * Apply emissive tint to special child meshes that use MeshStandardMaterial.
+   * Handles the boss crown (shared by BOSS/WYRM_ASCENDANT) and the
+   * WYRM_ASCENDANT eye-glow torus so status tints propagate consistently.
+   * Skips health-bar (MeshBasicMaterial) and shield dome children.
    */
   private tintChildMeshes(mesh: THREE.Mesh, color: number, intensity: number): void {
     const crown = mesh.userData['bossCrown'] as THREE.Mesh | undefined;
@@ -326,6 +362,17 @@ export class EnemyVisualService {
       if (crownMat.emissive) {
         crownMat.emissive.setHex(color);
         crownMat.emissiveIntensity = intensity;
+      }
+    }
+
+    // WYRM_ASCENDANT eye-glow torus shares the same emissive system as the
+    // crown so status tints and the base-restore path both propagate to it.
+    const eyeGlow = mesh.userData['wyrmEyeGlow'] as THREE.Mesh | undefined;
+    if (eyeGlow) {
+      const eyeMat = eyeGlow.material as THREE.MeshStandardMaterial;
+      if (eyeMat.emissive) {
+        eyeMat.emissive.setHex(color);
+        eyeMat.emissiveIntensity = intensity;
       }
     }
   }

@@ -33,7 +33,7 @@ import { TowerGraphService } from './tower-graph.service';
 import { BossBannerService } from './boss-banner.service';
 import { EnemyType } from '../models/enemy.model';
 import { getWaveEnemyTypes } from '../models/wave.model';
-import { BOSS_BANNER_COPY } from '../constants/ui.constants';
+import { BOSS_BANNER_COPY, UI_CONFIG } from '../constants/ui.constants';
 import { MusicService } from '../../../core/services/music.service';
 
 /** Callbacks that WaveCombatFacadeService calls back into the component for concerns
@@ -209,14 +209,20 @@ export class WaveCombatFacadeService {
     if (!waveDef) return;
 
     const types = getWaveEnemyTypes(waveDef);
-    const hasBoss = types.has(EnemyType.BOSS) || types.has(EnemyType.NOVA_SOVEREIGN);
+    const hasBoss = types.has(EnemyType.BOSS)
+      || types.has(EnemyType.NOVA_SOVEREIGN)
+      || types.has(EnemyType.WYRM_ASCENDANT);
     if (!hasBoss) return;
 
-    const copy = types.has(EnemyType.NOVA_SOVEREIGN)
+    const entry = types.has(EnemyType.NOVA_SOVEREIGN)
       ? BOSS_BANNER_COPY.novaSovereign
-      : BOSS_BANNER_COPY.generic;
-
-    this.bossBanner.flash(copy);
+      : types.has(EnemyType.WYRM_ASCENDANT)
+        ? BOSS_BANNER_COPY.wyrmAscendant
+        : BOSS_BANNER_COPY.generic;
+    const durationMs = entry.subtext
+      ? UI_CONFIG.bossBannerExtendedMs
+      : UI_CONFIG.bossBannerVisibleMs;
+    this.bossBanner.flash(entry.headline, { subtext: entry.subtext, durationMs });
     this.audioService.playBossRoar();
     this.screenShakeService.trigger(0.25, 0.6);
     this.musicService.playTheme('boss');

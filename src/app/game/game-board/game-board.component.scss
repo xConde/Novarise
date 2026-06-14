@@ -399,14 +399,18 @@
     .enemy-dot[data-type='basic']     { background: #dd6600; box-shadow: none; border-radius: 50%; }
     .enemy-dot[data-type='fast']      { background: #f5dd00; box-shadow: none; border-radius: 2px; transform: rotate(45deg); }
     .enemy-dot[data-type='heavy']     { background: #2244cc; box-shadow: none; border-radius: 2px; }
-    .enemy-dot[data-type='swift']     { background: #f0f0f0; box-shadow: none; border-radius: 50%; }
+    // swift: diamond (rotated square) — distinct from circle types; matches the
+    // fast/titan visual language (speed) without reusing the same color.
+    .enemy-dot[data-type='swift']     { background: #f0f0f0; box-shadow: none; border-radius: 2px; transform: rotate(45deg); }
     .enemy-dot[data-type='boss']      { background: #0099ee; box-shadow: none; clip-path: polygon(50% 0%, 100% 100%, 0% 100%); }
     .enemy-dot[data-type='shielded']  { background: #6699ff; box-shadow: none; border-radius: 1px; width: 0.7rem; }
     .enemy-dot[data-type='swarm']     { background: #ffcc00; box-shadow: none; border-radius: 50%; }
     .enemy-dot[data-type='flying']    { background: #aaccff; box-shadow: none; border-radius: 3px; }
     .enemy-dot[data-type='miner']     { background: #bb7722; box-shadow: none; border-radius: 50%; }
     .enemy-dot[data-type='unshakeable'] { background: #888888; box-shadow: none; border-radius: 2px; }
-    .enemy-dot[data-type='veinseeker']  { background: #cc9966; box-shadow: none; border-radius: 50%; }
+    // veinseeker: triangle (clip-path) — high-threat shape matching boss/wyrm/nova;
+    // distinguishes it from the circle group (basic/swarm/miner).
+    .enemy-dot[data-type='veinseeker']  { background: #cc9966; box-shadow: none; clip-path: polygon(50% 0%, 100% 100%, 0% 100%); border-radius: 0; }
     .enemy-dot[data-type='glider']      { background: #ddeeff; box-shadow: none; border-radius: 3px; }
     .enemy-dot[data-type='titan']       { background: #ff8822; box-shadow: none; border-radius: 2px; transform: rotate(45deg); }
     .enemy-dot[data-type='wyrm_ascendant']  { background: #1133aa; box-shadow: none; clip-path: polygon(50% 0%, 100% 100%, 0% 100%); }
@@ -722,6 +726,11 @@
   }
 }
 
+body.reduce-motion .board-container .turn-start-banner {
+  animation: none;
+  opacity: 1;
+}
+
 body.reduce-motion .board-container .path-blocked-warning { animation: none; }
 body.reduce-motion .board-container .context-lost-hint { animation: none; }
 body.reduce-motion .board-container .end-turn-btn--stuck { animation: none; }
@@ -754,6 +763,17 @@ body.reduce-motion .board-container .end-turn-btn--stuck { animation: none; }
     0 0 3rem rgba(255, 100, 0, 0.2);
   white-space: nowrap;
   animation: boss-banner-flash 2.8s ease-out forwards;
+
+  .boss-banner-subtext {
+    margin-top: var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    color: rgba(255, 200, 0, 0.65);
+    text-transform: none;
+    white-space: normal;
+    text-align: center;
+  }
 }
 
 @keyframes boss-banner-flash {

@@ -109,6 +109,10 @@
   }
 }
 
+body.reduce-motion .board-container .hud-wave-status--critical {
+  animation: none;
+}
+
 .board-container .hud-wave-status .wave-template-badge {
   font-size: 0.6rem;
   color: var(--theme-purple);

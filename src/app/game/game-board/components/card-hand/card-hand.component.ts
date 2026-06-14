@@ -534,11 +534,15 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
     }
   }
 
-  // Sprint 39 — true when the player has no energy and no playable cards
+  /**
+   * True when the player has cards in hand but none are currently playable.
+   * Triggers the End Turn nudge pulse so the player is cued to advance the turn.
+   * Fires on energy exhaustion AND on gold exhaustion (tower cards blocked by
+   * insufficient gold — the most common case after the unified run-gold model).
+   */
   get isHandStuck(): boolean {
     if (!this.energy || !this.handCards.length) return false;
-    const anyPlayable = this.handCards.some(c => c.canPlay);
-    return !anyPlayable && this.energy.current === 0;
+    return !this.handCards.some(c => c.canPlay);
   }
 
   /**

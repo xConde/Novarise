@@ -2185,6 +2185,47 @@ describe('GameBoardComponent', () => {
 
       expect(challengeTrackingSpy.recordTowerSold).toHaveBeenCalled();
     });
+
+    it('sellTower shows a refund notification with the gold amount returned', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.startWave();
+
+      const towerCombatService = fixture.debugElement.injector.get(TowerCombatService);
+      const mockSoldTower: PlacedTower = {
+        id: '2-2',
+        type: TowerType.BASIC,
+        level: 1,
+        row: 2,
+        col: 2,
+        kills: 0,
+        totalInvested: 100,
+        mesh: null,
+        targetingMode: TargetingMode.NEAREST,
+      };
+      spyOn(towerCombatService, 'unregisterTower').and.returnValue(mockSoldTower);
+
+      const gameBoardSvc = fixture.debugElement.injector.get(GameBoardService);
+      spyOn(gameBoardSvc, 'removeTower');
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'repathAffectedEnemies');
+      spyOn(component as unknown as TestableGameBoardComponent, 'deselectTower');
+      spyOn(component as unknown as TestableGameBoardComponent, 'updateTileHighlights');
+      spyOn(component as unknown as TestableGameBoardComponent, 'refreshPathOverlay');
+
+      const notificationService = fixture.debugElement.injector.get(GameNotificationService);
+      const showSpy = spyOn(notificationService, 'show');
+
+      (component as unknown as TestableGameBoardComponent).selectedTowerInfo = mockSoldTower;
+      component.sellConfirmPending = true;
+
+      component.sellTower();
+
+      // A notification should have been shown with the refund amount in its body.
+      expect(showSpy).toHaveBeenCalled();
+      const args = showSpy.calls.mostRecent().args;
+      expect(args[1]).toBe('Tower sold');
+      expect(args[2]).toContain('g');
+    });
   });
 
   describe('toggleModifier — state divergence guard', () => {

@@ -599,7 +599,10 @@ describe('WaveCombatFacadeService', () => {
         gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 2, phase: GamePhase.COMBAT }));
       });
       service.startWave();
-      expect(bossBannerService.flash).toHaveBeenCalledWith('⚠ BOSS INCOMING');
+      expect(bossBannerService.flash).toHaveBeenCalledWith(
+        '⚠ BOSS INCOMING',
+        jasmine.objectContaining({ subtext: '' }),
+      );
       expect(audioService.playBossRoar).toHaveBeenCalled();
     });
 
@@ -614,7 +617,10 @@ describe('WaveCombatFacadeService', () => {
         gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 1, phase: GamePhase.COMBAT }));
       });
       service.startWave();
-      expect(bossBannerService.flash).toHaveBeenCalledWith('⚠ THE SOVEREIGN MANIFESTS');
+      expect(bossBannerService.flash).toHaveBeenCalledWith(
+        '⚠ THE SOVEREIGN MANIFESTS',
+        jasmine.objectContaining({ subtext: jasmine.any(String) }),
+      );
     });
 
     it('triggers screen shake when a boss wave starts', () => {
@@ -659,6 +665,34 @@ describe('WaveCombatFacadeService', () => {
       });
       service.startWave();
       expect(musicService.playTheme).not.toHaveBeenCalledWith('boss');
+    });
+
+    it('flashes boss banner when wave has WYRM_ASCENDANT type', () => {
+      runService.getCurrentEncounter.and.returnValue(
+        makeEncounterWithWaves([
+          makeWaveWithEnemies(EnemyType.WYRM_ASCENDANT),
+        ]) as never
+      );
+      gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 1, phase: GamePhase.INTERMISSION }));
+      gameStateService.startWave.and.callFake(() => {
+        gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 1, phase: GamePhase.COMBAT }));
+      });
+      service.startWave();
+      // Banner must fire (WYRM_ASCENDANT now counts as a boss wave).
+      expect(bossBannerService.flash).toHaveBeenCalled();
+      expect(audioService.playBossRoar).toHaveBeenCalled();
+    });
+
+    it('triggers boss music when WYRM_ASCENDANT wave starts', () => {
+      runService.getCurrentEncounter.and.returnValue(
+        makeEncounterWithWaves([makeWaveWithEnemies(EnemyType.WYRM_ASCENDANT)]) as never
+      );
+      gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 1, phase: GamePhase.INTERMISSION }));
+      gameStateService.startWave.and.callFake(() => {
+        gameStateService.getState.and.callFake(() => ({ ...defaultState, wave: 1, phase: GamePhase.COMBAT }));
+      });
+      service.startWave();
+      expect(musicService.playTheme).toHaveBeenCalledWith('boss');
     });
   });
 

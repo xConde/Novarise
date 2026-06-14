@@ -23,6 +23,12 @@ export interface EncounterConfig {
   readonly goldReward: number;
   readonly isElite: boolean;
   readonly isBoss: boolean;
+  /**
+   * When true, EncounterBootstrapService enables WaveService and GameStateService
+   * endless mode before the first wave starts. Wave generation continues past the
+   * scripted wave list indefinitely. Optional — absent means false.
+   */
+  readonly isEndless?: boolean;
 }
 
 /** Reward offered after a combat encounter. */

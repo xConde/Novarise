@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { NodeMapGeneratorService } from './node-map-generator.service';
 import { NodeType } from '../models/node-map.model';
-import { NODE_MAP_CONFIG } from '../constants/run.constants';
+import { EXPECTED_EVENT_NODES_PER_ACT, NODE_MAP_CONFIG } from '../constants/run.constants';
 import { QUALITATIVE_ASCENSION_VALUES } from '../models/ascension.model';
 
 describe('NodeMapGeneratorService', () => {
@@ -184,20 +184,24 @@ describe('NodeMapGeneratorService', () => {
       expect(eventCountA14).toBeLessThanOrEqual(eventCountA13);
     });
 
-    it('A14 EVENT_NODE_REDUCTION reduces event count by exactly eventNodeReduction (deterministic)', () => {
-      // Seed 203 deterministically produces 10 EVENT nodes at A0 (no reduction)
-      // and 9 EVENT nodes at A14 (eventNodeReduction = 1), verified via the
-      // mulberry32 RNG used by NodeMapGeneratorService.
-      const DETERMINISTIC_SEED = 203;
-      const BASELINE_EVENT_COUNT = 10; // events at A0 for seed 203
-      const mapBaseline = service.generateActMap(0, DETERMINISTIC_SEED, 0);
-      const mapA14 = service.generateActMap(0, DETERMINISTIC_SEED, 14);
-      const baselineEvents = mapBaseline.nodes.filter(n => n.type === NodeType.EVENT).length;
-      const a14Events = mapA14.nodes.filter(n => n.type === NodeType.EVENT).length;
-      // Confirm seed still produces the known baseline — if this fails, the RNG changed
-      expect(baselineEvents).toBe(BASELINE_EVENT_COUNT);
-      // A14 must be exactly baseline minus the reduction constant
-      expect(a14Events).toBe(BASELINE_EVENT_COUNT - QUALITATIVE_ASCENSION_VALUES.eventNodeReduction);
+    it('A14 EVENT_NODE_REDUCTION caps event nodes to (EXPECTED_EVENT_NODES_PER_ACT - reduction)', () => {
+      // With EXPECTED_EVENT_NODES_PER_ACT=4 and eventNodeReduction=1 (A14), the cap
+      // is 3 event nodes per act. A0 has no cap and can produce significantly more.
+      // This verifies the cap is enforced, not just that count decreases by 1.
+      const seeds = [203, 42, 99, 500, 1000, 2000];
+      for (const seed of seeds) {
+        const mapA0 = service.generateActMap(0, seed, 0);
+        const mapA14 = service.generateActMap(0, seed, 14);
+        const a0Events = mapA0.nodes.filter(n => n.type === NodeType.EVENT).length;
+        const a14Events = mapA14.nodes.filter(n => n.type === NodeType.EVENT).length;
+        // A0 is uncapped — typically produces several events
+        // A14 must be at most (EXPECTED_EVENT_NODES_PER_ACT - eventNodeReduction)
+        const expectedCap = EXPECTED_EVENT_NODES_PER_ACT - QUALITATIVE_ASCENSION_VALUES.eventNodeReduction;
+        expect(a14Events).toBeLessThanOrEqual(expectedCap,
+          `seed ${seed}: A14 should cap at ${expectedCap} events, got ${a14Events}`);
+        // A0 should typically produce more events than the cap
+        expect(a0Events).toBeGreaterThanOrEqual(a14Events);
+      }
     });
   });
 });

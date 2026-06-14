@@ -34,8 +34,10 @@ const CATEGORY_LABELS: Record<AchievementCategory, string> = {
 // Endless mode does not exist in run mode — survivor/endless_30/endless_50/endless_100
 // are dev/test-only and cannot be earned. Three-star scoring (three_star_5/three_star_all)
 // requires a per-map star system that is also unreachable in run mode.
-// These ids are retained in the achievement model for data-migration safety but are
-// excluded from all display surfaces here.
+// Campaign-specific achievements (act_1_complete/act_2_complete/act_3_complete/
+// campaign_champion/star_collector) require per-map campaign progression that no longer
+// exists in the unified run mode. All of these ids are retained in the achievement model
+// for data-migration safety but are excluded from all display surfaces here.
 const DEAD_ACHIEVEMENT_IDS = new Set<string>([
   'survivor',
   'endless_30',
@@ -43,6 +45,11 @@ const DEAD_ACHIEVEMENT_IDS = new Set<string>([
   'endless_100',
   'three_star_5',
   'three_star_all',
+  'act_1_complete',
+  'act_2_complete',
+  'act_3_complete',
+  'campaign_champion',
+  'star_collector',
 ]);
 
 /** Achievements reachable in run mode — excludes endless and three-star campaign entries. */
@@ -50,7 +57,9 @@ export const DISPLAY_ACHIEVEMENTS: Achievement[] = ACHIEVEMENTS.filter(
   (a) => !DEAD_ACHIEVEMENT_IDS.has(a.id)
 );
 
-const CATEGORY_ORDER: AchievementCategory[] = ['campaign', 'combat', 'challenge'];
+// The 'campaign' category is excluded because all campaign achievements are dead
+// (campaign progression does not exist in run mode). Only non-empty categories are shown.
+const CATEGORY_ORDER: AchievementCategory[] = ['combat', 'challenge'];
 
 const ALL_TOWER_TYPES: TowerType[] = [
   TowerType.BASIC,
@@ -61,14 +70,26 @@ const ALL_TOWER_TYPES: TowerType[] = [
   TowerType.MORTAR,
 ];
 
-const RANK_THRESHOLDS: { min: number; title: string }[] = [
-  { min: 25, title: 'Novarise' },
-  { min: 19, title: 'Champion' },
-  { min: 13, title: 'Elite' },
-  { min: 7,  title: 'Commander' },
-  { min: 3,  title: 'Defender' },
-  { min: 0,  title: 'Recruit' },
-];
+/**
+ * Rank thresholds. The top rank's minimum equals DISPLAY_ACHIEVEMENTS.length
+ * so 100% completion always reaches 'Novarise'. Each lower tier is a distinct
+ * fraction of the total, ensured to be strictly decreasing to avoid ties.
+ */
+function buildRankThresholds(total: number): { min: number; title: string }[] {
+  // Compute strictly-decreasing thresholds to avoid two ranks sharing the same min.
+  const champion = Math.max(Math.floor(total * 0.75), 1);
+  const elite    = Math.max(Math.floor(total * 0.5),  1);
+  const commander = Math.max(Math.floor(total * 0.3), 1);
+  const defender  = Math.max(Math.floor(total * 0.2),  1);
+  return [
+    { min: total,       title: 'Novarise' },
+    { min: champion,    title: 'Champion' },
+    { min: elite,       title: 'Elite' },
+    { min: commander,   title: 'Commander' },
+    { min: defender,    title: 'Defender' },
+    { min: 0,           title: 'Recruit' },
+  ];
+}
 
 @Component({
   selector: 'app-profile',
@@ -155,7 +176,7 @@ export class ProfileComponent implements OnInit {
 
   get rankTitle(): string {
     const count = this.unlockedCount;
-    for (const threshold of RANK_THRESHOLDS) {
+    for (const threshold of buildRankThresholds(DISPLAY_ACHIEVEMENTS.length)) {
       if (count >= threshold.min) {
         return threshold.title;
       }

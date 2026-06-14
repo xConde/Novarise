@@ -92,6 +92,30 @@ describe('EventScreenComponent', () => {
       expect(spy).not.toHaveBeenCalled();
     });
 
+    it('emits previewCardRemoval with the choice index for removeCard outcomes', () => {
+      component.event = makeEvent({
+        choices: [
+          {
+            label: 'Remove',
+            description: 'Remove a card.',
+            outcome: makeOutcome({ removeCard: true }),
+          },
+        ],
+      });
+
+      const spy = jasmine.createSpy('previewCardRemoval');
+      component.previewCardRemoval.subscribe(spy);
+      component.makeChoice(0);
+      expect(spy).toHaveBeenCalledWith(0);
+    });
+
+    it('does not emit previewCardRemoval for non-removeCard outcomes', () => {
+      const spy = jasmine.createSpy('previewCardRemoval');
+      component.previewCardRemoval.subscribe(spy);
+      component.makeChoice(0); // goldDelta choice — no removeCard
+      expect(spy).not.toHaveBeenCalled();
+    });
+
     it('emits previewGamble with the choice index for gamble outcomes', () => {
       component.event = makeEvent({
         choices: [
@@ -244,6 +268,17 @@ describe('EventScreenComponent', () => {
 
     it('falls back to the raw id for an unknown item type', () => {
       expect(component.getItemName('UNKNOWN_ITEM')).toBe('UNKNOWN_ITEM');
+    });
+  });
+
+  describe('removedCardName input', () => {
+    it('defaults to null', () => {
+      expect(component.removedCardName).toBeNull();
+    });
+
+    it('can be set to a card name string', () => {
+      component.removedCardName = 'Pip · Basic';
+      expect(component.removedCardName).toBe('Pip · Basic');
     });
   });
 

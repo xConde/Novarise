@@ -1096,6 +1096,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.audioService.playTowerSell();
     this.gameStatsService.recordTowerSold();
+    this.notificationService.show(
+      NotificationType.INFO,
+      'Tower sold',
+      `Refunded +${result.refundAmount}g`,
+    );
 
     // Remove mesh via lifecycle service with animated=true so the tower
     // plays a shrink-and-fade before disposal (see SELL_ANIM_CONFIG).

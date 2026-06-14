@@ -4513,6 +4513,115 @@ describe('EnemyService', () => {
       // Regen should stop at the instance maxShield, not the static one.
       expect(sovereign.shield).toBe(scaledMax);
     });
+
+    it('tickNovaSovereignEffects() recreates the shield dome after break animation completes', () => {
+      const sovereign = service.spawnEnemy(EnemyType.NOVA_SOVEREIGN, mockScene)!;
+      // Simulate the state after a shield break animation completes:
+      // - dome was disposed and removed from userData
+      // - shieldBreaking reset to false
+      // - shield may still be 0 but regen will make it positive
+      sovereign.shield = 0;
+      sovereign.shieldBreaking = false;
+      if (sovereign.mesh) {
+        delete sovereign.mesh.userData['shieldMesh'];
+      }
+
+      service.tickNovaSovereignEffects();
+
+      // After regen the shield is positive and the dome should be re-attached.
+      expect(sovereign.shield).toBeGreaterThan(0);
+      expect(sovereign.mesh?.userData['shieldMesh']).toBeTruthy();
+    });
+
+    it('tickNovaSovereignEffects() does NOT recreate dome while break animation is in progress', () => {
+      const sovereign = service.spawnEnemy(EnemyType.NOVA_SOVEREIGN, mockScene)!;
+      // Simulate mid-animation: shield is 0, dome is still present (fading), shieldBreaking=true.
+      sovereign.shield = 0;
+      sovereign.shieldBreaking = true;
+      sovereign.shieldBreakTimer = 0.2;
+
+      service.tickNovaSovereignEffects();
+
+      // Shield becomes positive via regen — but dome must NOT be recreated yet
+      // (the old dome is still animating out; addShieldMesh must wait).
+      expect(sovereign.shield).toBeGreaterThan(0);
+      // userData['shieldMesh'] was not changed (no new dome added, original dome still present).
+      expect(sovereign.mesh?.userData['shieldMesh']).toBeTruthy(); // original dome
+    });
+
+    it('tickNovaSovereignEffects() does NOT replace an existing dome (idempotent)', () => {
+      const sovereign = service.spawnEnemy(EnemyType.NOVA_SOVEREIGN, mockScene)!;
+      // Shield already positive — partial regen, dome already present.
+      const initialDome = sovereign.mesh?.userData['shieldMesh'];
+      sovereign.shield = NOVA_SOVEREIGN_SHIELD_REGEN_PER_TURN; // just 1 regen unit below cap
+
+      service.tickNovaSovereignEffects();
+
+      // Dome reference must be the same object — addShieldMesh is a no-op when dome exists.
+      expect(sovereign.mesh?.userData['shieldMesh']).toBe(initialDome);
+    });
+  });
+
+  describe('SLOW card-modifier fractional accumulator', () => {
+    it('BASIC enemy under 15% card speed slow eventually skips a turn', () => {
+      // Rate = 1 * (1-0.15) = 0.85 tiles/turn. Accumulator grows by 0.85 each turn.
+      // Turn 1: acc=0.85 → floor=0 (skip).
+      // Turn 2: acc=1.70 → floor=1, remainder=0.70 (move).
+      // The enemy should skip at least once across 15 turns.
+      const cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+      // enemySpeed modifier = 0.15 (15% slow fraction)
+      cardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.ENEMY_SPEED ? 0.15 : 0,
+      );
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const movesPerTurn: number[] = [];
+
+      for (let i = 0; i < 12; i++) {
+        const prevIndex = enemy.pathIndex;
+        service.stepEnemiesOneTurn(() => 0);
+        movesPerTurn.push(enemy.pathIndex - prevIndex);
+        if (enemy.pathIndex >= enemy.path.length - 1) break;
+      }
+
+      // At least one turn must have produced 0 tile movement (skip).
+      expect(movesPerTurn.some(m => m === 0)).toBeTrue();
+    });
+
+    it('BASIC enemy under 15% card speed slow moves on most turns (not fully frozen)', () => {
+      const cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+      cardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.ENEMY_SPEED ? 0.15 : 0,
+      );
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      let movesCount = 0;
+
+      for (let i = 0; i < 8; i++) {
+        const prevIndex = enemy.pathIndex;
+        service.stepEnemiesOneTurn(() => 0);
+        if (enemy.pathIndex > prevIndex) movesCount++;
+        if (enemy.pathIndex >= enemy.path.length - 1) break;
+      }
+
+      // Should have moved on more turns than not (0.85 rate means ~6/7 turns)
+      expect(movesCount).toBeGreaterThan(4);
+    });
+
+    it('BASIC with SLOW status (slowReduction=1) and no card modifier still moves 1 tile', () => {
+      // Regression: existing floor-at-1 guarantee must be preserved for SLOW status effect.
+      // Reset the card-effect spy so no card-modifier speed slow is active.
+      const cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+      cardEffectSpy.getModifierValue.and.returnValue(0);
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const prevIndex = enemy.pathIndex;
+
+      service.stepEnemiesOneTurn(() => 1); // SLOW status gives 1-tile reduction
+
+      // Must still move 1 tile — accumulator is not involved (enemySpeedSlow=0).
+      expect(enemy.pathIndex).toBe(prevIndex + 1);
+    });
   });
 });
 

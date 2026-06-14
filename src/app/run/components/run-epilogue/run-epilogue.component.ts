@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
+import { EpilogueCopy, getEpilogueCopy } from '../../constants/epilogue-copy.constants';
 
 // ── Timing constants ──────────────────────────────────────────────────────────
 /** Delay before the title stage becomes visible (ms). */
@@ -24,6 +25,17 @@ export class RunEpilogueComponent implements OnInit, OnDestroy {
    */
   @Input() unlockedAscensionLevel = 0;
 
+  /**
+   * The `BossPreset.id` of the Act-3 boss that was just defeated.
+   * Selects the matching debrief variant from EPILOGUE_COPY.
+   * Defaults to '' which renders the neutral fallback copy — preserving
+   * the existing appearance when no preset id is supplied.
+   *
+   * CROSS-BATCH CONTRACT: Batch 4 binds [bossPresetId] from run state in
+   * run.component.html. This component only reads it.
+   */
+  @Input() bossPresetId = '';
+
   /** Emitted when the player clicks Continue — parent transitions to 'summary'. */
   @Output() continued = new EventEmitter<void>();
 
@@ -33,9 +45,13 @@ export class RunEpilogueComponent implements OnInit, OnDestroy {
   ascensionVisible = false;
   buttonVisible = false;
 
+  /** Resolved debrief copy for the current bossPresetId. */
+  epilogueCopy: EpilogueCopy = getEpilogueCopy('');
+
   private timeouts: ReturnType<typeof setTimeout>[] = [];
 
   ngOnInit(): void {
+    this.epilogueCopy = getEpilogueCopy(this.bossPresetId);
     this.scheduleReveal();
   }
 

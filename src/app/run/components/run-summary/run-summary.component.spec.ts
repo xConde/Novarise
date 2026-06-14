@@ -70,7 +70,7 @@ describe('RunSummaryComponent', () => {
 
   it('renders victory header for VICTORY status', () => {
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Ascent Complete');
+    expect(el.textContent).toContain('Run Complete');
   });
 
   it('renders defeat header for DEFEAT status', () => {
@@ -264,5 +264,40 @@ describe('RunSummaryComponent', () => {
     const badge = (fixture.nativeElement as HTMLElement).querySelector('.run-summary__ascension-badge');
     expect(badge).not.toBeNull();
     expect(badge?.textContent).toContain('Ascension 3');
+  });
+
+  describe('Endless Mode button', () => {
+    it('is shown on VICTORY', () => {
+      component.runState = makeRunState({ status: RunStatus.VICTORY });
+      fixture.detectChanges();
+      const btn = (fixture.nativeElement as HTMLElement).querySelector('.run-summary__btn--endless');
+      expect(btn).not.toBeNull();
+    });
+
+    it('is hidden on DEFEAT', () => {
+      component.runState = makeRunState({ status: RunStatus.DEFEAT });
+      fixture.detectChanges();
+      const btn = (fixture.nativeElement as HTMLElement).querySelector('.run-summary__btn--endless');
+      expect(btn).toBeNull();
+    });
+
+    it('emits launchEndless when clicked on victory screen', () => {
+      component.runState = makeRunState({ status: RunStatus.VICTORY });
+      fixture.detectChanges();
+      let emitted = false;
+      component.launchEndless.subscribe(() => (emitted = true));
+
+      const btn = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.run-summary__btn--endless');
+      btn?.click();
+
+      expect(emitted).toBeTrue();
+    });
+
+    it('onLaunchEndless() emits launchEndless', () => {
+      let emitted = false;
+      component.launchEndless.subscribe(() => (emitted = true));
+      component.onLaunchEndless();
+      expect(emitted).toBeTrue();
+    });
   });
 });

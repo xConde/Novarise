@@ -143,6 +143,8 @@ describe('RunService', () => {
     encounterService = jasmine.createSpyObj('EncounterService', [
       'prepareEncounter',
       'loadEncounterMap',
+      'getBossPresetId',
+      'getBossPresetName',
     ]);
     relicService = jasmine.createSpyObj('RelicService', [
       'clearRelics',
@@ -164,6 +166,8 @@ describe('RunService', () => {
     nodeMapGenerator.generateActMap.and.returnValue(stubMap);
     encounterService.prepareEncounter.and.returnValue(makeEncounterConfig());
     encounterService.loadEncounterMap.and.stub();
+    encounterService.getBossPresetId.and.returnValue('vanguard_convergence');
+    encounterService.getBossPresetName.and.returnValue('Vanguard Convergence');
     relicService.getAvailableRelics.and.returnValue([]);
     persistence.hasSavedRun.and.returnValue(false);
     persistence.getMaxAscension.and.returnValue(0);
@@ -717,6 +721,121 @@ describe('RunService', () => {
 
     service.resolveEvent(0);
     expect(deckService.getAllCards().length).toBe(cardsBefore);
+  }));
+
+  it('resolveEvent() with removeCard returns the removed card name', fakeAsync(() => {
+    service.startNewRun();
+    service.selectNode('node_1_0');
+
+    svc.currentEvent = {
+      id: 'card_purifier',
+      title: 'The Purifier',
+      description: 'Test',
+      choices: [
+        {
+          label: 'Remove a card',
+          description: 'Remove one card.',
+          outcome: { goldDelta: 0, livesDelta: 0, removeCard: true, description: 'Purged.' },
+        },
+      ],
+    };
+
+    const removedName = service.resolveEvent(0);
+    // The deck has starter cards — any of them may be selected, but the name must be a string
+    expect(typeof removedName).toBe('string');
+    expect((removedName as string).length).toBeGreaterThan(0);
+  }));
+
+  it('resolveEvent() without removeCard returns null', fakeAsync(() => {
+    service.startNewRun();
+    service.selectNode('node_1_0');
+
+    svc.currentEvent = {
+      id: 'test_event',
+      title: 'Test',
+      description: 'Test',
+      choices: [
+        {
+          label: 'No-op',
+          description: 'Nothing happens.',
+          outcome: { goldDelta: 0, livesDelta: 0, description: 'OK.' },
+        },
+      ],
+    };
+
+    const result = service.resolveEvent(0);
+    expect(result).toBeNull();
+  }));
+
+  it('resolveEvent() sets status to DEFEAT when livesDelta would drain all lives', fakeAsync(() => {
+    service.startNewRun();
+    service.selectNode('node_1_0');
+
+    // Use a livesDelta large enough to drain starting lives (DEFAULT_RUN_CONFIG.startingLives)
+    const livesToDrain = -(DEFAULT_RUN_CONFIG.startingLives + 1);
+
+    svc.currentEvent = {
+      id: 'cursed_idol_reckoning',
+      title: 'Cursed Idol',
+      description: 'Test',
+      choices: [
+        {
+          label: 'Accept',
+          description: 'Accept the curse.',
+          outcome: { goldDelta: 0, livesDelta: livesToDrain, description: 'You succumb.' },
+        },
+      ],
+    };
+
+    service.resolveEvent(0);
+    expect(service.runState!.status).toBe(RunStatus.DEFEAT);
+    expect(service.runState!.lives).toBe(0);
+  }));
+
+  it('previewEventCardRemoval() returns card name and stashes for resolveEvent()', fakeAsync(() => {
+    service.startNewRun();
+    service.selectNode('node_1_0');
+
+    svc.currentEvent = {
+      id: 'card_purifier',
+      title: 'The Purifier',
+      description: 'Test',
+      choices: [
+        {
+          label: 'Remove a card',
+          description: 'Remove one card.',
+          outcome: { goldDelta: 0, livesDelta: 0, removeCard: true, description: 'Purged.' },
+        },
+      ],
+    };
+
+    const preview = service.previewEventCardRemoval(0);
+    expect(typeof preview).toBe('string');
+    expect((preview as string).length).toBeGreaterThan(0);
+
+    // resolveEvent must reuse the stash — same card name returned
+    const resolved = service.resolveEvent(0);
+    expect(resolved).toBe(preview);
+  }));
+
+  it('previewEventCardRemoval() returns null for a non-removeCard choice', fakeAsync(() => {
+    service.startNewRun();
+    service.selectNode('node_1_0');
+
+    svc.currentEvent = {
+      id: 'test_event',
+      title: 'Test',
+      description: 'Test',
+      choices: [
+        {
+          label: 'No-op',
+          description: 'Nothing happens.',
+          outcome: { goldDelta: 0, livesDelta: 0, description: 'OK.' },
+        },
+      ],
+    };
+
+    expect(service.previewEventCardRemoval(0)).toBeNull();
   }));
 
   // ── gambling_den gamble mechanic ─────────────────────────────────
@@ -2974,6 +3093,78 @@ describe('RunService', () => {
       const state = service.runState!; // maxLives = 20
       // floor(20 * 0.3) = 6 — well above REST_HEAL_MIN=3
       expect(service.computeHealAmount(state)).toBe(6);
+    }));
+  });
+
+  // ── getFinalBossPresetId ──────────────────────────────────────
+
+  describe('getFinalBossPresetId()', () => {
+    it('returns empty string when no run is active', fakeAsync(() => {
+      expect(service.getFinalBossPresetId()).toBe('');
+    }));
+
+    it('delegates to EncounterService.getBossPresetId with the final act index', fakeAsync(() => {
+      service.startNewRun(0);
+      encounterService.getBossPresetId.and.returnValue('ironclad_march');
+      const id = service.getFinalBossPresetId();
+      // DEFAULT_RUN_CONFIG.actsCount = 3, so finalActIndex = 2
+      expect(encounterService.getBossPresetId).toHaveBeenCalledWith(
+        DEFAULT_RUN_CONFIG.actsCount - 1,
+        service.runState!.seed,
+      );
+      expect(id).toBe('ironclad_march');
+    }));
+
+    it('uses config.actsCount from the run state, not a hardcoded constant', fakeAsync(() => {
+      service.startNewRun(0);
+      // Override actsCount on the live state to verify derivation.
+      service['updateState']({ ...service.runState!, config: { ...service.runState!.config, actsCount: 2 } });
+      encounterService.getBossPresetId.and.returnValue('iron_tide');
+      service.getFinalBossPresetId();
+      expect(encounterService.getBossPresetId).toHaveBeenCalledWith(1, service.runState!.seed);
+    }));
+  });
+
+  // ── prepareEndlessEncounter ───────────────────────────────────
+
+  describe('prepareEndlessEncounter()', () => {
+    it('is a no-op when no run is active', fakeAsync(() => {
+      service.prepareEndlessEncounter();
+      expect(encounterService.loadEncounterMap).not.toHaveBeenCalled();
+    }));
+
+    it('loads a campaign map into EncounterService', fakeAsync(() => {
+      service.startNewRun(0);
+      service.prepareEndlessEncounter();
+      expect(encounterService.loadEncounterMap).toHaveBeenCalled();
+    }));
+
+    it('sets an endless EncounterConfig with isEndless true', fakeAsync(() => {
+      service.startNewRun(0);
+      service.prepareEndlessEncounter();
+      const config = service.getCurrentEncounter();
+      expect(config).not.toBeNull();
+      expect(config!.isEndless).toBeTrue();
+    }));
+
+    it('sets an empty wave list so endless mode drives all wave generation', fakeAsync(() => {
+      service.startNewRun(0);
+      service.prepareEndlessEncounter();
+      const config = service.getCurrentEncounter();
+      expect(config!.waves.length).toBe(0);
+    }));
+
+    it('reuses the last completed encounter map id when available', fakeAsync(() => {
+      service.startNewRun(0);
+      const node = service.nodeMap!.nodes[0];
+      service.prepareEncounter(node);
+      // Simulate returning from that encounter (sets lastCompletedEncounter)
+      service.recordEncounterResult(makeEncounterResult({ nodeId: node.id }));
+      service.consumePendingEncounterResult();
+
+      service.prepareEndlessEncounter();
+      const config = service.getCurrentEncounter();
+      expect(config!.campaignMapId).toBe('campaign_01');
     }));
   });
 });

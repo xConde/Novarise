@@ -129,9 +129,10 @@ describe('CARD_DEFINITIONS', () => {
       expect(commons.every(c => c.rarity === CardRarity.COMMON)).toBe(true);
     });
 
-    it('returns 5 starter cards when queried by STARTER', () => {
+    it('returns 6 starter cards when queried by STARTER', () => {
+      // 5 base tower cards + ENERGY_SURGE (utility starter — non-removable).
       const starters = getCardsByRarity(CardRarity.STARTER);
-      expect(starters.length).toBe(5);
+      expect(starters.length).toBe(6);
     });
   });
 
@@ -745,6 +746,11 @@ describe('CARD_DEFINITIONS', () => {
       it('upgradedDescription mentions the max-HP damage per extra step', () => {
         expect(def.upgradedDescription).toMatch(/8%.*max HP/i);
       });
+
+      it('base description describes the full reroute (not just one step)', () => {
+        expect(def.description).toMatch(/longest path/i);
+        expect(def.description).toMatch(/repath/i);
+      });
     });
 
     // ── Phase 2 Sprints 17/18 — Cartographer rare anchors ──────────────────
@@ -1146,6 +1152,19 @@ describe('CARD_DEFINITIONS', () => {
     });
   });
 
+  // ── SALVAGE description accuracy ─────────────────────────────────────────
+  describe('SALVAGE', () => {
+    const def = CARD_DEFINITIONS[CardId.SALVAGE];
+
+    it('description clarifies that the most recently placed tower is sold', () => {
+      expect(def.description).toMatch(/most recently placed/i);
+    });
+
+    it('description mentions 100% refund', () => {
+      expect(def.description).toMatch(/100%/);
+    });
+  });
+
   // ── SHIELD_WALL — encounter-scoped duration ──────────────────────────────
   describe('SHIELD_WALL', () => {
     const def = CARD_DEFINITIONS[CardId.SHIELD_WALL];
@@ -1208,11 +1227,15 @@ describe('CARD_DEFINITIONS', () => {
     });
   });
 
-  // ── ENERGY_SURGE cost ────────────────────────────────────────────────────
+  // ── ENERGY_SURGE rarity + cost ───────────────────────────────────────────
   describe('ENERGY_SURGE', () => {
     const def = CARD_DEFINITIONS[CardId.ENERGY_SURGE];
 
-    it('base energyCost is 1 (not free — RARE must have a non-zero base cost)', () => {
+    it('has STARTER rarity (ships in the starter deck and cannot be removed at the shop)', () => {
+      expect(def.rarity).toBe(CardRarity.STARTER);
+    });
+
+    it('base energyCost is 1', () => {
       expect(def.energyCost).toBe(1);
     });
 
@@ -1328,6 +1351,10 @@ describe('CARD_DEFINITIONS', () => {
 
     it('upgraded description mentions 4 turns', () => {
       expect(def.upgradedDescription).toMatch(/4 turns/);
+    });
+
+    it('description mentions "random" (selection is non-deterministic to the player)', () => {
+      expect(def.description).toMatch(/random/i);
     });
   });
 
@@ -1447,8 +1474,9 @@ describe('CARD_DEFINITIONS', () => {
       expect(def.upgradedEnergyCost).toBe(2);
     });
 
-    it('upgraded description mentions the 2-energy cost', () => {
+    it('upgraded description mentions the 2-energy cost and clarifies reduction from 3', () => {
       expect(def.upgradedDescription).toMatch(/2 energy/i);
+      expect(def.upgradedDescription).toMatch(/down from 3/i);
     });
 
     it('upgraded effect is structurally identical to base (cost-only upgrade)', () => {

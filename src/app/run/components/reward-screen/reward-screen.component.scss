@@ -560,3 +560,18 @@ app-card-draft     { grid-area: draft; }
     animation: none;
   }
 }
+
+// In-app reduce-motion toggle (body.reduce-motion) — mirrors the @media block
+// above so the SettingsService toggle and the OS preference share one outcome.
+body.reduce-motion {
+  .reward-card {
+    animation: none;
+    transition: none;
+
+    &:hover:not(:disabled) { transform: none; }
+  }
+
+  .reward-archetype__chip--flipping {
+    animation: none;
+  }
+}

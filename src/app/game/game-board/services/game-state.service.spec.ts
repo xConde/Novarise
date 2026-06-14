@@ -5,7 +5,7 @@ interface TestableGameStateService {
   state: { gold: number };
   emit(): void;
 }
-import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE, VALID_TRANSITIONS } from '../models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, MAX_STREAK_BONUS_PER_WAVE, STREAK_BONUS_PER_WAVE, VALID_TRANSITIONS } from '../models/game-state.model';
 import { GameModifier } from '../models/game-modifier.model';
 import { SerializableGameState } from '../models/encounter-checkpoint.model';
 import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
@@ -1317,6 +1317,32 @@ describe('GameStateService', () => {
         }
       });
       service.addStreakBonus();
+    });
+
+    it('addStreakBonus() caps payout at MAX_STREAK_BONUS_PER_WAVE on very long perfect streaks', () => {
+      // Advance streak counter well past the cap threshold (MAX / STREAK_BONUS_PER_WAVE waves).
+      // Threshold: 150 / 25 = 6 waves. We test at wave 10 (250g raw) → capped at 150g.
+      const capWave = Math.floor(MAX_STREAK_BONUS_PER_WAVE / STREAK_BONUS_PER_WAVE) + 4; // 10
+      for (let i = 0; i < capWave - 1; i++) {
+        service.addStreakBonus();
+        service.completeWave(0);
+        service.startWave();
+      }
+      const goldBefore = service.getState().gold;
+      const bonus = service.addStreakBonus(); // streak = capWave, raw = capWave * 25
+      expect(bonus).toBe(MAX_STREAK_BONUS_PER_WAVE);
+      expect(service.getState().gold).toBe(goldBefore + MAX_STREAK_BONUS_PER_WAVE);
+    });
+
+    it('addStreakBonus() is not capped below the threshold', () => {
+      // Streak at exactly STREAK_BONUS_PER_WAVE * 2 = 50g (below 150g cap).
+      service.addStreakBonus(); // streak = 1, bonus = 25
+      service.completeWave(0);
+      service.startWave();
+      const goldBefore = service.getState().gold;
+      const bonus = service.addStreakBonus(); // streak = 2, bonus = 50 (below cap)
+      expect(bonus).toBe(STREAK_BONUS_PER_WAVE * 2);
+      expect(service.getState().gold).toBe(goldBefore + STREAK_BONUS_PER_WAVE * 2);
     });
   });
 

@@ -1,6 +1,15 @@
 import { Injectable } from '@angular/core';
-import { Enemy, EnemyType, ENEMY_STATS, VEINSEEKER_BOOSTED_TILES_PER_TURN, NOVA_SOVEREIGN_SLOW_RESISTANCE_FACTOR } from '../models/enemy.model';
+import { Enemy, EnemyType, ENEMY_STATS, VEINSEEKER_BOOSTED_TILES_PER_TURN, NOVA_SOVEREIGN_SLOW_RESISTANCE_FACTOR, SLOW_ACCUMULATOR_ACTIVATION_THRESHOLD } from '../models/enemy.model';
 import { PlacedTower, getEffectiveStats } from '../models/tower.model';
+
+/**
+ * Lower bound for the projected tiles-per-turn rate used in turn-count estimates.
+ * Prevents division by zero when combined SLOW reductions reduce the effective rate
+ * to zero or below. Small enough not to disturb fractional-rate projections
+ * (e.g. 0.85 or 0.5 from card-modifier slows) but large enough to keep
+ * Math.ceil(distance / rate) finite and meaningful.
+ */
+const MIN_PROJECTION_TILES_PER_TURN = 0.01;
 
 /**
  * Pure projection of enemy movement N turns into the future.
@@ -52,7 +61,10 @@ export class ForwardSimulationService {
     }
     const tilesToMove = this.tilesPerTurnFor(enemy, slowTileReduction, enemySpeedSlow, veinseekerBoosted);
     const projectedIndex = Math.min(
-      enemy.pathIndex + tilesToMove * turnsAhead,
+      // Floor to integer: fractional rates (from card-modifier SLOW) produce
+      // non-integer index estimates. Floor gives the conservative "at least this
+      // far" position, which matches how the accumulator rounds down in the live engine.
+      Math.floor(enemy.pathIndex + tilesToMove * turnsAhead),
       enemy.path.length - 1,
     );
     const node = enemy.path[projectedIndex];
@@ -108,10 +120,14 @@ export class ForwardSimulationService {
     return total;
   }
 
-  // Mirrors stepEnemiesOneTurn:373-396 — the canonical movement math.
+  // Mirrors stepEnemiesOneTurn — the canonical movement math.
   // Same precedence as the live engine: VEINSEEKER boost, then NOVA_SOVEREIGN
-  // enrage override, then NOVA_SOVEREIGN halved slow reduction.
-  // Floor at 1 tile/turn matches the live engine's anti-freeze guarantee.
+  // enrage override, then NOVA_SOVEREIGN halved slow reduction, then fractional
+  // card-modifier speed reduction, then integer SLOW tile reduction floored at 1.
+  //
+  // For projection (stateless): returns the fractional effective rate directly.
+  // projectTurnsToExit uses Math.ceil(tilesRemaining / rate), which handles
+  // fractional rates correctly without simulating the per-enemy accumulator state.
   private tilesPerTurnFor(
     enemy: Enemy,
     slowTileReduction: number,
@@ -133,7 +149,19 @@ export class ForwardSimulationService {
     if (enemy.type === EnemyType.NOVA_SOVEREIGN && effectiveSlowReduction > 0) {
       effectiveSlowReduction = Math.floor(effectiveSlowReduction * NOVA_SOVEREIGN_SLOW_RESISTANCE_FACTOR);
     }
-    const enemySpeedReduction = enemySpeedSlow > 0 ? Math.floor(baseTiles * enemySpeedSlow) : 0;
-    return Math.max(1, baseTiles - effectiveSlowReduction - enemySpeedReduction);
+    // Card-modifier fractional speed reduction — mirrors the accumulator path in
+    // the live engine. Return the fractional rate so Math.ceil in projectTurnsToExit
+    // produces accurate turn-count estimates (e.g. 85% of 1 tile/turn → ceil(9/0.85) = 11 turns).
+    const speedModRate = enemySpeedSlow > 0 ? baseTiles * (1 - enemySpeedSlow) : baseTiles;
+    // Apply integer SLOW tile reduction floored at 1 — same guarantee as the live engine.
+    const grossRate = speedModRate - effectiveSlowReduction;
+    if (grossRate < SLOW_ACCUMULATOR_ACTIVATION_THRESHOLD) {
+      // Fractional zone: return the fractional rate directly so callers using
+      // Math.ceil get a correct turn estimate without simulating accumulator state.
+      // Clamp to MIN_PROJECTION_TILES_PER_TURN so projectTurnsToExit always returns
+      // a finite number even when combined reductions exceed the enemy's base speed.
+      return Math.max(MIN_PROJECTION_TILES_PER_TURN, grossRate);
+    }
+    return Math.max(1, grossRate);
   }
 }

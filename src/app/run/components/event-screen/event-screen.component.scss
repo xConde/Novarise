@@ -289,3 +289,11 @@
     transition: none;
   }
 }
+
+body.reduce-motion .event-outcome {
+  animation: none;
+}
+
+body.reduce-motion .event-choice-btn {
+  transition: none;
+}

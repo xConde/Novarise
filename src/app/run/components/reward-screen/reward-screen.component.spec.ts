@@ -196,6 +196,17 @@ describe('RewardScreenComponent', () => {
     expect(component.relicCards[2].id).toBe(RelicId.COMMANDERS_BANNER);
   });
 
+  it('relicCards returns a stable reference across accesses (no per-CD re-create)', () => {
+    // Stable references stop the relic *ngFor from rebuilding its DOM (and
+    // replaying the entrance animation) on every change-detection pass.
+    expect(component.relicCards).toBe(component.relicCards);
+  });
+
+  it('trackByRelicId returns the relic id', () => {
+    const relic = component.relicCards[0];
+    expect(component.trackByRelicId(0, relic)).toBe(relic.id);
+  });
+
   // ── Card draft integration ─────────────────────────────────────────────
 
   it('canContinue is false when relic and card sections are both unresolved', () => {
@@ -714,5 +725,30 @@ describe('RewardScreenComponent', () => {
       // Reaching here without a fakeAsync error is the assertion.
       expect(true).toBeTrue();
     }));
+
+    it('does not schedule the animation when body.reduce-motion class is set', () => {
+      // OS preference is off; in-app toggle is on.
+      (window.matchMedia as jasmine.Spy).and.returnValue({
+        matches: false,
+        media: '(prefers-reduced-motion: reduce)',
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      } as unknown as MediaQueryList);
+
+      document.body.classList.add('reduce-motion');
+      try {
+        component.config = { ...MOCK_CONFIG, dominantArchetype: 'conduit', previousDominantArchetype: 'neutral' };
+        component.ngOnInit();
+        fixture.detectChanges();
+
+        expect(component.isArchetypeFlipping).toBeFalse();
+      } finally {
+        document.body.classList.remove('reduce-motion');
+      }
+    });
   });
 });

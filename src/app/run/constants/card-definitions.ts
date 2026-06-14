@@ -200,7 +200,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     name: 'Mortar Barrage',
     description: 'Deploy a Mortar tower with 30% smaller radius and 20% less DoT damage.',
     upgradedDescription: 'Deploy a Mortar tower with 15% smaller radius and 10% less DoT damage.',
-    flavorText: 'Rapid cadence. The radius suffers. The volume compensates.',
+    flavorText: 'Tighter spread. Lower cost. The trade-off pays for itself.',
     type: CardType.TOWER,
     rarity: CardRarity.COMMON,
     energyCost: CARD_VALUES.energyMortarBarrage,
@@ -299,7 +299,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     id: CardId.SALVAGE,
     name: 'Salvage',
     effectGlyph: 'fx-recycle',
-    description: 'Sell a tower for 100% refund.',
+    description: 'Sell your most recently placed tower for a 100% refund.',
     flavorText: 'Nothing on this battlefield is wasted.',
     type: CardType.SPELL,
     rarity: CardRarity.COMMON,
@@ -683,7 +683,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     upgradedDescription: 'Gain 3 energy this wave.',
     flavorText: 'When the wave breaks, the surge breaks first.',
     type: CardType.UTILITY,
-    rarity: CardRarity.RARE,
+    rarity: CardRarity.STARTER,
     energyCost: 1,
     upgradedEnergyCost: 0,
     upgraded: false,
@@ -1195,20 +1195,19 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   },
 
   /**
-   * DETOUR (Sprint 14) — force all enemies onto the longest valid path for
-   * one step. Unlike the terraform-target cards, DETOUR modifies enemy routing
+   * DETOUR — forces all enemies onto the longest valid path from their current
+   * position. Unlike terraform-target cards, DETOUR modifies enemy routing
    * rather than tile state, so it uses `type: 'spell'` and `terraform: false`.
    *
-   * Design note: the "one step" framing means enemies walk the long route for
-   * one movement resolution and then fall back to normal shortest-path
-   * re-planning at the next waypoint via the existing executeRepath flow.
+   * Enemies walk the long route until the next waypoint, then fall back to
+   * normal shortest-path re-planning via the existing executeRepath flow.
    * This buys roughly 1–3 extra turns of travel time depending on the board.
    */
   [CardId.DETOUR]: {
     id: CardId.DETOUR,
     name: 'Detour',
     effectGlyph: 'kw-terraform',
-    description: 'Force all enemies onto the longest valid path for one step.',
+    description: 'Force all enemies onto the longest path from their current position; they repath to shortest at the next waypoint.',
     upgradedDescription: 'Force all enemies onto the longest valid path for one step. Each detoured enemy also takes 8% max HP damage per extra tile of path walked.',
     flavorText: 'Add distance. They will walk every step of it.',
     type: CardType.SPELL,
@@ -1766,8 +1765,8 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     id: CardId.CONDUIT_BRIDGE,
     name: 'Conduit Bridge',
     effectGlyph: ['fx-link', 'fx-buff'],
-    description: 'Link two non-adjacent towers as neighbors for 3 turns.',
-    upgradedDescription: 'Link two non-adjacent towers as neighbors for 4 turns.',
+    description: 'Link two random non-adjacent towers as neighbors for 3 turns.',
+    upgradedDescription: 'Link two random non-adjacent towers as neighbors for 4 turns.',
     flavorText: 'The signal travels faster than the towers do.',
     type: CardType.UTILITY,
     rarity: CardRarity.UNCOMMON,
@@ -1799,7 +1798,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     name: 'Architect',
     effectGlyph: ['fx-link', 'fx-energy'],
     description: 'Every tower in a cluster counts as adjacent to every other tower in that cluster for the rest of this encounter.',
-    upgradedDescription: 'Costs 2 energy. Every tower in a cluster counts as adjacent to every other tower in that cluster for the rest of this encounter.',
+    upgradedDescription: 'Costs 2 energy (down from 3). Every tower in a cluster counts as adjacent to every other tower in that cluster for the rest of this encounter.',
     flavorText: 'Every tower in the cluster now speaks the same language.',
     type: CardType.MODIFIER,
     rarity: CardRarity.RARE,

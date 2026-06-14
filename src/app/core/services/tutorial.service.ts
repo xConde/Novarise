@@ -60,7 +60,7 @@ const TUTORIAL_TIPS: Record<TutorialStep, TutorialTip> = {
     step: TutorialStep.SELECT_TOWER,
     type: 'tutorial',
     title: 'Your Hand & Energy',
-    message: 'Your cards appear at the bottom of the screen. Tower cards have a dual cost — energy (shown top-left of the hand) AND gold. Check your gold bar before committing a tower; you refill energy each turn but gold must be earned.',
+    message: 'Your cards appear at the bottom of the screen. Tower cards have a dual cost — energy (shown top-left of the hand) AND gold. You refill energy each turn, but gold does NOT reset between encounters — it carries forward into shops, rest sites, and the next fight, so spend carefully.',
     targetSelector: '.card-hand__energy',
     position: 'bottom',
   },
