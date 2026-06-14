@@ -378,60 +378,82 @@ body.reduce-motion .board-container .game-hud .hud-stat .speed-run-timer.critica
 
 /* ===== Toast notification system ===== */
 .toast-stack {
+  // Top-centre lane, in the open band below the End Turn button. Moved off the
+  // bottom-right corner where it overlapped the R/V/pause controls and the
+  // draw/discard/exhaust pile counters.
   position: fixed;
-  bottom: calc(var(--shell-hand-height, 9rem) + var(--spacing-sm));
-  right: 1rem;
+  top: calc(var(--shell-hud-top) + var(--shell-hud-height) + 2rem);
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
+  align-items: center;
   gap: 0.5rem;
   z-index: calc(var(--z-index-modal) + 50);
   pointer-events: none;
 }
 
 .toast {
-  padding: 0.75rem 1rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 0.55rem 0.95rem 0.55rem 1.1rem;
+  min-width: 230px;
+  max-width: 340px;
   border-radius: var(--border-radius-lg);
-  min-width: 200px;
-  max-width: 320px;
+  // Glass: dark translucent base + real backdrop blur + a defined edge and a
+  // depth shadow (no glow). The type colour rides on the left accent stripe.
+  background: rgba(8, 10, 18, 0.85);
+  backdrop-filter: blur(0.75rem);
+  -webkit-backdrop-filter: blur(0.75rem);
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.5);
   pointer-events: auto;
   cursor: pointer;
-  animation: toast-slide-in 0.3s ease-out;
+  animation: toast-slide-in 0.28s ease-out;
   font-family: 'Orbitron', sans-serif;
   color: var(--text-color);
 }
 
-.toast--achievement {
-  background: var(--game-gold-a15);
-  border: var(--border-width-thin) solid var(--game-gold-a50);
+// Type identity: a coloured left accent stripe — character without a glow.
+.toast::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: var(--border-radius-lg) 0 0 var(--border-radius-lg);
+  background: var(--toast-accent, var(--theme-purple-light));
 }
 
-.toast--streak {
-  background: rgba(0, 255, 255, 0.1);
-  border: var(--border-width-thin) solid rgba(0, 255, 255, 0.4);
-}
-
-.toast--challenge {
-  background: rgba(180, 100, 255, 0.15);
-  border: var(--border-width-thin) solid rgba(180, 100, 255, 0.4);
-}
-
-.toast--info {
-  background: rgba(200, 200, 255, 0.1);
-  border: var(--border-width-thin) solid rgba(200, 200, 255, 0.3);
-}
+.toast--info { --toast-accent: var(--theme-purple-light); }
+.toast--achievement { --toast-accent: var(--game-gold); }
+.toast--challenge { --toast-accent: #b46cff; }
+.toast--streak { --toast-accent: var(--theme-cyan); }
 
 .toast__title {
   display: block;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  color: inherit;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-color);
 }
 
 .toast__message {
   display: block;
-  font-size: 0.6rem;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: 2px;
+  font-size: 0.66rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.72);
+  margin-top: 0.18rem;
+}
+
+@media (max-width: 768px) {
+  .toast {
+    min-width: 0;
+    max-width: min(340px, calc(100vw - 1.5rem));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

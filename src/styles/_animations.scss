@@ -62,8 +62,8 @@
 
 /* Toast slide in */
 @keyframes toast-slide-in {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+  from { transform: translateY(-0.5rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 /* Pulse critical — HUD lives / speed-run warning */
